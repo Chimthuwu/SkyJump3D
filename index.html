@@ -530,13 +530,36 @@ function addSolid(minx, maxx, miny, maxy, minz, maxz) {
   const s = { minx, maxx, miny, maxy, minz, maxz }; solids.push(s); return s;
 }
 
+// one shared unit cylinder every round platform scales from; unit-height = matches the 2 m slab
+const unitDiscGeo = new THREE.CylinderGeometry(1, 0.94, 2, 12);
+// a shared full spring coil for every bouncy platform
+const springGeo = new THREE.TorusGeometry(0.9, 0.22, 6, 10), springMat = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x6fdb1f, emissive: 0x2f9e0f, emissiveIntensity: 0.9, flatShading: true }));
+function bounceDress(p) {                       // roadkill-green plates + edge coils: no way to mistake a trampoline
+  p.bounce = true; p.boost = 24 + rand() * 14;
+  const m = p.plate.material;
+  m.color.setHex(0x9dff3a); m.emissive.setHex(0x4dbd1f);
+  for (const [ox, oz] of [[p.hw, p.hd], [-p.hw, p.hd], [p.hw, -p.hd], [-p.hw, -p.hd]]) {
+    const c = new THREE.Mesh(springGeo, springMat); c.position.set(p.cx + ox, p.top + 0.4, p.cz + oz); p.grp.add(c);
+  }
+}
+function scaleSpecial(s, bx, bz) {              // breath pulser: grows / shrinks a platform's footprint around its centre
+  const sp = s.sp, b = sp.base, hw0 = (b.maxx - b.minx) / 2, hd0 = (b.maxz - b.minz) / 2;
+  s.minx = b.cx - hw0 * bx; s.maxx = b.cx + hw0 * bx;
+  s.minz = b.cz - hd0 * bz; s.maxz = b.cz + hd0 * bz;
+  s.hw = hw0 * bx; s.hd = hd0 * bz;
+  s.slab.scale.set(bx, 1, bz); s.plate.scale.set(bx, 1, bz);
+}
 function addPlatform(cx, y, cz, half, big, idx, zoneOv, floating = false, noTarget = false, footprint = null) {
   const hw = footprint ? footprint.hw : half, hd = footprint ? footprint.hd : half;
   const _sa = scene.add, grp = new THREE.Group(); scene.add = o => grp.add(o);     // everything for this platform lives in one group (so it can move / vanish)
   const s = addSolid(cx - hw, cx + hw, y - 2, y, cz - hd, cz + hd);
   s.cx = cx; s.cz = cz; s.top = y; s.idx = idx; s.hw = hw; s.hd = hd;
-  const slab = new THREE.Mesh(new THREE.BoxGeometry(hw * 2, 2, hd * 2), lam(0x1b2340));
-  slab.position.set(cx, y - 1, cz); scene.add(slab);
+  let slab;                                                        // shapes: box slabs, round discs, or beams via footprint
+  if (footprint && footprint.shape === 'disc') {
+    slab = new THREE.Mesh(unitDiscGeo, lam(0x1b2340));
+    slab.scale.set(hw, 1, hd);
+  } else slab = new THREE.Mesh(new THREE.BoxGeometry(hw * 2, 2, hd * 2), lam(0x1b2340));
+  slab.position.set(cx, y - 1, cz); scene.add(slab); s.slab = slab;
   const zone = zoneOv !== undefined ? zoneOv : zoneFor(idx); s.zone = zone;      // the zone decides what the world does once you land here
   if (floating) underside(cx, y - 2, cz, Math.min(hw, hd), 2);
   const plate = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.3, 0.25, hd * 2 + 0.3),
@@ -642,7 +665,9 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
       add(new THREE.SphereGeometry(0.07, 5, 4), side * 0.37, 2.03, 1.36, new THREE.MeshBasicMaterial({ color: 0xffcf37 }));
       for (let tooth = 0; tooth < 3; tooth++) add(new THREE.ConeGeometry(0.055, 0.16, 4), side * (0.12 + tooth * 0.16), 1.73, 1.43, belly).rotation.x = Math.PI;
     }
-    const tail = add(new THREE.ConeGeometry(0.4, 1.9, 5), 0, 1.1, -1.35, hide); tail.rotation.x = -Math.PI / 2;  } else if (variant === 'gorilla') {   // Jungle brute: hunched chest, long knuckles, heavy brow
+    const tail = add(new THREE.ConeGeometry(0.4, 1.9, 5), 0, 1.1, -1.35, hide); tail.rotation.x = -Math.PI / 2;
+    for (let ridge = 0; ridge < 5; ridge++) { const crest = add(new THREE.ConeGeometry(0.13, 0.48, 4), 0, 1.42 + (ridge % 2) * 0.12, 0.2 - ridge * 0.28, belly); crest.rotation.x = Math.PI / 2; }
+  } else if (variant === 'gorilla') {   // Jungle brute: hunched chest, long knuckles, heavy brow
     const hide = mat, face = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x1c1717 }));
     const torso = add(new THREE.SphereGeometry(0.83, 7, 5), 0, 1.15, 0, hide); torso.scale.set(1.1, 1.0, 0.85);
     const chest = add(new THREE.BoxGeometry(1.15, 0.88, 0.28), 0, 1.23, 0.62, dark); chest.rotation.x = -0.12;
@@ -661,6 +686,21 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
         : variant === 'stormWraith' ? [0x19233d, 0xa6efff, 0x668dff]
           : [0x650d22, 0xb7aa9a, 0xff1438];
     const rib = retroMaterial(new THREE.MeshLambertMaterial({ color: palette[0] })), bone = retroMaterial(new THREE.MeshLambertMaterial({ color: palette[1] }));
+    const torso = add(new THREE.SphereGeometry(0.52, 8, 6), 0, 1.05, 0.04, rib); torso.scale.set(0.9, 1.25, 0.72);
+    const skull = add(new THREE.SphereGeometry(0.34, 8, 6), 0, 1.82, 0.24, bone); skull.scale.set(1.1, 0.78, 0.92);
+    add(new THREE.BoxGeometry(0.44, 0.075, 0.12), 0, 1.83, 0.54, new THREE.MeshBasicMaterial({ color: palette[2] }));
+    for (const side of [-1, 1]) {
+      const arm = add(new THREE.CapsuleGeometry(0.13, 0.55, 3, 5), side * 0.59, 0.83, 0.03, rib); arm.rotation.z = side * -0.2;
+      const leg = add(new THREE.CapsuleGeometry(0.16, 0.42, 3, 5), side * 0.28, 0.35, 0, bone); leg.rotation.z = side * 0.08;
+      add(new THREE.ConeGeometry(0.13, 0.4, 5), side * 0.28, 0.1, 0.18, rib);
+    }
+    for (let plate = 0; plate < 3; plate++) {
+      const spine = add(new THREE.ConeGeometry(0.12, 0.42, 4), 0, 1.5 - plate * 0.28, -0.43, bone); spine.rotation.x = -0.35;
+    }
+    if (isBoss) {
+      const crown = add(new THREE.TorusGeometry(0.52, 0.045, 4, 10), 0, 2.1, -0.08, new THREE.MeshBasicMaterial({ color: palette[2] })); crown.rotation.x = Math.PI / 2;
+      for (const side of [-1, 1]) { const horn = add(new THREE.ConeGeometry(0.11, 0.65, 4), side * 0.3, 2.1, -0.08, rib); horn.rotation.z = side * -0.35; }
+    }
     for (let side of [-1, 1]) {
       const crest = add(new THREE.ConeGeometry(0.2, variant === 'infernal' ? 1.05 : 0.72, 4), side * 0.62, 1.08, -0.42, rib); crest.rotation.z = side * -0.65;
       add(new THREE.ConeGeometry(0.07, 0.28, 4), side * 0.2, 0.78, 0.38, bone).rotation.x = Math.PI;
@@ -668,14 +708,6 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
     }
     add(new THREE.BoxGeometry(0.52, 0.06, 0.08), 0, 1.52, 0.32, new THREE.MeshBasicMaterial({ color: palette[2] }));
     const halo = new THREE.Mesh(new THREE.TorusGeometry(0.48, 0.035, 4, 8), new THREE.MeshBasicMaterial({ color: palette[2] })); halo.position.set(0, 1.42, -0.18); g.add(halo);
-  } else if (variant === 'charger') {            // HOG: low four-legged boar with tusks, ears and a bristly mane
-    const rib = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x650d22 })), bone = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xb7aa9a }));
-    for (let side of [-1, 1]) {
-      const spike = add(new THREE.ConeGeometry(0.16, 0.72, 4), side * 0.62, 1.08, -0.42, rib); spike.rotation.z = side * -0.65;
-      add(new THREE.ConeGeometry(0.07, 0.28, 4), side * 0.2, 0.78, 0.38, bone).rotation.x = Math.PI;
-      add(new THREE.BoxGeometry(0.12, 0.54, 0.12), side * 0.18, 1.28, 0.39, rib);
-    }
-    add(new THREE.BoxGeometry(0.52, 0.06, 0.08), 0, 1.52, 0.32, new THREE.MeshBasicMaterial({ color: 0xff1438 }));
   } else if (variant === 'charger') {            // HOG: low four-legged boar with tusks, ears and a bristly mane
     const pink = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xe8a0a0 })),
       charcoal = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x2a1c14 })),
@@ -1255,13 +1287,20 @@ function connect(A, B) {
   if (A.kind === 'arena') A.gated = true;
   for (let k = 0; k < n; k++) {
     const t = k / (n - 1), s = s0 + L * t;
-    const half = k % 7 === 4 ? 5 + rand() * 0.8 : k % 5 === 2 ? 2.8 + rand() * 0.7 : 3.4 + rand() * 1.4, y = ys[k];
+    const y = ys[k], form = rand();
+    let fp = null;                                                        // shapes: beams, round discs, wide/deep slabs
+    if (form < 0.08) fp = { hw: 1.9 + rand() * 0.7, hd: 5.6 + rand() * 2.2, shape: 'beam' };
+    else if (form < 0.19) { const r = 2.7 + rand() * 1.7; fp = { hw: r, hd: r, shape: 'disc' }; }
+    else if (form < 0.31) fp = { hw: (k % 2 ? 5.6 : 2.3) + rand() * 0.6, hd: (k % 2 ? 2.3 : 5.6) + rand() * 0.6 };
+    const canMorph = !fp || fp.shape === 'beam';
+    const half = fp ? Math.max(fp.hw, fp.hd) : k % 7 === 4 ? 5 + rand() * 0.8 : k % 5 === 2 ? 2.8 + rand() * 0.7 : 3.4 + rand() * 1.4;
     const wob = tight ? (k % 2 ? 1 : -1) * 5 * Math.min(1, k, n - 1 - k) : Math.sin(t * Math.PI) * Math.sin(k * 1.4 + ph) * 3.5;
     let x = A.x + ux * s - uz * wob, z = A.z + uz * s + ux * wob;
     let tries = 0;
     while (blocked(x, y, z, half) && tries < 4) { const off = (tries % 2 ? 1 : -1) * 6 * (1 + (tries >> 1)); x += -uz * off; z += ux * off; tries++; }
     if (blocked(x, y, z, half)) continue;
-    const zone = A.zone === B.zone ? A.zone : (t < 0.18 ? A.zone : t > 0.82 ? B.zone : (A.top >= B.top ? A.zone : B.zone));
+    const sameRegion = A.region !== undefined && B.region !== undefined && A.region === B.region;
+    const zone = sameRegion ? A.zone : A.zone === B.zone ? A.zone : (t < 0.18 ? A.zone : t > 0.82 ? B.zone : (A.top >= B.top ? A.zone : B.zone));
     if (A.kind === 'arena') {                    // LOCKED: only a ghost outline until the arena's Guardian dies
       const spec = { x, y, z, half, zone, coins: [[x, y + 1.2, z]] };
       if (prevSpec) for (let u = 0.33; u < 0.9; u += 0.33) spec.coins.push([prevSpec.x + (x - prevSpec.x) * u, prevSpec.y + (y - prevSpec.y) * u + 1.5 + 3 * Math.sin(Math.PI * u), prevSpec.z + (z - prevSpec.z) * u]);
@@ -1271,15 +1310,16 @@ function connect(A, B) {
       reserved.push({ minx: x - half, maxx: x + half, minz: z - half, maxz: z + half, miny: y - 2, maxy: y });
       A.gates.push(spec); prevSpec = spec; continue;
     }
-    const p = addPlatform(x, y, z, half, false, 0, zone, true, k % 2 === 1);
+    const p = addPlatform(x, y, z, half, false, 0, zone, true, k % 2 === 1, fp);
     if (!clusterAnchor && t >= 0.38 && t <= 0.62 && p.hw <= 4.8) { clusterAnchor = p; clusterZone = zone; }
     coin(x, y + 1.2, z);
     if (prev && k % 2 === 0) for (let u = 0.33; u < 0.9; u += 0.33) coin(prev.cx + (x - prev.cx) * u, prev.top + (y - prev.top) * u + 1.5 + 3 * Math.sin(Math.PI * u), prev.cz + (z - prev.cz) * u);
     // weird platforms: movers, crumblers and psychedelic warpers (never the first/last stepping stone)
-    const roll = rand(), weird = k > 0 && k < n - 1 ? (roll < 0.12 ? 'mover' : roll < 0.36 ? 'crumble' : roll < 0.385 && psySpecialCount < 1 ? 'psy' : '') : '';
+    const roll = rand(), weird = canMorph && k > 0 && k < n - 1 ? (roll < 0.10 ? 'mover' : roll < 0.19 ? 'orbit' : roll < 0.28 ? 'crumble' : roll < 0.37 ? 'piston' : roll < 0.46 ? 'breath' : roll < 0.485 && psySpecialCount < 1 ? 'psy' : '') : '';
     if (weird === 'psy') tryPsySpecial(p, { ph: rand() * 6.28, period: 4 + rand() * 3, amp: 4 + rand() * 2.5, lift: rand() < 0.35, px: -uz, pz: ux, fx: ['trip', 'warp', 'invert'][(rand() * 3) | 0] });
-    else if (weird) makeSpecial(p, weird, { ph: rand() * 6.28, period: 4 + rand() * 3, amp: 4 + rand() * 2.5, lift: rand() < 0.35, px: -uz, pz: ux });
+    else if (weird) makeSpecial(p, weird, { ph: rand() * 6.28, period: weird === 'piston' ? 2.6 + rand() * 1.6 : 4 + rand() * 3, amp: weird === 'orbit' ? 5 + rand() * 3.5 : weird === 'piston' ? 3.5 + rand() * 2.5 : 4 + rand() * 2.5, lift: rand() < 0.35, px: -uz, pz: ux });
     else {
+      if (rand() < 0.3 && p.hw <= 4.4) bounceDress(p);
       const enemyEvery = zone && zone.name === 'Jungle' ? 3 : zone ? 4 : 5;
       if (k > 0 && k < n - 1 && k % enemyEvery === 2 && (A.kind !== 'start' || k > 1)) spawnBiomeEnemy(x, y, z, p, zone, depth);
       if (k % 4 === 2) ammoBox(x + 1.5, y + 0.8, z - 1.5);
@@ -1296,27 +1336,25 @@ function buildNetwork(exitAngle) {
   const keepOut = buildSkyway(hubs);                 // build the stairway to the moon FIRST so nothing else is placed on top of it
   const nB = Math.min(9 + level * 2, 22), nA = Math.min(4 + level, 10);
   const types = ARENA_TYPES.slice(); for (let i = types.length - 1; i > 0; i--) { const j = (rand() * (i + 1)) | 0; [types[i], types[j]] = [types[j], types[i]]; }
-  const zoneForRegion = region => {
-    const earlyBiomeCount = Math.min(2, ZONES.length - 1);
-    const zoneIndex = level < 3
-      ? 1 + ((Math.floor(region / 2) + level - 1) % earlyBiomeCount)
-      : 1 + ((Math.floor(region / 2) + level - 3) % (ZONES.length - 1));
-    return ZONES[zoneIndex];
-  };
-  const regionForHub = i => Math.floor(Math.max(0, i - 1) / Math.max(8, Math.floor((nA + nB) / 2)));
+  const zoneForRegion = region => biomeForRegion(level, region);
+  const regionSpan = level <= 4 ? 12 : Math.max(6, 12 - Math.floor((level - 4) / 2));
+  const regionForHub = i => Math.floor(Math.max(0, i - 1) / regionSpan);
   const want = [];
-  for (let i = 0; i < nA; i++) want.push({ arena: true, type: types[i % types.length], zone: zoneForRegion(regionForHub(i + 1)) });
-  for (let i = 0; i < nB; i++) want.push({ arena: false, zone: zoneForRegion(regionForHub(nA + i + 1)) });
-  for (let i = want.length - 1; i > 0; i--) { const j = (rand() * (i + 1)) | 0; [want[i], want[j]] = [want[j], want[i]]; }
+  for (let i = 0; i < nA; i++) { const region = regionForHub(i + 1); want.push({ arena: true, type: types[i % types.length], region, zone: zoneForRegion(region) }); }
+  for (let i = 0; i < nB; i++) { const region = regionForHub(nA + i + 1); want.push({ arena: false, region, zone: zoneForRegion(region) }); }
   for (const w of want) {
     const ext = w.arena ? (w.type === 'gauntlet' ? 42 : 26) : 20;
     for (let tries = 0; tries < 250; tries++) {
-      const ang = rand() * 6.283, dist = 75 + rand() * (210 + level * 16), x = Math.cos(ang) * dist, z = Math.sin(ang) * dist;
+      const biomeBands = Math.max(1, ZONES.length - 1), biomeBand = Math.floor(w.region / (level < 6 ? 2 : 1)) % biomeBands;
+      const bandWidth = 6.283 / biomeBands, ang = (biomeBand + 0.5) * bandWidth + (rand() - 0.5) * bandWidth * 0.72;
+      const dist = 75 + rand() * (210 + level * 16), x = Math.cos(ang) * dist, z = Math.sin(ang) * dist;
       if (hubs.some(h => Math.hypot(h.x - x, h.z - z) < h.r + ext + 18)) continue;
       if (Math.hypot(x - groundPad.x, z - groundPad.z) < 34 + ext || Math.hypot(x - boss.x, z - boss.z) < 30 + ext) continue;
       if (keepOut.some(kk => Math.hypot(kk.x - x, kk.z - z) < kk.r + ext)) continue;
-      if (w.arena) hubs.push(buildArena(w.type, x, 45 + rand() * (TOP - 90), z, w.zone));
-      else hubs.push(buildBuildingHub(x, z, 18 + rand() * 14, 18 + rand() * 14, 35 + rand() * (TOP - 60), w.zone));
+      let hub;
+      if (w.arena) hub = buildArena(w.type, x, 45 + rand() * (TOP - 90), z, w.zone);
+      else hub = buildBuildingHub(x, z, 18 + rand() * 14, 18 + rand() * 14, 35 + rand() * (TOP - 60), w.zone);
+      hub.region = w.region;
       break;
     }
   }
@@ -1366,24 +1404,29 @@ function walkBranch(src, mode, len, aim) {
   let heading = rand() * 6.283;
   if (aim) heading = Math.atan2(aim.z - src.cz, aim.x - src.cx) + (rand() - 0.5) * 0.5;
   let x = src.cx, y = src.top, z = src.cz, last = src, pending = null;
-  const decorate = (p, dir) => {
+  const decorate = (p, dir, canMorph) => {
     const roll = rand();
     if (roll < 0.10) makeSpecial(p, 'mover', { ph: rand() * 6.28, period: 4 + rand() * 3, amp: 4 + rand() * 2.5, lift: rand() < 0.35, px: -Math.sin(dir), pz: Math.cos(dir) });
-    else if (roll < 0.32) makeSpecial(p, 'crumble', {});
-    else if (roll < 0.345 && psySpecialCount < 1) tryPsySpecial(p, { ph: rand() * 6.28, fx: ['trip', 'warp', 'invert'][(rand() * 3) | 0] });
+    else if (roll < 0.20) makeSpecial(p, 'orbit', { ph: rand() * 6.28, period: 5 + rand() * 4, amp: 5 + rand() * 3.5 });
+    else if (roll < 0.30) makeSpecial(p, 'crumble', {});
+    else if (canMorph && roll < 0.40) makeSpecial(p, 'piston', { ph: rand() * 6.28, period: 2.6 + rand() * 1.6, amp: 3.5 + rand() * 2.5 });
+    else if (canMorph && roll < 0.50) makeSpecial(p, 'breath', { ph: rand() * 6.28, period: 3 + rand() * 2.4 });
+    else if (roll < 0.525 && psySpecialCount < 1) tryPsySpecial(p, { ph: rand() * 6.28, fx: ['trip', 'warp', 'invert'][(rand() * 3) | 0] });
+    else if (roll < 0.62) bounceDress(p);
     else { if (rand() < 0.5) coin(p.cx, p.top + 1.2, p.cz); if (rand() < (src.zone && src.zone.name === 'Jungle' ? 0.28 : 0.1)) spawnBiomeEnemy(p.cx, p.top, p.cz, p, src.zone, 0.5); }
   };
   for (let k = 0; k < len; k++) {
     heading += (rand() - 0.5) * 0.6;
-    const step = 9.5 + rand() * 3, half = 3.2 + rand() * 1.4;
+    const step = 9.5 + rand() * 3, form = rand(), fp = rand() < 0.12 ? { hw: 1.9 + rand() * 0.7, hd: 5.4 + rand() * 2.2, shape: 'beam' } : rand() < 0.14 ? (() => { const r = 2.6 + rand() * 1.6; return { hw: r, hd: r, shape: 'disc' }; })() : null;
+    const half = fp ? Math.max(fp.hw, fp.hd) : 3.2 + rand() * 1.4;
     const dy = mode === 'climb' ? 1.8 + rand() * 0.9 : mode === 'flat' ? (rand() - 0.5) * 0.5 : -(2 + rand() * 4);
     let nx = x + Math.cos(heading) * step, nz = z + Math.sin(heading) * step; const ny = y + dy;
     if (ny < 24 || ny > TOP + 70 || Math.hypot(nx, nz) > WORLD_R - 25) break;
     if (blocked(nx, ny, nz, half)) { heading += 1.1; nx = x + Math.cos(heading) * step; nz = z + Math.sin(heading) * step; if (blocked(nx, ny, nz, half)) continue; }
-    const p = addPlatform(nx, ny, nz, half, false, 0, src.zone, true, true);
+    const p = addPlatform(nx, ny, nz, half, false, 0, src.zone, true, true, fp);
     // Defer decoration until another stone is placed so every branch's portal landing stays solid and safe.
-    if (pending) decorate(pending.platform, pending.heading);
-    pending = { platform: p, heading };
+    if (pending) decorate(pending.platform, pending.heading, pending.canMorph);
+    pending = { platform: p, heading, canMorph: !fp || fp.shape === 'beam' };
     x = nx; y = ny; z = nz; last = p;
   }
   if (last !== src) addPortalPair(
@@ -1431,7 +1474,7 @@ function buildStatic() {
   gx.fillStyle = 'rgba(255,63,200,.55)'; gx.fillRect(0, 32, 256, 2); gx.fillRect(32, 0, 2, 256);
   const gt = trackRetroTexture(new THREE.CanvasTexture(gc)); gt.wrapS = gt.wrapT = THREE.RepeatWrapping; gt.repeat.set(80, 80);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshLambertMaterial({ map: gt }));
-  ground.rotation.x = -Math.PI / 2; scene.add(ground); groundMesh = ground; groundOrigMat = ground.material;
+  ground.rotation.x = -Math.PI / 2; ground.visible = false; scene.add(ground); groundMesh = ground; groundOrigMat = ground.material;   // NO FLOOR: the void loops (see voidLoop)
 }
 
 // Builds (or rebuilds) the tower for the current `level`. Everything added goes into `lvl`.
@@ -1440,7 +1483,7 @@ function buildLevel() {
   scene.remove(lvl);
   lvl.traverse(o => { if (o.geometry) o.geometry.dispose(); });
   lvl = new THREE.Group(); scene.add(lvl);
-  solids.length = platforms.length = portals.length = enemies.length = items.length = decals.length = gibsList.length = clouds.length = shots.length = 0; buildingBoxes.length = 0;
+  solids.length = platforms.length = portals.length = enemies.length = items.length = decals.length = gibsList.length = clouds.length = shots.length = 0; buildingBoxes.length = 0; bleeders.length = 0;
   activePortalPreview = activePortalDestination = null; $('portalPreview').classList.remove('visible');
   decorSites.length = 0; dressings.clear();
   specials.length = reserved.length = 0; psySpecialCount = 0; portalCooldown = 0; portalExit = null; psy.t = 0; psy.kind = ''; try { renderer.domElement.style.filter = ''; } catch (_) {}
@@ -1495,6 +1538,7 @@ function buildLevelBody() {
   boss = endBosses[0];
   // street-level terminal opens only after all six bosses fall
   groundPad = { x: Math.cos(padA) * 48, z: Math.sin(padA) * 48 };
+  const streetPad = addSlab(groundPad.x, 0, groundPad.z, 9, 9, 3, null, true); streetPad.ground = true;      // the only 'street' left: a floating island
   addBullseye(groundPad.x, 0, groundPad.z, 1.8);
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, TOP + 120, 8), new THREE.MeshBasicMaterial({ color: 0x55e6ff, transparent: true, opacity: 0.3 }));
   beam.position.set(groundPad.x, (TOP + 120) / 2, groundPad.z); scene.add(beam);
@@ -1807,8 +1851,8 @@ function loadGore() {
 }
 setInterval(saveGore, 3000);
 addEventListener('beforeunload', saveGore);
-let activeBloodFx = 0;
-const MAX_BLOOD_FX = 240;
+let activeBloodFx = 0, bleeders = [];
+const MAX_BLOOD_FX = 420;
 function bloodBurst(p, n, power = 1) {
   if (!goreOn) return;
   for (let i = 0; i < n && activeBloodFx < MAX_BLOOD_FX; i++) {
@@ -1832,10 +1876,15 @@ function spawnGibs(p, parts, n, force) {
     gibsList.push({ mesh: m, rest: false, dims, col,
       vel: new THREE.Vector3((Math.random() - 0.5) * force, 4 + Math.random() * force * 0.8, (Math.random() - 0.5) * force),
       spin: new THREE.Vector3(Math.random() * 14 - 7, Math.random() * 14 - 7, Math.random() * 14 - 7) });
-    if (gibsList.length > 300) { const o = gibsList.shift(); o.mesh.removeFromParent(); o.mesh.geometry.dispose(); }
+    if (gibsList.length > 420) { const o = gibsList.shift(); o.mesh.removeFromParent(); o.mesh.geometry.dispose(); }
   }
 }
 function updateGibs(dt) {
+  for (let i = bleeders.length - 1; i >= 0; i--) {                        // arterial fountains: things keep spraying after death
+    const f = bleeders[i]; f.t -= dt; f.acc += dt;
+    while (f.acc > 0.07) { f.acc -= 0.07; bloodBurst(f.p, 2, 1.6); splatter(f.p.x, f.p.y - 0.4, f.p.z, 2, 1.3, 0.8); }
+    if (f.t <= 0) { splatter(f.p.x, f.p.y - 0.4, f.p.z, 10, 2.2, 1.2); bleeders.splice(i, 1); }
+  }
   for (const g of gibsList) {
     if (g.rest) continue;
     const p = g.mesh.position;
@@ -1867,15 +1916,16 @@ function bloodScreen(a, persist) {
 function clearBloodScreen() { goreEl.style.transition = 'opacity 1.5s'; goreEl.style.opacity = 0; setTimeout(() => { if (state === 'play') goreEl.innerHTML = ''; }, 1600); }
 function goreDeath(big, at = pos, remote = false) {      // `remote`: another player's death, seen from here
   sfx.splat();
-  const horror = activeZ && activeZ.name === 'Horror', gore = horror ? 1.4 : 1;
+  const horror = activeZ && activeZ.name === 'Horror', gore = horror ? 2.0 : 1.6;
   const p = new THREE.Vector3(at.x, at.y + 0.9, at.z);
   const parts = horror
     ? [[0.8, 1.0, 0.4, 0x4b1118], [0.5, 0.5, 0.5, 0xd2c5b0], [0.25, 0.9, 0.25, 0x4b1118], [0.25, 0.9, 0.25, 0x292026], [0.25, 0.9, 0.25, 0x292026], [0.25, 0.9, 0.25, 0x4b1118], [0.35, 0.35, 0.35, 0x7a0710]]
     : [[0.8, 1.0, 0.4, 0x2a7de1], [0.5, 0.5, 0.5, 0xffd2a8], [0.25, 0.9, 0.25, 0x2a7de1], [0.25, 0.9, 0.25, 0x2b3a67], [0.25, 0.9, 0.25, 0x2b3a67], [0.25, 0.9, 0.25, 0x2a7de1], [0.35, 0.35, 0.35, 0xb00d1a]];
-  spawnGibs(p, parts, Math.round((big ? 22 : 13) * gore), big ? 18 : 12);
-  bloodBurst(p, Math.round((big ? 150 : 75) * gore), big ? 2.0 : 1.3);
-  splatter(at.x, at.y + 0.3, at.z, Math.round((big ? 105 : 48) * gore), big ? 5.5 : 3.2, big ? 1.7 : 1.15);
-  wallSplat(at.x, at.y + 1, at.z, Math.round((big ? 30 : 16) * gore), big ? 1.9 : 1.25);
+  spawnGibs(p, parts, Math.round((big ? 34 : 20) * gore), big ? 20 : 14);
+  bloodBurst(p, Math.round((big ? 230 : 115) * gore), big ? 2.2 : 1.5);
+  splatter(at.x, at.y + 0.3, at.z, Math.round((big ? 160 : 74) * gore), big ? 5.5 : 3.2, big ? 1.7 : 1.15);
+  wallSplat(at.x, at.y + 1, at.z, Math.round((big ? 46 : 24) * gore), big ? 1.9 : 1.25);
+  if (bleeders.length < 10) bleeders.push({ p: p.clone(), t: big ? 3 : 2.4, acc: 0 });
   if (horror) { sfx.horror(); shockRing(p, big ? 9 : 6, 0x760719); }
   saveGore();
   if (!remote) { bloodScreen(big ? 1 : 0.85, true); shake = 1.2; }
@@ -1883,10 +1933,11 @@ function goreDeath(big, at = pos, remote = false) {      // `remote`: another pl
 function enemyGore(e) {
   const p = new THREE.Vector3(e.x, e.y + e.h / 2, e.z), horror = activeZ && activeZ.name === 'Horror', col = horror ? 0x4b1118 : e.mat.color.getHex(), gore = horror ? 1.5 : 1;
   const parts = [[1.1 * e.r, 0.9 * e.r, 0.8 * e.r, col], [0.8 * e.r, 0.45 * e.r, 0.7 * e.r, horror ? 0xd2c5b0 : col], [0.3 * e.r, 0.5 * e.r, 0.3 * e.r, col], [0.4 * e.r, 0.4 * e.r, 0.4 * e.r, horror ? 0x7a0710 : 0xb00d1a]];
-  spawnGibs(p, parts, Math.round((e.boss ? 30 : 12) * gore), e.boss ? 18 : 12);
-  bloodBurst(p, Math.round((e.boss ? 165 : 72) * gore), e.boss ? 2.0 : 1.25);
-  splatter(e.x, e.y + 0.5, e.z, Math.round((e.boss ? 92 : 38) * gore), e.boss ? 6.2 : 3.1, e.boss ? 1.75 : 1.1);
-  wallSplat(e.x, e.y + 1, e.z, Math.round((e.boss ? 26 : 12) * gore), e.boss ? 1.8 : 1.1);
+  spawnGibs(p, parts, Math.round((e.boss ? 46 : 18) * gore), e.boss ? 20 : 14);
+  bloodBurst(p, Math.round((e.boss ? 250 : 110) * gore), e.boss ? 2.2 : 1.5);
+  splatter(e.x, e.y + 0.5, e.z, Math.round((e.boss ? 140 : 58) * gore), e.boss ? 6.2 : 3.1, e.boss ? 1.75 : 1.1);
+  wallSplat(e.x, e.y + 1, e.z, Math.round((e.boss ? 40 : 18) * gore), e.boss ? 1.8 : 1.1);
+  if (bleeders.length < 10) bleeders.push({ p: p.clone(), t: e.boss ? 3 : 2.2, acc: 0 });
   if (horror && e.boss) { sfx.horror(); shockRing(p, 10, 0x760719); }
 }
 
@@ -1933,8 +1984,8 @@ function hurt(n, fromX, fromZ) {
   if (state !== 'play' || invuln > 0) return;
   health -= n; invuln = 1.3; shake = 0.6; sfx.hurt();
   const horrorHit = activeZ && activeZ.name === 'Horror';
-  bloodBurst(new THREE.Vector3(pos.x, pos.y + 1, pos.z), horrorHit ? 36 : 22, horrorHit ? 1.3 : 1);
-  splatter(pos.x, pos.y + 0.3, pos.z, horrorHit ? 14 : 8, horrorHit ? 2 : 1.4, horrorHit ? 0.85 : 0.6);
+  bloodBurst(new THREE.Vector3(pos.x, pos.y + 1, pos.z), horrorHit ? 52 : 34, horrorHit ? 1.4 : 1.2);
+  splatter(pos.x, pos.y + 0.3, pos.z, horrorHit ? 20 : 13, horrorHit ? 2 : 1.4, horrorHit ? 0.85 : 0.6);
   wallSplat(pos.x, pos.y + 1, pos.z, horrorHit ? 6 : 3, horrorHit ? 1 : 0.7); bloodScreen(0.7, false);
   if (health <= 0) return die('KNOCKED OUT', 'Enemies are tough — stomp them from above or slash with your sword.');
   if (fromX !== undefined) {
@@ -2041,7 +2092,7 @@ function damageEnemy(e, dmg, kind = 'hit') {
   }
   if (net.on && !net.host && kind !== 'net') {            // guests don't simulate enemies: report the hit to the host
     netSend({ t: 'dmg', i: enemies.indexOf(e), d: dmg, px: +pos.x.toFixed(1), pz: +pos.z.toFixed(1), k: kind === 'beam' ? 'beam' : undefined });
-    e.hit = 0.18; if (kind !== 'beam') { sfx.hit(); enemyHurtVoice(e); } bloodBurst(new THREE.Vector3(e.x, e.y + e.h / 2, e.z), kind === 'beam' ? 2 : 10, 0.8);
+    e.hit = 0.18; if (kind !== 'beam') { sfx.hit(); enemyHurtVoice(e); } bloodBurst(new THREE.Vector3(e.x, e.y + e.h / 2, e.z), kind === 'beam' ? 3 : 18, 1.0);
     return;
   }
   e.hp -= dmg; e.hit = 0.18; if (e.hp > 0) { if (kind !== 'beam') { sfx.hit(); enemyHurtVoice(e); } } else { sfx.kill(); enemyDeathVoice(e); }
@@ -2051,7 +2102,7 @@ function damageEnemy(e, dmg, kind = 'hit') {
   const kb = tick ? 1.2 : e.boss ? 2 : 9;
   e.kx = dx / d * kb; e.kz = dz / d * kb; if (!e.boss && !tick) e.stun = 0.35;
   if (!tick) burst(new THREE.Vector3(e.x, e.y + e.h / 2, e.z), 0xffe08a, 4);
-  bloodBurst(new THREE.Vector3(e.x, e.y + e.h / 2, e.z), tick ? 3 : 16, 0.9); if (!tick || Math.random() < 0.2) splatter(e.x, e.y + 0.5, e.z, 2, 1, 0.5);
+  bloodBurst(new THREE.Vector3(e.x, e.y + e.h / 2, e.z), tick ? 3 : 26, 1.1); if (!tick || Math.random() < 0.2) splatter(e.x, e.y + 0.5, e.z, 3, 1, 0.5);
   if (e.hp <= 0) {
     e.dead = true; e.mesh.removeFromParent(); if (e.warn) e.warn.visible = false;
     if (net.on && net.host) netSend({ t: 'kill', i: enemies.indexOf(e) });
@@ -2480,6 +2531,13 @@ const BIOME_ENEMIES = {
   Storm: ['stormWraith', 'stormWraith', 'gunner', 'shield', 'drone'],
   Horror: ['stalker', 'stalker', 'charger', 'walker', 'shield'],
 };
+function biomeForRegion(levelNumber, regionIndex) {
+  if (levelNumber <= 1) return ZONES.find(z => z.name === 'Jungle');
+  if (levelNumber === 2) return ZONES.find(z => z.name === 'Horror');
+  const laterBiomes = ZONES.filter(z => z.name !== 'Jungle');
+  const regionGroup = levelNumber < 6 ? 2 : 1;
+  return laterBiomes[(Math.floor(regionIndex / regionGroup) + levelNumber - 3) % laterBiomes.length];
+}
 const zoneFor = idx => (idx < 3 ? null : ZONES[Math.floor((idx - 3) / 4) % ZONES.length]);
 const WEATHER = {
   none: {},
@@ -2732,7 +2790,6 @@ function physicsStep(h) {
       if (vel.y <= 0) { pos.y = s.maxy; landed = s; } else { pos.y = s.miny - PH; vel.y = 0; }
     }
   }
-  if (pos.y <= 0) { pos.y = 0; landed = landed || { maxy: 0, ground: true }; }
   if (landed) {
     onGround = true; standOn = landed; vel.y = 0;
     if (!wasGround) onLand(-vy0, landed);
@@ -2750,6 +2807,20 @@ function heightAbove() {
   return { ground: g, h: pos.y - g };
 }
 
+// THE SICK JOKE: there is no floor. Fall far enough and you start falling again from the moon.
+const VOID_Y = -160;
+let loops = 0;
+function voidLoop() {
+  if (state !== 'play' || !moonInfo) return;
+  loops++;
+  const mx = moonInfo.x, mz = moonInfo.z, d = Math.hypot(mx, mz) || 1, a = (Math.random() - 0.5) * 1.2;
+  const ux = -mx / d, uz = -mz / d, c = Math.cos(a), sn = Math.sin(a), R = 270;              // fall past the moon's edge, on the tower side
+  pos.set(mx + (ux * c - uz * sn) * R, moonInfo.y + 140, mz + (ux * sn + uz * c) * R);
+  vel.set(0, -20, 0); onGround = false; pounding = false; climbing = null; glide = 1; combo = 0; invuln = Math.max(invuln, 1);
+  camInit = false; shake = Math.max(shake, 0.5); try { $('flash').style.opacity = 1; setTimeout(() => { $('flash').style.opacity = 0; }, 120); } catch (_) {}
+  toast(loops === 1 ? 'THERE IS NO FLOOR.' : loops < 4 ? 'You are falling again.' : 'FALLING. FALLING. FALLING.', 2400);
+  try { sfx.psy(); } catch (_) {}
+}
 function playerUpdate(dt) {
   // timers
   invuln = Math.max(0, invuln - dt); atkCd = Math.max(0, atkCd - dt); atkT = Math.max(0, atkT - dt);
@@ -2834,7 +2905,7 @@ function playerUpdate(dt) {
   // keep inside the play area
   const rr = Math.hypot(pos.x, pos.z);
   if (rr > WORLD_R) { pos.x *= WORLD_R / rr; pos.z *= WORLD_R / rr; dbgClamp.t = performance.now(); dbgClamp.at = [pos.x, pos.y, pos.z]; }
-  if (pos.y < -5) die('LOST', 'You fell out of the world.');
+  if (pos.y < VOID_Y) voidLoop();
 }
 
 // ---------- enemies ----------
@@ -3304,6 +3375,7 @@ function updatePeers(dt) {
 // ---------- weird platforms: movers, crumblers, psychedelic warpers; Guardian-locked platforms rise into place ----------
 const specials = [];
 let psySpecialCount = 0;
+const psyPlatformEligible = () => level >= 4 && level % 3 === 1 && psySpecialCount < 1;
 let psy = { kind: '', t: 0, zoneT: 0 };
 function inLevel(fn) { const sa = scene.add; scene.add = o => lvl.add(o); try { return fn(); } finally { scene.add = sa; } }
 function baseOf(s) { return { minx: s.minx, maxx: s.maxx, miny: s.miny, maxy: s.maxy, minz: s.minz, maxz: s.maxz, cx: s.cx, cz: s.cz, top: s.top }; }
@@ -3319,6 +3391,9 @@ function makeSpecial(s, kind, d) {
   s.sp = { kind, ...d, base: baseOf(s), ox: 0, oy: 0, oz: 0, state: 'idle', t: 0 };
   const m = s.plate.material;
   if (kind === 'mover') { m.color.setHex(0x5affd8); m.emissive.setHex(0x5affd8); }
+  else if (kind === 'orbit') { m.color.setHex(0x9b73ff); m.emissive.setHex(0x9b73ff); }   // orbiters glow violet
+  else if (kind === 'piston') { m.color.setHex(0xff7ad8); m.emissive.setHex(0xff7ad8); }   // pistons glow hot pink
+  else if (kind === 'breath') { m.color.setHex(0x36ffd8); m.emissive.setHex(0x2fbfa8); }   // growers/gloopers pulse teal
   else if (kind === 'crumble') {            // cracked, brittle-looking
     s.sp.col = m.color.getHex();                 // keeps its zone colour; the CRACKS are the warning
     if (!crackMat) {                             // one shared cracked-glass texture; each cracked platform is just ONE extra quad
@@ -3458,6 +3533,19 @@ function updateSpecials(dt) {
     if (sp.kind === 'mover') {
       const w = Math.sin(T * (2 * Math.PI / sp.period) + sp.ph);
       moveSpecial(s, sp.lift ? 0 : sp.px * w * sp.amp, sp.lift ? w * sp.amp * 0.6 : 0, sp.lift ? 0 : sp.pz * w * sp.amp);
+    } else if (sp.kind === 'orbit') {        // circling around its base like a carousel stone
+      const a = T * (2 * Math.PI / sp.period) + sp.ph;
+      moveSpecial(s, Math.cos(a) * sp.amp, 0, Math.sin(a) * sp.amp);
+    } else if (sp.kind === 'piston') {       // jackhammers up in hard snaps, carrying anyone riding it
+      const ph2 = (T * (2 * Math.PI / sp.period) + sp.ph) % (2 * Math.PI);
+      const cur = sp.k || 0, up = ph2 < Math.PI ? 1 : 0;
+      sp.k = cur + (up - cur) * Math.min(1, dt * 12);
+      moveSpecial(s, 0, sp.amp * sp.k, 0);
+    } else if (sp.kind === 'breath') {       // pumps its footprint between 70% and 120% while its plate breathes
+      const w = Math.sin(T * (2 * Math.PI / sp.period) + sp.ph) * 0.5 + 0.5;
+      const k = 0.7 + 0.5 * w;
+      scaleSpecial(s, k, k);
+      s.plate.material.color.setHSL(0.42 + 0.08 * w, 0.9, 0.55);
     } else if (sp.kind === 'rise') {          // a freshly unlocked platform rising out of the void
       sp.t += dt; const k = Math.min(1, sp.t / 1.3), e = 1 - Math.pow(1 - k, 3);
       moveSpecial(s, 0, -14 * (1 - e), 0);
