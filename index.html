@@ -28,6 +28,12 @@
   @keyframes horrorPulse{from{filter:brightness(1);opacity:.3}to{filter:brightness(.72);opacity:.48}}
   body.horror-world #gore .blob{background:linear-gradient(145deg,#310008 0%,#ad101b 38%,#69000b 72%,#260006 100%);box-shadow:0 0 14px rgba(120,0,12,.48);border-radius:58% 42% 72% 26%;transform-origin:center top}
   body.horror-world #gore .blob::after{content:"";position:absolute;left:28%;top:65%;width:34%;height:150%;border-radius:0 0 60% 55%;background:linear-gradient(180deg,rgba(111,0,12,.9),rgba(50,0,5,.05));filter:blur(1px)}
+  body.horror-world::before{opacity:.72;background:radial-gradient(ellipse at 50% 46%,rgba(85,0,15,.05) 0 16%,rgba(22,0,7,.28) 42%,rgba(0,0,0,.94) 100%);animation:horrorBreath 5.5s ease-in-out infinite alternate}
+  body.horror-world::after{opacity:.31;background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(205,20,42,.12) 3px,transparent 4px),radial-gradient(ellipse at 50% 50%,transparent 28%,rgba(100,0,18,.25) 100%);background-size:100% 5px,100% 100%;mix-blend-mode:screen;mask-image:none;animation:horrorGrain .26s steps(2) infinite}
+  body.horror-world #hud,body.horror-world #players{border-color:rgba(255,28,61,.72);box-shadow:0 0 24px rgba(150,0,24,.32),inset 0 0 24px rgba(120,0,18,.18);text-shadow:0 0 9px rgba(255,36,62,.8)}
+  body.horror-world #hint{border-color:rgba(178,12,36,.8);color:#ffd2d8;box-shadow:0 0 18px rgba(120,0,24,.28)}
+  @keyframes horrorBreath{from{filter:brightness(.86) contrast(1.07);transform:scale(1)}to{filter:brightness(.62) contrast(1.25);transform:scale(1.018)}}
+  @keyframes horrorGrain{0%{transform:translate(0,0)}50%{transform:translate(-1px,1px)}100%{transform:translate(1px,-1px)}}
   #hud,#players{position:fixed;top:12px;padding:10px 13px;background:var(--panel);border:1px solid rgba(54,246,255,.55);box-shadow:0 0 14px rgba(54,246,255,.16),inset 0 0 18px rgba(54,246,255,.05);font-size:15px;line-height:1.5;text-shadow:0 0 8px #36f6ff55;pointer-events:none;z-index:2}
   #hud{left:12px;border-left:3px solid var(--neon-cyan);max-width:min(300px,42vw);font-size:13px;line-height:1.4;padding:7px 10px;background:rgba(5,9,22,.55);opacity:.92}
   #players{right:12px;text-align:right;border-right:3px solid var(--neon-pink)}
@@ -795,6 +801,8 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
     add(new THREE.BoxGeometry(0.1, 0.1, 0.1), -0.25, 1.05, 1.33, new THREE.MeshBasicMaterial({ color: 0xff2222 }));
     add(new THREE.BoxGeometry(0.1, 0.1, 0.1), 0.25, 1.05, 1.33, new THREE.MeshBasicMaterial({ color: 0xff2222 }));
     add(new THREE.BoxGeometry(0.1, 0.1, 0.3), 0, 1.0, -1.0, pink);                               // tail
+  } else if (variant === 'rider') {
+    g.add(makeRiderVisual());
   } else {
     // humanoid chassis shared by walker / gunner / shield / boss
     add(new THREE.BoxGeometry(0.28, 0.4, 0.28), -0.3, 0.2, 0, dark);                             // shins
@@ -923,6 +931,7 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
   if (variant === 'stalker' || variant === 'stormWraith') { e.speed *= 1.25; e.h = 2.1 * scale; e.r = 0.72 * scale; }
   if (variant === 'frozenStalker') { e.speed *= 1.1; e.h = 2.2 * scale; e.r = 0.78 * scale; }
   if (variant === 'infernal') { e.h = 2.25 * scale; e.r = 0.82 * scale; }
+  if (variant === 'rider') { e.h = 1.5 * scale; e.r = 0.95 * scale; e.speed = 6.2; }
   if (isBoss) { e.h = Math.max(e.h, 2.2 * scale); e.r = Math.max(e.r, 0.95 * scale); }
   e.mesh.add(new THREE.Mesh(aggroGeo, aggroMat)).position.y = e.h + 0.9;    // floating red arrow so hostile walkers read at distance
   enemies.push(e); return e;
@@ -1213,7 +1222,7 @@ function buildBuildingHub(cx, cz, w, d, h, zone) {
     makeWalker(cx - 4, h, cz - 4, s, 1, false, 'dinosaur');
     makeWalker(cx + 4, h, cz + 3, s, 0.9, false, 'gorilla');
   } else if (level >= 2 || rand() < 0.5) spawnBiomeEnemy(cx - 4, h, cz - 4, s, zone, 0.5);
-  return { kind: 'building', x: cx, z: cz, top: h, hw: w / 2, hd: d / 2, zone, r: Math.max(w, d) / 2 + 3 };
+  return { kind: 'building', x: cx, z: cz, top: h, hw: w / 2, hd: d / 2, zone, r: Math.max(w, d) / 2 + 3, roofSolid: s };
 }
 function addNeonSign(cx, cz, w, d, h) {
   const dist = Math.hypot(cx, cz) || 1, nx = -cx / dist, nz = -cz / dist;
@@ -1516,7 +1525,8 @@ function connect(A, B) {
 function buildNetwork(exitAngle) {
   const hubs = [{ kind: 'start', x: 0, z: 0, top: TOP, hw: TH, hd: TH, zone: null, r: 20 }];
   const keepOut = buildSkyway(hubs);                 // build the stairway to the moon FIRST so nothing else is placed on top of it
-  const nB = Math.min(9 + level * 2, 22), nA = Math.min(4 + level, 10);
+  hubs.push(buildRidePark());                        // the ride park joins the hub network, gets connectivity for free
+  const nB = Math.min(9 + level * 2, 22), nA = Math.min(8 + level * 2, 18);
   const types = ARENA_TYPES.slice(); for (let i = types.length - 1; i > 0; i--) { const j = (rand() * (i + 1)) | 0; [types[i], types[j]] = [types[j], types[i]]; }
   const zoneForRegion = region => biomeForRegion(level, region);
   const regionSpan = level <= 4 ? 12 : Math.max(6, 12 - Math.floor((level - 4) / 2));
@@ -1607,6 +1617,7 @@ function buildNetwork(exitAngle) {
   }
   buildBranches(hubs);
   buildHubPortalLoop(hubs);
+  spawnStreetRiders(hubs);                           // rider chase packs on rooftops
 }
 // loose branches that wander off existing platforms: ladders UP, level runs and drops; many point at a nearby building
 function walkBranch(src, mode, len, aim) {
@@ -1692,9 +1703,10 @@ function buildLevel() {
   scene.remove(lvl);
   lvl.traverse(o => { if (o.geometry) o.geometry.dispose(); });
   lvl = new THREE.Group(); scene.add(lvl);
-  solids.length = platforms.length = portals.length = enemies.length = items.length = decals.length = gibsList.length = clouds.length = shots.length = 0; buildingBoxes.length = 0; bleeders.length = 0; armoryGun = null;
+  solids.length = platforms.length = portals.length = enemies.length = items.length = decals.length = gibsList.length = clouds.length = shots.length = 0; buildingBoxes.length = 0; bleeders.length = 0; armoryGun = null; railSolids.length = 0;
+  streetReset();
   activePortalPreview = activePortalDestination = null; $('portalPreview').classList.remove('visible');
-  decorSites.length = 0; dressings.clear();
+  decorSites.length = 0; dressings.clear(); growers.length = 0; growCd = 0;
   specials.length = reserved.length = 0; psySpecialCount = 0; popArenaCount = 0; portalCooldown = 0; portalExit = null; psy.t = 0; psy.kind = ''; try { renderer.domElement.style.filter = ''; } catch (_) {}
   decalMesh.count = 0; decalNext = 0;
   applyTheme();
@@ -1717,6 +1729,8 @@ function buildLevelBody() {
   roof.position.set(0, TOP + 0.1, 0); scene.add(roof);
   const spawnPad = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.1, 8), lam(0x36f6ff));
   spawnPad.position.set(start.x, TOP + 0.05, start.z); scene.add(spawnPad);
+  addProp('board', start.x + 4, TOP, start.z + 4);                       // the streets are looking for you
+  addProp('skates', start.x - 4, TOP, start.z + 4);
   // roof guard(s) so the start isn't empty
   const roofBounds = { minx: -15, maxx: 15, minz: -15, maxz: 15 };
   makeWalker(-6, TOP, 6, roofBounds, 1, false);
@@ -1774,6 +1788,7 @@ function buildLevelBody() {
   }
   const arenaApproachAngle = padA + Math.PI;
   addRouteLandmark(Math.cos(arenaApproachAngle) * 52, 0, Math.sin(arenaApproachAngle) * 52, arenaApproachAngle + Math.PI / 2, 0xff3152, 'SIGNAL GAUNTLET');
+  if (level >= 3) spawnRiderGroup(groundPad.x + 2, 0, groundPad.z - 2, streetPad, 2, 3);      // rider pack guarding the street terminal
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, TOP + 120, 8), new THREE.MeshBasicMaterial({ color: 0x55e6ff, transparent: true, opacity: 0.3 }));
   beam.position.set(groundPad.x, (TOP + 120) / 2, groundPad.z); scene.add(beam);
   // the sky network: floating platforms from the roof to rooftops and themed arenas
@@ -1843,6 +1858,16 @@ handGuns.forEach((g, i) => { g.position.set(0, -0.9, 0); if (i > 0) g.rotation.x
 player.add(torso, chestPlate, head, cap, visor, armL, armR, legL, legR);
 player.scale.setScalar(0.85);
 const model = new THREE.Group(); model.add(player); scene.add(model);
+
+// street gear ∨s worn on the player model: a board under the feet, skates on the boots
+const gearBoard = makeBoard(); gearBoard.position.set(0, -0.05, 0.15); gearBoard.rotation.y = Math.PI; gearBoard.scale.setScalar(0.85); gearBoard.visible = false; player.add(gearBoard);
+const gearSkateL = new THREE.Group(), gearSkateR = new THREE.Group();
+for (const [g, side] of [[gearSkateL, -1], [gearSkateR, 1]]) {
+  const boot = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.22, 0.52), lam(0x2a3444)); g.add(boot);
+  const strip = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.06, 0.42), new THREE.MeshBasicMaterial({ color: 0xb0ff63 })); strip.position.y = -0.12; g.add(strip);
+  for (let w = 0; w < 4; w++) { const wheel = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffffff })); wheel.position.set(0, -0.18, 0.18 - w * 0.12); g.add(wheel); }
+  g.position.set(side * 0.22, 0.32, 0.02); player.add(g); g.visible = false;
+}
 
 // first-person viewmodel: weapons parented to the camera
 scene.add(camera);
@@ -2232,6 +2257,8 @@ function schizoTick(dt) {                                  // hallucinations: ph
 }
 
 function respawn() {
+  if (onVehicle) dismount(); grinding = null;
+  if (poundPress) poundPress = false;
   pos.set(checkpoint.x, checkpoint.y, checkpoint.z); vel.set(0, 0, 0);
   health = MAXHP; glide = 1; pounding = false; invuln = 1.5; onGround = false;
   climbing = null; climbStam = 1; psy.t = 0; psy.kind = ''; try { renderer.domElement.style.filter = ''; } catch (_) {}
@@ -2278,6 +2305,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyC' || e.code === 'ControlLeft') poundPress = true;      // SHIFT is sprint now
   if (e.code === 'KeyF' || e.code === 'KeyJ') atkPress = true;
   if (e.code === 'KeyR' && state === 'play') respawn();
+  if (e.code === 'Enter' && state === 'play') useProp();
   if (e.code === 'CapsLock' || e.code === 'KeyV') { fpv = !fpv; toast(fpv ? 'First-person view' : 'Third-person view', 900); }
   if (/^Digit[1-7]$/.test(e.code)) { const i = +e.code[5] - 1; if (i === 1 && state !== 'title') { hotbarSel = 1; updateHotbar(); toast('BUILDER HAND — walk into ore to mine, KeyE to place a block', 1600); }
     else { hotbarSel = 0; updateHotbar(); selectWeapon(i); } }
@@ -2424,6 +2452,47 @@ function hitTarget(sol) {
     score += 25; combo = 0; toast('Close!  +25', 900);
   } else combo = 0;
 }
+// ---- SPONTANEOUS ARENAS: sometimes the platform you land on grows out into an ambush arena. Clear the wave for hearts + ammo + score.
+const growers = []; let growCd = 0;
+function spontaneousArena(sol, force = false) {
+  if (sol.grown || sol.sp || sol.grp || sol.moon || sol.arena || sol.checkpoint || sol.bounce || sol.ground || sol.egg || sol.bossArena || sol.targetR !== undefined || sol.cx === undefined) return;
+  if (!force && (growCd > 0 || Math.random() > 0.12 || spaceK(pos.y) > 0.3 || sol.hw > 12)) return;
+  sol.grown = true; growCd = 12;
+  const top = sol.maxy, cx = sol.cx, cz = sol.cz, hw0 = sol.hw, hd0 = sol.hd, hwT = Math.max(hw0 + 8, 15), hdT = Math.max(hd0 + 8, 15);
+  const ext = addSolid(cx - hw0, cx + hw0, top - 1.2, top, cz - hd0, cz + hd0); Object.assign(ext, { cx, cz, top, hw: hw0, hd: hd0, zone: sol.zone, grown: true });
+  const g = { ext, cx, cz, top, hw0, hd0, hwT, hdT, t: 0, spawned: false, foes: [], done: false };
+  inLevel(() => {
+    g.body = new THREE.Mesh(new THREE.BoxGeometry(1, 1.2, 1), lam(0x5a2630, { emissive: 0x2a0710, emissiveIntensity: 0.6 }));
+    g.rim = new THREE.Mesh(new THREE.BoxGeometry(1, 0.22, 1), new THREE.MeshBasicMaterial({ color: 0xff3a5a }));
+    scene.add(g.body); scene.add(g.rim);
+  });
+  growers.push(g);
+  toast('THE PLATFORM IS GROWING...', 1800); sfx.roar(); shake = Math.max(shake, 0.5); shockRing({ x: cx, y: top, z: cz }, hwT, 0xff3a5a);
+}
+function updateGrowers(dt) {
+  growCd = Math.max(0, growCd - dt);
+  for (const g of growers) {
+    if (g.done) continue;
+    g.t += dt;
+    const k = 1 - Math.pow(1 - Math.min(1, g.t / 1.8), 3), hw = g.hw0 + (g.hwT - g.hw0) * k, hd = g.hd0 + (g.hdT - g.hd0) * k, e = g.ext;
+    e.minx = g.cx - hw; e.maxx = g.cx + hw; e.minz = g.cz - hd; e.maxz = g.cz + hd; e.hw = hw; e.hd = hd;
+    g.body.scale.set(hw * 2, 1, hd * 2); g.body.position.set(g.cx, g.top - 0.6, g.cz);
+    g.rim.scale.set(hw * 2 + 0.4, 1, hd * 2 + 0.4); g.rim.position.set(g.cx, g.top - 0.08, g.cz);
+    g.rim.material.color.setHex(g.spawned && !g.foes.every(f => f.dead) ? 0xff3a5a : g.spawned ? 0x6bff8a : 0xff9a3a);
+    if (!g.spawned && g.t > 1.2) {                                        // the ambush: a wave of biome enemies spawns on the grown platform
+      g.spawned = true; const n = 4 + Math.min(level, 6), before = enemies.length;
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * 6.283, r = 0.35 + Math.random() * 0.5;
+        spawnBiomeEnemy(g.cx + Math.cos(a) * hw * r, g.top, g.cz + Math.sin(a) * hd * r, e, e.zone || activeZ, 0.6 + level * 0.1, 0.9);
+      }
+      g.foes = enemies.slice(before); toast('AMBUSH!', 1400);
+    }
+    if (g.spawned && !g.done && g.foes.length && g.foes.every(f => f.dead)) {
+      g.done = true; score += 300; toast('AMBUSH CLEARED  +300', 1800); sfx.clear();
+      heart(g.cx - 2, g.top + 1.3, g.cz); ammoBox(g.cx + 2, g.top + 0.8, g.cz); coin(g.cx, g.top + 1.4, g.cz + 2);
+    }
+  }
+}
 let eggBottom = false;
 function onLand(speed, sol) {
   if (sol.egg === 'bottom' && state === 'play') {          // EASTER EGG: you fell all the way to the lowest platform there is
@@ -2437,6 +2506,7 @@ function onLand(speed, sol) {
       try { $('subs').textContent = '[IT] You went all the way down. There is nothing here. You are still falling.'; setTimeout(() => { $('subs').textContent = ''; }, 6500); } catch (_) {}
     } else toast('Rock bottom. Again.', 1400);
   }
+  if (state === 'play' && speed < 40) spontaneousArena(sol);
   if (sol.pn !== undefined && state === 'play') {
     curPN = sol.pn;
     if (ladderTop && sol.pn >= ladderTop.n - 1) ladderExtend(1);
@@ -2914,7 +2984,7 @@ const WEATHER = {
   embers: { vx: 2, vy: 6, size: 3.5, color: 0xffa030, op: 0.9 },
   spores: { vx: 1.5, vy: 1.2, size: 4.5, color: 0x9aff4a, op: 0.8, sway: 1.5 },
   leaves: { vx: 2.5, vy: -4.5, size: 5.2, color: 0x7ae030, op: 0.95, sway: 2.4 },
-  ash:     { vx: -1.5, vy: -7, size: 3.2, color: 0x9a2436, op: 0.64, sway: 0.8 },
+  ash:     { vx: -1.5, vy: -7, size: 4.2, color: 0xc52a43, op: 0.82, sway: 0.8 },
 };
 const mkCol = () => new THREE.Color();
 const env = { top: mkCol(), mid: mkCol(), bot: mkCol(), fog: mkCol(), hemiCol: mkCol(), sunCol: mkCol(), cloud: mkCol(), hemi: 1, sun: 1 };
@@ -2931,6 +3001,30 @@ wGeo.setAttribute('position', new THREE.BufferAttribute(wPos, 3));
 const wMat = new THREE.PointsMaterial({ size: 3, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, fog: false });
 const weatherPts = new THREE.Points(wGeo, wMat); weatherPts.frustumCulled = false; weatherPts.visible = false; scene.add(weatherPts);
 wMat.color.setHex(WEATHER.rain.color); wMat.size = WEATHER.rain.size; wOn = true; wCfg = WEATHER.rain; wOp = WEATHER.rain.op; wMat.opacity = wOp; weatherPts.visible = true;
+
+// The watcher is scenery, never a hitbox: every world has something silently keeping pace with you.
+const dreadWatcher = (() => {
+  const g = new THREE.Group(), shadow = new THREE.MeshBasicMaterial({ color: 0x050207, transparent: true, opacity: 0.82, depthWrite: false }), eye = new THREE.MeshBasicMaterial({ color: 0xff173c, transparent: true, opacity: 1, depthWrite: false });
+  const cloak = new THREE.Mesh(new THREE.ConeGeometry(1.35, 6.8, 5), shadow); cloak.position.y = 3.2; g.add(cloak);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.62, 8, 6), shadow); head.position.y = 6.25; g.add(head);
+  for (const x of [-.22, .22]) { const e = new THREE.Mesh(new THREE.SphereGeometry(.105, 6, 5), eye); e.position.set(x, 6.3, -.53); g.add(e); }
+  g.visible = false; g.userData = { shadow, eye, t: 2, alpha: 0 }; scene.add(g); return g;
+})();
+const dreadDir = new THREE.Vector3();
+function updateDreadWatcher(dt, cp) {
+  const u = dreadWatcher.userData; u.t -= dt;
+  if (u.t <= 0) {
+    u.t = 4.5 + Math.random() * 6;
+    camera.getWorldDirection(dreadDir); dreadDir.y = 0; if (dreadDir.lengthSq() < .01) dreadDir.set(0, 0, -1); else dreadDir.normalize();
+    const side = (Math.random() < .5 ? -1 : 1) * (13 + Math.random() * 24), forward = 25 + Math.random() * 36;
+    dreadWatcher.position.set(cp.x + dreadDir.x * forward - dreadDir.z * side, cp.y - 1.5, cp.z + dreadDir.z * forward + dreadDir.x * side);
+  }
+  dreadWatcher.visible = state === 'play' && spaceNow < .7;
+  if (!dreadWatcher.visible) return;
+  dreadWatcher.lookAt(cp.x, dreadWatcher.position.y + 3.5, cp.z);
+  const pulse = .72 + Math.sin(performance.now() / 1000 * 5.5) * .22;
+  u.eye.opacity = pulse; dreadWatcher.scale.setScalar(.85 + Math.sin(performance.now() / 1000 * .8) * .08);
+}
 
 // ---------- Jungle morph: towers turn into giant tree trunks + canopies, and revert when the zone leaves ----------
 const towersOfTheWild = { on: false, canopies: [] };
@@ -2979,9 +3073,10 @@ function setZone(z, snap = false, quiet = false) {
   const jungleWorld = !!(z && z.name === 'Jungle'), cyberHorror = !!z && !jungleWorld;
   document.body.classList.toggle('jungle-world', jungleWorld);
   document.body.classList.toggle('cyber-horror', cyberHorror);
+  document.body.classList.toggle('horror-world', true); // every biome is now a different flavour of nightmare
   document.body.classList.toggle('schizo', schizoOn);      // game-wide horror dread, independent of whatever zone is live
-  const horror = !!(z && z.name === 'Horror');
-  if (scene.fog) { scene.fog.near = horror ? 20 : 45; scene.fog.far = horror ? 150 : 200; }
+  const horror = true;
+  if (scene.fog) { scene.fog.near = 14; scene.fog.far = 112; }
   const src = z || theme();
   goal.top.set(src.top); goal.mid.set(src.mid); goal.bot.set(src.bot); goal.fog.set(src.fog);
   goal.hemiCol.set(src.hemiCol); goal.sunCol.set(src.sunCol); goal.cloud.set(src.cloud); goal.hemi = src.hemi; goal.sun = src.sun;
@@ -3050,6 +3145,7 @@ function updateEnv(dt, cp) {
     }
     wGeo.attributes.position.needsUpdate = true;
   }
+  updateDreadWatcher(dt, cp);
 }
 // gameplay side-effects of the active zone / the surface underfoot
 const iceUnderfoot = () => onGround && standOn && standOn.zone && standOn.zone.name === 'Frozen';
@@ -3115,6 +3211,11 @@ function enemyContacts() {
       continue;
     }
     if (pos.y < top && pos.y + PH > e.y) {
+      if (onVehicle && Math.hypot(vel.x, vel.z) > 10) {          // riding at speed: ram them (buggy especially)
+        damageEnemy(e, onVehicle.kind === 'buggy' ? 4 : 2, 'pound');
+        shake = Math.max(shake, 0.4); burst(new THREE.Vector3(e.x, e.y + e.h / 2, e.z), 0xffd23a, 8);
+        continue;
+      }
       if (e.variant === 'bomber') damageEnemy(e, 99, 'self');     // bombers detonate on contact
       else hurt(1, e.x, e.z);
     }
@@ -3240,6 +3341,7 @@ function voidLoop() {
   try { sfx.psy(); } catch (_) {}
 }
 function playerUpdate(dt) {
+  if (grinding) { atkPress = false; mouseHeld = false; handleGrind(dt); return; }
   // timers
   invuln = Math.max(0, invuln - dt); atkCd = Math.max(0, atkCd - dt); atkT = Math.max(0, atkT - dt);
 
@@ -3290,8 +3392,8 @@ function playerUpdate(dt) {
     if ((atkBuf > 0 || fireHeld) && atkCd <= 0 && !pounding && !climbing) { atkBuf = 0; useWeapon(); }
   }
 
-  // grab and climb walls: jump at a wall and push into it
-  updateClimb(dt, ix, iz, dx, dz, rX, rZ);
+  // grab and climb walls: jump at a wall and push into it (not while riding)
+  if (onVehicle) wallT = Math.max(0, wallT - dt); else updateClimb(dt, ix, iz, dx, dz, rX, rZ);
 
   // glide / parachute (hold space while falling)
   gliding = !onGround && keys.Space && vel.y < 0.5 && glide > 0 && !pounding && airT > 0.2 && !climbing;
@@ -3299,7 +3401,8 @@ function playerUpdate(dt) {
 
   // horizontal control
   if (!pounding && invuln < 1.0 && !climbing && lockT <= 0) {
-    const sp = (gliding ? RUN * 1.4 : RUN) * (sprintNow ? 1.6 : 1) * (aimEff ? 0.6 : 1), acc = onGround ? (iceUnderfoot() ? 11 : 70) : (gliding ? 46 : 26);
+    const gearMul = gear === 'board' ? 1.42 : gear === 'skates' ? 1.28 : 1, rideMul = onVehicle ? (onVehicle.kind === 'buggy' ? 1.8 : 2.1) : 1;
+    const sp = (gliding ? RUN * 1.4 : RUN) * (sprintNow ? 1.6 : 1) * (aimEff ? 0.6 : 1) * gearMul * rideMul, acc = (onGround ? (iceUnderfoot() ? 11 : 70) : (gliding ? 46 : 26)) * (onVehicle ? 0.8 : 1);
     const tx = dx * sp, tz = dz * sp;
     const ax = tx - vel.x, az = tz - vel.z, al = Math.hypot(ax, az);
     if (al > 0.001) { const st = Math.min(al, acc * dt); vel.x += ax / al * st; vel.z += az / al * st; }
@@ -3434,6 +3537,12 @@ function variantAI(e, dt, d, dxp, dzp) {
       e.windT -= dt; e.hit = Math.max(e.hit, 0.05); spd = 0; e.cdx = dxp / d; e.cdz = dzp / d;
       if (e.windT <= 0) e.charge = 1.0;
     } else if (e.chCd <= 0 && d < 14) { e.windT = 0.65; e.chCd = 3; spd = 0; sfx.oink(); }
+  } else if (e.variant === 'rider') {             // hover-bike rider: keeps pace, then gooses the throttle and runs you down
+    e.chCd -= dt;
+    if (e.charge > 0) { e.charge -= dt; dx = e.cdx; dz = e.cdz; spd = 14; }
+    else if (e.windT > 0) { e.windT -= dt; e.hit = Math.max(e.hit, 0.05); spd = 0; e.cdx = dxp / d; e.cdz = dzp / d; if (e.windT <= 0) { e.charge = 1.2; sfx.oink(); } }
+    else if (e.chCd <= 0 && d < 26) { e.windT = 0.6; e.chCd = 3.8; spd = 2; }
+    else spd = e.speed;
   } else if (e.variant === 'shield') spd = 1.8;
   return [dx, dz, spd];
 }
@@ -3442,7 +3551,9 @@ function walker(e, dt, t) {
   const dxp = P.x - e.x, dzp = P.z - e.z, d = Math.hypot(dxp, dzp) || 1;
   const playing = state === 'play' || (state === 'dead' && peerAlive());
   const active = playing && (e.boss ? (P.y < 8 && d < 120)
-    : e.variant === 'gunner' ? (d < 30 && Math.abs(P.y - e.y) < 16) : (d < 13 && Math.abs(P.y - e.y) < 3.5));
+    : e.variant === 'gunner' ? (d < 30 && Math.abs(P.y - e.y) < 16)
+    : e.variant === 'rider' ? (d < 46 && Math.abs(P.y - e.y) < 14)
+    : (d < 13 && Math.abs(P.y - e.y) < 3.5));
   let dx = 0, dz = 0, moving = false, spd = e.speed;
   if (e.boss && e.slamT > 0) {
     e.slamT -= dt; e.warn.visible = true; e.warn.position.set(e.x, 0.1, e.z);
@@ -3635,7 +3746,7 @@ function addProp(kind, x, y, z) {
       for (let w = 0; w < 4; w++) { const wheel = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffffff })); wheel.position.set(side * 0.28, 0.06, 0.2 - w * 0.14); g.add(wheel); prop.wheels.push(wheel); }
     }
   }
-  props.push(prop); return prop;
+  props.push(prop); railSolids.push(prop); return prop;
 }
 
 function nearestProp(radius = 3.4) {
@@ -3697,9 +3808,9 @@ function addRamp(cx, cz, baseY, dirX, dirZ, steps = 4, width = 8, lipBoost = 30)
 }
 
 const railSolids = [];
+const props = [];                      // street props (vehicles / gear). NOTE: declaration was missing (props is not defined crash) - restored by the arena session
 function buildRidePark() {                     // floating street playground; part of the hub network
   let cx = 0, cz = 0, parkY = 0;
-  const keepOut = arguments;
   for (let tries = 0; tries < 60; tries++) {
     const a = rand() * 6.283, r = 180 + rand() * 70, y = Math.max(120, TOP * 0.45 + 20 + rand() * 40);
     cx = Math.cos(a) * Math.min(r, 250); cz = Math.sin(a) * r; parkY = y;
@@ -3707,7 +3818,6 @@ function buildRidePark() {                     // floating street playground; pa
     break;
   }
   const slab = addSlab(cx, parkY, cz, 26, 26, 3, RIDE_ZONE, false);
-  // quarter pipes facing each other + a half-pipe gap that launches you onto the grind rail
   const north = addRamp(cx, cz - 16, parkY, 0, 1, 6, 10, 32);
   const south = addRamp(cx, cz + 16, parkY, 0, -1, 6, 10, 32);
   addRail(north.x, north.z + 1.2, north.y + 0.45, south.x, south.z - 1.2, 0xff3fc8);              // the money rail between both lips
@@ -3771,6 +3881,7 @@ function handleGrind(dt) {
 }
 
 function updateStreet(dt) {
+  for (const it of props) if (!it.taken) it.mesh.rotation.y += dt * 2;   // idle props gently spin (wheels shine when you ride)
   // props idle / equipped gear visuals follow the player
   if (onVehicle) {
     const p = onVehicle;
@@ -3846,6 +3957,13 @@ function updateVisuals(dt) {
   const sideV = vel.x * Math.cos(face) - vel.z * Math.sin(face);                          // lean into turns
   leanK += (clamp(sideV * 0.05, -0.45, 0.45) - leanK) * Math.min(1, dt * 8);
   boardW.visible = glideK > 0.05 && !fpv && state !== 'dead';
+  gearBoard.visible = (gear === 'board' || gear === 'skates') && state !== 'dead';     // skate deck worn under the feet
+  if (gearBoard.visible) { gearBoard.position.set(0, grinding ? -0.16 : -0.05, 0.15); gearBoard.rotation.y = Math.PI; }
+  gearSkateL.visible = gearSkateR.visible = gear === 'skates' && state !== 'dead';
+  if (onVehicle && onVehicle.mesh) {                                                   // mirror the board: skates blend with it
+    onVehicle.mesh.rotation.x = clamp(-vel.y * 0.02, -0.25, 0.25);
+    if (gear === 'board' || gear === 'skates') gearBoard.visible = false;
+  }
   if (boardW.visible) {
     boardW.position.set(pos.x, pos.y - 0.02, pos.z); boardW.rotation.set(clamp(-vel.y * 0.04, -0.35, 0.35), face, -leanK); boardW.scale.setScalar(glideK);
     if (Math.random() < dt * 45) { const sa = Math.sin(face), ca = Math.cos(face); burst(new THREE.Vector3(pos.x - sa * 0.95, pos.y - 0.1, pos.z - ca * 0.95), Math.random() < 0.5 ? 0x36f6ff : 0xff3fc8, 1); }   // glowing trail
@@ -3908,8 +4026,9 @@ let hintT = 14, hintOn = true;      // the controls bar shows for the first 14 s
 function setHint() {
   const h = $('hint'); h.style.transition = 'opacity .8s'; h.style.opacity = (state === 'play' && hintOn && hintT > 0) || paused ? 0.95 : 0;
   if (state === 'play' && hintT > 0) hintT -= 1 / 60;
+  const near = hintProp ? `· ENTER: ${hintProp} ` : (grinding ? '· SPACE: rail jump · ENTER bail ' : '');
   $('hint').textContent = state === 'play'
-    ? 'WASD move · SHIFT sprint · double-jump summons your HOVERBOARD (hold SPACE to ride) · C pound · click/F fire (hold for beams) · RIGHT-CLICK aim · 1-7 or wheel: weapons · jump at a wall to climb (SPACE wall-jump) · step into neon portals to travel · CAPS/V first-person · R respawn · M sound · N music · G gore · H this bar'
+    ? 'WASD move · SHIFT sprint · double-jump summons your HOVERBOARD (hold SPACE to ride) · C pound · click/F fire (hold for beams) · RIGHT-CLICK aim · 1-7 or wheel: weapons · jump at a wall to climb (SPACE wall-jump) · step into neon portals to travel · ' + near + 'CAPS/V first-person · R respawn · M sound · N music · G gore · H this bar'
     : '';
 }
 
@@ -4500,6 +4619,15 @@ function dressSite(site, zone) {
       spike.scale.set(0.55 + r() * 0.4, h, 0.55 + r() * 0.4); spike.rotation.z = (r() - 0.5) * 0.36;
     }
   }
+  // Each otherwise-distinct biome still carries a little of the same wrongness: black thorns and watching lights.
+  if (zone.name !== 'Horror') {
+    const dreadM = MM('dreadThorn', () => lamC(0x0b050a)), eyeM = MM('dreadEye', () => addC(0xff173c, 0.95));
+    for (let i = 0, count = n(1, big ? 3 : 2); i < count; i++) {
+      const [x, z] = spot(), h = 1.1 + r() * 2.4, thorn = add(new THREE.Mesh(GG('dreadSpike', () => new THREE.ConeGeometry(.34, 1, 4)), dreadM), x, h / 2, z);
+      thorn.scale.set(.7 + r() * .4, h, .7 + r() * .4); thorn.rotation.z = (r() - .5) * .5;
+      if (i === 0) { const eye = add(new THREE.Mesh(GG('dreadEyeGeo', () => new THREE.SphereGeometry(.13, 6, 5)), eyeM), x, h * .72, z); anims.push({ k: 'watch', m: eye, ph: r() * 6 }); }
+    }
+  }
   return { g, anims, rods };
 }
 function animDress(d, T, dt) {
@@ -4513,6 +4641,7 @@ function animDress(d, T, dt) {
       case 'flower': a.m.position.y = (a.m.position.y > 2.5 ? 3.3 : 0.3) + 0.12 * Math.sin(T * 2 + a.ph); break;
       case 'rock': a.m.rotation.y += dt * a.sp; a.m.rotation.x += dt * a.sp * 0.6; a.m.position.y = a.y0 + Math.sin(T * 0.9 + a.ph) * 0.7; break;
       case 'pulse': { const beat = 1 + 0.06 * Math.sin(T * 2.2 + a.ph); a.m.scale.x = a.sx * beat; a.m.scale.z = a.sz * beat; break; }
+      case 'watch': a.m.scale.setScalar(.72 + .35 * Math.sin(T * 5 + a.ph) ** 2); break;
       case 'monkey': {
         const w = a.mk; a.t -= dt;
         if (a.t <= 0) { a.t = 1.2 + Math.random() * 2.2; a.hop = 0.55; a.tx = clamp(a.bx + (Math.random() - 0.5) * 5, -a.ix, a.ix); a.tz = clamp(a.bz + (Math.random() - 0.5) * 5, -a.iz, a.iz); }
@@ -4965,7 +5094,7 @@ document.addEventListener('pointerlockchange', () => { if (!document.pointerLock
 buildLevel();
 pos.set(start.x, start.y, start.z);
 showMenu(true);
-window.__ng = { lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(ZONES.find(z => z.name === n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; }, info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow }) };   // dev hook (console / test tools)
+window.__ng = { grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (!['board', 'skates'].includes(k)) return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(ZONES.find(z => z.name === n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; }, info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length }) };   // dev hook (console / test tools)
 {   // opened from the relay server with ?room=... -> connect right away
   const qp = new URLSearchParams(location.search || '');
   if (/^https?:$/.test(location.protocol) && qp.get('room')) netConnect(location.host, qp.get('room').slice(0, 24));
@@ -4977,7 +5106,7 @@ renderer.setAnimationLoop(now => {
   else if (state === 'play') { playerUpdate(dt); updateEnemies(dt); updateShots(dt); }
   else if (state === 'dead') { deadT -= dt; if (deadT <= 0) respawn(); if (net.on) { updateEnemies(dt); updateShots(dt); } }
   else if (state === 'clear') { updateEnemies(dt); clearT -= dt; if (clearT <= 0) nextLevel(); }
-  updateItems(dt); musicTick(dt); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); updateClouds(dt); updateSpecials(dt); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar();
+  updateItems(dt); updateStreet(dt); updateGrowers(dt); musicTick(dt); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); updateClouds(dt); updateSpecials(dt); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar();
   updateVisuals(dt); setHint(); netTick(dt); updatePeers(dt); debugTick(dt);
   upscaleMaterial.uniforms.uTime.value = performance.now() / 1000;
   if (!contextLost) {
