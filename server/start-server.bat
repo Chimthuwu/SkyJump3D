@@ -1,5 +1,5 @@
 @echo off
-rem Neon Genocide - start the game/multiplayer server. Needs Node.js (https://nodejs.org).
+rem SkyJump3D - start the game/multiplayer server. Needs Node.js (https://nodejs.org).
 cd /d "%~dp0"
 if not exist node_modules (
   echo Installing server packages...

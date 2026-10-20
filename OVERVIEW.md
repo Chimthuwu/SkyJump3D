@@ -1,4 +1,4 @@
-# NEON GENOCIDE — Project Overview (for a reviewing agent)
+# SkyJump3D — Project Overview (for a reviewing agent)
 
 > Snapshot of everything currently in the game, written so an outside agent can give professional advice
 > (aesthetics, performance, architecture, game design, multiplayer). Line numbers are approximate —
@@ -13,7 +13,7 @@ land on a street target to clear the level, and the next (taller, harder) level 
 sky into space and land on the Moon. Tone: "psychosis simulator" — enemies whisper paranoid, urging hallucination
 lines in processed voices. Heavy persistent gore. Up to 8-player co-op over LAN/Tailscale.
 
-Origin: "a 3D game where you jump off a tall building" → grew by user requests. Name history: Tower Drop → **Neon Genocide**
+Origin: "a 3D game where you jump off a tall building" → grew by user requests. Name history: Tower Drop → Neon Genocide → **SkyJump3D**
 (`localStorage` keys still use the `towerdrop.` prefix).
 
 ## 2. Tech & file map
@@ -117,7 +117,7 @@ Instanced decal mesh (≤5000) painting floors and walls with blood; gibs, blood
 - Avatars with name tags and hoverboards; players HUD (HTML-escaped).
 - **Menu wizard**: HOST (checklist: Tailscale detected via `/net-info`, server running, invite link, room code, copy, START HOSTING) and JOIN (steps, paste invite, TEST CONNECTION, JOIN navigates to host page which auto-connects via `?room=`). `serverOrigin()` finds `localhost:8080` even from a `file://` page.
 - This PC: Tailscale 100.95.67.84, LAN 192.168.0.226.
-- **Security**: server is unauthenticated, intended for LAN/Tailscale only — do not expose to the open internet. **Open issue**: Windows Firewall has no inbound rule for Node, so friends over Tailscale can't connect until the user runs (admin PowerShell): `New-NetFirewallRule -DisplayName "Neon Genocide (Tailscale)" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -InterfaceAlias "Tailscale"`.
+- **Security**: server is unauthenticated, intended for LAN/Tailscale only — do not expose to the open internet. **Open issue**: Windows Firewall has no inbound rule for Node, so friends over Tailscale can't connect until the user runs (admin PowerShell): `New-NetFirewallRule -DisplayName "SkyJump3D (Tailscale)" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -InterfaceAlias "Tailscale"`.
 
 ## 14. Menus & dev tools
 

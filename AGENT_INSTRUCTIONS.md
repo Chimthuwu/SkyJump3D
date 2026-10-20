@@ -1,4 +1,4 @@
-# NEON GENOCIDE — Multi-Agent Work Assignment
+# SkyJump3D — Multi-Agent Work Assignment
 
 **Goal:** Make the game look **immersive, inspiring, impressive** — visual polish, atmosphere, and "wow" moments that land in a real browser.
 
@@ -156,7 +156,7 @@
 
 ## FIRST HOUR CHECKLIST (All Agents)
 
-- [ ] `cd server && npm install && npm start` — server logs "Neon Genocide server on port 8080"
+- [ ] `cd server && npm install && npm start` — server logs "SkyJump3D server on port 8080"
 - [ ] Open `http://localhost:8080` — game loads, no console errors
 - [ ] Press **H** — controls hint appears, fades at 14s
 - [ ] Press **B** — Crazy Mode toggles (chroma-split + CRT wobble)
@@ -178,4 +178,4 @@
 
 ---
 
-**Ship Target:** A build that drops into a browser, runs 60fps, looks *distinctly* Neon Genocide, and makes a friend say "holy shit" within 30 seconds.
+**Ship Target:** A build that drops into a browser, runs 60fps, looks *distinctly* SkyJump3D, and makes a friend say "holy shit" within 30 seconds.
