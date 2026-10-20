@@ -55,6 +55,8 @@ Section order in `index.html`: tuning → helpers → renderer + retro pipeline 
 - Score: coins +10, enemy points by kind, **Bullseye combo** on the street target. Best score/level saved in `localStorage`.
 - Level clear: land on the street-level bullseye/target (ground pad) → next level. Levels are seeded (`seed = 11 + level*97`), so identical for every co-op client. `TOP = min(480 + level*100, 1200)`; `WORLD_R = 640`.
 
+**The Void Loop ("psychosis loop")**: there is no floor. The ground plane is hidden and the y=0 clamp removed; the street target sits on a floating island (`streetPad`) and the boss arena is another floating slab. Falling below `VOID_Y = -160` calls `voidLoop()`: you reappear ~140 m above the moon, beside it on the tower side, still falling (no damage), with a flash + toast ("THERE IS NO FLOOR." → "FALLING. FALLING. FALLING."). Landing on the Moon arena still clears the level.
+
 ## 5. Level generation
 
 Everything level-specific goes in the `lvl` group (scene.add is overridden during `buildLevel`).
