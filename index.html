@@ -1341,6 +1341,7 @@ function buildSkyway(hubs) {
   const cloth = new THREE.Mesh(new THREE.PlaneGeometry(4, 2.4), new THREE.MeshBasicMaterial({ color: 0xff3fc8, side: THREE.DoubleSide })); cloth.position.set(mx + 2.2, moonTop + 10, mz); scene.add(cloth);
   // THE FALL: the void loop drops you down a corridor off to one side of the skyway. Fill it (and the space under the city) with
   // floating platforms you can catch, so the endless fall is full of things to grab, dodge and splat on.
+  VOID_Y = -160; ladder.length = 0; ladderTop = null; ladderBot = null; curPN = null;
   const loop = { x: ux * 250 + px * 95, z: uz * 250 + pz * 95 }, yLo = VOID_Y + 30, yHi = topY + 120;
   for (let i = 0; i < 560; i++) {
     const nearLoop = i < 400, y = yLo + (yHi - yLo) * ((i % 400 + rand()) / 400) * (nearLoop ? 1 : 0.9);
@@ -1350,7 +1351,7 @@ function buildSkyway(hubs) {
     if (Math.abs(x) < TH + 12 && Math.abs(z) < TH + 12 && y < TOP + 10) continue;                       // keep clear of the tower
     if (Math.hypot(x - ux * (colR + 20), z - uz * (colR + 20)) < 14 && y > baseY - 20) continue;       // ...and of the skyway column
     const zone = rand() < 0.45 ? ZONES[Math.floor(rand() * ZONES.length)] : (y > TOP + 100 ? MOON_ZONE : null), hw = 2.5 + rand() * 5, hd = 2.5 + rand() * 5;
-    addSlab(x, y, z, hw, hd, 1.5, zone, true);
+    const sl = addSlab(x, y, z, hw, hd, 1.5, zone, true); if (nearLoop) ladder.push(sl);
     if (rand() < 0.35) coin(x, y + 1.2, z);
     if (rand() < 0.04) heart(x, y + 1.3, z);
   }
@@ -1365,10 +1366,12 @@ function buildSkyway(hubs) {
   shards.frustumCulled = false; scene.add(shards);
   // EASTER EGG: the lowest platform in the world, below everything else, with a faint gold beacon. Land on it...
   const bx = loop.x + 30, bz = loop.z - 20, by = VOID_Y + 8;
-  const rb = addSlab(bx, by, bz, 5, 5, 2, null, true); rb.egg = 'bottom';
+  const rb = addSlab(bx, by, bz, 5, 5, 2, null, true); rb.egg = 'bottom'; ladder.push(rb);
   const eggBeam = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 260, 6), new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }));
   eggBeam.position.set(bx, by + 130, bz); scene.add(eggBeam);
   const eggRing = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.12, 6, 24), new THREE.MeshBasicMaterial({ color: 0xffd23a })); eggRing.rotation.x = Math.PI / 2; eggRing.position.set(bx, by + 0.15, bz); scene.add(eggRing);
+  ladder.sort((a, b) => a.top - b.top); ladder.forEach((sl, i) => { sl.pn = i + 1; });      // PLATFORM COUNTER: lowest = #1, highest = biggest number
+  ladderBot = { n: 1, y: ladder[0].top }; ladderTop = { n: ladder.length, y: ladder[ladder.length - 1].top }; ladderLoop = loop;
   moonInfo = { x: mx, y: moonTop, z: mz, col: [ux * colR, baseY, uz * colR], top: topY, loop };
   return keepOut;
 }
@@ -1472,13 +1475,16 @@ function buildNetwork(exitAngle) {
     }
   }
   hubs.sort((a, b) => b.top - a.top);            // the start roof is the highest point, so it sorts first
+  for (const h of hubs) if (h.kind !== 'start' && h.kind !== 'launch') h.region = h.region === undefined ? regionForHub(hubs.indexOf(h)) : h.region;
   // last stop: a low platform beside the street target, a safe drop from the street
   const exitPos = { x: Math.cos(exitAngle) * 34, z: Math.sin(exitAngle) * 34 };
   const ex = addSlab(exitPos.x, 12, exitPos.z, 8, 8, 2, null, true);
   Object.assign(ex, { targetR: 2.2 }); addBullseye(exitPos.x, 12, exitPos.z, 2.2);
   heart(exitPos.x + 3, 13.3, exitPos.z); ammoBox(exitPos.x - 3, 12.8, exitPos.z);
-  hubs.push({ kind: 'exit', x: exitPos.x, z: exitPos.z, top: 12, hw: 8, hd: 8, zone: null, r: 10 });
-  const armory = hubs.find(h => h.kind === 'building' && h.zone && h.zone.name === 'Jungle') || hubs.find(h => h.kind === 'building') || hubs.find(h => h.kind === 'arena') || hubs.find(h => h.kind === 'exit');
+  const exitHub = { kind: 'exit', x: exitPos.x, z: exitPos.z, top: 12, hw: 8, hd: 8, zone: null, r: 10 };
+  hubs.push(exitHub);
+  const weaponHubs = hubs.filter(h => h.kind === 'building' || h.kind === 'arena');
+  const armory = weaponHubs.find(h => h.zone && h.zone.name === 'Jungle') || weaponHubs[0] || exitHub;
   const nextWeapon = WEAPONS.findIndex((w, i) => i >= 2 && !weaponOwned[i]);
   const levelGun = nextWeapon >= 2 ? nextWeapon : 2 + ((level - 1) % (WEAPONS.length - 2));
   armoryGun = levelGun;                            // checkpoints will dispense the same gun, all level long
@@ -2287,12 +2293,14 @@ function onLand(speed, sol) {
       toast('ROCK BOTTOM. NOBODY WAS COMING. +9999 · ALL WEAPONS · FULL HEALTH', 5200);
       try { $('subs').textContent = '[IT] You went all the way down. There is nothing here. You are still falling.'; setTimeout(() => { $('subs').textContent = ''; }, 6500); } catch (_) {}
     } else toast('Rock bottom. Again.', 1400);
-    return;
   }
-  if (sol.moon && state === 'play') {
-    if (endBosses.every(b => b.dead)) levelClear('moon', 3000);
-    else toast(`${endBosses.filter(b => !b.dead).length} SIGNAL BOSSES STILL BLOCK THE MOON`, 2200);
+  if (sol.pn !== undefined && state === 'play') {
+    curPN = sol.pn;
+    if (ladderTop && sol.pn >= ladderTop.n - 1) ladderExtend(1);
+    if (ladderBot && sol.pn <= ladderBot.n + 1) ladderExtend(-1);
+    if (sol.egg === 'bottom') return;
   }
+  if (sol.moon && state === 'play') levelClear('moon', 3000);
   if (sol.ground) setZone(null); else if (!sol.bounce && !(psy.t > 0)) setZone(sol.zone || null);
   if (sol.sp && sol.sp.kind === 'psy') psyTrigger(sol);
   if (sol.arena && sol.arena.locked && !sol.arena.warned) { sol.arena.warned = true; toast('Defeat the Guardian to unlock the way on!', 3000); }
@@ -2304,15 +2312,16 @@ function onLand(speed, sol) {
   else if (speed > 12) burst(pos, 0xcccccc, 4);
   if (sol.ground && groundPad && state === 'play') {
     const d = Math.hypot(pos.x - groundPad.x, pos.z - groundPad.z);
-    if (d < 1.8 * 2.1) {
-      if (endBosses.some(e => !e.dead)) toast(`${endBosses.filter(e => !e.dead).length} SIGNAL BOSSES REMAIN`, 1800);
-      else levelClear(d < 1.8 ? 'bullseye' : 'target', d < 1.8 ? 1000 : 500);
-    }
+    if (d < 1.8 * 2.1) levelClear(d < 1.8 ? 'bullseye' : 'target', d < 1.8 ? 1000 : 500);
   }
 }
 let clearT = 0;
 function levelClear(why, bonus, remote = false) {      // remote: a teammate cleared it, everyone advances together
   if (state !== 'play' && !(remote && state === 'dead')) return;
+  if ((why === 'moon' || why === 'bullseye' || why === 'target') && endBosses.some(b => !b.dead)) {
+    if (!remote) toast(`${endBosses.filter(b => !b.dead).length} SIGNAL BOSSES STILL BLOCK THE EXIT`, 2200);
+    return;
+  }
   if (!remote) netSend({ t: 'clear', why, bonus });
   state = 'clear'; clearT = 4; vel.set(0, 0, 0); pounding = false;
   if (why === 'boss') bonus = Math.max(bonus, 5000);
@@ -2953,8 +2962,54 @@ function heightAbove() {
 }
 
 // THE SICK JOKE: there is no floor. Fall far enough and you start falling again from the moon.
-const VOID_Y = -160;
+let VOID_Y = -160;
 let loops = 0;
+// ---- PLATFORM COUNTER: every platform in the fall corridor is numbered by height (bottom = #1). Reach the top one and more spawn above;
+// reach the bottom one and more spawn below, counting into the negatives (-1, -2, ...), and the void floor sinks with them.
+const ladder = []; let ladderTop = null, ladderBot = null, ladderLoop = null, curPN = null;
+function ladderRand(n) { let t = (n * 2654435761 + 0x9e3779b9) >>> 0; return () => { t = (t + 0x6D2B79F5) >>> 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; }; }
+function ladderExtend(dir) {        // dir +1 = upward, -1 = downward
+  if (!ladderLoop) return;
+  const edge = dir > 0 ? ladderTop : ladderBot, R = ladderRand(edge.n * 7 + (dir > 0 ? 1 : 2));
+  inLevel(() => {
+    let n = edge.n, y = edge.y;
+    for (let k = 0; k < 14; k++) {
+      n += dir; if (n === 0) n = dir;                                                            // there is no #0: ... 2, 1, -1, -2 ...
+      y += dir * (15 + R() * 8);
+      const a = R() * 6.283, r = Math.sqrt(R()) * 55, zone = R() < 0.4 ? ZONES[Math.floor(R() * ZONES.length)] : null;
+      const sl = addSlab(ladderLoop.x + Math.cos(a) * r, y, ladderLoop.z + Math.sin(a) * r, 2.5 + R() * 4, 2.5 + R() * 4, 1.5, zone, true);
+      sl.pn = n; ladder.push(sl); if (R() < 0.4) coin(sl.cx, y + 1.2, sl.cz);
+      if (dir > 0) ladderTop = { n, y }; else { ladderBot = { n, y }; VOID_Y = Math.min(VOID_Y, y - 60); }
+    }
+  });
+  toast(dir > 0 ? `THE TOP WAS NOT THE TOP · #${ladderTop.n}` : `THE BOTTOM WAS NOT THE BOTTOM · #${ladderBot.n}`, 3200);
+  sfx.psy(); shake = Math.max(shake, 0.4);
+}
+const pnSprites = [];
+function pnLabel(i) {
+  if (pnSprites[i]) return pnSprites[i];
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, fog: false }));
+  spr.scale.set(7, 3.5, 1); spr.userData = { c, n: null }; scene.add(spr); return (pnSprites[i] = spr);
+}
+let pnT = 0;
+function updateLadderLabels(dt) {      // floating numbers over the nearest numbered platforms (a small reused pool of sprites)
+  pnT -= dt; if (pnT > 0 || !ladder.length) return; pnT = 0.3;
+  const near = [];
+  for (const sl of ladder) { const d = Math.hypot(sl.cx - pos.x, sl.top - pos.y, sl.cz - pos.z); if (d < 110) near.push([d, sl]); }
+  near.sort((a, b) => a[0] - b[0]);
+  for (let i = 0; i < 12; i++) {
+    const spr = pnLabel(i), it = near[i];
+    if (!it) { spr.visible = false; continue; }
+    const sl = it[1], n = sl.pn; spr.visible = true; spr.position.set(sl.cx, sl.top + 3.2, sl.cz);
+    if (spr.userData.n !== n) {
+      spr.userData.n = n; const g = spr.userData.c.getContext('2d'); g.clearRect(0, 0, 256, 128);
+      g.font = '800 84px Consolas, monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      const col = n < 0 ? '#ff3a5a' : n === 1 ? '#ffd23a' : '#36f6ff'; g.shadowColor = col; g.shadowBlur = 18; g.fillStyle = col; g.fillText('#' + n, 128, 66);
+      spr.material.map.needsUpdate = true;
+    }
+  }
+}
 function voidLoop() {
   if (state !== 'play' || !moonInfo) return;
   loops++;
@@ -3306,7 +3361,8 @@ function updateVisuals(dt) {
   $('hud').style.display = state === 'title' ? 'none' : '';
   const hearts = '♥'.repeat(Math.max(0, health)) + '<span style="opacity:.35">' + '♥'.repeat(MAXHP - Math.max(0, health)) + '</span>';
   $('hud').innerHTML = `<div class="hearts">${hearts}</div>Glide<div class="bar"><div style="width:${(glide * 100) | 0}%"></div></div>Grip<div class="bar"><div style="width:${(climbStam * 100) | 0}%;background:#ffb347"></div></div>Energy<div class="bar"><div style="width:${(cont.energy * 100) | 0}%;background:${cont.locked ? '#ff4a4a' : '#3affd0'}"></div></div>` +
-    `Level <b>${level}</b> · Altitude <b>${Math.max(0, pos.y) | 0}</b> m<br>Score <b>${score}</b> · Best ${Math.max(best.score, score)} (L${best.level})` +
+    `Level <b>${level}</b> · Altitude <b>${pos.y | 0}</b> m<br>Score <b>${score}</b> · Best ${Math.max(best.score, score)} (L${best.level})` +
+    (curPN !== null && ladderTop ? `<br><span style="color:${curPN < 0 ? '#ff3a5a' : '#ffd23a'}">PLATFORM #${curPN}</span> · deepest #${ladderBot.n} · highest #${ladderTop.n}` : '') +
     (combo > 0 ? ` · <span style="color:#ffd23a">Bullseye combo x${combo}</span>` : '') + '<br>' + weaponHud();
   const bb = $('bossbar');
   let tgt = null, tn = 1e9;
@@ -4351,7 +4407,7 @@ renderer.setAnimationLoop(now => {
   else if (state === 'play') { playerUpdate(dt); updateEnemies(dt); updateShots(dt); }
   else if (state === 'dead') { deadT -= dt; if (deadT <= 0) respawn(); if (net.on) { updateEnemies(dt); updateShots(dt); } }
   else if (state === 'clear') { updateEnemies(dt); clearT -= dt; if (clearT <= 0) nextLevel(); }
-  updateItems(dt); updateFx(dt); updateGibs(dt); updateClouds(dt); updateSpecials(dt); updateWorlds(dt); innerVoices(dt); updatePortals(dt);
+  updateItems(dt); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); updateClouds(dt); updateSpecials(dt); updateWorlds(dt); innerVoices(dt); updatePortals(dt);
   updateVisuals(dt); setHint(); netTick(dt); updatePeers(dt); debugTick(dt);
   upscaleMaterial.uniforms.uTime.value = performance.now() / 1000;
   if (!contextLost) {
