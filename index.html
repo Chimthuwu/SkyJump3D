@@ -471,7 +471,7 @@ const winTex = (() => {
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 1;
   return t;
 })();
-const bldMats = [0x465477, 0x35476b, 0x69466d, 0x304c62].map(col => retroMaterial(new THREE.MeshLambertMaterial({ map: winTex, color: col, flatShading: true })));
+const bldMats = [0x465477, 0x35476b, 0x69466d, 0x304c62].map(col => retroMaterial(new THREE.MeshLambertMaterial({ map: winTex, color: col, emissive: 0xffffff, emissiveMap: winTex, emissiveIntensity: 0.85, flatShading: true })));
 // Bark + canopies for the Jungle morph: when the jungle zone takes over, every building becomes a giant tree trunk
 const barkTex = (() => {
   const c = document.createElement('canvas'); c.width = 64; c.height = 128;
@@ -1329,10 +1329,10 @@ function buildSkyway(hubs) {
   // THE FALL: the void loop drops you down a corridor off to one side of the skyway. Fill it (and the space under the city) with
   // floating platforms you can catch, so the endless fall is full of things to grab, dodge and splat on.
   const loop = { x: ux * 250 + px * 95, z: uz * 250 + pz * 95 }, yLo = VOID_Y + 30, yHi = topY + 120;
-  for (let i = 0; i < 230; i++) {
-    const nearLoop = i < 160, y = yLo + (yHi - yLo) * ((i % 160 + rand()) / 160) * (nearLoop ? 1 : 0.9);
+  for (let i = 0; i < 560; i++) {
+    const nearLoop = i < 400, y = yLo + (yHi - yLo) * ((i % 400 + rand()) / 400) * (nearLoop ? 1 : 0.9);
     let x, z;
-    if (nearLoop) { const a = rand() * 6.283, r = Math.sqrt(rand()) * 60; x = loop.x + Math.cos(a) * r; z = loop.z + Math.sin(a) * r; }
+    if (nearLoop) { const a = rand() * 6.283, r = Math.sqrt(rand()) * 75; x = loop.x + Math.cos(a) * r; z = loop.z + Math.sin(a) * r; }
     else { const a = rand() * 6.283, r = 50 + rand() * 360; x = Math.cos(a) * r; z = Math.sin(a) * r; }
     if (Math.abs(x) < TH + 12 && Math.abs(z) < TH + 12 && y < TOP + 10) continue;                       // keep clear of the tower
     if (Math.hypot(x - ux * (colR + 20), z - uz * (colR + 20)) < 14 && y > baseY - 20) continue;       // ...and of the skyway column
@@ -1341,6 +1341,15 @@ function buildSkyway(hubs) {
     if (rand() < 0.35) coin(x, y + 1.2, z);
     if (rand() < 0.04) heart(x, y + 1.3, z);
   }
+  // drifting neon debris (non-solid, one instanced draw call): shards, ring fragments and sparks hanging in the fall corridor
+  const shardN = 900, shards = new THREE.InstancedMesh(new THREE.OctahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0xffffff }), shardN), dm = new THREE.Object3D(), cc = new THREE.Color();
+  const neon = [0x36f6ff, 0xff3fc8, 0x9b73ff, 0x7aff5a, 0xffb347];
+  for (let i = 0; i < shardN; i++) {
+    const a = rand() * 6.283, r = Math.sqrt(rand()) * 110, y = yLo + (yHi - yLo) * rand(), sc = 0.3 + rand() * 1.6;
+    dm.position.set(loop.x + Math.cos(a) * r, y, loop.z + Math.sin(a) * r); dm.rotation.set(rand() * 6, rand() * 6, rand() * 6); dm.scale.set(sc * 0.4, sc * 1.6, sc * 0.4); dm.updateMatrix();
+    shards.setMatrixAt(i, dm.matrix); shards.setColorAt(i, cc.setHex(neon[(rand() * neon.length) | 0]));
+  }
+  shards.frustumCulled = false; scene.add(shards);
   moonInfo = { x: mx, y: moonTop, z: mz, col: [ux * colR, baseY, uz * colR], top: topY, loop };
   return keepOut;
 }
