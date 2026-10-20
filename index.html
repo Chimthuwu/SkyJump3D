@@ -619,6 +619,37 @@ function weaponPickup(index, x, y, z) {
   m.add(core, ring, pip, label); m.position.set(x, y, z); lvl.add(m);
   const it = { mesh: m, type: 'weapon', weaponIndex: index, taken: false }; items.push(it); return it;
 }
+const LORE = [
+  'CITY LOG 001 // They built the tower to see the ground. Nobody has seen the ground since.',
+  'CITY LOG 002 // The street was the first thing to go. Then the bridges. Then the reasons.',
+  'MAINTENANCE // Sublevel -1 reports: there is no sublevel. The elevator just keeps counting.',
+  'TRANSMISSION // If you can read this you are already falling. That is fine. Everyone is falling.',
+  'GRAFFITI // THE MOON IS NOT A PLACE. THE MOON IS A DEADLINE.',
+  'CITY LOG 009 // Platform #1 was poured first. The counting started there. It has not stopped.',
+  'RADIO FREE NEON // ...and that was the Funk Collective with "Terminal Velocity". Stay airborne, citizens.',
+  'CITY LOG 013 // The Guardians were security once. Then the signal told them to keep everyone IN.',
+  'DIARY // I jumped on day 3. I landed on day 4. The falling is longer than the jump. Weird.',
+  'TRANSMISSION // THEY are not enemies. THEY are what the city dreams when nobody is awake.',
+  'GRAFFITI // GO DOWN FAR ENOUGH AND YOU COME BACK FROM THE TOP. NOBODY KNOWS WHY. NOBODY STOPS.',
+  'CITY LOG 021 // Frogs were released in the canopy district to control the insects. There were no insects.',
+  'WARNING // Stegosaurus is not a recommended pet. Stegosaurus does not care about your recommendations.',
+  'TRANSMISSION // The gold beacon at the very bottom is real. Someone left a gift there. Be kind to it.',
+  'CITY LOG 030 // Each zone is a mood the city had once. Jungle: curiosity. Frozen: grief. Inferno: spite.',
+  'CITY LOG 031 // Horror is the one that remembers. It only shows up where people have died. So: everywhere.',
+  'DIARY // The hoverboard hums a note when you ride it. If you hum along the fall feels shorter.',
+  'MAINTENANCE // Do not fix the void. The void is load-bearing.',
+  'TRANSMISSION // Count the platforms. If you reach the top, there are more. Reach the bottom, there are more. The numbers go negative. We checked.',
+  'GRAFFITI // THE BOSSES ARE JUST ENGINEERS WHO STAYED LATE.',
+];
+let loreN = 0;
+function loreTerminal(x, y, z) {
+  const g = new THREE.Group(), idx = loreN++ % LORE.length;
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.4, 0.5), retroMaterial(new THREE.MeshLambertMaterial({ color: 0x1a2236 })));
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.8), new THREE.MeshBasicMaterial({ color: 0x36f6ff }));
+  scr.position.set(0, 0.2, 0.26); g.add(base, scr);
+  g.position.set(x, y + 0.7, z); scene.add(g);
+  items.push({ mesh: g, type: 'lore', idx, taken: false });
+}
 function heart(x, y, z) {
   const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.55), retroMaterial(new THREE.MeshLambertMaterial({ color: 0xff3355 })));
   m.position.set(x, y, z); scene.add(m); items.push({ mesh: m, type: 'heart', taken: false });
@@ -1472,7 +1503,7 @@ function buildNetwork(exitAngle) {
       let hub;
       if (w.arena) hub = buildArena(w.type, x, 45 + rand() * (TOP - 90), z, w.zone);
       else hub = buildBuildingHub(x, z, 18 + rand() * 14, 18 + rand() * 14, 35 + rand() * (TOP - 60), w.zone);
-      hub.region = w.region;
+      hub.region = w.region; hubs.push(hub);
       break;
     }
   }
@@ -1485,6 +1516,8 @@ function buildNetwork(exitAngle) {
   heart(exitPos.x + 3, 13.3, exitPos.z); ammoBox(exitPos.x - 3, 12.8, exitPos.z);
   const exitHub = { kind: 'exit', x: exitPos.x, z: exitPos.z, top: 12, hw: 8, hd: 8, zone: null, r: 10 };
   hubs.push(exitHub);
+  loreN = (level * 3) % LORE.length;
+  for (const h of hubs) if (h.kind === 'building' || h.kind === 'arena' || h.kind === 'start') loreTerminal(h.x + (h.kind === 'start' ? 6 : Math.min(h.hw || 8, 8) - 2), h.top, h.z + (h.kind === 'start' ? -6 : 2));
   const weaponHubs = hubs.filter(h => h.kind === 'building' || h.kind === 'arena');
   const armory = weaponHubs.find(h => h.zone && h.zone.name === 'Jungle') || weaponHubs[0] || exitHub;
   const nextWeapon = WEAPONS.findIndex((w, i) => i >= 2 && !weaponOwned[i]);
@@ -1982,7 +2015,7 @@ function loadGore() {
 }
 setInterval(saveGore, 3000);
 addEventListener('beforeunload', saveGore);
-let activeBloodFx = 0, bleeders = [];
+let activeBloodFx = 0, bleeders = [], killStreak = 0, killStreakT = 0;
 const MAX_BLOOD_FX = 420;
 function bloodBurst(p, n, power = 1) {
   if (!goreOn) return;
@@ -2010,7 +2043,20 @@ function spawnGibs(p, parts, n, force) {
     if (gibsList.length > 420) { const o = gibsList.shift(); o.mesh.removeFromParent(); o.mesh.geometry.dispose(); }
   }
 }
+// kill juice: shock rings, flash, escalating streak bonuses shared by every death path
+function killFx(e, big = false) {
+  const p = new THREE.Vector3(e.x, e.kind === 'drone' ? e.cy : e.y + e.h / 2, e.z);
+  shockRing(p, big ? 10 : 4.5, big ? 0xff3fc8 : 0x36f6ff);
+  flashFx(p, 0xfff6a0, big ? 6 : 2.5, big ? 0.5 : 0.22);
+  if (big) flash = Math.max(flash, 0.85);                          // whole-sky white pop on a boss kill
+  killStreak = killStreakT > 0 ? killStreak + 1 : 1; killStreakT = 4;
+  if (killStreak >= 2) {
+    const bonus = killStreak * 25; score += bonus;
+    toast(`${['DOUBLE', 'TRIPLE', 'QUAD', 'RAMPAGE', 'MASSACRE', 'UNSPEAKABLE'][Math.min(killStreak - 2, 5)]} KILL ×${killStreak}  +${bonus}`, 1100);
+  }
+}
 function updateGibs(dt) {
+  if (killStreakT > 0) { killStreakT -= dt; if (killStreakT <= 0) killStreak = 0; }
   for (let i = bleeders.length - 1; i >= 0; i--) {                        // arterial fountains: things keep spraying after death
     const f = bleeders[i]; f.t -= dt; f.acc += dt;
     while (f.acc > 0.07) { f.acc -= 0.07; bloodBurst(f.p, 2, 1.6); splatter(f.p.x, f.p.y - 0.4, f.p.z, 2, 1.3, 0.8); }
@@ -2147,6 +2193,7 @@ addEventListener('keydown', e => {
   if (/^Digit[1-7]$/.test(e.code)) selectWeapon(+e.code[5] - 1);
   if (e.code === 'Tab') cycleWeapon(1);
   if (e.code === 'KeyL') { voiceLines = !voiceLines; toast(voiceLines ? 'Enemy voice lines on' : 'Enemy voice lines off', 1200); if (!voiceLines) { try { window.speechSynthesis.cancel(); } catch (_) {} $('subs').textContent = ''; } }
+  if (e.code === 'KeyN') { musicOn = !musicOn; toast(musicOn ? 'Music on' : 'Music off', 900); }
   if (e.code === 'KeyM') { muted = !muted; toast(muted ? 'Sound off' : 'Sound on', 900); }
   if (e.code === 'KeyP' && state !== 'title') cycleRetroPreset();
   if (e.code === 'KeyB' && state !== 'title') toggleCrazy();
@@ -2238,7 +2285,7 @@ function damageEnemy(e, dmg, kind = 'hit') {
     e.dead = true; e.mesh.removeFromParent(); if (e.warn) e.warn.visible = false;
     if (net.on && net.host) netSend({ t: 'kill', i: enemies.indexOf(e) });
     enemyGore(e); shake = Math.max(shake, e.boss ? 1.2 : 0.5);
-    score += e.pts; toast(`+${e.pts}`, 700);
+    score += e.pts; toast(`+${e.pts}`, 700); killFx(e, e.boss);
     if (e.variant === 'bomber') explode({ x: e.x, y: e.cy, z: e.z }, 4.2, 0, 'enemy', kind);
     dropAmmo(e); if (e.mini) unlockArena(e.hub);
     if (e.boss && endBosses.every(b => b.dead)) {
@@ -3109,6 +3156,68 @@ function playerUpdate(dt) {
   if (pos.y < VOID_Y) voidLoop();
 }
 
+
+// ---------- THE FUNK: a procedural live-band (drums, slap bass, chord stabs, licks) that changes key/tempo per zone ----------
+// Scheduler with look-ahead on the WebAudio clock. Intensity rises near enemies and in free-fall; space strips it down to a pad + arp.
+let musicOn = true, musicBus = null, musicNext = 0, musicStep = 0;
+const MUSIC = {          // root MIDI note, bpm, scale intervals, swing, drum placement
+  city:        { root: 45, bpm: 108, sc: [0, 3, 5, 7, 10], sw: 0.12, kick: [0, 6, 10], snare: [4, 12] },
+  Psychedelic: { root: 50, bpm: 118, sc: [0, 2, 3, 7, 9],  sw: 0.18, kick: [0, 3, 8, 11], snare: [4, 12] },
+  Jungle:      { root: 52, bpm: 104, sc: [0, 3, 5, 7, 10], sw: 0.22, kick: [0, 5, 7, 10], snare: [4, 12] },
+  Frozen:      { root: 45, bpm: 96,  sc: [0, 2, 3, 7, 8],  sw: 0.08, kick: [0, 8], snare: [12] },
+  Inferno:     { root: 48, bpm: 126, sc: [0, 1, 4, 5, 7],  sw: 0.1,  kick: [0, 2, 4, 6, 8, 10, 12, 14], snare: [4, 12] },
+  Storm:       { root: 41, bpm: 112, sc: [0, 3, 5, 6, 7],  sw: 0.14, kick: [0, 7, 10], snare: [4, 12] },
+  Horror:      { root: 35, bpm: 84,  sc: [0, 1, 3, 6, 7],  sw: 0.05, kick: [0, 10], snare: [12] },
+};
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+function musicHit(t, kind, a, b) {
+  const o = actx.createOscillator(), g = actx.createGain(); o.connect(g); g.connect(musicBus);
+  if (kind === 'kick') { o.type = 'sine'; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.14); g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.22); o.start(t); o.stop(t + 0.24); }
+  else if (kind === 'bass') {                    // slappy filtered saw with a pitch pop
+    const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 6; f.frequency.setValueAtTime(900 + b * 900, t); f.frequency.exponentialRampToValueAtTime(160, t + 0.16);
+    o.disconnect(); o.connect(f); f.connect(g); o.type = 'sawtooth'; o.frequency.setValueAtTime(mtof(a) * 1.06, t); o.frequency.exponentialRampToValueAtTime(mtof(a), t + 0.03);
+    g.gain.setValueAtTime(0.42, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18 + b * 0.1); o.start(t); o.stop(t + 0.3);
+  } else if (kind === 'stab') {                  // short chord stab (square / saw)
+    const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(2800, t); f.frequency.exponentialRampToValueAtTime(700, t + 0.14);
+    o.disconnect(); o.connect(f); f.connect(g); o.type = b ? 'sawtooth' : 'square'; o.frequency.value = mtof(a); g.gain.setValueAtTime(0.09, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.15); o.start(t); o.stop(t + 0.18);
+  } else if (kind === 'lead') {                  // wobbly lick
+    o.type = 'triangle'; o.frequency.setValueAtTime(mtof(a), t); o.frequency.linearRampToValueAtTime(mtof(a) * 1.01, t + 0.2); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.13, t + 0.02); g.gain.exponentialRampToValueAtTime(0.001, t + 0.28); o.start(t); o.stop(t + 0.3);
+  } else if (kind === 'pad') {
+    o.type = 'sine'; o.frequency.value = mtof(a); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.07, t + 0.8); g.gain.linearRampToValueAtTime(0.0001, t + b); o.start(t); o.stop(t + b + 0.1);
+  } else {                                       // noise percussion: snare / hat
+    o.disconnect(); const src = actx.createBufferSource(); src.buffer = noiseBuf; const f = actx.createBiquadFilter();
+    f.type = kind === 'hat' ? 'highpass' : 'bandpass'; f.frequency.value = kind === 'hat' ? 7500 : 1800; src.connect(f); f.connect(g);
+    g.gain.setValueAtTime(kind === 'hat' ? (b ? 0.16 : 0.07) : 0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + (kind === 'hat' ? 0.05 : 0.17)); src.start(t); src.stop(t + 0.2);
+  }
+}
+function musicTick(dt) {
+  if (!actx || !musicOn || muted || paused || state === 'title' || !noiseBuf) { if (musicBus) musicBus.gain.value = 0; return; }
+  if (!musicBus) { musicBus = actx.createGain(); const comp = actx.createDynamicsCompressor(); musicBus.connect(comp); comp.connect(actx.destination); }
+  const sk = spaceK(pos.y), zn = (activeZ && MUSIC[activeZ.name]) ? activeZ.name : 'city', M = MUSIC[zn];
+  let near = 0; for (const e of enemies) if (!e.dead && Math.abs(e.y - pos.y) < 20 && Math.hypot(e.x - pos.x, e.z - pos.z) < 26) near++;
+  const fall = clamp((-vel.y - 18) / 30, 0, 1), heat = clamp(near / 4, 0, 1) * 0.8 + fall * 0.5;       // 0..1 intensity
+  musicBus.gain.value += ((state === 'dead' ? 0.25 : 0.55 - sk * 0.2) - musicBus.gain.value) * Math.min(1, dt * 2);
+  const bpm = M.bpm * (1 + fall * 0.18 + (near ? 0.04 : 0)), stepDur = 60 / bpm / 4, now = actx.currentTime;
+  if (musicNext < now - 0.5) musicNext = now + 0.05;
+  while (musicNext < now + 0.25) {
+    const i = musicStep % 16, t = musicNext + ((i % 2) ? stepDur * M.sw : 0), deg = n => M.root + M.sc[((n % 5) + 5) % 5] + 12 * Math.floor(n / 5);
+    const bar = Math.floor(musicStep / 16) % 4, shift = [0, 0, 3, 2][bar];                          // i - i - iv - bVII feel (scale degrees)
+    if (sk < 0.5) {
+      if (M.kick.includes(i)) musicHit(t, 'kick');
+      if (M.snare.includes(i) && (heat > 0.15 || bar % 2)) musicHit(t, 'snare');
+      if (i % 2 === 0 || heat > 0.5) musicHit(t, 'hat', 0, i % 4 === 2 ? 1 : 0);
+      // slap bass: syncopated 16th riff built from the bar's root, ghost notes + octave pops
+      const riff = [0, -1, -1, 0, -1, 2, -1, 0, -1, -1, 3, -1, 2, -1, 0, 4][i];
+      if (riff >= 0 && (i % 4 !== 3 || heat > 0.3)) musicHit(t, 'bass', deg(shift + riff) - 12 + (i === 15 ? 12 : 0), i % 4 === 0 ? 1 : 0);
+      if (heat > 0.25 && (i === 3 || i === 7 || i === 11 || i === 14)) for (const k of [0, 2, 4]) musicHit(t, 'stab', deg(shift + k) + 12, i === 7 ? 1 : 0);      // off-beat chord stabs
+      if (heat > 0.55 && i % 8 === 6) musicHit(t, 'lead', deg(shift + [2, 4, 3, 5][Math.floor(musicStep / 8) % 4]) + 24);
+    } else if (i % 4 === 0) {                                                                         // space: pad + slow arp, no drums
+      musicHit(t, 'pad', deg(shift + [0, 2, 4][(i / 4) % 3]) + 12, 3.5); musicHit(t, 'lead', deg(shift + [4, 2, 3, 1][(i / 4) % 4]) + 24);
+    }
+    musicNext += stepDur; musicStep++;
+  }
+}
+
 // ---------- enemies ----------
 // per-variant behaviour while the player is in range; returns [dirX, dirZ, speed]
 function variantAI(e, dt, d, dxp, dzp) {
@@ -3265,6 +3374,10 @@ function updateItems(dt) {
           if (!restocked && w.cont) cont.energy = Math.min(1, cont.energy + 0.5);
           toast(restocked ? `${w.name} acquired · ammo restocked` : `${w.name} core recharged`, 1300); sfx.eshay();
         }
+      } else if (it.type === 'lore') {
+        score += 50; sfx.coin(); const line = LORE[it.idx];
+        try { $('subs').textContent = line; clearTimeout(window.__loreT); window.__loreT = setTimeout(() => { if ($('subs').textContent === line) $('subs').textContent = ''; }, 9000); } catch (_) {}
+        toast('TRANSMISSION RECEIVED +50', 1400);
       } else {
         toast(it.type === 'ammo' ? 'AMMO CACHE' : '+1 HEART', 1100);
         sfx.eshay(); announceEshay();
@@ -3385,7 +3498,7 @@ function updateVisuals(dt) {
 
 function setHint() {
   $('hint').textContent = state === 'play'
-    ? 'WASD move · SHIFT sprint · double-jump summons your HOVERBOARD (hold SPACE to ride) · C pound · click/F fire (hold for beams) · RIGHT-CLICK aim · 1-7 or wheel: weapons · jump at a wall to climb (SPACE wall-jump) · step into neon portals to travel · CAPS/V first-person · R respawn · M sound · G gore'
+    ? 'WASD move · SHIFT sprint · double-jump summons your HOVERBOARD (hold SPACE to ride) · C pound · click/F fire (hold for beams) · RIGHT-CLICK aim · 1-7 or wheel: weapons · jump at a wall to climb (SPACE wall-jump) · step into neon portals to travel · CAPS/V first-person · R respawn · M sound · N music · G gore'
     : '';
 }
 
@@ -3455,7 +3568,7 @@ function netSnapshot(all) {
 }
 function remoteKill(e) {
   e.dead = true; e.mesh.removeFromParent(); if (e.warn) e.warn.visible = false;
-  sfx.kill(); enemyDeathVoice(e); enemyGore(e); score += e.pts; dropAmmo(e); shake = Math.max(shake, e.boss ? 1.2 : 0.3);
+  sfx.kill(); enemyDeathVoice(e); enemyGore(e); score += e.pts; dropAmmo(e); shake = Math.max(shake, e.boss ? 1.2 : 0.3); killFx(e, e.boss);
   if (e.mini) unlockArena(e.hub);
   if (e.boss && endBosses.every(b => b.dead) && groundPad && groundPad.seal) { groundPad.seal.material.color.setHex(0x5aff8a); groundPad.seal.material.opacity = 0.4; }
 }
@@ -4397,7 +4510,7 @@ document.addEventListener('pointerlockchange', () => { if (!document.pointerLock
 buildLevel();
 pos.set(start.x, start.y, start.z);
 showMenu(true);
-window.__ng = { spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(ZONES.find(z => z.name === n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; }, info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow }) };   // dev hook (console / test tools)
+window.__ng = { lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(ZONES.find(z => z.name === n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; }, info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow }) };   // dev hook (console / test tools)
 {   // opened from the relay server with ?room=... -> connect right away
   const qp = new URLSearchParams(location.search || '');
   if (/^https?:$/.test(location.protocol) && qp.get('room')) netConnect(location.host, qp.get('room').slice(0, 24));
@@ -4409,7 +4522,7 @@ renderer.setAnimationLoop(now => {
   else if (state === 'play') { playerUpdate(dt); updateEnemies(dt); updateShots(dt); }
   else if (state === 'dead') { deadT -= dt; if (deadT <= 0) respawn(); if (net.on) { updateEnemies(dt); updateShots(dt); } }
   else if (state === 'clear') { updateEnemies(dt); clearT -= dt; if (clearT <= 0) nextLevel(); }
-  updateItems(dt); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); updateClouds(dt); updateSpecials(dt); updateWorlds(dt); innerVoices(dt); updatePortals(dt);
+  updateItems(dt); musicTick(dt); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); updateClouds(dt); updateSpecials(dt); updateWorlds(dt); innerVoices(dt); updatePortals(dt);
   updateVisuals(dt); setHint(); netTick(dt); updatePeers(dt); debugTick(dt);
   upscaleMaterial.uniforms.uTime.value = performance.now() / 1000;
   if (!contextLost) {
