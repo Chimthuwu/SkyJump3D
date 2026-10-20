@@ -1,4 +1,4 @@
-<p align="center"><img src="LOGO2.png" width="480" alt="NEON GENOCIDE"></p>
+<p align="center"><img src="LOGO2.png" width="480" alt="SkyJump3D"></p>
 
 First-person neon endless co-op platformer-shooter on a sky-city. Single-file Three.js game.
 

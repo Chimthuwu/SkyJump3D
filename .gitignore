@@ -4,3 +4,5 @@ node_modules/
 server/.env
 server/tts-cache/
 
+cf-public/
+.wrangler/

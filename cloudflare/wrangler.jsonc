@@ -1,0 +1,9 @@
+{
+  "name": "skyjump3d",
+  "main": "worker.js",
+  "compatibility_date": "2026-01-01",
+  "assets": { "directory": "../cf-public", "binding": "ASSETS" },
+  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Room" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  "observability": { "enabled": true }
+}

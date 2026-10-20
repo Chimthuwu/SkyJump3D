@@ -1,4 +1,4 @@
-// Neon Genocide co-op relay: serves ../index.html and relays JSON messages between players in a room.
+// SkyJump3D co-op relay: serves ../index.html and relays JSON messages between players in a room.
 // Run:  cd server && npm install && npm start      (then open http://<this-pc-ip>:8080/?room=myroom)
 // No accounts, no persistence. Meant for LAN / friends — do not expose it to the open internet as-is.
 const http = require('http');
@@ -186,7 +186,7 @@ setInterval(() => {
 }, 30000).unref();
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Neon Genocide server on port ${PORT}  (enemy voices: ${FISH_KEY ? 'Fish Audio ' + FISH_MODEL : 'browser fallback - no key'})`);
+  console.log(`SkyJump3D server on port ${PORT}  (enemy voices: ${FISH_KEY ? 'Fish Audio ' + FISH_MODEL : 'browser fallback - no key'})`);
   for (const addrs of Object.values(os.networkInterfaces()))
     for (const a of addrs || []) if (a.family === 'IPv4' && !a.internal) console.log(`  friends on your network: http://${a.address}:${PORT}/?room=myroom`);
   console.log(`  this PC:                 http://localhost:${PORT}/?room=myroom`);

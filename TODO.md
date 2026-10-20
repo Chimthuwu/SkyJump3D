@@ -1,4 +1,5 @@
-# Neon Genocide — Work Log
+- 2026-10-21 [CLAUDE] Renamed the game to **SkyJump3D** (titles, README, server strings). LOGO.png/LOGO2.png still show the old name and need new art; GitHub repo `Chimthuwu/neon-genocide` not renamed yet.
+# SkyJump3D — Work Log
 
 ## Current focus
 Weapons-findable + enemies-visible pass.
