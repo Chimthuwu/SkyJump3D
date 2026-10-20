@@ -1,0 +1,13 @@
+{
+  "grunt": [
+    "They are watching you.", "Look behind you.", "Don't trust the colors.", "Kill them all.", "Keep moving. Do not stop.", "Jump. The next one is real.",
+    "Did you hear that? Nobody else did.", "They know your name.", "The floor is lying.", "Shoot first.", "They were never people.", "Listen. Listen to us."
+  ],
+  "boss": [
+    "We have been talking to you for a long time.", "Do not listen to the others. Listen to us.", "Kill them all. They are not real.", "Every voice here is yours.",
+    "Look at me. Do not look away.", "Nothing here is what it seems."
+  ],
+  "death": [
+    "Wake up.", "That was not real.", "Again.", "You are still here.", "Did you see it?", "Shh. Start again."
+  ]
+}
