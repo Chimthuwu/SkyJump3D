@@ -1,10 +1,10 @@
 # Neon Genocide — Work Log
 
 ## Current focus
-Jungle pass 2 — buildings morph into giant tree trunks.
+Weapons-findable + enemies-visible pass.
 
 ## In progress
-- Real-browser eyeball check of the trunk morph, leaf weather and monkey density.
+- Real-browser eyeball check: trunk morph, leaf weather, monkey density, weapon beacons, aggro arrows.
 
 ## Blocked / needs decision from user
 None.
@@ -13,6 +13,8 @@ None.
 - [ ] Real browser smoke test for the cyberpunk/EVA enemy accents — verify they read at distance and in fog.
 
 ## Done (most recent first)
+- 2026-10-20: EASTER EGG #1: the lowest platform in the world (y=-152, gold beacon, in the fall corridor) -> "ROCK BOTTOM": +9999, all weapons, full ammo/health, no fall damage. More eggs welcome. Perf note: page now takes longer to build on software GL (560 fall platforms) - profile on a real GPU.
+- 2026-10-20: Weapons + enemies findable — weapon pickups now beacon (light pillar in the gun's colour at every pickup); every CHECKPOINT doubles as an ammo stand (`armoryGun` dispenser + beacon); enemy density up (every 2nd jungle / 3rd zone / 4th plain route stone instead of 3/4/5). Every walker/boss/drone gets a shared red inverted-cone aggro arrow floating over its head (additive, fog-free), so hostiles read across the whole map. Headless smoke 0 errors, level-side enemy counts 116–202 (up from ~90).
 - 2026-10-20: Gore pass 2 — kill counts ~1.8× (gibs ×~1.7, blood bursts ×~1.5, splatter ×~1.6, wall splats ~+50%), hits spray more (gun 10→18/26, tick 16→26), player hurt 22→34. NEW: arterial fountains (`bleeders`) — dead things keep spraying for ~2.2–3 s then burst a final pool; ×worse in Horror (gore 2.0/1.5→2.0+). Caps up: blood FX 240→420, gibs 300→420. Any hit/kill still respects the G toggle.
 - 2026-10-20: Platform mega-network — NEW SHAPES: round discs (one shared unit cylinder per `addPlatform`), long beams + wide/deep slabs via footprint{hw,hd,shape} on routes and branches. NEW BOUNCY: `bounceDress()` — ~10% of route stones get a trampoline platform (boost 24–38, roadkill-green plate + 4 corner spring coils), physics reuses the existing bounce-pad solid path. NEW MORPHING SPECIALS: `orbit` (circles its base, violet), `piston` (jackhammer lift, pink), `breath` (footprint pumps 70–120% via `scaleSpecial`, teal pulse). Generators heavily reshuffled (routes now alternate movers/orbits/crumblers/pistons/breathers/trampolines). NOTE: platform counts (~100/level) match the committed HEAD baseline (92) — the old 900+ prints came from the parallel agent's in-flight file; my route edits net +14% over HEAD.
 - 2026-10-20: Checks — `node --check` PASS; headless smoke (run.mjs plays/dies/clears, builds L1–7) 0 errors; probe.mjs verified 11 bouncy platforms + specials by kind spawn per build; gore tested via scripted death. Real-Edge title/menu flow clean (pre-existing favicon 404 only).
