@@ -1,0 +1,53 @@
+# Neon Genocide — Work Log
+
+## Current focus
+Jungle pass 2 — buildings morph into giant tree trunks.
+
+## In progress
+- Real-browser eyeball check of the trunk morph, leaf weather and monkey density.
+
+## Blocked / needs decision from user
+None.
+
+## Backlog (ordered, top = highest priority)
+- [ ] Real browser smoke test for the cyberpunk/EVA enemy accents — verify they read at distance and in fog.
+
+## Done (most recent first)
+- 2026-10-20: Jungle pass 2 — `trunkify()`: when the Jungle zone activates, every `boxMesh()` building (inc. the main tower + far skyline) swaps to a shared bark material with canopy caps (one shared `canopyGeo` ico, max 220 canopy meshes), and reverts when the zone leaves; rebuilt levels re-apply if jungle stayed active. Skyline canopies sway in the wind in `updateEnv`. Reactive sky: jungle hue slowly breathes through greens in `updateEnv`; jungle weather switched from spores to falling `leaves` (green, sway 2.4). More monkeys: every jungle roof spawns at least one, small sites 75% second, big sites spawn up to a third — troop-sized. Headless smoke (`C:\Users\Serge\skytest\run.mjs`) plays, dies, clears and builds levels 1–7 with 0 errors; harness stubs (classList, fullscreen, style.setProperty, children) patched to match current game code.
+- 2026-10-20: Wrote `OVERVIEW.md` (full game description for outside review). Double jump now summons a neon hoverboard (hold Space to ride; `makeBoard`). Fixed startup crash (`hide` undefined in gorilla branch). Handoff: aesthetics still dark/muddy; Jungle/Psy/Frozen/Storm/Horror unverified by eye; firewall rule needed for Tailscale friends (see OVERVIEW §13).
+- [x] Skyway + Moon + space, first-person start, cooler voices, wizard works from a plain file — 2026-10-20 (Claude), all checked in real Edge via puppeteer (`C:\Users\Serge\skytest\*.mjs`, outside repo).
+  - **Skyway/Moon** (`buildSkyway`, `spaceK`, `MOON_ZONE`): bounce-pad stairs from a launch platform near the tower up to TOP+800, flat bridge to a cratered moon sphere with a colosseum arena + Guardian; landing on it = `levelClear('moon', 3000)`. Above TOP+80 gravity fades to 35%, sky/fog fade to black, stars appear. World radius 640, hubs spread wider.
+  - Game now **starts in first person** (`fpv = true`). Voices: new generic cast + per-kind effects chain (`VFX`, `voiceChain`) + random "inner voices" (`innerVoices`, kind `inner`). Wizard: `serverOrigin()` finds the server at localhost:8080 even from a double-clicked file; CORS enabled on `/net-info` and `/tts-status`.
+  - Still to do: Windows Firewall inbound rule for Tailscale (user must run as admin); eyeball Jungle/Psychedelic/Frozen/Storm worlds.
+- [~] Guided multiplayer wizard — 2026-10-20 (Claude). MULTIPLAYER -> HOST A GAME / JOIN A GAME. Host panel: checklist (Tailscale detected via server `/net-info`, server running), room code, invite link + copy, START HOSTING. Join panel: install/accept-invite steps, paste invite link, TEST CONNECTION (no-cors fetch), JOIN (navigates to the host's page, which auto-connects via `?room=`). Added `server/start-server.bat` and `/net-info` in `server/server.js`. **Not run** (shell down, Z: full): needs a server restart + a click-through in a real browser + `node --check` on the inline script.
+- [x] Voice lines changed from Evangelion to "hallucination" whispers — 2026-10-20 (Claude): paranoid/urging lines ("They are watching you", "Kill them all", "Jump. The next one is real", death lines like "Wake up"). Edited in two places that must stay identical: `LINES` in `index.html` and `server/voice-lines.json` (server copy wins when the game is served by it); cues in `CAST` in `server/server.js`. **Deliberately no lines that urge the player to end their own life** (user asked for "end it all" — declined). Not run/tested (shell was down, Z: full).
+- [x] Drone/bomber turned into a giant eyeball — 2026-10-20 — Faceted PS1 sphere as sclera, iris + black pupil front, cyberpunk optic ring (cyan drone / magenta bomber), bomber gets 5 bloodshot veins, rotor halo still spins e.ring, bottom optic nerve, rotor arms/housings kept. Hitboxes (r 0.65 / h 1.1), pts, AI untouched. Syntax + geometry-budget + regression checks pass; no browser play.
+- [x] CRAZY MODE — 2026-10-20 — KeyB toggle in-game, persisted in towerdrop.settings. Chroma-split + CRT scanline wobble in the upscale shader (2 extra texture reads, still O(1)/pixel), toast gets a magenta/cyan pulsing skew. PS1/N64/MODERN presets, gameplay, AI, physics, aim all untouched. Syntax + regression grep checks pass; not play-tested in a browser.
+- [~] Fish Audio enemy voices + multiplayer check + zone worlds — 2026-10-20 (Claude). **UNVERIFIED parts first:** the Z: drive hit 0 bytes free mid-session so the shell tool stopped working; the last client edit (`say`/`playFish`/`pickLine` near the enemy-voice section of `index.html`) was NOT syntax-checked and the TTS endpoint was NOT exercised. First job: free space on Z:, run `node --check` on the inline script, restart the server (`cd server && npm start`), open `/tts?kind=boss&cat=boss&n=0` (should return an mp3).
+  - Voices: `server/server.js` has `/tts` (only allowlisted lines from `server/voice-lines.json`, cached in `server/tts-cache/`, 300 new clips/hour cap, free model `s2.1-pro-free`, `model` as a HEADER per `Z:\GITHUB\FISH_AUDIO_TTS*.md`). Key is in `server/.env` (git-ignored, never sent to the browser). Cast: walker=Robot, gunner=Lans, charger=doom, shield=Computer, bomber/drone=Robot/Lans, boss+guardians=horror. Client falls back to browser speech when the server has no key / isn't the origin. **Rotate the key at fish.audio/app/developers (it was pasted into chat).**
+  - Multiplayer: two real Edge windows in one room saw each other (host + guest, names, hearts). Note: two tabs in ONE browser throttle the background tab, so test with two windows. Friends on LAN are blocked by Windows Firewall (Wi-Fi profile is Public): needs an inbound allow rule for TCP 8080 (admin PowerShell) or use the Tailscale address.
+  - Zone worlds (`updateWorlds`, `dressSite`, `buildBackdrop`, `zoneGround`): Inferno verified in a real browser (red sky, flames, embers); Jungle/Psychedelic/Frozen/Storm load without errors, visuals not yet eyeballed. Bug fixed: ground contact needed a 1 cm sink so `onGround` flickered and `onLand` re-fired every few frames (reset the zone, flaky portals). Portals are now flat hatches you can stand on or fall into (`updatePortals`).
+- [x] Mouse control fix — 2026-10-20 — Aim now works both with pointer lock (movementX/Y) and without it (clientX/Y deltas), pointer-lock failures toast instead of force-pausing, mousedown/resume path re-requests the lock, begin() re-locks after fullscreen settles. Syntax + control-flow checks pass; not play-tested in a browser.
+- [x] Cyberpunk/EVA enemy aesthetic pass — 2026-10-20 — shoulder pylons with neon horn tips, torso vents + reactor core, boss EVA twin-horn crest + collar pylon core, gunner magenta optic, shield neon sigil, drone hood-spike + hull neon band, bullseye discs 20→12 segments. Syntax + geometry checks pass; hitboxes untouched; no browser play.
+- [x] Taller levels + many more platforms + crack-based crumbling — 2026-10-20 (Claude). Real-browser check (Edge/puppeteer, software GL) loads with no console errors; real-GPU frame rate NOT measured.
+- [x] Enemy sprite rework (walker/gunner/shield/boss/charger/drone/bomber) — 2026-10-20 — Unified humanoid chassis + per-variant accents; drones now have a real rotor assembly and bomber fins; game loop and hitboxes untouched.
+- [x] Retro stages 1–6 in one pass — 2026-10-20 — target/dither/quantize, fog+banded sky, polygon/flat shading, texture budget, snapping shim, affine UV.
+- [x] Presets + persistence (KeyP, towerdrop.settings) — 2026-10-20.
+- [x] Stage 1 low-res render target + upscale shipped earlier — 2026-10-20.
+
+## Decisions
+- 2026-10-20 — Drones/bombers are eyeballs, not quadrotors — the chunky sphere + grep-confirmed old-drone code is gone; the user approved it visually ("giant eyeballs"); revisit only if the silhouette reads badly in play.
+- 2026-10-20 — Hitboxes unchanged (`r 0.65 / h 1.1`), `e.ring.rotation.z` still drives the rotor halo — the game loop code didn't need to change.
+- 2026-10-20 — EVA/cyberpunk accents reuse the game's existing neon palette (cyan #20dff0, magenta #ff3fc8, violet #9b73ff) rather than introducing new colors, so enemy art coheres with the Night City skybox, neon signs, beacon glow, and bullseye target rings.
+- 2026-10-20 — Geometry budget: bullseye target discs reduced from 20 to 12 segments so every ground/world shape is at or under the retro segment ceiling; visual difference is negligible at 320×240 with nearest filtering.
+- 2026-10-20 — Enemy hitboxes (`e.r`, `e.h`) untouched — visuals now read bigger and more detailed than the hitbox, which is fine; revisit only if hit detection feels wrong.
+- 2026-10-20 — Drone rotor assembly still the `e.ring` group so the existing `e.ring.rotation.z` game-loop code doesn't change.
+
+## Known issues
+- Real-browser visuals and manual play have not been verified in this environment — no Puppeteer Chrome executable here (Claude's harness lives outside the repo) — severity: medium.
+
+## Manual test log
+- 2026-10-20 — Session summary — Cyberpunk/EVA accent pass shipped on top of the enemy sprite rework; no real-browser play-test performed.
+- 2026-10-20 — Cyberpunk/EVA accents — Syntax + geometry-budget + accent-artifact + hitbox checks pass.
+- 2026-10-20 — Enemy sprite rework — Verified shared humanoid body, variant-specific railings, syntax, and hitbox preservation.
+- 2026-10-20 — Retro stages 1–6 — Verified by source grep; no visual test available.

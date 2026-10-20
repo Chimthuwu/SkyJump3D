@@ -1,0 +1,8 @@
+{
+  "name": "tower-drop-server",
+  "version": "0.1.0",
+  "description": "Tiny WebSocket relay + static server for Neon Genocide co-op",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "ws": "^8.18.0" }
+}
