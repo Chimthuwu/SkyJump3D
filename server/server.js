@@ -44,6 +44,23 @@ const CAST = {            // enemy kind -> voice, delivery cue and speed (the ga
   inner:   { id: VOICE_IDS.horrorGirl, cue: '[whispering]', speed: 0.9 },   // the voices "inside your head"
 };
 let synthQueue = Promise.resolve(), synthsThisHour = [], inflight = new Map();
+// keep the disk cache bounded (default 500 clips ≈ 25–50 MB): drop the oldest files when over the cap
+const TTS_CACHE_MAX = Number(process.env.TTS_CACHE_MAX) || 500;
+function pruneTtsCache() {
+  fs.readdir(CACHE_DIR, (err, names) => {
+    if (err || names.length <= TTS_CACHE_MAX) return;
+    const files = names.filter(n => n.endsWith('.mp3'));
+    if (files.length <= TTS_CACHE_MAX) return;
+    let done = 0, oldest = [];
+    for (const n of files) fs.stat(path.join(CACHE_DIR, n), (e, st) => {
+      if (!e) oldest.push({ n, t: st.mtimeMs });
+      if (++done === files.length) {
+        oldest.sort((a, b) => a.t - b.t).slice(0, files.length - TTS_CACHE_MAX)
+          .forEach(f => fs.unlink(path.join(CACHE_DIR, f.n), () => {}));
+      }
+    });
+  });
+}
 function fishSynth(text, cast) {
   const body = JSON.stringify({ text: `${cast.cue} ${text}`, reference_id: cast.id, format: 'mp3', latency: 'normal', prosody: { speed: cast.speed, volume: 0, normalize_loudness: true } });
   const once = () => new Promise((resolve, reject) => {
@@ -77,7 +94,9 @@ async function serveTts(url, res) {
   let job = inflight.get(key);
   if (!job) {                                   // one at a time (the free tier allows 5 concurrent; we stay well under)
     synthsThisHour.push(now);
-    job = synthQueue = synthQueue.then(() => fishSynth(text, cast)).then(buf => { fs.writeFileSync(file, buf); return buf; });
+    // catch BEFORE chaining so one failed synth can't poison the queue for every later request
+    job = (synthQueue = synthQueue.catch(() => {}).then(() => fishSynth(text, cast)))
+      .then(buf => { fs.writeFileSync(file, buf); pruneTtsCache(); return buf; });
     inflight.set(key, job); job.catch(() => {}).finally(() => inflight.delete(key));
   }
   try { send(await job); } catch (e) { console.log(`[tts] ${kind}/${cat}/${n} failed: ${e.status || ''} ${String(e.message).slice(0, 100)}`); fail(502, 'voice generation failed'); }
