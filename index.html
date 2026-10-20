@@ -90,6 +90,7 @@
   #menu button.mini{display:inline-block;width:auto;padding:4px 12px;margin:6px 8px 0 0;font-size:13px;letter-spacing:.08em}
   #menu .wide{width:min(520px,78vw);margin:6px 0 0;padding:8px 10px;font:600 15px Consolas,monospace;color:#e9fbff;background:#0a1226;border:1px solid #ff3fc8;border-radius:4px}
   #menu button:disabled{opacity:.4;cursor:not-allowed}
+  #ride{position:fixed;left:50%;bottom:128px;transform:translateX(-50%);z-index:4;pointer-events:none;font:700 15px monospace;letter-spacing:2px;color:#0b0b14;background:#36f6ff;padding:7px 16px;border-radius:3px;box-shadow:0 0 18px #36f6ff;opacity:0;transition:opacity .25s}
   #dread{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:0;background:radial-gradient(ellipse at center,transparent 38%,rgba(20,0,6,.55) 72%,rgba(0,0,0,.96) 100%)}
   #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:40}
   #toast{position:fixed;top:22%;width:100%;text-align:center;font-size:clamp(22px,4vw,30px);font-weight:700;color:var(--neon-lime);text-shadow:0 0 10px #c4ff4d,0 2px 8px #000b;pointer-events:none;z-index:4}
@@ -113,6 +114,7 @@
 <div id="gore"></div>
 <div id="flash"></div>
 <div id="dread"></div>
+<div id="ride"></div>
 <div id="dbg"></div>
 <div id="subs"></div>
 <div id="menu">
@@ -920,13 +922,18 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
     }
     const sigil = add(new THREE.TorusGeometry(0.62, 0.055, 5, 16), 0, 2.35, 0, new THREE.MeshBasicMaterial({ color: biomeAccent })); sigil.rotation.x = Math.PI / 2;
   }
+  // A restrained ground halo makes silhouettes legible at range without turning every enemy into a glowing blob.
+  const auraMat = new THREE.MeshBasicMaterial({ color: biomeAccent, transparent: true, opacity: isBoss ? .38 : .18, blending: THREE.AdditiveBlending, depthWrite: false });
+  const aura = new THREE.Mesh(new THREE.TorusGeometry(isBoss ? 1.15 : .72, isBoss ? .055 : .035, 4, 12), auraMat); aura.rotation.x = Math.PI / 2; aura.position.y = .045; g.add(aura);
+  const beaconMat = new THREE.MeshBasicMaterial({ color: isBoss ? 0xff294b : biomeAccent, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false });
+  const beacon = new THREE.Mesh(new THREE.OctahedronGeometry(isBoss ? .12 : .07), beaconMat); beacon.position.set(0, 1.95, -.05); g.add(beacon);
   g.scale.setScalar(scale); g.position.set(x, y, z); scene.add(g);
   const a = rand() * 6.28;
   const e = { kind: 'walker', boss: isBoss, mesh: g, mat, x, y, z, plat, hp: isBoss ? 12 : V.hp, maxhp: isBoss ? 12 : V.hp,
     r: 0.65 * scale, h: 1.8 * scale, dir: { x: Math.cos(a), z: Math.sin(a) }, speed: isBoss ? 4.6 : V.sp,
     kx: 0, kz: 0, stun: 0, hit: 0, dead: false, slamT: 0, slamCd: 2.5, pts: isBoss ? 1000 : V.pts,
     variant: isBoss ? 'boss' : variant, shield: variant === 'shield', strafe: Math.random() < 0.5 ? 1 : -1,
-    fireCd: 1 + Math.random() * 1.5, aimT: 0, chCd: 1.5, windT: 0, charge: 0, cdx: 0, cdz: 0 };
+    fireCd: 1 + Math.random() * 1.5, aimT: 0, chCd: 1.5, windT: 0, charge: 0, cdx: 0, cdz: 0, accent: biomeAccent, aura, auraMat, beacon, beaconMat };
   if (isBoss) { e.bossRole = variant; e.boss = true; }
   if (variant === 'charger') { e.h = 1.3 * scale; e.r = 0.85 * scale; }       // hogs are low and wide
   if (variant === 'dinosaur') { e.h = 2.7 * scale; e.r = 0.95 * scale; e.pounceCd = 1.4 + rand() * 1.2; e.pounceT = 0; }
@@ -1062,6 +1069,44 @@ function spawnBiomeEnemy(x, y, z, plat, zone, depth, scale = 1) {
   if (variant === 'drone' || variant === 'bomber') return makeDrone(x, y + 3, z, variant, zone);
   return makeWalker(x, y, z, plat, scale, false, variant);
 }
+
+// ---------- biome evolution: enemies mutate into the current biome's species ----------
+let lastEvolveZone = null, evolveT = 20;
+const evolveCap = () => 70 + level * 12;
+function spawnEvolutionPack(zone) {
+  if (!zone || state !== 'play') return;                                    // only during live play
+  const roster = BIOME_ENEMIES[zone.name]; if (!roster) return;             // Ride Park / Moon crowds stay wild
+  if (net.on && !net.host) return;                                          // host ghosts the drip into guests
+  if (enemies.filter(e => !e.dead).length > evolveCap()) return;            // respect the perf budget
+  const around = 3 + ((Math.random() * 3) | 0);;
+  const base = standOn;
+  const total = 2 + ((Math.random() * (zone.name === 'Jungle' ? 4 : 3)) | 0);   // jungle = big animal packs
+  for (let i = 0; i < total; i++) {
+    const variant = roster[(Math.random() * roster.length) | 0];
+    const a = (i / total) * Math.PI * 2 + Math.random(), r = 5 + Math.random() * 8;
+    let x = pos.x + Math.cos(a) * r, z = pos.z + Math.sin(a) * r, plat = null;
+    if (base && base.minx !== undefined) {
+      plat = base;
+      x = clamp(x, base.minx + 1.2, base.maxx - 1.2);
+      z = clamp(z, base.minz + 1.2, base.maxz - 1.2);
+    }
+    spawnBiomeEnemy(x, pos.y, z, plat, zone, 0.75);
+  }
+  const evolved = zone.name === 'Jungle' ? 'dinosaurs' : zone.name === 'Frozen' ? 'cryo raptors' : zone.name === 'Inferno' ? 'furnace fiends'
+    : zone.name === 'Storm' ? 'ion phantoms' : zone.name === 'Horror' ? 'grave stalkers' : zone.name === 'Psychedelic' ? 'prism wraiths' : 'creatures';
+  toast(`${zone.name.toUpperCase()} EVOLVES — ${evolved} moving in`, 2200);
+  shockRing(pos, 12, zone.plate);
+}
+function evolveTick(dt) {
+  if (state !== 'play' || !activeZ || !BIOME_ENEMIES[activeZ.name]) { evolveT = 16; return; }
+  evolveT -= dt;
+  if (evolveT > 0) return;
+  evolveT = 16 + Math.random() * 12;
+  spawnEvolutionPack(activeZ);                                              // steady pressure on the new biome
+}
+
+// Zone crossings: land in a new biome -> local wildlife morphs into it right away
+// (evolution hook lives next to setZone below)
 function underside(cx, y, cz, r, t) {       // inverted pyramid under floating things so they read as sky islands
   const h = Math.min(14, 3 + r * 0.6);
   const m = new THREE.Mesh(new THREE.ConeGeometry(r * 1.05, h, 4), lam(0x4a4f5c));
@@ -1456,9 +1501,47 @@ function buildSkyway(hubs) {
 }
 // A chain of floating platforms from hub A to hub B. Heights wander (level runs, climbs, drops) so the player goes UP as well as down,
 // and a chain may climb from a lower hub to a higher one. Chains leaving an arena stay LOCKED (ghost outlines) until its Guardian dies.
+// HIGHWAYS: a continuous, wide, neon-striped road between two hubs, built for the bike and buggy. Only for downhill links (roads can't climb).
+let roadBudget = 0;
+function tryRoad(A, B, ux, uz, eA, eB, D) {
+  if (roadBudget <= 0 || A.kind === 'arena' || A.kind === 'exit' || B.kind === 'exit' || B.top > A.top - 1) return false;
+  const r0 = eA - 1, r1 = D - eB + 1, L = r1 - r0, SEG = 7, HW = 5.5, n = Math.ceil(L / SEG);
+  if (L < 40 || (A.top - B.top) / L > 1.1 || (A.kind !== 'start' && rand() > 0.7)) return false;
+  roadBudget--;
+  const y0 = A.top - 0.2, y1 = B.top - 0.2, depth = 1 - Math.max(A.top, B.top) / TOP;
+  let first = null; const mild = (A.top - B.top) / L < 0.3;
+  for (let k = 0; k <= n; k++) {
+    const t = k / n, d = r0 + L * t, x = A.x + ux * d, z = A.z + uz * d, y = y0 + (y1 - y0) * t;
+    if (blocked(x, y, z, HW)) continue;
+    const zone = t < 0.5 ? A.zone : B.zone;
+    const sl = addSolid(x - HW, x + HW, y - 1.2, y, z - HW, z + HW); Object.assign(sl, { cx: x, cz: z, top: y, hw: HW, hd: HW, zone, road: true });
+    const c = zone ? zone.plate : 0x36f6ff;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(HW * 2, 1.2, HW * 2), lam(0x1c2236)); body.position.set(x, y - 0.6, z); scene.add(body);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(HW * 2 - 0.4, 0.12, HW * 2 - 0.4), lam(0x0e1220)); top.position.set(x, y - 0.06, z); scene.add(top);
+    for (const side of [-1, 1]) {                                       // neon lane edges + dashed centre line
+      const e = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.16, SEG + 0.2), new THREE.MeshBasicMaterial({ color: c })); e.position.set(x - uz * side * (HW - 0.5), y + 0.02, z + ux * side * (HW - 0.5)); e.rotation.y = Math.atan2(ux, uz); scene.add(e);
+    }
+    const dash = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.14, 3), new THREE.MeshBasicMaterial({ color: 0xffd23a })); dash.position.set(x, y + 0.02, z); dash.rotation.y = Math.atan2(ux, uz); scene.add(dash);
+    if (!first) { first = { x, y, z }; }
+    if (mild && k > 1 && k < n - 1) {                                  // SKATE-PARK DYNAMICS on flat stretches: kickers, a half-pipe, grind rails
+      const nz = Math.abs(uz) > 0.6;                                 // ramps are z-axis aligned
+      if (nz && k === Math.floor(n / 2)) { addRamp(x, z - 3.5, y, 0, -1, 4, 8, 26); addRamp(x, z + 3.5, y, 0, 1, 4, 8, 26); }      // HALF-PIPE: two quarter-pipes facing each other
+      else if (nz && k % 5 === 2) addRamp(x, z - uz * 2, y, 0, Math.sign(uz) || 1, 3, 8, 22);                                       // KICKER
+      else if (k % 4 === 1) addRail(x - ux * 3, z - uz * 3, y + 1.5, x + ux * 10, z + uz * 10, [0xff3fc8, 0x36f6ff, 0xffd23a][k % 3]);   // GRIND RAIL
+    }
+    if (k % 2 === 0) coin(x, y + 1.2, z);
+    if (k % 6 === 3 && k > 1 && k < n - 1) spawnBiomeEnemy(x, y, z, sl, zone, depth);
+    if (k % 9 === 5) addCheckpoint(x, y, z, zone);
+    if (k % 5 === 4) weaponPickup(2 + ((rand() * (WEAPONS.length - 2)) | 0), x + 2.5, y + 1.2, z + 2.5);
+    if (k % 3 === 1) addDashPad(x, y, z, ux, uz);
+  }
+  if (first) addProp(rand() < 0.5 ? 'bike' : 'buggy', first.x + ux * 3, first.y, first.z + uz * 3);     // a ride waits at the top of every highway
+  return true;
+}
 function connect(A, B) {
   const dx = B.x - A.x, dz = B.z - A.z, D = Math.hypot(dx, dz) || 1, ux = dx / D, uz = dz / D;
   const ext = h => Math.min(h.hw / Math.max(Math.abs(ux), 1e-4), h.hd / Math.max(Math.abs(uz), 1e-4));
+  if (tryRoad(A, B, ux, uz, ext(A), ext(B), D)) return;
   const s0 = ext(A) + 6, s1 = D - ext(B) - 6;
   if (s1 < s0 + 4) return;
   const asc = B.top > A.top + 3;                                    // climbing chain (lower hub -> higher hub)
@@ -1478,7 +1561,7 @@ function connect(A, B) {
     e.position.set(A.x + ux * (ext(A) - 0.6), TOP + 0.12, A.z + uz * (ext(A) - 0.6)); e.rotation.y = Math.atan2(ux, uz) + Math.PI / 2; scene.add(e);
   }
   const depth = 1 - Math.max(A.top, B.top) / TOP;
-  let prev = null, prevSpec = null, clusterAnchor = null, clusterZone = null;
+  let prev = null, prevSpec = null, clusterAnchor = null, clusterZone = null, prevWeird = false;
   if (A.kind === 'arena') A.gated = true;
   for (let k = 0; k < n; k++) {
     const t = k / (n - 1), s = s0 + L * t;
@@ -1519,11 +1602,17 @@ function connect(A, B) {
       if (k > 0 && k < n - 1 && k % enemyEvery === 1 && (A.kind !== 'start' || k > 1)) spawnBiomeEnemy(x, y, z, p, zone, depth);
       if (level > 1 && k % 4 === 3) spawnBiomeEnemy(x - 1.5, y, z + 1.5, p, zone, depth, 0.85);   // second spawn tier: packs of two on zone routes
       if (k % 4 === 2) ammoBox(x + 1.5, y + 0.8, z - 1.5);
+      if (k % 8 === 1) weaponPickup(2 + ((rand() * (WEAPONS.length - 2)) | 0), x - 1.5, y + 1.2, z + 1.5);      // guns all along every route
       if (k % 6 === 3) addCheckpoint(x, y, z, zone);          // save points along long paths
       if (k % 5 === 1 && rand() < 0.5) spawnOreVein(x + 1.5, y, z - 1.5, zone);   // biome ore veins to mine for build blocks
       if (level >= 2 && k % 5 === 3) spawnBiomeEnemy(x, y, z, p, zone, depth, 0.8);
     }
-    prev = p;
+    if (prev && !weird && !prevWeird && A.kind !== 'arena') {            // GRIND ACROSS LONG GAPS: a rail links the two stones when the jump is big
+      const gx = p.cx - prev.cx, gz = p.cz - prev.cz, gd = Math.hypot(gx, gz) || 1, gux = gx / gd, guz = gz / gd;
+      const e1 = Math.min(prev.hw / Math.max(Math.abs(gux), 1e-4), prev.hd / Math.max(Math.abs(guz), 1e-4)), e2 = Math.min(p.hw / Math.max(Math.abs(gux), 1e-4), p.hd / Math.max(Math.abs(guz), 1e-4));
+      if (gd - e1 - e2 > 5.5) addRail(prev.cx + gux * (e1 - 0.8), prev.cz + guz * (e1 - 0.8), prev.top + 1.3, prev.cx + gux * (gd - e2 + 0.8), prev.cz + guz * (gd - e2 + 0.8), p.top + 1.3, zone ? zone.plate : 0x36f6ff, false);
+    }
+    prevWeird = !!weird; prev = p;
   }
   if (clusterAnchor && A.kind !== 'arena' && rand() < 0.34) buildRouteCluster(clusterAnchor, ux, uz, clusterZone);
 }
@@ -1534,7 +1623,8 @@ function buildNetwork(exitAngle) {
   hubs.push(buildRidePark());                        // the ride park joins the hub network, gets connectivity for free
   const nB = Math.min(9 + level * 2, 22), nA = Math.min(8 + level * 2, 18);
   const types = ARENA_TYPES.slice(); for (let i = types.length - 1; i > 0; i--) { const j = (rand() * (i + 1)) | 0; [types[i], types[j]] = [types[j], types[i]]; }
-  const zoneForRegion = region => biomeForRegion(level, region);
+const prevActiveZone = () => activeZ;   // biome-evolution helper (used by setZone crossings)
+const zoneForRegion = region => biomeForRegion(level, region);
   const regionSpan = level <= 4 ? 12 : Math.max(6, 12 - Math.floor((level - 4) / 2));
   const regionForHub = i => Math.floor(Math.max(0, i - 1) / regionSpan);
   const want = [];
@@ -1568,6 +1658,8 @@ function buildNetwork(exitAngle) {
   hubs.push(exitHub);
   loreN = (level * 3) % LORE.length;
   for (const h of hubs) if (h.kind === 'building' || h.kind === 'arena' || h.kind === 'start') loreTerminal(h.x + (h.kind === 'start' ? 6 : Math.min(h.hw || 8, 8) - 2), h.top, h.z + (h.kind === 'start' ? -6 : 2));
+  { let vi = 0; for (const h of hubs) if ((h.kind === 'building' || h.kind === 'arena') && h.top !== undefined) {     // rides parked across the whole sky-city
+      addProp(vi++ % 2 ? 'buggy' : 'bike', h.x + Math.min(h.hw || 8, 8) - 3, h.top, h.z - 3); } }
   const weaponHubs = hubs.filter(h => h.kind === 'building' || h.kind === 'arena');
   const armory = weaponHubs.find(h => h.zone && h.zone.name === 'Jungle') || weaponHubs[0] || exitHub;
   const nextWeapon = WEAPONS.findIndex((w, i) => i >= 2 && !weaponOwned[i]);
@@ -1595,11 +1687,13 @@ function buildNetwork(exitAngle) {
     weaponPickup(eg, extra.x + 3, extra.top + 1.2, extra.z - 3);                     // random bonus gun on yet another hub
     if (WEAPONS[eg].cont) items[items.length - 1].mesh.userData.powerupColor = WEAPONS[eg].col;
   }
+  roadBudget = 9;
   for (let i = 1; i < hubs.length; i++) {
     const near = hubs.slice(0, i).sort((a, b) => Math.hypot(a.x - hubs[i].x, a.z - hubs[i].z) - Math.hypot(b.x - hubs[i].x, b.z - hubs[i].z));
     connect(i <= 3 ? hubs[0] : near[0], hubs[i]);              // every one of the first hubs hangs straight off the start roof
     if (i > 3 && near.length > 1 && rand() < 0.85) connect(near[1], hubs[i]);     // extra links make it a network, not a tree
   }
+  buildFlow(hubs);                                           // trampoline towers, mega-rails, loops
   const byDist = h => (a, b) => Math.hypot(a.x - h.x, a.z - h.z) - Math.hypot(b.x - h.x, b.z - h.z);
   // every arena needs a way on (locked behind its Guardian)
   for (const h of hubs) if (h.kind === 'arena' && !h.gated) {
@@ -1731,12 +1825,19 @@ function buildLevelBody() {
   // tower
   addSolid(-TH, TH, 0, TOP, -TH, TH);
   boxMesh(0, 0, TH * 2, TH * 2, TOP, bldMats[0]);
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(TH * 2 + 1, 0.2, TH * 2 + 1), lam(0x12192d, { emissive: 0x10152a, emissiveIntensity: 0.35 }));
+  const roofTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+    g.fillStyle = '#23305a'; g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 256; i += 64) { g.fillStyle = i % 128 ? 'rgba(54,246,255,.35)' : 'rgba(255,63,200,.5)'; g.fillRect(i, 0, 3, 256); g.fillRect(0, i, 256, 3); }
+    g.fillStyle = 'rgba(255,255,255,.07)'; for (let i = 0; i < 40; i++) g.fillRect((Math.random() * 256) | 0, (Math.random() * 256) | 0, 24, 24);
+    const t = trackRetroTexture(new THREE.CanvasTexture(c)); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(TH / 4, TH / 4); return t; })();
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(TH * 2 + 1, 0.2, TH * 2 + 1), retroMaterial(new THREE.MeshLambertMaterial({ map: roofTex, color: 0xffffff, emissive: 0x2a3a78, emissiveIntensity: 0.6 })));
   roof.position.set(0, TOP + 0.1, 0); scene.add(roof);
   const spawnPad = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.1, 8), lam(0x36f6ff));
   spawnPad.position.set(start.x, TOP + 0.05, start.z); scene.add(spawnPad);
   addProp('board', start.x + 4, TOP, start.z + 4);                       // the streets are looking for you
   addProp('skates', start.x - 4, TOP, start.z + 4);
+  for (let wi = 2; wi < WEAPONS.length; wi++) weaponPickup(wi, clamp(start.x - 9 + (wi - 2) * 4.5, -TH + 3, TH - 3), TOP + 1.5, clamp(start.z - 11, -TH + 3, TH - 3));      // the whole arsenal laid out at spawn
+  addProp('bike', start.x + 4, TOP, start.z - 5); addProp('buggy', start.x - 5, TOP, start.z - 5);      // one of each ride at spawn
   // roof guard(s) so the start isn't empty
   const roofBounds = { minx: -15, maxx: 15, minz: -15, maxz: 15 };
   makeWalker(-6, TOP, 6, roofBounds, 1, false);
@@ -1889,7 +1990,7 @@ for (const [g, side] of [[gearSkateL, -1], [gearSkateR, 1]]) {
 
 // first-person viewmodel: weapons parented to the camera
 scene.add(camera);
-const vm = new THREE.Group(); vm.position.set(0.3, -0.3, -0.55); vm.visible = false; camera.add(vm);
+const vm = new THREE.Group(); vm.scale.setScalar(0.7); vm.position.set(0.3, -0.3, -0.55); vm.visible = false; camera.add(vm);
 const vmGuns = makeWeaponMeshes().map(heroWeapon);
 vmGuns.forEach(g => { g.rotation.y = Math.PI; vm.add(g); });
 
@@ -1936,6 +2037,8 @@ function updateFx(dt) {
       const k = clamp(f.life / f.fadeT, 0, 1);
       f.mesh.material.opacity = (f.op0 === undefined ? 1 : f.op0) * k;
       if (f.beam) f.mesh.scale.x = f.mesh.scale.z = f.beam * (0.3 + 0.7 * k);
+    } else if (f.muzzle) {
+      const k = clamp(f.life / f.fadeT, 0, 1); for (const m of f.mats) m.opacity = k * (m === f.mats[0] ? 1 : .78); f.mesh.scale.setScalar(1 + (1 - k) * .7);
     } else if (f.flash) {
       const k = clamp(f.life / f.fadeT, 0, 1);
       f.mesh.material.opacity = k; f.mesh.scale.setScalar(f.flash * (1.6 - 0.6 * k));
@@ -1943,7 +2046,7 @@ function updateFx(dt) {
     else { f.vel.y -= 25 * dt; f.mesh.position.addScaledVector(f.vel, dt); f.mesh.material.opacity = clamp(f.life * 2, 0, 1); }
     if (f.life <= 0) {
       if (f.blood && Math.random() < 0.4) { const q = f.mesh.position; splatter(q.x, q.y + 0.5, q.z, 1, 0, 0.35); }
-      scene.remove(f.mesh); f.mesh.material.dispose(); if (f.line && !f.beam) f.mesh.geometry.dispose();
+      scene.remove(f.mesh); if (f.mesh.material) f.mesh.material.dispose(); if (f.line && !f.beam) f.mesh.geometry.dispose();
       if (f.blood) activeBloodFx = Math.max(0, activeBloodFx - 1);
       fx.splice(i, 1);
     }
@@ -2473,7 +2576,7 @@ function hitTarget(sol) {
 // ---- SPONTANEOUS ARENAS: sometimes the platform you land on grows out into an ambush arena. Clear the wave for hearts + ammo + score.
 const growers = []; let growCd = 0;
 function spontaneousArena(sol, force = false) {
-  if (sol.grown || sol.sp || sol.grp || sol.moon || sol.arena || sol.checkpoint || sol.bounce || sol.ground || sol.egg || sol.bossArena || sol.targetR !== undefined || sol.cx === undefined) return;
+  if (sol.grown || sol.sp || sol.grp || sol.moon || sol.arena || sol.checkpoint || sol.bounce || sol.ground || sol.egg || sol.road || sol.bossArena || sol.targetR !== undefined || sol.cx === undefined) return;
   if (!force && (growCd > 0 || Math.random() > 0.12 || spaceK(pos.y) > 0.3 || sol.hw > 12)) return;
   sol.grown = true; growCd = 12;
   const top = sol.maxy, cx = sol.cx, cz = sol.cz, hw0 = sol.hw, hd0 = sol.hd, hwT = Math.max(hw0 + 8, 15), hdT = Math.max(hd0 + 8, 15);
@@ -2518,7 +2621,7 @@ function onLand(speed, sol) {
     if (!eggBottom) {
       eggBottom = true; score += 9999; health = MAXHP; glide = 1;
       for (let i = 0; i < WEAPONS.length; i++) { weaponOwned[i] = true; if (WEAPONS[i].ammoKey) ammo[WEAPONS[i].ammoKey] = WEAPONS[i].ammoCap; }
-      ammo.reserve = Math.max(ammo.reserve, 30);
+      ammo.reserve = Math.max(ammo.reserve, 30); selectWeapon(WEAPONS.length - 1);
       shockRing(pos, 14, 0xffd23a); burst(new THREE.Vector3(pos.x, pos.y + 1, pos.z), 0xffd23a, 60); sfx.clear();
       toast('ROCK BOTTOM. NOBODY WAS COMING. +9999 · ALL WEAPONS · FULL HEALTH', 5200);
       try { $('subs').textContent = '[IT] You went all the way down. There is nothing here. You are still falling.'; setTimeout(() => { $('subs').textContent = ''; }, 6500); } catch (_) {}
@@ -2541,7 +2644,7 @@ function onLand(speed, sol) {
   if (sol.arena && sol.arena.locked && !sol.arena.warned) { sol.arena.warned = true; toast('Defeat the Guardian to unlock the way on!', 3000); }
   if (sol.targetR !== undefined && !sol.hit && speed < SPLAT) hitTarget(sol);
   if (pounding) groundPoundLand();
-  else if (speed >= SPLAT) return die('SPLAT!', 'Too far, too fast. Glide (hold SPACE) or ground-pound (SHIFT) before you land.');
+  else if (speed >= SPLAT && !onVehicle) return die('SPLAT!', 'Too far, too fast. Glide (hold SPACE) or ground-pound (SHIFT) before you land.');
   else if (speed > 40) { hurt(2); toast('Hard landing!'); combo = 0; }
   else if (speed > 32) { hurt(1); toast('Ouch!'); combo = 0; }
   else if (speed > 12) burst(pos, 0xcccccc, 4);
@@ -2756,9 +2859,9 @@ function aimDirection(o) {
 }
 const spread = (d, a) => d.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2 * a, (Math.random() - 0.5) * 2 * a, (Math.random() - 0.5) * 2 * a)).normalize();
 const BEAMS = {
-  laser:   { color: 0xff2244, width: 0.045, life: 0.13 },
-  scatter: { color: 0xff3af0, width: 0.04, life: 0.1 },
-  rail:    { color: 0x6ab8ff, width: 0.16, life: 0.4 },
+  laser:   { color: 0xff2244, width: 0.07, life: 0.16 },
+  scatter: { color: 0xff3af0, width: 0.065, life: 0.13 },
+  rail:    { color: 0x6ab8ff, width: 0.22, life: 0.44 },
 };
 const r1 = v => [+v.x.toFixed(1), +v.y.toFixed(1), +v.z.toFixed(1)];
 function beamShot(a, b, st) { tracer(a, b, st.color, st.width, st.life); netSend({ t: 'ray', a: r1(a), b: r1(b), c: st.color, w: st.width, l: st.life }); }
@@ -2802,6 +2905,10 @@ function useWeapon() {
   const o = chest(), d = aimDirection(o);
   face = Math.atan2(d.x, d.z);
   const mz = o.clone().addScaledVector(d, 1.1);
+  const fireCol = [0x2ad8ff, 0xff335d, 0xff3af0, 0x5aff8a, 0x72baff, 0x3affd0, 0xb06aff][weapon];
+  const firePower = weapon === 4 ? 1.8 : weapon === 3 ? 1.45 : weapon === 2 ? 1.25 : 1;
+  muzzleFlash(mz, d, fireCol, firePower);
+  for (const gun of [handGuns[weapon], vmGuns[weapon]]) if (gun && gun.userData.hero) gun.userData.hero.kick = 1;
   if (weapon === 1) { shootRay(o, d, 1, 90, BEAMS.laser); flashFx(mz, 0xff4a6a, 0.3); sfx.laser(); }
   else if (weapon === 2) {
     for (let i = 0; i < 6; i++) shootRay(o, spread(d, 0.09 * (1 - 0.7 * aimK)), 1, 32, BEAMS.scatter);      // sights tighten the spread
@@ -3102,6 +3209,11 @@ function setZone(z, snap = false, quiet = false) {
   document.body.classList.toggle('schizo', schizoOn);      // game-wide horror dread, independent of whatever zone is live
   const horror = true;
   if (scene.fog) { scene.fog.near = 14; scene.fog.far = 112; }
+  // biome evolution: entering a new biome flips the local wildlife over to its species
+  if (!snap && state === 'play' && z && BIOME_ENEMIES[z.name] && lastEvolveZone !== z) {
+    lastEvolveZone = z;
+    spawnEvolutionPack(z);
+  }
   const src = z || theme();
   goal.top.set(src.top); goal.mid.set(src.mid); goal.bot.set(src.bot); goal.fog.set(src.fog);
   goal.hemiCol.set(src.hemiCol); goal.sunCol.set(src.sunCol); goal.cloud.set(src.cloud); goal.hemi = src.hemi; goal.sun = src.sun;
@@ -3174,8 +3286,8 @@ function updateEnv(dt, cp) {
 }
 // gameplay side-effects of the active zone / the surface underfoot
 const iceUnderfoot = () => onGround && standOn && standOn.zone && standOn.zone.name === 'Frozen';
-const jumpMul = () => (standOn && standOn.zone && standOn.zone.name === 'Jungle' ? 0.88 : 1);
-const gravMul = () => (activeZ && activeZ.name === 'Psychedelic' ? 0.7 : 1) * (psy.t > 0 && psy.kind === 'invert' ? 0.45 : 1) * (1 - 0.65 * spaceK(pos.y));      // lighter and lighter the higher you climb
+const jumpMul = () => (onVehicle ? (onVehicle.kind === 'buggy' ? 1.2 : 1.35) : 1) * (standOn && standOn.zone && standOn.zone.name === 'Jungle' ? 0.88 : 1);
+const gravMul = () => (onVehicle && onVehicle.kind === 'bike' ? 0.55 : 1) * (activeZ && activeZ.name === 'Psychedelic' ? 0.7 : 1) * (psy.t > 0 && psy.kind === 'invert' ? 0.45 : 1) * (1 - 0.65 * spaceK(pos.y));      // lighter and lighter the higher you climb
 const thermal = () => !!(activeZ && activeZ.name === 'Inferno');
 function envWind(dt) {
   if (!activeZ || activeZ.name !== 'Storm' || onGround || climbing) return;
@@ -3457,7 +3569,7 @@ function playerUpdate(dt) {
 
 // ---------- THE FUNK: a procedural live-band (drums, slap bass, chord stabs, licks) that changes key/tempo per zone ----------
 // Scheduler with look-ahead on the WebAudio clock. Intensity rises near enemies and in free-fall; space strips it down to a pad + arp.
-let musicOn = true, musicBus = null, musicNext = 0, musicStep = 0;
+let musicOn = false, musicBus = null, musicNext = 0, musicStep = 0;
 const MUSIC = {          // root MIDI note, bpm, scale intervals, swing, drum placement
   city:        { root: 45, bpm: 108, sc: [0, 3, 5, 7, 10], sw: 0.12, kick: [0, 6, 10], snare: [4, 12] },
   Psychedelic: { root: 50, bpm: 118, sc: [0, 2, 3, 7, 9],  sw: 0.18, kick: [0, 3, 8, 11], snare: [4, 12] },
@@ -3646,7 +3758,10 @@ function updateEnemies(dt) {
   for (const e of enemies) {
     if (e.dead) continue;
     e.hit = Math.max(0, e.hit - dt); e.stun = Math.max(0, e.stun - dt);
-    e.mat.emissive.setHex(e.hit > 0 ? 0xff3030 : 0);
+    const pulse = .65 + .35 * Math.sin(t * (e.boss ? 5 : 3) + e.x * .3);
+    e.mat.emissive.setHex(e.hit > 0 ? 0xff3030 : e.accent || 0x142030);
+    e.mat.emissiveIntensity = e.hit > 0 ? 1.2 : (e.boss ? .42 : .16);
+    if (e.aura) { e.aura.rotation.z += dt * (e.boss ? 2.5 : 1.1); e.auraMat.opacity = (e.boss ? .28 : .11) + pulse * (e.boss ? .22 : .11) + e.hit * .3; e.beacon.scale.setScalar(.75 + pulse * .45 + e.hit * .7); e.beaconMat.opacity = .45 + pulse * .42; }
     { const NP = nearestPlayer(e); if (Math.hypot(NP.x - e.x, NP.z - e.z) > (e.boss ? 300 : 230) || Math.abs(NP.y - e.y) > 300) continue; }     // distant bosses still animate from the street approach
     enemyVoice(e, dt);
     if (net.on && !net.host) clientEnemy(e, dt);            // guests just follow the host's snapshots
@@ -3687,7 +3802,7 @@ function updateItems(dt) {
         else {
           const restocked = grantWeaponAmmo(i);
           if (!restocked && w.cont) cont.energy = Math.min(1, cont.energy + 0.5);
-          toast(restocked ? `${w.name} acquired · ammo restocked` : `${w.name} core recharged`, 1300); sfx.eshay();
+          toast(restocked ? `${w.name} acquired · ammo restocked` : `${w.name} core recharged`, 1300); sfx.eshay(); if (i !== weapon) selectWeapon(i);
         }
       } else if (it.type === 'lore') {
         score += 50; sfx.coin(); const line = LORE[it.idx];
@@ -3771,7 +3886,7 @@ function addProp(kind, x, y, z) {
       for (let w = 0; w < 4; w++) { const wheel = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffffff })); wheel.position.set(side * 0.28, 0.06, 0.2 - w * 0.14); g.add(wheel); prop.wheels.push(wheel); }
     }
   }
-  props.push(prop); railSolids.push(prop); return prop;
+  props.push(prop); return prop;
 }
 
 function nearestProp(radius = 3.4) {
@@ -3797,11 +3912,17 @@ function dismount() {
   vel.multiplyScalar(0.35); toast('Dismounted', 800);
 }
 
+let summonCd = 0;
+function summonRide(kind) {                          // ENTER anywhere: call a hover-bike (SHIFT+ENTER: buggy) under you
+  if (state !== 'play' || grinding || performance.now() < summonCd) return;
+  summonCd = performance.now() + 1500;
+  const p = addProp(kind, pos.x, pos.y, pos.z); mount(p); score += 0;
+}
 function useProp() {                                 // ENTER: mount a vehicle / equip arcade gear
   if (onVehicle) { dismount(); return; }
   if (grinding) return;
   const p = nearestProp();
-  if (!p) return;
+  if (!p) { summonRide(keys.ShiftLeft || keys.ShiftRight ? 'buggy' : 'bike'); return; }
   if (p.gear) {
     gear = p.gear; p.taken = true; p.mesh.visible = false;
     toast(gear === 'board' ? 'SKATEBOARD ON — speed up, drift wide, grind rails' : 'ROLLER SKATES ON — nimble little legend', 2200);
@@ -3809,16 +3930,175 @@ function useProp() {                                 // ENTER: mount a vehicle /
   } else mount(p);
 }
 
-function addRail(x1, z1, y, x2, z2, col = 0xff3fc8) {
-  const dx = x2 - x1, dz = z2 - z1, len = Math.hypot(dx, dz) || 1;
-  const s = addSolid(Math.min(x1, x2) - 0.35, Math.max(x1, x2) + 0.35, y - 0.22, y + 0.22, Math.min(z1, z2) - 0.35, Math.max(z1, z2) + 0.35);
-  s.rail = { x1, z1, x2, z2, len, ux: dx / len, uz: dz / len, height: y, t: 0.5 };
-  const tube = new THREE.Mesh(new THREE.BoxGeometry(len, 0.16, 0.16), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.92 }));
-  tube.position.set((x1 + x2) / 2, y, (z1 + z2) / 2); tube.rotation.y = Math.atan2(-dz, dx); scene.add(tube);
-  for (const [px, pz] of [[x1, z1], [x2, z2]]) {
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.1, 6), lam(0x14111f)); post.position.set(px, y - 0.55, pz); scene.add(post);
+// ---------- GRIND RAILS: every rail is a 3D polyline (straight, sloped or a smooth curve). You carry momentum: gravity speeds you downhill, loops are assisted, ends fling you ballistically. ----------
+const rainbowRails = [], dashPads = []; let railCd = 0;
+const _rP = new THREE.Vector3(), _rT = new THREE.Vector3();
+function railBuild(pts) {
+  const lens = [0], bb = { minx: 1e9, maxx: -1e9, miny: 1e9, maxy: -1e9, minz: 1e9, maxz: -1e9 };
+  for (let i = 0; i < pts.length; i++) {
+    if (i) lens.push(lens[i - 1] + pts[i].distanceTo(pts[i - 1]));
+    const q = pts[i]; bb.minx = Math.min(bb.minx, q.x); bb.maxx = Math.max(bb.maxx, q.x); bb.miny = Math.min(bb.miny, q.y); bb.maxy = Math.max(bb.maxy, q.y); bb.minz = Math.min(bb.minz, q.z); bb.maxz = Math.max(bb.maxz, q.z);
+  }
+  for (const k of ['minx', 'miny', 'minz']) bb[k] -= 3; for (const k of ['maxx', 'maxy', 'maxz']) bb[k] += 3;
+  return { pts, lens, len: lens[lens.length - 1], bb, d: 0, dirSign: 1, speed: 10 };
+}
+function railPoint(r, d, outP, outT) {
+  d = clamp(d, 0, r.len); let lo = 0, hi = r.lens.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (r.lens[m] <= d) lo = m; else hi = m; }
+  const seg = (r.lens[hi] - r.lens[lo]) || 1, f = (d - r.lens[lo]) / seg;
+  outP.lerpVectors(r.pts[lo], r.pts[hi], f); outT.subVectors(r.pts[hi], r.pts[lo]).multiplyScalar(1 / seg);
+}
+function addRail(x1, z1, y, x2, z2, col = 0xff3fc8, y2 = y, posts = true) {
+  const dx = x2 - x1, dz = z2 - z1, len = Math.hypot(dx, dz) || 1, dy = y2 - y;
+  const s = addSolid(x1, x1, y, y, z1, z1);                       // rail solids never collide (and stay tiny so they never block shots)
+  s.rail = railBuild([new THREE.Vector3(x1, y, z1), new THREE.Vector3(x2, y2, z2)]); Object.assign(s.rail, { x1, y1: y, z1, x2, y2, z2 });
+  const tube = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(len, dy), 0.16, 0.16), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.92 }));
+  tube.position.set((x1 + x2) / 2, (y + y2) / 2, (z1 + z2) / 2); tube.rotation.order = 'YZX'; tube.rotation.set(0, Math.atan2(-dz, dx), Math.atan2(dy, len)); scene.add(tube);
+  if (posts) for (const [px, pz, py] of [[x1, z1, y], [x2, z2, y2]]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.1, 6), lam(0x14111f)); post.position.set(px, py - 0.55, pz); scene.add(post);
   }
   return s;
+}
+function curveRail(ctrl, col = 0x36f6ff, rainbow = true) {          // smooth spline rail through control points (loops, corkscrews, mega-rails)
+  const curve = new THREE.CatmullRomCurve3(ctrl, false, 'centripetal'), n = Math.max(10, Math.ceil(curve.getLength() / 1.4));
+  const pts = curve.getSpacedPoints(n), a = pts[0];
+  const s = addSolid(a.x, a.x, a.y, a.y, a.z, a.z); s.rail = railBuild(pts);
+  const mat = new THREE.MeshBasicMaterial({ color: col });
+  const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, Math.min(500, n), 0.15, 5, false), mat); scene.add(tube);
+  if (rainbow) rainbowRails.push(mat);
+  return s;
+}
+function tryLatchRail() {
+  if (grinding || railCd > 0 || onGround || vel.y > 0.6) return false;                 // anyone can grind: foot, board, skates, bike or buggy
+  let best = null, bd = 1.9, bdd = 0;
+  for (const s of solids) {
+    const r = s.rail; if (!r) continue; const bb = r.bb;
+    if (pos.x < bb.minx || pos.x > bb.maxx || pos.y < bb.miny || pos.y > bb.maxy || pos.z < bb.minz || pos.z > bb.maxz) continue;
+    const P = r.pts;
+    for (let i = 0; i < P.length - 1; i++) {
+      const a = P[i], b = P[i + 1], abx = b.x - a.x, aby = b.y - a.y, abz = b.z - a.z, l2 = abx * abx + aby * aby + abz * abz || 1;
+      const t = clamp(((pos.x - a.x) * abx + (pos.y - 1 - a.y) * aby + (pos.z - a.z) * abz) / l2, 0, 1);
+      const dd = Math.hypot(pos.x - (a.x + abx * t), (pos.y - 1 - (a.y + aby * t)) * 0.8, pos.z - (a.z + abz * t));
+      if (dd < bd) { bd = dd; best = s; bdd = r.lens[i] + t * (r.lens[i + 1] - r.lens[i]); }
+    }
+  }
+  if (!best) return false;
+  const r = best.rail; railPoint(r, bdd, _rP, _rT);
+  const dot = _rT.x * vel.x + _rT.y * vel.y * 0.5 + _rT.z * vel.z, fdot = _rT.x * Math.sin(face) + _rT.z * Math.cos(face);
+  r.dirSign = (Math.abs(dot) > 1.5 ? dot : fdot) >= 0 ? 1 : -1; r.d = bdd;
+  if (r.dirSign > 0 && r.len - bdd < 4) r.dirSign = -1; else if (r.dirSign < 0 && bdd < 4) r.dirSign = 1;        // never latch facing straight off the end
+  r.speed = clamp(Math.hypot(vel.x, vel.z, vel.y * 0.5) * 1.05, 10, 40) + (onVehicle ? 4 : 0);
+  grinding = best; vel.set(0, 0, 0); onGround = false; climbing = null; pounding = false; gliding = false;
+  grindScore = gear === 'skates' ? 12 : 10;
+  score += grindScore; sfx.jump(true); burst(pos, gearPlate(gear), 8); toast(`GRIND! +${grindScore}`, 800);
+  return true;
+}
+
+function grindExit(launch) {
+  grinding = null; onGround = false; railCd = 0.35;
+  vel.y = Math.max(vel.y, launch ? 4 : 0);
+}
+
+function handleGrind(dt) {
+  const r = grinding.rail;
+  railPoint(r, r.d, _rP, _rT);
+  r.speed = clamp(r.speed - _rT.y * r.dirSign * 30 * dt, 9, 46);      // gravity along the slope: downhill speeds you up, uphill drags
+  r.d += r.speed * dt * r.dirSign;
+  railPoint(r, r.d, _rP, _rT);
+  const dvx = _rT.x * r.dirSign, dvy = _rT.y * r.dirSign, dvz = _rT.z * r.dirSign;
+  pos.set(_rP.x, _rP.y + 0.75, _rP.z); vel.set(dvx * r.speed, dvy * r.speed, dvz * r.speed);
+  face = Math.atan2(dvx, dvz);
+  if (Math.random() < dt * 40) burst(new THREE.Vector3(pos.x, pos.y - 0.6, pos.z), gearPlate(gear), 1);
+  score += Math.round(dt * 30 * (r.speed / 14));
+  if (r.d <= 0.02 || r.d >= r.len - 0.02) { grindExit(true); toast('RAIL DROPOFF', 700); return; }      // ends fling you along the rail's direction
+  if (jumpPress) { jumpPress = false; const vx = vel.x * 0.92, vz = vel.z * 0.92, vy = vel.y; grindExit(false); vel.set(vx, Math.max(vy, 0) + JUMP * 0.95, vz); jumps = 1; sfx.jump(true); toast('RAIL JUMP', 650); }
+  else if (poundPress) { poundPress = false; const vx = vel.x * 0.6, vz = vel.z * 0.6; grindExit(false); vel.set(vx, -TERM, vz); pounding = true; }
+}
+
+// ---- DASH PADS (Sonic-style speed strips) ----
+function addDashPad(x, y, z, ux, uz) {
+  dashPads.push({ x, y, z, ux, uz });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 4.6), new THREE.MeshBasicMaterial({ color: 0xffe14a, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
+  m.rotation.x = -Math.PI / 2; m.rotation.z = -Math.atan2(ux, uz) + Math.PI; m.position.set(x, y + 0.09, z); scene.add(m);
+}
+function updateDashPads(dt) {
+  if (!onGround || state !== 'play') return;
+  for (const d of dashPads) {
+    if (Math.abs(pos.y - d.y) > 1.6 || Math.abs(pos.x - d.x) > 2.3 || Math.abs(pos.z - d.z) > 2.3) continue;
+    const sp = Math.hypot(vel.x, vel.z);
+    if (sp < 40) { vel.x += d.ux * 70 * dt; vel.z += d.uz * 70 * dt; }
+    if (Math.random() < dt * 20) burst(pos, 0xffe14a, 2);
+  }
+}
+
+// ---------- THE WEAVE: trampoline towers launch you up to mega-rails that spiral, loop and corkscrew down to other hubs ----------
+function loopPts(P, f, R) {                                          // a full vertical loop-de-loop: entry along f, helical so the exit is beside the entry
+  const side = new THREE.Vector3(-f.z, 0, f.x), out = [];
+  for (let k = 0; k <= 22; k++) {
+    const a = (k / 22) * 6.2832, fw = Math.sin(a) * R + a * 1.3, up = R * (1 - Math.cos(a)), sd = 5 * a / 6.2832;
+    out.push(new THREE.Vector3(P.x + f.x * fw + side.x * sd, P.y + up, P.z + f.z * fw + side.z * sd));
+  }
+  return out;
+}
+function megaRailPts(P0, P1, ph, loops) {
+  const D = Math.hypot(P1.x - P0.x, P1.z - P0.z), f = new THREE.Vector3((P1.x - P0.x) / D, 0, (P1.z - P0.z) / D), side = new THREE.Vector3(-f.z, 0, f.x);
+  const M = Math.max(10, Math.ceil(D / 7)), pts = [], shift = new THREE.Vector3(); const loopAt = loops ? [Math.floor(M * 0.35), Math.floor(M * 0.7)].slice(0, loops) : [];
+  for (let i = 0; i <= M; i++) {
+    const t = i / M, env = Math.sin(Math.PI * t) ** 0.7, cs = t > 0.15 && t < 0.4 ? Math.sin(Math.PI * (t - 0.15) / 0.25) : 0, th = (t - 0.15) / 0.25 * 6.2832;
+    const lat = env * 16 * Math.sin(t * 9 + ph) + cs * 6 * Math.sin(th), upd = env * 5 * Math.sin(t * 13 + ph * 2) + cs * 6 * (1 - Math.cos(th)) * 0.5;
+    const P = new THREE.Vector3(P0.x + (P1.x - P0.x) * t + side.x * lat, P0.y + (P1.y - P0.y) * Math.pow(t, 0.85) + upd, P0.z + (P1.z - P0.z) * t + side.z * lat).add(shift);
+    if (loopAt.includes(i)) { const lp = loopPts(P, f, 8 + (i % 3)); for (const q of lp) pts.push(q); const e = lp[lp.length - 1]; shift.add(e.clone().sub(P)); }
+    else pts.push(P);
+  }
+  return pts;
+}
+function buildFlow(netHubs) {
+  const junctions = [];                                              // free-floating JUNCTION slabs scattered through the sky: each hosts a tower + loop and joins the rail web
+  for (let tries = 0; tries < 160 && junctions.length < 14; tries++) {
+    const a = rand() * 6.283, r = 70 + rand() * 260, x = Math.cos(a) * r, z = Math.sin(a) * r, y = 90 + rand() * Math.max(60, TOP - 200);
+    if (netHubs.some(h => Math.hypot(h.x - x, h.z - z) < (h.r || 20) + 30 && Math.abs(h.top - y) < 70) || junctions.some(j => Math.hypot(j.x - x, j.z - z) < 70)) continue;
+    if (moonInfo && moonInfo.loop && Math.hypot(x - moonInfo.loop.x, z - moonInfo.loop.z) < 110) continue;
+    if (blocked(x, y, z, 12)) continue;
+    const sl = addSlab(x, y, z, 10, 10, 2.5, null, true); sl.road = true;
+    const lab = makeLabel('JUNCTION'); lab.position.set(x, y + 4, z); lab.scale.set(5, 1.2, 1); scene.add(lab);
+    junctions.push({ kind: 'junction', x, z, top: y, hw: 10, hd: 10, zone: null, r: 14 });
+  }
+  const hubs = netHubs.concat(junctions);
+  const towerHubs = hubs.filter(h => (h.kind === 'building' || h.kind === 'start' || h.kind === 'ridepark' || h.kind === 'junction') && h.top !== undefined);
+  const towers = [];
+  for (const h of towerHubs) {
+    const R = clamp(Math.min(h.hw || 8, h.hd || 8) * 0.5, 4, 8), a0 = rand() * 6.28, rise = 22, n = 4, cx = h.x, cz = h.z;
+    const boost = Math.sqrt(2 * GRAV * (rise + 6));
+    let top = null;
+    for (let k = 0; k < n; k++) {
+      const a = a0 + k * 1.25, x = cx + Math.cos(a) * R, z = cz + Math.sin(a) * R, y = h.top + k * rise;
+      if (k > 0) { const sl = addSlab(x, y, z, 4.2, 4.2, 1.5, h.zone, true); sl.road = true; }
+      const pad = addSolid(x - 1.8, x + 1.8, y, y + 0.35, z - 1.8, z + 1.8); pad.bounce = true; pad.boost = boost;
+      const pm = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.35, 3.6), new THREE.MeshLambertMaterial({ color: 0xff3fc8, emissive: 0xff3fc8, emissiveIntensity: 1.0 })); pm.position.set(x, y + 0.18, z); scene.add(pm);
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, rise * 0.9, 8), new THREE.MeshBasicMaterial({ color: 0xff3fc8, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false })); beam.position.set(x, y + rise * 0.45, z); scene.add(beam);
+      if (k === n - 1) top = { x: x + Math.cos(a + 1.2) * 3, y: y + 1.4, z: z + Math.sin(a + 1.2) * 3, hub: h };
+    }
+    towers.push(top);
+  }
+  for (const T of towers) {                                          // each tower launches rails to the nearest hubs lying below it
+    const cand = hubs.filter(B => B !== T.hub && B.kind !== 'launch' && B.top < T.y - 8 && Math.hypot(B.x - T.x, B.z - T.z) > 45 && Math.hypot(B.x - T.x, B.z - T.z) < 340)
+      .sort((a, b) => Math.hypot(a.x - T.x, a.z - T.z) - Math.hypot(b.x - T.x, b.z - T.z));
+    const take = Math.min(2, cand.length);
+    for (let i = 0; i < take; i++) {
+      const B = cand[i + (cand.length > 3 && rand() < 0.4 ? 1 : 0)] || cand[i], D = Math.hypot(B.x - T.x, B.z - T.z), fx = (T.x - B.x) / D, fz = (T.z - B.z) / D, inset = Math.min(B.hw || 8, B.hd || 8) * 0.4;
+      const P1 = new THREE.Vector3(B.x + fx * inset, B.top + 1.3, B.z + fz * inset);
+      curveRail(megaRailPts(new THREE.Vector3(T.x, T.y, T.z), P1, rand() * 6.28, rand() < 0.65 ? 1 + (rand() < 0.35 ? 1 : 0) : 0), [0xff3fc8, 0x36f6ff, 0xffd23a][i % 3], true);
+    }
+  }
+  // free-standing loop-de-loops on every few hub roofs: a kicker pad flings you onto the entry
+  let li = 0;
+  for (const h of towerHubs) if ((h.kind === 'building' || h.kind === 'junction') && li++ % 2 === 0) {
+    const a = rand() * 6.28, f = new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), P = new THREE.Vector3(h.x - f.x * (Math.min(h.hw, h.hd) - 4), h.top + 1.4, h.z - f.z * (Math.min(h.hw, h.hd) - 4));
+    const lead = [P.clone().addScaledVector(f, -10), P.clone().addScaledVector(f, -4)], loop = loopPts(P, f, 9), end = loop[loop.length - 1];
+    curveRail(lead.concat(loop, [end.clone().addScaledVector(f, 8), end.clone().addScaledVector(f, 16).setY(end.y - 3)]), 0xffd23a, true);
+    const px = P.x - f.x * 13, pz = P.z - f.z * 13, pad = addSolid(px - 1.8, px + 1.8, h.top, h.top + 0.35, pz - 1.8, pz + 1.8); pad.bounce = true; pad.boost = 17;
+    const pm = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.35, 3.6), new THREE.MeshLambertMaterial({ color: 0xffd23a, emissive: 0xffd23a, emissiveIntensity: 1.0 })); pm.position.set(px, h.top + 0.18, pz); scene.add(pm);
+  }
 }
 
 function addRamp(cx, cz, baseY, dirX, dirZ, steps = 4, width = 8, lipBoost = 30) {
@@ -3867,45 +4147,9 @@ function spawnStreetRiders(hubs) {
     spawnRiderGroup(roofs[i].x, roofs[i].top, roofs[i].z, roofs[i].roofSolid, 2 + ((rand() * 2) | 0), Math.min(5, roofs[i].hw - 2));
 }
 
-function tryLatchRail() {
-  if (!(gear === 'board' || gear === 'skates') || onVehicle) return false;
-  if (onGround || vel.y > 0.4) return false;
-  for (const s of solids) {
-    if (!s.rail) continue;
-    if (!overlapXZ(s) || !overlapY(s) || pos.y < s.rail.height - 0.4) continue;
-    grinding = s;
-    s.rail.dirSign = (s.rail.ux * vel.x + s.rail.uz * vel.z) >= 0 ? 1 : -1;
-    s.rail.t = clamp(((pos.x - s.rail.x1) * s.rail.ux + (pos.z - s.rail.z1) * s.rail.uz) / s.rail.len, 0, 1);
-    vel.set(0, 0, 0); onGround = false; climbing = null; pounding = false; gliding = false;
-    grindScore = gear === 'skates' ? 12 : 10;
-    score += grindScore; sfx.jump(true); burst(pos, gearPlate(gear), 8); toast(`GRIND! +${grindScore}`, 800);
-    return true;
-  }
-  return false;
-}
-
-function grindExit(launch) {
-  grinding = null; onGround = false;
-  vel.y = Math.max(vel.y, launch ? 4 : 0);
-}
-
-function handleGrind(dt) {
-  const rail = grinding.rail;
-  const slide = (gear === 'skates' ? 11.5 : 10) * rail.dirSign;
-  rail.t = clamp(rail.t + (slide * dt) / rail.len, 0, 1);
-  pos.x = rail.x1 + rail.ux * rail.len * rail.t;
-  pos.z = rail.z1 + rail.uz * rail.len * rail.t;
-  pos.y = rail.height + 0.75;
-  vel.set(rail.ux * slide * 0.5, 0, rail.uz * slide * 0.5);
-  face = Math.atan2(vel.x, vel.z);
-  if (Math.random() < dt * 40) burst(new THREE.Vector3(pos.x, pos.y - 0.6, pos.z), gearPlate(gear), 1);
-  score += Math.round(dt * 30);
-  if (rail.t <= 0.002 || rail.t >= 0.998) { grindExit(true); toast('RAIL DROPOFF', 700); return; }
-  if (jumpPress) { jumpPress = false; grindExit(false); vel.y = JUMP * 0.95; jumps = 1; sfx.jump(true); toast('RAIL JUMP', 650); }
-  if (poundPress) { poundPress = false; grindExit(false); vel.set(0, -TERM, 0); pounding = true; return; }
-}
-
 function updateStreet(dt) {
+  railCd = Math.max(0, railCd - dt); updateDashPads(dt);
+  if (rainbowRails.length) { const hh = (performance.now() * 0.00018) % 1; rainbowRails.forEach((m, i) => m.color.setHSL((hh + i * 0.07) % 1, 1, 0.58)); }
   for (const it of props) if (!it.taken) it.mesh.rotation.y += dt * 2;   // idle props gently spin (wheels shine when you ride)
   // props idle / equipped gear visuals follow the player
   if (onVehicle) {
@@ -3918,7 +4162,7 @@ function updateStreet(dt) {
     if (boost > 16 && Math.random() < dt * 30) burst(new THREE.Vector3(pos.x, pos.y + 0.2, pos.z), p.kind === 'buggy' ? 0xffa73a : 0x36f6ff, 1);
   }
   // airborne grind latch
-  if (!grinding && (gear === 'board' || gear === 'skates')) tryLatchRail();
+  if (!grinding) tryLatchRail();
   // proximity hint for props
   hintProp = null;
   if (state === 'play' && !onVehicle && !grinding) {
@@ -3929,7 +4173,7 @@ function updateStreet(dt) {
 }
 
 // ---------- state/cleanup for street gear ----------
-function streetReset() { props.length = 0; gear = ''; grinding = null; onVehicle = null; hintProp = null; parkSeen = false; for (const m of [gearBoard, gearSkateL, gearSkateR]) m.visible = false; }
+function streetReset() { props.length = 0; rainbowRails.length = 0; dashPads.length = 0; railCd = 0; gear = ''; grinding = null; onVehicle = null; hintProp = null; parkSeen = false; for (const m of [gearBoard, gearSkateL, gearSkateR]) m.visible = false; }
 
 // ---------- visuals ----------
 const camPos = new THREE.Vector3();
@@ -3952,6 +4196,13 @@ function updateVisuals(dt) {
   legL.rotation.z = 0.3 * glideK; legR.rotation.z = -0.3 * glideK;
   if (atkT > 0) { const k = 1 - atkT / 0.28; armR.rotation.z = -0.15; armR.rotation.x = 0.9 - 3.1 * k; }
   for (let i = 0; i < WEAPONS.length; i++) { handGuns[i].visible = i === weapon; vmGuns[i].visible = i === weapon; }
+  for (const gun of [...handGuns, ...vmGuns]) {
+    const h = gun.userData.hero; if (!h) continue;
+    h.kick = Math.max(0, h.kick - dt * 8);
+    const pulse = .72 + .2 * Math.sin(t * 7 + h.phase) + h.kick * .7;
+    h.core.scale.setScalar(pulse); h.ring.scale.setScalar(.8 + pulse * .45); h.ring.rotation.z += dt * (3 + h.kick * 22);
+    h.coreMat.opacity = .5 + pulse * .38; h.finMat.opacity = .2 + pulse * .32;
+  }
   if (weapon > 0) {                                  // ranged weapons: raise the arm(s) and aim
     armR.rotation.x = -1.5 + recoil * 0.35; armR.rotation.z = -0.12;
     if (weapon >= 2) { armL.rotation.x = -1.3; armL.rotation.z = 0.35; }
@@ -4047,13 +4298,16 @@ function updateVisuals(dt) {
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').textContent = ''; }
 }
 
-let hintT = 14, hintOn = true;      // the controls bar shows for the first 14 s of play, then fades; H brings it back
+let rideTold = false, hintT = 14, hintOn = true;      // the controls bar shows for the first 14 s of play, then fades; H brings it back
 function setHint() {
   const h = $('hint'); h.style.transition = 'opacity .8s'; h.style.opacity = (state === 'play' && hintOn && hintT > 0) || paused ? 0.95 : 0;
   if (state === 'play' && hintT > 0) hintT -= 1 / 60;
+  const rd = $('ride'), rt = state !== 'play' || paused ? '' : hintProp ? `[ENTER]  ${hintProp}` : onVehicle ? '[ENTER]  hop off' : grinding ? '[SPACE] rail jump' : '';
+  if (rd.textContent !== rt) rd.textContent = rt; rd.style.opacity = rt ? 1 : 0;
+  if (state === 'play' && !rideTold && hintT < 10.5 && !hintProp && !onVehicle) { rideTold = true; toast('PRESS ENTER TO RIDE A HOVER-BIKE  ·  SHIFT+ENTER = BUGGY', 4200); }
   const near = hintProp ? `· ENTER: ${hintProp} ` : (grinding ? '· SPACE: rail jump · ENTER bail ' : '');
   $('hint').textContent = state === 'play'
-    ? 'WASD move · SHIFT sprint · double-jump summons your HOVERBOARD (hold SPACE to ride) · C pound · click/F fire (hold for beams) · RIGHT-CLICK aim · 1-7 or wheel: weapons · jump at a wall to climb (SPACE wall-jump) · step into neon portals to travel · ' + near + 'CAPS/V first-person · R respawn · M sound · N music · G gore · H this bar'
+    ? 'WASD move · SHIFT sprint · double-jump summons your HOVERBOARD (hold SPACE to ride) · C pound · click/F fire (hold for beams) · RIGHT-CLICK aim · 1-7 or wheel: weapons · jump at a wall to climb (SPACE wall-jump) · step into neon portals to travel · ' + near + 'CAPS/V first-person · ENTER ride (anywhere; SHIFT+ENTER buggy) · R respawn · M sound · N music · G gore · H this bar'
     : '';
 }
 
@@ -4907,7 +5161,7 @@ function dreadTick(dt) {
 function innerVoices(dt) {
   if (state !== 'play' || muted || !voiceLines || !ttsOn || paused) return;
   innerAcc -= dt; if (innerAcc > 0) return;
-  innerAcc = 22 + Math.random() * 25;
+  innerAcc = 70 + Math.random() * 70;
   say({ x: camera.position.x + (Math.random() - 0.5) * 3, y: pos.y + 1.5, z: camera.position.z + (Math.random() - 0.5) * 3, inner: true }, pickLine(Math.random() < 0.3 ? 'boss' : 'grunt'));
 }
 // loudness and left/right position from where the enemy is relative to the camera
@@ -4949,7 +5203,8 @@ function alienCall(e) {
 // Real voices come from the game server (Fish Audio, cached per line); without the server we fall back to the browser's built-in voice.
 let ttsOn = false, ttsFails = 0, curVoiceSrc = null, curVoiceSrcs = null, innerAcc = 18 + Math.random() * 12;
 const ttsBufs = new Map(), ttsPending = new Set();
-fetch('/tts-status').then(r => (r.ok ? r.json() : null)).then(j => { ttsOn = !!(j && j.enabled); }).catch(() => {});
+function checkTts() { fetch('/tts-status').then(r => (r.ok ? r.json() : null)).then(j => { ttsOn = !!(j && j.enabled); if (!ttsOn) setTimeout(checkTts, 20000); }).catch(() => { setTimeout(checkTts, 20000); }); }
+checkTts();
 fetch('/voice-lines.json').then(r => (r.ok ? r.json() : null)).then(j => { if (j && j.grunt && j.boss && j.death) { LINES.grunt = j.grunt; LINES.boss = j.boss; LINES.death = j.death; } }).catch(() => {});
 // audio effects per voice: octave-down twin, echo, ring-mod, distortion, low-pass, reverb
 const VFX = { walker: ['double', 'echo'], gunner: ['ring', 'echo'], charger: ['dist', 'double'], shield: ['lowpass', 'reverb'], bomber: ['dist'], drone: ['ring'],
@@ -5001,17 +5256,18 @@ function playFish(e, k, line, urgent) {
   ttsPending.add(key);
   fetch(`/tts?kind=${k}&cat=${line.cat}&n=${line.n}`).then(r => { if (!r.ok) throw new Error('tts ' + r.status); return r.arrayBuffer(); })
     .then(ab => actx.decodeAudioData(ab)).then(buf => { ttsBufs.set(key, buf); ttsPending.delete(key); ttsFails = 0; play(buf); })
-    .catch(() => { ttsPending.delete(key); if (++ttsFails >= 4) ttsOn = false; });          // server can't make voices -> stop asking, use the browser voice
+    .catch(() => { ttsPending.delete(key); if (++ttsFails >= 4) { ttsOn = false; ttsFails = 0; setTimeout(checkTts, 20000); } });          // server hiccup -> pause voices briefly, then re-check (never the robotic browser voice)
 }
 function say(e, line, urgent = false) {
   const text = line && line.text;
   if (!voiceLines || muted || !text) return;
   const k = voiceKind(e), v = VOICE[k], now = performance.now(), d = Math.hypot(e.x - camera.position.x, e.z - camera.position.z);
-  if (!urgent && now - lastSayAt < 2500) return;
+  if (!urgent && now - lastSayAt < 11000) return;
   lastSayAt = now;
   clearTimeout(subTimer);
   const sub = $('subs'); sub.style.color = v.col; sub.textContent = `[${e.mini ? e.name : v.who}]  ${text}`; subTimer = setTimeout(() => { sub.textContent = ''; }, 2800);
   if (ttsOn) { playFish(e, k, line, urgent); return; }
+  return;                                          // Fish voices only: no browser-voice fallback
   const ss = window.speechSynthesis;
   if (!ss || !window.SpeechSynthesisUtterance) return;
   if (ss.speaking) { if (!urgent) return; try { ss.cancel(); } catch (_) {} }
@@ -5028,11 +5284,11 @@ function enemyVoice(e, dt) {                      // chatter + a growl the first
   if (muted || state === 'title') return;
   const d = Math.hypot(e.x - camera.position.x, e.y - camera.position.y, e.z - camera.position.z);
   if (d > 50) { e.seen = false; return; }
-  if (!e.seen && d < 22) { e.seen = true; alienCall(e); if (Math.random() < (e.boss || e.mini ? 0.9 : 0.4)) say(e, pickLine(e.boss || e.mini ? 'boss' : 'grunt')); e.vT = 4 + Math.random() * 4; return; }
+  if (!e.seen && d < 22) { e.seen = true; alienCall(e); if (Math.random() < (e.boss || e.mini ? 0.7 : 0.12)) say(e, pickLine(e.boss || e.mini ? 'boss' : 'grunt')); e.vT = 4 + Math.random() * 4; return; }
   e.vT = (e.vT === undefined ? 1 + Math.random() * 5 : e.vT) - dt;
   if (e.vT > 0) return;
   e.vT = 3.5 + Math.random() * 6; alienCall(e);
-  if (d < 34 && Math.random() < (e.boss || e.mini ? 0.5 : 0.2)) say(e, pickLine(e.boss || e.mini ? 'boss' : 'grunt'));
+  if (d < 34 && Math.random() < (e.boss || e.mini ? 0.25 : 0.05)) say(e, pickLine(e.boss || e.mini ? 'boss' : 'grunt'));
 }
 function enemyHurtVoice(e) {
   if (!actx || muted || performance.now() - (e.hurtV || 0) < 450) return; e.hurtV = performance.now();
@@ -5043,7 +5299,7 @@ function enemyDeathVoice(e) {
   if (!actx || muted) return;
   const { g, d } = voiceOut(e);
   if (d < 55) { vOsc(g, 'sawtooth', 900, 70, 0.55, 0.32, 30, 90); vNoise(g, 0.4, 0.25, 700); }
-  if (d < 40 && Math.random() < (e.boss || e.mini ? 1 : 0.4)) say(e, pickLine('death'), true);
+  if (d < 40 && Math.random() < (e.boss || e.mini ? 1 : 0.08)) say(e, pickLine("death"), true);
 }
 
 // ---------- main menu: START / MULTIPLAYER / EXIT ----------
@@ -5190,7 +5446,7 @@ document.addEventListener('pointerlockchange', () => { if (!document.pointerLock
 buildLevel();
 pos.set(start.x, start.y, start.z);
 showMenu(true);
-window.__ng = { dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (!['board', 'skates'].includes(k)) return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(ZONES.find(z => z.name === n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; }, info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length }) };   // dev hook (console / test tools)
+window.__ng = { rails: () => solids.filter(q => q.rail).map(q => { const a = q.rail.pts[0], b = q.rail.pts[q.rail.pts.length - 1]; return [a.x, a.y, a.z, b.x, b.y, b.z, q.rail.len]; }), grinding: () => !!grinding, dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (!['board', 'skates'].includes(k)) return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(ZONES.find(z => z.name === n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; }, info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length, propList: props.map(p => ({ k: p.kind, at: p.mesh.position.toArray().map(v => Math.round(v * 10) / 10), taken: p.taken, vis: p.mesh.visible, inLvl: !!(p.mesh.parent && p.mesh.parent !== scene) })) }) };   // dev hook (console / test tools)
 {   // opened from the relay server with ?room=... -> connect right away
   const qp = new URLSearchParams(location.search || '');
   if (/^https?:$/.test(location.protocol) && qp.get('room')) netConnect(location.host, qp.get('room').slice(0, 24));
@@ -5202,7 +5458,7 @@ renderer.setAnimationLoop(now => {
   else if (state === 'play') { playerUpdate(dt); updateEnemies(dt); updateShots(dt); }
   else if (state === 'dead') { deadT -= dt; if (deadT <= 0) respawn(); if (net.on) { updateEnemies(dt); updateShots(dt); } }
   else if (state === 'clear') { updateEnemies(dt); clearT -= dt; if (clearT <= 0) nextLevel(); }
-  updateItems(dt); updateStreet(dt); updateGrowers(dt); dreadTick(dt); musicTick(dt); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); updateClouds(dt); updateSpecials(dt); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar();
+  updateItems(dt); updateStreet(dt); evolveTick(dt); updateGrowers(dt); dreadTick(dt); musicTick(dt); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); updateClouds(dt); updateSpecials(dt); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar();
   updateVisuals(dt); setHint(); netTick(dt); updatePeers(dt); debugTick(dt);
   upscaleMaterial.uniforms.uTime.value = performance.now() / 1000;
   if (!contextLost) {
