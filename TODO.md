@@ -18,6 +18,8 @@ Spawn-region cleanliness (no portals/gore/duplicate rides), six-player spawn tow
 - [ ] Windows firewall inbound rule for LAN co-op (user/admin action).
 
 ## Done (most recent first)
+- 2026-10-21 [CLAUDE] P-key looks now match in colour: MODERN renders to screen (ACES tone-mapped) but PS1/N64 render to an untonemapped low-res target, so they looked brighter/more saturated. The upscale shader now applies the same ACES curve. Headless mean screen colour per preset: within ~1 of each other.
+- 2026-10-21 [CLAUDE] Rides no longer spawn on trampolines/launch pads: `addProp` slides a prop to the nearest bounce-free spot on the same surface (`propSpotClear`), and `bounceDress` skips platforms with a ride parked on them. Loads clean; not eyeballed.
 - 2026-10-21 [CLAUDE] Vehicle boost moved from X to hold SHIFT (hints updated; sprint is off while riding). Not run in browser.
 - 2026-10-21 [CLAUDE] P-key looks (PS1/N64) no longer pillarboxed: low-res target keeps 240 rows but its width follows the window aspect (`resizeRenderer`; vertex snap grid now a `retroRes` uniform instead of a baked define), viewport fills the window. Verified at 1600x800 headless, 0 errors.
 - 2026-10-21 [CLAUDE] Jungle monkeys are now killable (2 hp, +50, gibs): they are scenery anims not `enemies`, so `eachMonkey`/`hurtMonkey` hook into castRay (guns, beam), railgun, explosions, sword and ground-pound. Dev: `__ng.shootMonkey()`. Co-op not synced (local only). Headless: 2 hits kill one, 0 errors.
