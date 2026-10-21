@@ -51,12 +51,17 @@ Put an optional Fish Audio key in `server/.env` (git-ignored) to enable voice li
 
 ## Deploy (Cloudflare Pages)
 
-The game is static, so the deploy is just `index.html`:
+**`git push` does not deploy this project.** The live `sky-jump` Pages project is direct-upload
+(`Git Provider: No`), so pushes only update GitHub. Deploy from the repo root with:
 
 ```
-mkdir dist && copy index.html dist
-npx wrangler pages deploy dist --project-name sky-jump --branch main
+npm run deploy:pages
 ```
+
+That builds `cf-public/` from `index.html` + `server/voice-lines.json` and uploads it to the
+`sky-jump` Pages project on the `main` branch. To make pushes deploy automatically instead, connect
+the GitHub repo in Cloudflare Dashboard → Workers & Pages → `sky-jump` → Settings → Builds &
+deployments, with build command `npm run cf:prep` and output directory `cf-public`.
 
 ## Project docs
 

@@ -1,17 +1,20 @@
-- 2026-10-21 [CLAUDE] Renamed the game to **SkyJump3D** (titles, README, server strings). LOGO.png/LOGO2.png still show the old name and need new art; GitHub repo `Chimthuwu/neon-genocide` not renamed yet.
+- 2026-10-21 [CLAUDE] Renamed the game to **SkyJump3D** (titles, README, server strings). Superseded: the remote is now `Chimthuwu/SkyJump3D` and the old logo files are no longer in the tree.
 # SkyJump3D — Work Log
 
 ## Current focus
-Weapons-findable + enemies-visible pass.
+Spawn-region cleanliness (no portals/gore/duplicate rides), six-player spawn towers, deploy handoff.
 
 ## In progress
-- Real-browser eyeball check: trunk morph, leaf weather, monkey density, weapon beacons, aggro arrows.
+- Human visual review only: biome art, trunk morph, leaf weather, skyline emissive and enemy readability at real GPU. Headless Edge runtime/screenshots are clean.
 
 ## Blocked / needs decision from user
-None.
+- Auto-deploy on push requires connecting `sky-jump` Pages to GitHub in the Cloudflare dashboard (project is direct-upload, `Git Provider: No`).
+- Real-GPU performance measurement requires a hardware-GPU browser; tests here use headless software GL.
 
 ## Backlog (ordered, top = highest priority)
-- [ ] Real browser smoke test for the cyberpunk/EVA enemy accents — verify they read at distance and in fog.
+- [~] Cyberpunk/EVA enemy accents: headless runtime smoke passes, but distance/fog readability still needs a human eyeball pass.
+- [ ] Physical traversal playtest from all six home towers through the generated route graph.
+- [ ] Windows firewall inbound rule for LAN co-op (user/admin action).
 
 ## Done (most recent first)
 - 2026-10-21 [ANTIGRAVITY] DELOREAN TIME MACHINE MODEL OVERHAUL + RESTORED AT SPAWN:
@@ -48,11 +51,11 @@ None.
   - **Skyway/Moon** (`buildSkyway`, `spaceK`, `MOON_ZONE`): bounce-pad stairs from a launch platform near the tower up to TOP+800, flat bridge to a cratered moon sphere with a colosseum arena + Guardian; landing on it = `levelClear('moon', 3000)`. Above TOP+80 gravity fades to 35%, sky/fog fade to black, stars appear. World radius 640, hubs spread wider.
   - Game now **starts in first person** (`fpv = true`). Voices: new generic cast + per-kind effects chain (`VFX`, `voiceChain`) + random "inner voices" (`innerVoices`, kind `inner`). Wizard: `serverOrigin()` finds the server at localhost:8080 even from a double-clicked file; CORS enabled on `/net-info` and `/tts-status`.
   - Still to do: Windows Firewall inbound rule for Tailscale (user must run as admin); eyeball Jungle/Psychedelic/Frozen/Storm worlds.
-- [~] Guided multiplayer wizard — 2026-10-20 (Claude). MULTIPLAYER -> HOST A GAME / JOIN A GAME. Host panel: checklist (Tailscale detected via server `/net-info`, server running), room code, invite link + copy, START HOSTING. Join panel: install/accept-invite steps, paste invite link, TEST CONNECTION (no-cors fetch), JOIN (navigates to the host's page, which auto-connects via `?room=`). Added `server/start-server.bat` and `/net-info` in `server/server.js`. **Not run** (shell down, Z: full): needs a server restart + a click-through in a real browser + `node --check` on the inline script.
+- [x] Guided multiplayer wizard — 2026-10-20 (Claude). MULTIPLAYER -> HOST A GAME / JOIN A GAME. Host panel: checklist (Tailscale detected via server `/net-info`, server running), room code, invite link + copy, START HOSTING. Join panel: install/accept-invite steps, paste invite link, TEST CONNECTION (no-cors fetch), JOIN (navigates to the host's page, which auto-connects via `?room=`). Added `server/start-server.bat` and `/net-info` in `server/server.js`. Superseded: relay slot tests and the two-browser room test pass; the wizard's visual click-through is not separately retested.
 - [x] Voice lines changed from Evangelion to "hallucination" whispers — 2026-10-20 (Claude): paranoid/urging lines ("They are watching you", "Kill them all", "Jump. The next one is real", death lines like "Wake up"). Edited in two places that must stay identical: `LINES` in `index.html` and `server/voice-lines.json` (server copy wins when the game is served by it); cues in `CAST` in `server/server.js`. **Deliberately no lines that urge the player to end their own life** (user asked for "end it all" — declined). Not run/tested (shell was down, Z: full).
 - [x] Drone/bomber turned into a giant eyeball — 2026-10-20 — Faceted PS1 sphere as sclera, iris + black pupil front, cyberpunk optic ring (cyan drone / magenta bomber), bomber gets 5 bloodshot veins, rotor halo still spins e.ring, bottom optic nerve, rotor arms/housings kept. Hitboxes (r 0.65 / h 1.1), pts, AI untouched. Syntax + geometry-budget + regression checks pass; no browser play.
 - [x] CRAZY MODE — 2026-10-20 — KeyB toggle in-game, persisted in towerdrop.settings. Chroma-split + CRT scanline wobble in the upscale shader (2 extra texture reads, still O(1)/pixel), toast gets a magenta/cyan pulsing skew. PS1/N64/MODERN presets, gameplay, AI, physics, aim all untouched. Syntax + regression grep checks pass; not play-tested in a browser.
-- [~] Fish Audio enemy voices + multiplayer check + zone worlds — 2026-10-20 (Claude). **UNVERIFIED parts first:** the Z: drive hit 0 bytes free mid-session so the shell tool stopped working; the last client edit (`say`/`playFish`/`pickLine` near the enemy-voice section of `index.html`) was NOT syntax-checked and the TTS endpoint was NOT exercised. First job: free space on Z:, run `node --check` on the inline script, restart the server (`cd server && npm start`), open `/tts?kind=boss&cat=boss&n=0` (should return an mp3).
+- [x] Fish Audio enemy voices + multiplayer check + zone worlds — 2026-10-20 (Claude). Superseded: inline syntax now passes, `/tts?kind=boss&cat=boss&n=0` returned real mp3 bytes in the later server sweep, and two-browser multiplayer works. Remaining admin action: rotate the Fish Audio key that was pasted into chat.
   - Voices: `server/server.js` has `/tts` (only allowlisted lines from `server/voice-lines.json`, cached in `server/tts-cache/`, 300 new clips/hour cap, free model `s2.1-pro-free`, `model` as a HEADER per `Z:\GITHUB\FISH_AUDIO_TTS*.md`). Key is in `server/.env` (git-ignored, never sent to the browser). Cast: walker=Robot, gunner=Lans, charger=doom, shield=Computer, bomber/drone=Robot/Lans, boss+guardians=horror. Client falls back to browser speech when the server has no key / isn't the origin. **Rotate the key at fish.audio/app/developers (it was pasted into chat).**
   - Multiplayer: two real Edge windows in one room saw each other (host + guest, names, hearts). Note: two tabs in ONE browser throttle the background tab, so test with two windows. Friends on LAN are blocked by Windows Firewall (Wi-Fi profile is Public): needs an inbound allow rule for TCP 8080 (admin PowerShell) or use the Tailscale address.
   - Zone worlds (`updateWorlds`, `dressSite`, `buildBackdrop`, `zoneGround`): Inferno verified in a real browser (red sky, flames, embers); Jungle/Psychedelic/Frozen/Storm load without errors, visuals not yet eyeballed. Bug fixed: ground contact needed a 1 cm sink so `onGround` flickered and `onLand` re-fired every few frames (reset the zone, flaky portals). Portals are now flat hatches you can stand on or fall into (`updatePortals`).
@@ -73,9 +76,10 @@ None.
 - 2026-10-20 — Drone rotor assembly still the `e.ring` group so the existing `e.ring.rotation.z` game-loop code doesn't change.
 
 ## Known issues
-- Real-browser visuals and manual play have not been verified in this environment — no Puppeteer Chrome executable here (Claude's harness lives outside the repo) — severity: medium.
+- Headless Edge/Puppeteer is now available and used for runtime, layout, gore, Guide/mission and slot tests. Human visual quality and real-GPU frame rate are still unverified — severity: low for correctness, medium for look/perf.
 
 ## Manual test log
+- 2026-10-21 — Headless Edge: solo plus all six home slots load correctly; no enemies/gore/portals near homes; 3 props per tower; 587 jungle bananas; Guide opens/closes and mission accept → ready → turn-in works; zero page errors.
 - 2026-10-20 — Session summary — Cyberpunk/EVA accent pass shipped on top of the enemy sprite rework; no real-browser play-test performed.
 - 2026-10-20 — Cyberpunk/EVA accents — Syntax + geometry-budget + accent-artifact + hitbox checks pass.
 - 2026-10-20 — Enemy sprite rework — Verified shared humanoid body, variant-specific railings, syntax, and hitbox preservation.
@@ -90,18 +94,18 @@ None.
 
 ## Home Base + Mission Board
 - Plan in `PLAN-HOMEBASE.md` (Agent A = base world/NPC/dialogue UI, Agent B = missions/rewards/crafting logic).
-- 2026-10-21 [BUFFY / Agent A] Added a peaceful start rooftop and first-route safe radius (including secondary route spawns), neon safe-zone ring, forge, storage, mission board, banner, lamps and barrels. Built a blocky Guide with short constrained wandering, approach greeting/wave, offer/turn-in marker, and an E-triggered HELP / RECIPES / TASKS / LEAVE panel. The panel gates player input without freezing the world; mission actions call the current logic (`acceptMission`, `abandonMission`, `turnIn`) and recipes use `craftList`/`craft`, including ingredient/credit affordability. Added `__ng.homeBase()` for NPC/prompt/dialog/safe-radius inspection. Inline module syntax and structural checks pass; browser visual/gameplay test unavailable in this environment. Multiplayer slot placement still awaits the documented slot-assignment work.
+- 2026-10-21 [BUFFY / Agent A] Added a peaceful start rooftop and first-route safe radius (including secondary route spawns), neon safe-zone ring, forge, storage, mission board, banner, lamps and barrels. Built a blocky Guide with short constrained wandering, approach greeting/wave, offer/turn-in marker, and an E-triggered HELP / RECIPES / TASKS / LEAVE panel. The panel gates player input without freezing the world; mission actions call the current logic (`acceptMission`, `abandonMission`, `turnIn`) and recipes use `craftList`/`craft`, including ingredient/credit affordability. Added `__ng.homeBase()` for NPC/prompt/dialog/safe-radius inspection. Superseded by the 2026-10-21 headless test below; per-slot Guides now exist on all six towers.
 
 ## Next: Home Base integration and testing
-- Verify `index.html` with a real browser: Guide appearance, dialogue navigation, mission accept/return/turn-in, recipe cost display, and vehicle interaction precedence.
+- [x] 2026-10-21 — Headless Edge verified Guide opens with HELP/RECIPES/TASKS/LEAVE, Escape closes it, and `acceptMission → completeMission → turnIn` pays credits at the home base. Recipe panel wiring remains covered by `__ng.craftList`/`craft` structural checks.
 - Home Base Agent A slice is implemented; Agent B mission/reward/crafting systems are already present in the merged file and are now surfaced by the Guide UI.
-- 2026-10-21 [BUFFY / Agent B] Verified the integration in `index.html`: mission generation uses its separate level-seeded RNG; the frame loop updates mission state; local and remote kills both route to mission credit; and persistent glide, nitro, jump, credit, and resource effects are wired to use sites. Added disposal of regenerated core pickups, made full-health medkits non-craftable, persisted resources when placing blocks, and aligned kill markers with valid kill targets. Extracted module syntax and focused RNG/crafting/API-hook checks pass. Browser play remains unverified (Puppeteer Chrome executable absent); multiplayer slot mapping is not activated and remains a follow-up.
+- 2026-10-21 [BUFFY / Agent B] Verified the integration in `index.html`: mission generation uses its separate level-seeded RNG; the frame loop updates mission state; local and remote kills both route to mission credit; and persistent glide, nitro, jump, credit, and resource effects are wired to use sites. Added disposal of regenerated core pickups, made full-health medkits non-craftable, persisted resources when placing blocks, and aligned kill markers with valid kill targets. Superseded: browser, slot-mapping and Guide/mission tests now pass; see the six-player section.
 
 - `PLAN-INTERIORS-MP.md`: Part 1 hollow tower interiors (Agent A), Part 2 six-player ring of spawn towers with per-slot Guide + missions (Agent B). Runs after PLAN-HOMEBASE.
 
 ## Six-player spawn towers (Agent B) — 2026-10-21
 - `starts[]` + `mySlot` are live. Single player still builds the original one-roof tower at (10, TOP, 0); a room builds six identical home towers on a 150 m ring at 60° spacing.
-- Each tower gets its own full dressing pass (arsenal, bike, buggy, board, skates, lore terminal, Guide, forge, board) and a `HOME n` landmark. Hub portals on home roofs were removed (they were permanent dormant duds), and branch portal pairs within 40 m / 40 m vertically of a home are skipped so nothing wakes up on the spawn roof.
+- Each tower gets its own full dressing pass (arsenal, bike, buggy, board, lore terminal, Guide, forge, board) and a `HOME n` landmark. Hub portals on home roofs were removed (they were permanent dormant duds), and all portal gates within 80 m of a home are skipped so no platform near spawn can wake one.
 - `server/server.js` and the Cloudflare Durable Object now assign slots 0–5, reject the 7th player with `reason: 'lobby full'`, free/reuse slots on leave, send `slot/level/seed` in `hi`, and retain the room level for late joiners. Client `applyNetSlot()` rebuilds the seeded city, drops the player on their own roof, and restores their own base/mission state.
 - Missions use `missionRandom(levelSeed ^ mySlot·0x9E3779B1 ^ 0xBA5E)` and `missionSlots[mySlot]`; IDs are e.g. `L1-S3-2`. Mission markers, turn-in, tracker and Guide all target `myMissionHub()`, not the first start hub. Contract accept/progress/complete is relayed as informational HUD only; `craft`/`base` stay local.
 - Kill credit is now owner-only: a guest tags an enemy it hit; the host's networked kill does not advance the host's own contract, and a guest only gets credit for a kill tag less than 15 s old.
@@ -110,7 +114,7 @@ None.
 ### Verified (2026-10-21)
 - Extracted module `node --check` PASS; `node --check server/server.js` and `cloudflare/worker.js` PASS.
 - Server WS test on :8099: six clients got slots `[0,1,2,3,4,5]`, the 7th got `{t:'full',reason:'lobby full'}`, disconnecting slot 2 and joining again reused slot 2.
-- Headless Edge (software GL) on :8101: solo build has one tower at (0,0) and spawn (10, 580, 0); `applyNetSlot(0..5)` produced six homes/six Guides, correct own tower, 10 m spawn offset, zero enemies near any home, exactly 24 home props (4 per tower), hidden boss bar, zero portals on the six home roofs, and per-slot mission IDs.
+- Headless Edge (software GL) on :8101: solo build has one tower at (0,0) and spawn (10, 580, 0); `applyNetSlot(0..5)` produced six homes/six Guides, correct own tower, 10 m spawn offset, zero enemies near any home, exactly 18 home props (3 per tower: bike, buggy, board), hidden boss bar, zero portals within 80 m of any home tower, and per-slot mission IDs.
 - Two pages in one room received slots 0 and 1 and loaded different home towers; zero page errors. Slot-3 mission list is deterministic across rebuilds and differs from slot 1.
 
 ### Known limits
@@ -124,6 +128,11 @@ None.
 - Road/ramp vehicles within 60 m horizontally and 35 m vertically of a home roof are suppressed, so the home garage is the only ride cluster at spawn.
 - The old always-on `10/10 BOSSES REMAIN` bar is gone. The boss bar now only appears when a boss/Guardian is within 120 m / 55 m, and shows `BOSS n/10 · NAME` or `GUARDIAN · NAME`.
 - Removed permanently-dormant portals from start hubs (they could never unlock).
+- Roller skates were removed from the game: no skates prop, spawn pickup, worn model, speed multiplier, grind bonus, hint text, or debug equip path. Skateboard gear remains and still grinds.
+- Home roofs now reject gore: `putDecal` drops splatter within the tower footprint, `saveGore`/`loadGore` filter old decals and resting gibs there, and live gibs are deleted instead of resting on a home roof. Verified by seeding `towerdrop.gore.L1` with one spawn decal + one far decal + a spawn gib and reloading: `__ng.gore()` = `{decals:1, gibs:0, nearSpawn:0}`.
+
+## Deploy note
+- `sky-jump` on Cloudflare Pages is **direct upload** (`Git Provider: No`), so `git push` cannot update https://sky-jump.pages.dev. Use `npm run deploy:pages` (added to `package.json`, documented in `README.md`). Automatic deploys require connecting the GitHub repo in the Pages dashboard (`npm run cf:prep`, output `cf-public`).
 
 ## Performance audit
-- `PERFORMANCE_AUDIT.md` written (hypotheses only, nothing measured yet). Next: add perf HUD + renderer.info, capture 3 reference scenes.
+- Perf HUD/renderer.info hooks (`__ng.perf`) are present. Real-GPU capture of the 3 reference scenes is still open; only headless software-GL timing is available here.
