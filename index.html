@@ -2868,7 +2868,7 @@ function openTower(hub, forceKey = null) {
       decorSites.splice(i, 1);
     }
   }
-  const floorCount = Math.max(1, Math.min(14, Math.ceil((hub.top - 6) / 22))), shell = interiorShell(hub, floorCount, theme);
+  const floorCount = Math.max(1, Math.min(14, Math.ceil((hub.top - 6) / 22))), shell = interiorShell(hub, floorCount, theme); hub.shellFloors = shell.floors;
   const result = ({ server: buildInterior_server, atrium: buildInterior_atrium, reactor: buildInterior_reactor, club: buildInterior_club, vault: buildInterior_vault })[key](hub, shell.floors, shell);
   interiorDecor(key, hub, shell, (levelSeed ^ Math.floor(hub.x * 17 + hub.z * 29)) | 0);
   result.enemies = [];
@@ -2906,6 +2906,28 @@ function openTower(hub, forceKey = null) {
   if (Math.hypot(pos.x - hub.x, pos.z - hub.z) < hub.hw - 1 && pos.y < hub.top - 0.05) enterTowerInterior(hub);
   toast(`${theme.name.toUpperCase()} OPENED — ROOF HATCH IS CLEAR`, 2400); sfx.portal();
   return result;
+}
+// SIDE ENTRANCE: stand at the outer wall of any hollow-able tower and press E to step through a window onto the nearest floor.
+function towerWallHint() {
+  if (inInterior || state !== 'play') return null;
+  let best = null, bd = 3.4;
+  for (const h of buildingHubs) {
+    if (!h.roofSolid || pos.y < 3 || pos.y > h.top - 2) continue;
+    const dx = Math.max(Math.abs(pos.x - h.x) - h.hw, 0), dz = Math.max(Math.abs(pos.z - h.z) - h.hd, 0), d = Math.hypot(dx, dz);
+    if (d < bd && Math.abs(pos.x - h.x) < h.hw + 3.4 && Math.abs(pos.z - h.z) < h.hd + 3.4) { bd = d; best = h; }
+  }
+  return best;
+}
+function enterTowerSide(hub) {
+  if (!hub.opened) openTower(hub);
+  const floors = hub.shellFloors; if (!floors || !floors.length) return;
+  let f = floors[0]; for (const q of floors) if (Math.abs(q.y - pos.y) < Math.abs(f.y - pos.y)) f = q;
+  const ex = hub.hw - Math.abs(pos.x - hub.x), ez = hub.hd - Math.abs(pos.z - hub.z), inset = 3.2;
+  let px = pos.x, pz = pos.z;
+  if (ex < ez) px = hub.x + Math.sign(pos.x - hub.x || 1) * (hub.hw - inset); else pz = hub.z + Math.sign(pos.z - hub.z || 1) * (hub.hd - inset);
+  pos.set(clamp(px, hub.x - hub.hw + inset, hub.x + hub.hw - inset), f.y + 0.4, clamp(pz, hub.z - hub.hd + inset, hub.z + hub.hd - inset));
+  vel.set(0, 0, 0); onGround = false; climbing = null; pounding = false; invuln = Math.max(invuln, 1.2);
+  enterTowerInterior(hub); sfx.portal(); toast('YOU CLIMB IN THROUGH A WINDOW', 1800);
 }
 function enterTowerInterior(hub) {
   if (!hub || !hub.interior || activeTowerInterior === hub.interior) return;
@@ -3864,6 +3886,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyR' && state === 'play') respawn();
   eUsedProp = false;
   if (e.code === 'KeyE' && state === 'play' && hintNpc && !hintProp && !onVehicle) { eUsedProp = true; openGuideDialog(); return; }
+  if (e.code === 'KeyE' && state === 'play' && hintTower && !hintProp && !hintNpc && !onVehicle) { eUsedProp = true; enterTowerSide(hintTower); return; }
   if ((e.code === 'Enter' || (e.code === 'KeyE' && (hintProp || onVehicle))) && state === 'play') { eUsedProp = e.code === 'KeyE'; useProp(); }
   if (e.code === 'CapsLock' || e.code === 'KeyV') { fpv = !fpv; toast(fpv ? 'First-person view' : 'Third-person view', 900); }
   if (/^Digit[1-7]$/.test(e.code)) { const i = +e.code[5] - 1; if (i === 1 && state !== 'title') { hotbarSel = 1; updateHotbar(); toast('BUILDER HAND — walk into ore to mine, KeyE to place a block', 1600); }
@@ -5022,7 +5045,7 @@ function playerUpdate(dt) {
 
   // camera-relative movement
   const fwdX = -Math.sin(camYaw), fwdZ = -Math.cos(camYaw), rX = Math.cos(camYaw), rZ = -Math.sin(camYaw);
-  if (keys.KeyQ) camYaw += 1.9 * dt; if (keys.KeyE && !hintProp && !hintNpc && !onVehicle) camYaw -= 1.9 * dt;
+  if (keys.KeyQ) camYaw += 1.9 * dt; if (keys.KeyE && !hintProp && !hintNpc && !hintTower && !onVehicle) camYaw -= 1.9 * dt;
   const ix = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
   const iz = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
   let dx = fwdX * iz + rX * ix, dz = fwdZ * iz + rZ * ix;
@@ -5396,7 +5419,7 @@ missionTracker.id = 'missionTracker';
 Object.assign(missionTracker.style, { position: 'fixed', display: 'none', zIndex: '2', left: '12px', top: '180px', maxWidth: 'min(360px, calc(100vw - 24px))', boxSizing: 'border-box', padding: '6px 9px', background: 'rgba(3,8,20,.86)', border: '1px solid currentColor', font: '700 12px monospace', textShadow: '0 0 8px currentColor', whiteSpace: 'normal', pointerEvents: 'none' });
 document.body.appendChild(missionTracker);
 let boostE = 1, boosting = false;                                // vehicle nitro: hold SHIFT
-let gear = '', grinding = null, onVehicle = null, hintProp = null, grindScore = 0, parkSeen = false;
+let gear = '', grinding = null, onVehicle = null, hintProp = null, hintTower = null, grindScore = 0, parkSeen = false;
 const gearPlate = (g) => ({ board: 0xff3fc8 })[g] || 0x36f6ff;
 
 function spawnRiderGroup(x, y, z, slab, n = 2, spread = 4) {
@@ -6187,11 +6210,12 @@ function updateStreet(dt) {
   // airborne grind latch
   if (!grinding) tryLatchRail();
   // Props/vehicles keep priority over the Guide so the existing E-to-ride flow stays intact.
-  hintProp = null; hintNpc = false;
+  hintProp = null; hintNpc = false; hintTower = null;
   if (state === 'play' && !guideDialogOpen && !onVehicle && !grinding) {
     const p = nearestProp();
     if (p) hintProp = p.gear ? 'pick up your SKATEBOARD' : `ride the ${p.kind === 'buggy' ? 'DELOREAN' : 'HOVER-BIKE'}`;
     else if (homeGuide && Math.hypot(homeGuide.group.position.x - pos.x, homeGuide.group.position.z - pos.z) < 3.5 && Math.abs(homeGuide.hub.top - pos.y) < 4) hintNpc = true;
+    else hintTower = towerWallHint();
   }
   if (state === 'play' && activeZ && activeZ.name === 'Ride Park' && !parkSeen) { parkSeen = true; toast('RIDE PARK — E to ride · leap onto rails to GRIND', 3400); }
 }
@@ -6323,7 +6347,7 @@ let rideTold = false, hintT = 14, hintOn = true;      // the controls bar shows 
 function setHint() {
   const h = $('hint'), ho = (state === 'play' && hintOn && hintT > 0) || paused ? 0.95 : 0; if (setHint._o !== ho) { setHint._o = ho; h.style.transition = 'opacity .8s'; h.style.opacity = ho; }
   if (state === 'play' && hintT > 0) hintT -= 1 / 60;
-  const rd = $('ride'), rt = state !== 'play' || paused ? '' : hintProp ? `[E]  ${hintProp}` : hintNpc ? '[E]  TALK TO THE GUIDE' : onVehicle ? `[E] hop off  ·  hold [SHIFT] boost ${'▮'.repeat(Math.round(boostE * 8))}${'▯'.repeat(8 - Math.round(boostE * 8))}` : grinding ? '[SPACE] rail jump' : '';
+  const rd = $('ride'), rt = state !== 'play' || paused ? '' : hintProp ? `[E]  ${hintProp}` : hintNpc ? '[E]  TALK TO THE GUIDE' : hintTower ? '[E]  CLIMB INTO THE TOWER' : onVehicle ? `[E] hop off  ·  hold [SHIFT] boost ${'▮'.repeat(Math.round(boostE * 8))}${'▯'.repeat(8 - Math.round(boostE * 8))}` : grinding ? '[SPACE] rail jump' : '';
   if (rd.textContent !== rt) rd.textContent = rt; rd.style.opacity = rt ? 1 : 0;
   if (state === 'play' && !rideTold && hintT < 10.5 && !hintProp && !onVehicle) { rideTold = true; toast('WALK UP TO THE HOVER-BIKE OR THE DELOREAN AND PRESS E', 4200); }
   const near = hintProp ? `· E: ${hintProp} ` : hintNpc ? '· E: TALK TO THE GUIDE ' : (grinding ? '· SPACE: rail jump · E bail ' : '');
