@@ -257,12 +257,19 @@ function retroMaterial(material) {
   retroMaterials.add(material);
   material.userData ||= {};
   if (material.map) trackRetroTexture(material.map);
-  if (retroPreset === 'MODERN') return material;
+  const keep = material.userData.retroOrig;
+  if (retroPreset === 'MODERN') {          // MODERN = the materials as the game authored them; undo anything a PS1/N64 pass stripped
+    if (keep) {
+      if (material.emissive) material.emissive.setHex(keep.emissive);
+      if ('emissiveMap' in material) material.emissiveMap = keep.emissiveMap;
+      if ('emissiveIntensity' in material) material.emissiveIntensity = keep.emissiveIntensity;
+      material.flatShading = keep.flatShading; material.toneMapped = keep.toneMapped;
+    }
+    return material;
+  }
+  if (!keep) material.userData.retroOrig = { emissive: material.emissive ? material.emissive.getHex() : 0, emissiveMap: material.emissiveMap || null, emissiveIntensity: material.emissiveIntensity, flatShading: material.flatShading, toneMapped: material.toneMapped };
   if (material.isMeshLambertMaterial) material.flatShading = true;
-  if (material.emissive) material.emissive.set(0x000000);
-    if ('emissiveMap' in material) material.emissiveMap = null;
-    if ('emissiveIntensity' in material) material.emissiveIntensity = 0;
-    if (material.isMeshBasicMaterial) material.toneMapped = false;
+    if (material.isMeshBasicMaterial) material.toneMapped = false;      // glow (emissive) is kept so every look matches MODERN's colours
   if (material.userData.retroShaderHook) return material;
   material.userData.retroShaderHook = true;
   // only plain mesh materials get the retro shader patch (sprites / points / line materials have different vertex shaders)
@@ -416,7 +423,7 @@ function applyRetroPreset(name, persist = true) {
   upscaleMaterial.uniforms.uCrazy.value = crazy ? 1 : 0;
   try { $('toast').classList.toggle('crazy', crazy); } catch (_) {}
   scene.traverse(retrofitObject);
-  for (const material of retroMaterials) material.needsUpdate = true;
+  for (const material of retroMaterials) { retroMaterial(material); material.needsUpdate = true; }
   setRetroTextureSampling();
   resizeRenderer();
   if (persist) {
@@ -5840,9 +5847,11 @@ function buildFlow(netHubs) {
   const towerHubs = hubs.filter(h => (h.kind === 'building' || h.kind === 'start' || h.kind === 'ridepark' || h.kind === 'junction') && h.top !== undefined);
   const towers = [];
   for (const h of towerHubs) {
-    const R = clamp(Math.min(h.hw || 8, h.hd || 8) * 0.5, 4, 8), a0 = rand() * 6.28, rise = 22, n = 4, cx = h.x, cz = h.z;
+    let a0 = rand() * 6.28;
+    const R = clamp(Math.min(h.hw || 8, h.hd || 8) * 0.5, 4, 8), rise = 22, n = 4, cx = h.x, cz = h.z;
     const boost = Math.sqrt(2 * GRAV * (rise + 6));
     let top = null;
+    for (let t = 0; t < 13 && props.some(q => Math.abs(q.mesh.position.y - h.top) < 1 && Math.hypot(q.mesh.position.x - (cx + Math.cos(a0) * R), q.mesh.position.z - (cz + Math.sin(a0) * R)) < 5.5); t++) a0 += 0.5;   // keep the trampoline tower off any parked ride
     for (let k = 0; k < n; k++) {
       const a = a0 + k * 1.25, x = cx + Math.cos(a) * R, z = cz + Math.sin(a) * R, y = h.top + k * rise;
       if (k > 0) { const sl = addSlab(x, y, z, 4.2, 4.2, 1.5, h.zone, true); sl.road = true; }
@@ -7492,7 +7501,7 @@ window.__ng.setCull = r => { CULL_R = r; };
 window.__ng.lvl = () => lvl;
 window.__ng.cull = () => ({ tracked: cull.list.length, hidden: cull.hidden, children: lvl.children.length, solids: solids.length, platforms: platforms.length, specials: specials.length, enemies: enemies.length, items: items.length, props: props.length });
 window.__ng.renderInfo = () => new Promise(res => { renderer.info.autoReset = false; renderer.info.reset(); requestAnimationFrame(() => requestAnimationFrame(() => { const i = renderer.info; res({ calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries }); renderer.info.autoReset = true; })); });
-window.__ng.perf = PERF; window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute();
+window.__ng.perf = PERF; window.__ng.propsNow = () => props.map(p => ({ k: p.kind, x: +p.mesh.position.x.toFixed(1), y: +p.mesh.position.y.toFixed(1), z: +p.mesh.position.z.toFixed(1) })); window.__ng.bounceNear = (x, z, r = 12) => solids.filter(s => s.bounce && Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z) < r).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +s.maxy.toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), w: +(s.maxx - s.minx).toFixed(1), d: +(s.maxz - s.minz).toFixed(1), boost: s.boost })); window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute();
 let last = performance.now();
 renderer.setAnimationLoop(now => {
   const P = PERF.enabled; if (P) { renderer.info.reset(); PERF.frame(now); PERF.lapStart(); }

@@ -18,6 +18,8 @@ Spawn-region cleanliness (no portals/gore/duplicate rides), six-player spawn tow
 - [ ] Windows firewall inbound rule for LAN co-op (user/admin action).
 
 ## Done (most recent first)
+- 2026-10-21 [CLAUDE] Spawn buggy was parked on a pink trampoline-tower pad (buildFlow places pads after props, so the addProp check never saw them): tower start angle now dodges parked rides. Headless check: 53 props, 0 on a bounce solid. PS1/N64 no longer zero emissive (glow kept) so all looks share MODERN colours. Dev: `__ng.propsNow()`, `__ng.bounceNear()`.
+- 2026-10-21 [CLAUDE] Default look != MODERN fixed: switching to PS1/N64 permanently stripped material emissive/flatShading, so cycling back to MODERN was darker than the fresh-load default. `retroMaterial` now stashes originals (`userData.retroOrig`) and restores them on MODERN. Headless: fresh load vs cycled-back MODERN mean colour now equal (~18/23/53). PS1/N64 stay slightly darker by design (emissive off).
 - 2026-10-21 [CLAUDE] P-key looks now match in colour: MODERN renders to screen (ACES tone-mapped) but PS1/N64 render to an untonemapped low-res target, so they looked brighter/more saturated. The upscale shader now applies the same ACES curve. Headless mean screen colour per preset: within ~1 of each other.
 - 2026-10-21 [CLAUDE] Rides no longer spawn on trampolines/launch pads: `addProp` slides a prop to the nearest bounce-free spot on the same surface (`propSpotClear`), and `bounceDress` skips platforms with a ride parked on them. Loads clean; not eyeballed.
 - 2026-10-21 [CLAUDE] Vehicle boost moved from X to hold SHIFT (hints updated; sprint is off while riding). Not run in browser.
