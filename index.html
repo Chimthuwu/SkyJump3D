@@ -2252,6 +2252,17 @@ const zoneForRegion = region => biomeForRegion(level, region);
     connect(home, local[0]);
     for (let k = 1; k < 3 && k < local.length; k++) connect(home, local[k]);
   });
+  // No home tower may have a blind side: wherever none of the 8 compass directions already has platforms near the tower,
+  // grow a stepping-stone chain out to a small supply island so there is always something to jump to on every side.
+  for (const home of spawnHubs) for (let k = 0; k < 8; k++) {
+    const a = k / 8 * Math.PI * 2 + 0.2, ca = Math.cos(a), sa = Math.sin(a), px = home.x + ca * (TH + 40), pz = home.z + sa * (TH + 40);
+    if (solids.some(q => q.cx !== undefined && Math.abs(q.top - TOP) < 45 && Math.hypot(q.cx - px, q.cz - pz) < 24)) continue;
+    const R = TH + 100 + rand() * 20, ix = home.x + ca * R, iz = home.z + sa * R, top = TOP - 6 - rand() * 16;
+    const isl = addSlab(ix, top, iz, 9, 9, 2, null, true);
+    const hub = { kind: 'island', x: ix, z: iz, top, hw: 9, hd: 9, zone: null, r: 12 };
+    connect(home, hub);
+    heart(ix + 3, top + 1.3, iz); ammoBox(ix - 3, top + 0.8, iz); for (let c = 0; c < 4; c++) coin(ix + (c - 1.5) * 2.4, top + 1.2, iz + 4, null);
+  }
   for (let i = 0; i < hubs.length; i++) {
     if (hubs[i].kind === 'start') continue;
     const near = hubs.slice(0, i).sort((a, b) => Math.hypot(a.x - hubs[i].x, a.z - hubs[i].z) - Math.hypot(b.x - hubs[i].x, b.z - hubs[i].z));
@@ -5981,7 +5992,7 @@ pShadow.rotation.x = -Math.PI / 2; pShadow.visible = false; pShadow.renderOrder 
 // ---- distance culling, size-aware so the horizon is untouched. Fog is opaque past ~270 m, so SMALL things beyond ~380 m are invisible anyway,
 // but BIG things (towers, platforms, islands) still read as fog-coloured silhouettes against the sky, so they stay drawn out to 900 m.
 // Enemy bodies / pickups / vehicles far away are hidden too, but enemy aura, beacon and red aggro-arrow stay, so hostiles still read across the map.
-let CULL_R = 380, CULL_BIG_R = 900, CULL_BIG_SIZE = 8; const cull = { lvl: null, n: 0, list: [], t: 0, hidden: 0 };
+let CULL_R = 290, CULL_BIG_R = 340, CULL_BIG_SIZE = 8; const cull = { lvl: null, n: 0, list: [], t: 0, hidden: 0 };
 function cullable(o) {
   if (o.userData && o.userData.noCull) return false;
   if (skyProps.includes(o) || clouds.includes(o)) return false;
@@ -5998,7 +6009,7 @@ function cullTick(dt) {
   cull.t -= dt; if (cull.t > 0) return; cull.t = 0.35;
   if (inInterior) return;
   if (cull.lvl !== lvl) { cull.lvl = lvl; cull.n = 0; cull.list = []; cull.hidden = 0; }
-  let budget = 1500;
+  let budget = lvl.children.length - cull.n > 1500 ? 20000 : 1500;      // a freshly built level registers in one go (a slow trickle left thousands of far meshes drawn), later additions trickle
   for (; cull.n < lvl.children.length && budget-- > 0; cull.n++) {
     const o = lvl.children[cull.n]; if (!cullable(o)) continue;
     o.updateWorldMatrix(true, true); const b = new THREE.Box3().setFromObject(o);
@@ -6013,7 +6024,9 @@ function cullTick(dt) {
   }
   for (const en of enemies) {                          // far enemies: drop the body meshes, keep aura + beacon + aggro arrow
     if (en.dead || !en.mesh) continue;
-    const far = Math.hypot(en.x - cp.x, en.z - cp.z) > 170 || Math.abs(en.y - cp.y) > 200;
+    const dFar = Math.hypot(en.x - cp.x, en.z - cp.z);
+    if ((dFar > 460 || Math.abs(en.y - cp.y) > 500) !== !!en._gone) { en._gone = !en._gone; en.mesh.visible = !en._gone; }      // beyond the horizon even the beacon is dropped
+    const far = dFar > 170 || Math.abs(en.y - cp.y) > 200;
     if (far === !!en._bodyOff) continue;
     en._bodyOff = far;
     for (const c of en.mesh.children) if (c !== en.aura && c !== en.beacon && c.geometry !== aggroGeo) c.visible = !far;
@@ -6152,7 +6165,7 @@ function updateStreet(dt) {
     if (p) hintProp = p.gear ? 'pick up your SKATEBOARD' : `ride the ${p.kind === 'buggy' ? 'DELOREAN' : 'HOVER-BIKE'}`;
     else if (homeGuide && Math.hypot(homeGuide.group.position.x - pos.x, homeGuide.group.position.z - pos.z) < 3.5 && Math.abs(homeGuide.hub.top - pos.y) < 4) hintNpc = true;
   }
-  if (state === 'play' && activeZ && activeZ.name === 'Ride Park' && !parkSeen) { parkSeen = true; toast('RIDE PARK — ENTER to ride · leap onto rails to GRIND', 3400); }
+  if (state === 'play' && activeZ && activeZ.name === 'Ride Park' && !parkSeen) { parkSeen = true; toast('RIDE PARK — E to ride · leap onto rails to GRIND', 3400); }
 }
 
 // ---------- state/cleanup for street gear ----------
@@ -6284,10 +6297,10 @@ function setHint() {
   if (state === 'play' && hintT > 0) hintT -= 1 / 60;
   const rd = $('ride'), rt = state !== 'play' || paused ? '' : hintProp ? `[E]  ${hintProp}` : hintNpc ? '[E]  TALK TO THE GUIDE' : onVehicle ? `[E] hop off  ·  hold [SHIFT] boost ${'▮'.repeat(Math.round(boostE * 8))}${'▯'.repeat(8 - Math.round(boostE * 8))}` : grinding ? '[SPACE] rail jump' : '';
   if (rd.textContent !== rt) rd.textContent = rt; rd.style.opacity = rt ? 1 : 0;
-  if (state === 'play' && !rideTold && hintT < 10.5 && !hintProp && !onVehicle) { rideTold = true; toast('PRESS ENTER TO RIDE A HOVER-BIKE  ·  SHIFT+ENTER = DELOREAN', 4200); }
+  if (state === 'play' && !rideTold && hintT < 10.5 && !hintProp && !onVehicle) { rideTold = true; toast('WALK UP TO THE HOVER-BIKE OR THE DELOREAN AND PRESS E', 4200); }
   const near = hintProp ? `· E: ${hintProp} ` : hintNpc ? '· E: TALK TO THE GUIDE ' : (grinding ? '· SPACE: rail jump · E bail ' : '');
   const hintTxt = state === 'play'
-    ? 'WASD move · SHIFT sprint · double-jump summons your HOVERBOARD (hold SPACE to ride) · C pound · click/F fire (hold for beams) · RIGHT-CLICK aim · 1-7 or wheel: weapons · jump at a wall to climb (SPACE wall-jump) · step into neon portals to travel · ' + near + 'CAPS/V first-person · ENTER ride (anywhere; SHIFT+ENTER buggy) · R respawn · M sound · N music · G gore · H this bar'
+    ? 'WASD move · SHIFT sprint · double-jump summons your HOVERBOARD (hold SPACE to ride) · C pound · click/F fire (hold for beams) · RIGHT-CLICK aim · 1-7 or wheel: weapons · jump at a wall to climb (SPACE wall-jump) · step into neon portals to travel · ' + near + 'CAPS/V first-person · E ride (at a bike or DeLorean; ENTER summons one anywhere, SHIFT+ENTER the DeLorean) · R respawn · M sound · N music · G gore · H this bar'
     : '';
   if (hintTxt !== setHint._t) { setHint._t = hintTxt; $('hint').textContent = hintTxt; }
 }
@@ -7547,7 +7560,8 @@ window.__ng.setCull = r => { CULL_R = r; };
 window.__ng.lvl = () => lvl;
 window.__ng.cull = () => ({ tracked: cull.list.length, hidden: cull.hidden, children: lvl.children.length, solids: solids.length, platforms: platforms.length, specials: specials.length, enemies: enemies.length, items: items.length, props: props.length });
 window.__ng.renderInfo = () => new Promise(res => { renderer.info.autoReset = false; renderer.info.reset(); requestAnimationFrame(() => requestAnimationFrame(() => { const i = renderer.info; res({ calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries }); renderer.info.autoReset = true; })); });
-window.__ng.perf = PERF; window.__ng.bossesNow = () => endBosses.map(e => ({ n: e.name, v: e.bossRole, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), hub: e.hub ? e.hub.kind : 'bottom' })); window.__ng.enemyCount = () => enemies.filter(e => !e.dead).length; window.__ng.propsNow = () => props.map(p => ({ k: p.kind, x: +p.mesh.position.x.toFixed(1), y: +p.mesh.position.y.toFixed(1), z: +p.mesh.position.z.toFixed(1) })); window.__ng.bounceNear = (x, z, r = 12) => solids.filter(s => s.bounce && Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z) < r).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +s.maxy.toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), w: +(s.maxx - s.minx).toFixed(1), d: +(s.maxz - s.minz).toFixed(1), boost: s.boost })); window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute();
+window.__ng.perf = PERF; window.__ng.drawStats = () => { const fr = new THREE.Frustum(), m = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); fr.setFromProjectionMatrix(m); const enemyRoots = new Set(enemies.map(e => e.mesh)); const out = { enemyParts: 0, enemiesVisible: 0, other: 0, instanced: 0, sprites: 0, transparent: 0 }; const seen = new Set(); scene.traverseVisible(o => { if (!o.isMesh && !o.isSprite && !o.isPoints) return; if (o.frustumCulled && o.geometry && !fr.intersectsObject(o)) return; if (o.isSprite) { out.sprites++; return; } let a = o, isE = false; while (a) { if (enemyRoots.has(a)) { isE = true; seen.add(a); break; } a = a.parent; } if (isE) out.enemyParts++; else if (o.isInstancedMesh) out.instanced++; else { out.other++; const k = (o.geometry ? o.geometry.type : '?') + '|' + (o.material && o.material.type) + (o.material && o.material.transparent ? '|T' : '') + '|d' + Math.round(Math.hypot(o.getWorldPosition(new THREE.Vector3()).x - camera.position.x, o.getWorldPosition(new THREE.Vector3()).z - camera.position.z) / 100); (out.k = out.k || {})[k] = (out.k[k] || 0) + 1; } if (o.material && o.material.transparent) out.transparent++; }); out.enemiesVisible = seen.size; return out; }; window.__ng.farWho = () => { const fr = new THREE.Frustum(); fr.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)); const tops = new Map(); scene.traverseVisible(o => { if (!o.isMesh || (o.frustumCulled && !fr.intersectsObject(o))) return; const wp = o.getWorldPosition(new THREE.Vector3()); if (Math.hypot(wp.x - camera.position.x, wp.z - camera.position.z) < 450) return; let a = o; while (a.parent && a.parent !== scene && a.parent !== lvl) a = a.parent; const e = tops.get(a) || { n: 0, cullable: cullable(a), type: a.type, kids: a.children.length, inLvl: a.parent === lvl, ud: Object.keys(a.userData || {}).join(), x: Math.round(a.position.x), y: Math.round(a.position.y), z: Math.round(a.position.z) }; e.n++; tops.set(a, e); }); return [...tops.values()].sort((p, q) => q.n - p.n).slice(0, 8); };
+window.__ng.setCull = (r, big) => { CULL_R = r; CULL_BIG_R = big; cull.t = 0; }; window.__ng.sectors = () => { const out = []; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + 0.2; let n = 0; for (const q of solids) { if (q.cx === undefined || Math.abs(q.top - TOP) > 60) continue; const dx = q.cx - start.x, dz = q.cz - start.z, d = Math.hypot(dx, dz); if (d < 30 || d > 170) continue; let da = Math.abs(Math.atan2(dz, dx) - a); da = Math.min(da, Math.PI * 2 - da); if (da < Math.PI / 8) n++; } out.push(n); } return out; }; window.__ng.bossesNow = () => endBosses.map(e => ({ n: e.name, v: e.bossRole, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), hub: e.hub ? e.hub.kind : 'bottom' })); window.__ng.enemyCount = () => enemies.filter(e => !e.dead).length; window.__ng.propsNow = () => props.map(p => ({ k: p.kind, x: +p.mesh.position.x.toFixed(1), y: +p.mesh.position.y.toFixed(1), z: +p.mesh.position.z.toFixed(1) })); window.__ng.bounceNear = (x, z, r = 12) => solids.filter(s => s.bounce && Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z) < r).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +s.maxy.toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), w: +(s.maxx - s.minx).toFixed(1), d: +(s.maxz - s.minz).toFixed(1), boost: s.boost })); window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute();
 let last = performance.now();
 renderer.setAnimationLoop(now => {
   const P = PERF.enabled; if (P) { renderer.info.reset(); PERF.frame(now); PERF.lapStart(); }
