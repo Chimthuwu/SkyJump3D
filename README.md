@@ -12,13 +12,13 @@ city and work your way down (or up) through floating platforms, rooftops, arenas
 - **A huge sky-city:** buildings, themed arenas with Guardian bosses, spiral and weaving platform chains, trampolines,
   mega-rails, loops, highways and a Ride Park. Levels get taller and harder each time.
 - **Biomes:** Jungle, Frozen, Inferno, Storm, Horror and Psychedelic zones, each with its own enemies, weather and resources.
-- **Vehicles:** DeLorean-style car and a hover-bike. Hold **X** to boost, **E** to get on/off. Drops are cushioned, and
+- **Vehicles:** DeLorean-style car and a hover-bike. Hold **Shift** to boost, **E** to get on/off. Drops are cushioned, and
   highways have ramps, kickers and loop-the-loops (cars on wide roads, bikes on narrow trails).
 - **Weapons (1–7):** Blade, Laser, Scatter, Plasma, Railgun, Beam, Arc. Empty weapons auto-switch to one with ammo.
 - **Beyond the sky:** a skyway to the Moon, then the **Alien Void** — ~900 mixed platforms (moving, orbiting, crumbling, thin beams),
   drifting space cities underneath, alien troops and UFOs — leading to Mars.
 - **Warp gates:** hidden until you discover them by landing on their platform.
-- **Co-op:** up to 8 players through the small Node relay in `server/` (LAN / Tailscale).
+- **Co-op:** up to 6 players. On the public site, MULTIPLAYER -> HOST A GAME works out of the box through the online Cloudflare relay (just share the invite link). For LAN / Tailscale, run the small Node relay in `server/`.
 
 ## Controls
 
@@ -31,7 +31,7 @@ city and work your way down (or up) through floating platforms, rooftops, arenas
 | Click / F | fire · Right-click aim |
 | 1–7 / wheel | choose weapon |
 | E | get on/off a vehicle (near one) |
-| X (held, on a vehicle) | boost |
+| Shift (held, on a vehicle) | boost |
 | V / Caps Lock | first / third person |
 | R | respawn at last checkpoint |
 | M / N / G / H | sound / music / gore / hint bar |
