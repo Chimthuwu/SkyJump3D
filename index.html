@@ -672,8 +672,8 @@ function addPlatform(cx, y, cz, half, big, idx, zoneOv, floating = false, noTarg
   const zone = zoneOv !== undefined ? zoneOv : zoneFor(idx); s.zone = zone;      // the zone decides what the world does once you land here
   if (floating) underside(cx, y - 2, cz, Math.min(hw, hd), 2);
   const plate = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.3, 0.25, hd * 2 + 0.3),
-    lam(zone ? zone.plate : big ? 0xff3fc8 : 0x36f6ff, { emissive: zone ? zone.plate : big ? 0xff3fc8 : 0x36f6ff, emissiveIntensity: 0.8 }));
-  plate.position.set(cx, y - 0.1, cz); scene.add(plate);
+    lam(zone ? zone.plate : big ? 0xff3fc8 : 0x36f6ff, { emissive: zone ? zone.plate : big ? 0xff3fc8 : 0x36f6ff, emissiveIntensity: 0.8, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  plate.position.set(cx, y - 0.05, cz);      // top sits 7.5 cm over the slab: PS1/N64 vertex snapping moved the two layers independently and the dark slab flickered through scene.add(plate);
   if (!noTarget) { addBullseye(cx, y, cz, 1.6); s.targetR = 1.6; }
   if (!floating) {         // support beam back to the tower (visual only)
     const a = Math.atan2(cz, cx), r = Math.hypot(cx, cz), L = r - TH + 2;
@@ -699,10 +699,10 @@ function addBullseye(cx, y, cz, r) {          // one flat textured disc (cheap: 
   if (!bullMat) {
     const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
     [[1, '#ff3fc8'], [0.714, '#11152a'], [0.476, '#36f6ff'], [0.214, '#e9fbff']].forEach(([f, col]) => { g.fillStyle = col; g.beginPath(); g.arc(32, 32, 32 * f, 0, Math.PI * 2); g.fill(); });
-    bullMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, polygonOffset: true, polygonOffsetFactor: -1 });
+    bullMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
   }
   const key = r.toFixed(2); const geo = bullGeo[key] || (bullGeo[key] = new THREE.CircleGeometry(r * 2.1, 12));
-  const d = new THREE.Mesh(geo, bullMat); d.rotation.x = -Math.PI / 2; d.position.set(cx, y + 0.06, cz); scene.add(d); return d;
+  const d = new THREE.Mesh(geo, bullMat); d.rotation.x = -Math.PI / 2; d.position.set(cx, y + 0.16, cz); scene.add(d); return d;
 }
 
 const BANANA_GEO = new THREE.TorusGeometry(0.4, 0.14, 5, 8, Math.PI * 0.9);
@@ -712,8 +712,8 @@ const COIN_GEO = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 8).rotateX(Math.PI / 
 const HEART_GEO = new THREE.OctahedronGeometry(0.55), HEART_MAT = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xff3355 }));
 const AMMO_GEO = new THREE.BoxGeometry(0.7, 0.5, 0.5), AMMO_MAT = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xffc233 }));
 const AMMO_STRIPE_GEO = new THREE.BoxGeometry(0.73, 0.12, 0.53), AMMO_STRIPE_MAT = new THREE.MeshBasicMaterial({ color: 0xfff0a1 });
-function coin(x, y, z, zone) {
-  const zz = zone === undefined ? activeZ : zone, jungle = !!(zz && zz.name === 'Jungle');
+function coin(x, y, z, zone, plain = false) {
+  const zz = zone === undefined ? activeZ : zone, jungle = !plain && !!(zz && zz.name === 'Jungle');
   let m;
   if (jungle) {                                                      // one shared banana mesh: no per-coin geometry or material
     m = new THREE.Mesh(BANANA_GEO, BANANA_MAT); m.rotation.z = 0.55; m.rotation.y = 0.35; m.scale.setScalar(1.5);
@@ -721,6 +721,11 @@ function coin(x, y, z, zone) {
     m = new THREE.Mesh(COIN_GEO, COIN_MAT);
   }
   m.position.set(x, y, z); scene.add(m); items.push({ mesh: m, type: 'coin', taken: false, banana: jungle });
+}
+// every kill sheds coins: 1-2 from a grunt, a fistful from minibosses and bosses
+function dropCoins(e) {
+  const n = e.boss ? 10 : e.mini ? 4 : (Math.random() < 0.6 ? 1 : 0);
+  for (let i = 0; i < n; i++) { const a = Math.random() * 6.283, r = Math.random() * (e.boss ? 3.2 : 1.2); coin(e.x + Math.cos(a) * r, e.y + 0.9 + Math.random() * 0.6, e.z + Math.sin(a) * r, null, true); }      // always plain coins, even in the Jungle
 }
 function ammoBox(x, y, z) {
   const m = new THREE.Group();
@@ -1783,6 +1788,7 @@ function buildAlienRoute() {
   console.log('[alien route] platforms', platCount, 'placed', all.length, 'links', links, 'cities', CITIES);
 }
 function buildSkyway(hubs) {
+  const skyTag0 = lvl.children.length;
   // Pick a skyway bearing that stays well clear of every co-op home tower on the ring.
   let ma = rand() * 6.283;
   const homes = hubs.filter(h => h.kind === 'start');
@@ -1824,6 +1830,7 @@ function buildSkyway(hubs) {
     const r = colR + k * 12 + (px * 0), bx = ux * r + px * Math.sin(k * 0.8) * 4, bz = uz * r + pz * Math.sin(k * 0.8) * 4;
     addPlatform(bx, topY + k * 0.12, bz, 4.5, false, 0, MOON_ZONE, true, true); if (k % 3 === 0) coin(bx, topY + 1.4, bz, MOON_ZONE);
   }
+  for (let i = skyTag0; i < lvl.children.length; i++) lvl.children[i].userData.noCull = true;      // the stairway + bridge are the landmark you navigate by: never distance-cull them
   // the moon itself: a huge cratered sphere with an arena on top; landing reaches the moon route
   const mx = ux * moonR, mz = uz * moonR, moonTop = topY + 3, rad = 230;
   const moon = new THREE.Mesh(new THREE.SphereGeometry(rad, 28, 18), new THREE.MeshBasicMaterial({ map: moonTexture(), color: 0xd4dbec, fog: false }));          // self-lit so the moon glows even in the dark of space
@@ -3090,6 +3097,17 @@ function walkBranch(src, mode, len, aim) {
     { x: last.cx, y: last.top, z: last.cz },
     { x: src.cx, y: src.top, z: src.cz },
     'BRANCH LINK');
+  // Branches that start beside a home tower get no return portal (gates are banned near homes), which left them as bare dead ends.
+  // Give such a branch a payoff: a supply cache on its last stone, and a path onward to the nearest real hub.
+  if (last !== src && portalNearHome(src.cx, src.top, src.cz) && len >= 3) {
+    const lx = last.cx, ly = last.top, lz = last.cz;
+    heart(lx + 1.2, ly + 1.3, lz); ammoBox(lx - 1.2, ly + 0.8, lz); beacon(lx, ly, lz, 0xffd23a);
+    for (let c = 0; c < 3; c++) coin(lx + (c - 1) * 1.6, ly + 1.2, lz + 1.8, src.zone);
+    const homes = activeStartHubs(), cand = (levelHubs || []).filter(h => h.kind !== 'start' && h.kind !== 'launch' && h.top !== undefined && !homes.some(m => Math.hypot(h.x - m.x, h.z - m.z) < 60));
+    let tgt = null, bd = 1e9;
+    for (const h of cand) { const d = Math.hypot(h.x - lx, h.z - lz); if (d > 55 && d < 230 && d < bd) { bd = d; tgt = h; } }
+    if (tgt) connect({ kind: 'lookout', x: lx, z: lz, top: ly, hw: last.hw || 4, hd: last.hd || 4, zone: src.zone, r: 8 }, tgt);
+  }
 }
 function buildBranches(hubs) {
   const base = platforms.filter(p => !p.sp);
@@ -3804,7 +3822,7 @@ function respawn() {
 }
 function die(title, why) {
   if (state !== 'play') return;
-  runDeaths++;
+  runDeaths++; runPayout('RUN PAYOUT');
   state = 'dead'; deadT = 2.6; vel.set(0, 0, 0); pounding = false; combo = 0; saveBest();
   goreDeath(title === 'SPLAT!');
   netSend({ t: 'died', x: +pos.x.toFixed(1), y: +pos.y.toFixed(1), z: +pos.z.toFixed(1), big: title === 'SPLAT!' });
@@ -3952,7 +3970,7 @@ function damageEnemy(e, dmg, kind = 'hit') {
     enemyGore(e); shake = Math.max(shake, e.boss ? 1.2 : 0.5);
     score += e.pts; toast(`+${e.pts}`, 700); killFx(e, e.boss);
     if (e.variant === 'bomber') explode({ x: e.x, y: e.cy, z: e.z }, 4.2, 0, 'enemy', kind);
-    dropAmmo(e); if (e.mini) unlockArena(e.hub);
+    dropAmmo(e); dropCoins(e); if (e.mini) unlockArena(e.hub);
     if (e.boss && endBosses.every(b => b.dead)) {
       if (groundPad && groundPad.seal) { groundPad.seal.material.color.setHex(0x5aff8a); groundPad.seal.material.opacity = 0.4; }
       toast(`ALL ${endBosses.length} SIGNAL BOSSES DOWN — TERMINAL UNLOCKED`, 3500);
@@ -4098,6 +4116,7 @@ function levelClear(why, bonus, remote = false) {      // remote: a teammate cle
   state = 'clear'; clearT = 4; vel.set(0, 0, 0); pounding = false;
   if (why === 'boss') bonus = Math.max(bonus, 5000);
   score += bonus; saveBest(); saveGore(); sfx.clear();
+  runPayout('LEVEL CLEAR');
   const how = why === 'mars' ? 'YOU REACHED MARS' : why === 'moon' ? 'YOU REACHED THE MOON' : why === 'boss' ? `ALL ${endBosses.length} SIGNAL BOSSES ARE DOWN` : why === 'bullseye' ? 'BULLSEYE on the street target!' : 'Hit the street target';
   shockRing(pos, 10, 0xffd23a); burst(new THREE.Vector3(pos.x, pos.y + 1, pos.z), 0xffd23a, 40);
   showMsg(`LEVEL ${level} CLEAR!`, `${how} · Bonus <b>+${bonus}</b><br>Score <b>${score}</b>`,
@@ -4156,10 +4175,10 @@ const RESLOAD = { wood: 14, stone: 10, ore: 7, leaf: 26, ember: 16 };   // mine 
 const hotbarRes = { wood: 0, stone: 0, ore: 0, leaf: 0, ember: 0 };     // Minecraft-style stockpile
 const bases = [];
 let slot = 0, base = null;
-const emptyBase = () => ({ credits: 0, upgrades: {}, done: 0, resources: { wood: 0, stone: 0, ore: 0, leaf: 0, ember: 0 } });
+const emptyBase = () => ({ credits: 0, bananas: 0, upgrades: {}, done: 0, resources: { wood: 0, stone: 0, ore: 0, leaf: 0, ember: 0 } });
 function ensureBase(index = slot) {
   if (!bases[index]) bases[index] = emptyBase();
-  bases[index].credits = Math.max(0, Number(bases[index].credits) || 0);
+  bases[index].credits = Math.max(0, Number(bases[index].credits) || 0); bases[index].bananas = Math.max(0, Number(bases[index].bananas) || 0);
   bases[index].upgrades ||= {}; bases[index].done = Math.max(0, bases[index].done | 0); bases[index].resources ||= {};
   for (const key of Object.keys(hotbarRes)) bases[index].resources[key] = Math.max(0, bases[index].resources[key] | 0);
   return bases[index];
@@ -5017,7 +5036,8 @@ function playerUpdate(dt) {
 
   // Jump once from the ground/coyote window, then once more before landing.
   if (jumpPress) {
-    if (climbing) wallJump();
+    if (onVehicle && pounding) { pounding = false; vel.y = JUMP * jumpMul(); jumps = Math.max(jumps, 1); onGround = false; coyote = 0; sfx.jump(false); }      // an accidental Ctrl slam while riding: jump cancels it
+    else if (climbing) wallJump();
     else if ((onGround || coyote > 0) && jumps === 0) {
       vel.y = JUMP * jumpMul(); jumps = 1; onGround = false; coyote = 0; pounding = false; sfx.jump(false);
     } else if (!onGround && jumps === 1 && !pounding) {
@@ -5048,6 +5068,7 @@ function playerUpdate(dt) {
 
   // glide / parachute (hold space while falling)
   gliding = !onGround && keys.Space && vel.y < 0.5 && glide > 0 && !pounding && airT > 0.2 && !climbing;
+  if (state === 'play') { if (gliding) runGlideT += dt; if (pos.y > runPeakY) runPeakY = pos.y; }
   const glideUpgrade = base && base.upgrades.glideTank ? 1.25 : 1;
   if (gliding) glide = Math.max(0, glide - dt / (GLIDE_TIME * glideUpgrade * (onVehicle ? 3.5 : 1)));      // vehicles hover ~3.5x longer than you can on foot
 
@@ -5324,7 +5345,7 @@ function updateItems(dt) {
         continue;
       }
       it.taken = true; it.mesh.removeFromParent();
-      if (it.type === 'coin') {        score += 10; sfx.coin(); }
+      if (it.type === 'coin') {        score += 10; sfx.coin(); if (base) { if (it.banana) base.bananas += 1; else base.credits += 1; saveBase(); } }
       else if (it.type === 'weapon') {
         const i = it.weaponIndex, w = WEAPONS[i];
         if (unlockWeapon(i)) { toast(`ARSENAL FOUND: ${w.name}`, 1800); sfx.coin(); selectWeapon(i); }
@@ -5351,6 +5372,13 @@ function updateItems(dt) {
 const RIDE_ZONE = { name: 'Ride Park', desc: 'grinds, kickers and quarter pipes - the street lives in the sky', top: '#05040f', mid: '#0b0a22', bot: '#231043', fog: 0x170c2b, hemi: 0.5, hemiCol: 0x8f7bd6, sun: 0.4, sunCol: 0xb07aff, cloud: 0x0d0b1c, plate: 0xff3fc8, weather: 'none' };
 let levelHubs = [], missions = [], activeMission = null, missionMarker = null, missionArrowText = '';
 const missionSlots = [];
+let runGlideT = 0, runPeakY = 0;
+// A run pays out in credits by how long you glided and how high you got (peak above the spawn roof)
+function runPayout(label) {
+  const up = Math.max(0, runPeakY - TOP), coins = Math.round(runGlideT * 1.5), bananas = Math.round(up / 12);      // coins = glide time, bananas = height
+  if ((coins > 0 || bananas > 0) && base) { base.credits += coins; base.bananas += bananas; saveBase(); toast(`${label}  +${coins} COINS (glided ${runGlideT.toFixed(0)}s)  ·  +${bananas} BANANAS (peak +${up | 0} m)`, 4600); }
+  runGlideT = 0; runPeakY = TOP;
+}
 let runDeaths = 0, hasUsedVehicle = false, hasUsedHoverboard = false, guideTipIndex = 0;
 function setBaseSlot(index = 0) {
   slot = Math.max(0, index | 0); base = ensureBase(slot);
@@ -5992,7 +6020,7 @@ pShadow.rotation.x = -Math.PI / 2; pShadow.visible = false; pShadow.renderOrder 
 // ---- distance culling, size-aware so the horizon is untouched. Fog is opaque past ~270 m, so SMALL things beyond ~380 m are invisible anyway,
 // but BIG things (towers, platforms, islands) still read as fog-coloured silhouettes against the sky, so they stay drawn out to 900 m.
 // Enemy bodies / pickups / vehicles far away are hidden too, but enemy aura, beacon and red aggro-arrow stay, so hostiles still read across the map.
-let CULL_R = 290, CULL_BIG_R = 340, CULL_BIG_SIZE = 8; const cull = { lvl: null, n: 0, list: [], t: 0, hidden: 0 };
+let CULL_R = 290, CULL_BIG_R = 450, CULL_BIG_SIZE = 8; const cull = { lvl: null, n: 0, list: [], t: 0, hidden: 0 };
 function cullable(o) {
   if (o.userData && o.userData.noCull) return false;
   if (skyProps.includes(o) || clouds.includes(o)) return false;
@@ -6013,11 +6041,11 @@ function cullTick(dt) {
   for (; cull.n < lvl.children.length && budget-- > 0; cull.n++) {
     const o = lvl.children[cull.n]; if (!cullable(o)) continue;
     o.updateWorldMatrix(true, true); const b = new THREE.Box3().setFromObject(o);
-    if (b.isEmpty()) continue; b.getSize(_cullSize); b.expandByScalar(6); cull.list.push({ o, b, r: Math.max(_cullSize.x, _cullSize.y, _cullSize.z) >= CULL_BIG_SIZE ? CULL_BIG_R : CULL_R, off: false });
+    if (b.isEmpty()) continue; b.getSize(_cullSize); b.expandByScalar(6); cull.list.push({ o, b, big: Math.max(_cullSize.x, _cullSize.y, _cullSize.z) >= CULL_BIG_SIZE, off: false });
   }
   const cp = camera.position; let hidden = 0;
   for (const e of cull.list) {
-    const far = e.b.distanceToPoint(cp) > e.r;
+    const far = e.b.distanceToPoint(cp) > (e.big ? CULL_BIG_R : CULL_R);
     if (far && !e.off && e.o.visible) { e.o.visible = false; e.off = true; }
     else if (!far && e.off) { e.o.visible = true; e.off = false; }
     if (e.off) hidden++;
@@ -6273,7 +6301,7 @@ function updateVisuals(dt) {
   $('hotbar').style.display = state === 'title' ? 'none' : '';
   const hearts = '♥'.repeat(Math.max(0, health)) + '<span style="opacity:.35">' + '♥'.repeat(MAXHP - Math.max(0, health)) + '</span>';
   const hudHtml = `<div class="hearts">${hearts}</div>Glide<div class="bar"><div style="width:${(glide * 100) | 0}%"></div></div>Grip<div class="bar"><div style="width:${(climbStam * 100) | 0}%;background:#ffb347"></div></div>Energy<div class="bar"><div style="width:${(cont.energy * 100) | 0}%;background:${cont.locked ? '#ff4a4a' : '#3affd0'}"></div></div>` +
-    `Level <b>${level}</b> · Altitude <b>${pos.y | 0}</b> m<br>Score <b>${score}</b> · Credits <b>${base.credits}</b> · Best ${Math.max(best.score, score)} (L${best.level})` +
+    `Level <b>${level}</b> · Altitude <b>${pos.y | 0}</b> m<br>Score <b>${score}</b> · Coins <b>${base.credits}</b> · Bananas <b>${base.bananas}</b> · Best ${Math.max(best.score, score)} (L${best.level})` +
     (curPN !== null && ladderTop ? `<br><span style="color:${curPN < 0 ? '#ff3a5a' : '#ffd23a'}">PLATFORM #${curPN}</span> · deepest #${ladderBot.n} · highest #${ladderTop.n}` : '') +
     (combo > 0 ? ` · <span style="color:#ffd23a">Bullseye combo x${combo}</span>` : '') + '<br>' + weaponHud();
   if (hudHtml !== updateVisuals._hud) { updateVisuals._hud = hudHtml; $('hud').innerHTML = hudHtml; }      // no DOM rebuild unless the HUD text actually changed
@@ -7556,12 +7584,12 @@ const PERF = {
   },
 };
 window.__ng.linkGraph = () => linkGraphFn ? linkGraphFn() : null;
-window.__ng.setCull = r => { CULL_R = r; };
+window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.setCull = r => { CULL_R = r; };
 window.__ng.lvl = () => lvl;
 window.__ng.cull = () => ({ tracked: cull.list.length, hidden: cull.hidden, children: lvl.children.length, solids: solids.length, platforms: platforms.length, specials: specials.length, enemies: enemies.length, items: items.length, props: props.length });
 window.__ng.renderInfo = () => new Promise(res => { renderer.info.autoReset = false; renderer.info.reset(); requestAnimationFrame(() => requestAnimationFrame(() => { const i = renderer.info; res({ calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries }); renderer.info.autoReset = true; })); });
 window.__ng.perf = PERF; window.__ng.drawStats = () => { const fr = new THREE.Frustum(), m = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); fr.setFromProjectionMatrix(m); const enemyRoots = new Set(enemies.map(e => e.mesh)); const out = { enemyParts: 0, enemiesVisible: 0, other: 0, instanced: 0, sprites: 0, transparent: 0 }; const seen = new Set(); scene.traverseVisible(o => { if (!o.isMesh && !o.isSprite && !o.isPoints) return; if (o.frustumCulled && o.geometry && !fr.intersectsObject(o)) return; if (o.isSprite) { out.sprites++; return; } let a = o, isE = false; while (a) { if (enemyRoots.has(a)) { isE = true; seen.add(a); break; } a = a.parent; } if (isE) out.enemyParts++; else if (o.isInstancedMesh) out.instanced++; else { out.other++; const k = (o.geometry ? o.geometry.type : '?') + '|' + (o.material && o.material.type) + (o.material && o.material.transparent ? '|T' : '') + '|d' + Math.round(Math.hypot(o.getWorldPosition(new THREE.Vector3()).x - camera.position.x, o.getWorldPosition(new THREE.Vector3()).z - camera.position.z) / 100); (out.k = out.k || {})[k] = (out.k[k] || 0) + 1; } if (o.material && o.material.transparent) out.transparent++; }); out.enemiesVisible = seen.size; return out; }; window.__ng.farWho = () => { const fr = new THREE.Frustum(); fr.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)); const tops = new Map(); scene.traverseVisible(o => { if (!o.isMesh || (o.frustumCulled && !fr.intersectsObject(o))) return; const wp = o.getWorldPosition(new THREE.Vector3()); if (Math.hypot(wp.x - camera.position.x, wp.z - camera.position.z) < 450) return; let a = o; while (a.parent && a.parent !== scene && a.parent !== lvl) a = a.parent; const e = tops.get(a) || { n: 0, cullable: cullable(a), type: a.type, kids: a.children.length, inLvl: a.parent === lvl, ud: Object.keys(a.userData || {}).join(), x: Math.round(a.position.x), y: Math.round(a.position.y), z: Math.round(a.position.z) }; e.n++; tops.set(a, e); }); return [...tops.values()].sort((p, q) => q.n - p.n).slice(0, 8); };
-window.__ng.setCull = (r, big) => { CULL_R = r; CULL_BIG_R = big; cull.t = 0; }; window.__ng.sectors = () => { const out = []; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + 0.2; let n = 0; for (const q of solids) { if (q.cx === undefined || Math.abs(q.top - TOP) > 60) continue; const dx = q.cx - start.x, dz = q.cz - start.z, d = Math.hypot(dx, dz); if (d < 30 || d > 170) continue; let da = Math.abs(Math.atan2(dz, dx) - a); da = Math.min(da, Math.PI * 2 - da); if (da < Math.PI / 8) n++; } out.push(n); } return out; }; window.__ng.bossesNow = () => endBosses.map(e => ({ n: e.name, v: e.bossRole, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), hub: e.hub ? e.hub.kind : 'bottom' })); window.__ng.enemyCount = () => enemies.filter(e => !e.dead).length; window.__ng.propsNow = () => props.map(p => ({ k: p.kind, x: +p.mesh.position.x.toFixed(1), y: +p.mesh.position.y.toFixed(1), z: +p.mesh.position.z.toFixed(1) })); window.__ng.bounceNear = (x, z, r = 12) => solids.filter(s => s.bounce && Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z) < r).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +s.maxy.toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), w: +(s.maxx - s.minx).toFixed(1), d: +(s.maxz - s.minz).toFixed(1), boost: s.boost })); window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute();
+window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.setCull = (r, big) => { CULL_R = r; CULL_BIG_R = big; cull.t = 0; }; window.__ng.sectors = () => { const out = []; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + 0.2; let n = 0; for (const q of solids) { if (q.cx === undefined || Math.abs(q.top - TOP) > 60) continue; const dx = q.cx - start.x, dz = q.cz - start.z, d = Math.hypot(dx, dz); if (d < 30 || d > 170) continue; let da = Math.abs(Math.atan2(dz, dx) - a); da = Math.min(da, Math.PI * 2 - da); if (da < Math.PI / 8) n++; } out.push(n); } return out; }; window.__ng.bossesNow = () => endBosses.map(e => ({ n: e.name, v: e.bossRole, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), hub: e.hub ? e.hub.kind : 'bottom' })); window.__ng.enemyCount = () => enemies.filter(e => !e.dead).length; window.__ng.propsNow = () => props.map(p => ({ k: p.kind, x: +p.mesh.position.x.toFixed(1), y: +p.mesh.position.y.toFixed(1), z: +p.mesh.position.z.toFixed(1) })); window.__ng.bounceNear = (x, z, r = 12) => solids.filter(s => s.bounce && Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z) < r).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +s.maxy.toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), w: +(s.maxx - s.minx).toFixed(1), d: +(s.maxz - s.minz).toFixed(1), boost: s.boost })); window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute();
 let last = performance.now();
 renderer.setAnimationLoop(now => {
   const P = PERF.enabled; if (P) { renderer.info.reset(); PERF.frame(now); PERF.lapStart(); }
