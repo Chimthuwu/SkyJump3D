@@ -7,7 +7,7 @@ const CR = +process.env.CR || 340;
   const page = await browser.newPage(); await page.setViewport({ width: 1280, height: 800 });
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
-  page.on('console', m => { const t = m.text(); if (m.type() === 'error' && !/voice-lines|tts-status|ERR_FILE_NOT_FOUND/.test(t)) errors.push('CONSOLE: ' + t); if (/alien route|universe|link/i.test(t)) console.log('LOG', t.slice(0,200)); });
+  page.on('console', m => { const t = m.text(); if (m.type() === 'error' && !/voice-lines|tts-status|ERR_FILE_NOT_FOUND/.test(t)) errors.push('CONSOLE: ' + t); if (/skyline|alien route|universe|link/i.test(t)) console.log('LOG', t.slice(0,200)); });
   const t0 = Date.now();
   await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await page.waitForFunction('window.__ng', { timeout: 90000 });

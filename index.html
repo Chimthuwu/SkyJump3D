@@ -225,7 +225,9 @@ const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ---------- renderer / scene ----------
-const RETRO_WIDTH = 320, RETRO_HEIGHT = 240;
+let RETRO_WIDTH = 320;
+const RETRO_HEIGHT = 240;
+const retroResUniform = { value: new THREE.Vector2(320, 240) };      // low-res target size; width follows the window aspect so PS1/N64 fill the screen
 const RETRO_PRESETS = ['PS1', 'N64', 'MODERN'];
 let retroPreset = 'MODERN';
 let crazy = false;
@@ -268,11 +270,11 @@ function retroMaterial(material) {
   material.onBeforeCompile = shader => {
     shader.uniforms.wobbleIntensity = wobbleUniform;
     shader.uniforms.affineEnabled = affineUniform;
-    const defs = `#define RETRO_WIDTH ${RETRO_WIDTH.toFixed(1)}\n#define RETRO_HEIGHT ${RETRO_HEIGHT.toFixed(1)}\n`;
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>\n${defs}uniform float wobbleIntensity;\nvarying vec2 vAffineUv;\nvarying float vAffineW;`);
+    shader.uniforms.retroRes = retroResUniform;
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>\nuniform vec2 retroRes;\nuniform float wobbleIntensity;\nvarying vec2 vAffineUv;\nvarying float vAffineW;`);
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float affineEnabled;\nvarying vec2 vAffineUv;\nvarying float vAffineW;');
     shader.vertexShader = shader.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\nvAffineUv = vec2(0.0);\n#ifdef USE_MAP\nvAffineUv = vMapUv;\n#endif');
-    shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\nvAffineUv *= gl_Position.w;\nvAffineW = gl_Position.w;\nvec2 retroHalfGrid = floor((gl_Position.xy / gl_Position.w) * (vec2(RETRO_WIDTH, RETRO_HEIGHT) * 0.5)) / (vec2(RETRO_WIDTH, RETRO_HEIGHT) * 0.5);\ngl_Position.xy = mix(gl_Position.xy, retroHalfGrid * gl_Position.w, wobbleIntensity);');
+    shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\nvAffineUv *= gl_Position.w;\nvAffineW = gl_Position.w;\nvec2 retroHalfGrid = floor((gl_Position.xy / gl_Position.w) * (retroRes * 0.5)) / (retroRes * 0.5);\ngl_Position.xy = mix(gl_Position.xy, retroHalfGrid * gl_Position.w, wobbleIntensity);');
     // fragment varyings are read-only, so sample the map through a local affine UV and alias vMapUv to it for map_fragment only
     shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', '#ifdef USE_MAP\nvec2 affUvLocal = mix(vMapUv, vAffineUv / max(vAffineW, 0.00001), affineEnabled);\n#define vMapUv affUvLocal\n#endif\n#include <map_fragment>\n#ifdef USE_MAP\n#undef vMapUv\n#endif');
     material.userData.retroUniforms = shader.uniforms;
@@ -441,7 +443,6 @@ function resizeRenderer() {
   outputWidth = width;
   outputHeight = height;
   renderer.setSize(width, height);
-  const aspect = RETRO_WIDTH / RETRO_HEIGHT;
   if (modern) {
     outputViewport.x = 0; outputViewport.y = 0;
     outputViewport.width = width; outputViewport.height = height;
@@ -449,18 +450,14 @@ function resizeRenderer() {
     camera.updateProjectionMatrix();
     return;
   }
-  if (width / height > aspect) {
-    outputViewport.height = height;
-    outputViewport.width = Math.max(1, Math.floor(height * aspect));
-    outputViewport.x = Math.floor((width - outputViewport.width) / 2);
-    outputViewport.y = 0;
-  } else {
-    outputViewport.width = width;
-    outputViewport.height = Math.max(1, Math.floor(width / aspect));
-    outputViewport.x = 0;
-    outputViewport.y = Math.floor((height - outputViewport.height) / 2);
-  }
-  camera.aspect = aspect;
+  // PS1 / N64: keep the low-res height, widen the target to the window aspect so there are no black bars
+  RETRO_WIDTH = clamp(Math.round(RETRO_HEIGHT * width / height), 160, 960);
+  sceneTarget.setSize(RETRO_WIDTH, RETRO_HEIGHT);
+  retroResUniform.value.set(RETRO_WIDTH, RETRO_HEIGHT);
+  upscaleMaterial.uniforms.uSourceResolution.value.set(RETRO_WIDTH, RETRO_HEIGHT);
+  outputViewport.x = 0; outputViewport.y = 0;
+  outputViewport.width = width; outputViewport.height = height;
+  camera.aspect = width / height;
   camera.updateProjectionMatrix();
 }
 renderer.domElement.addEventListener('webglcontextlost', event => {
@@ -2551,7 +2548,7 @@ function guideTips() {
   if (activeMission && activeMission.state === 'ready') return 'Your task is ready to turn in. Return to the Home Base and talk to me for your reward.';
   if (!weaponOwned.slice(2).some(Boolean)) return 'You only have your starter kit. Follow the weapon beacons and bring back a new gun from the route.';
   if (runDeaths > 0) return 'You have fallen before; respawning keeps your task. Checkpoints shorten the way back into the route.';
-  if (!hasUsedVehicle) return 'Your rides are parked nearby. Press E at the bike or DeLorean, then hold X to boost.';
+  if (!hasUsedVehicle) return 'Your rides are parked nearby. Press E at the bike or DeLorean, then hold SHIFT to boost.';
   if (!hasUsedHoverboard) return 'You have not tried the hoverboard yet. Use your second jump, then hold SPACE to glide on it.';
   if (Object.values(hotbarRes).reduce((sum, n) => sum + n, 0) >= 12) return 'You are carrying a nice haul of ore. Check RECIPES for a medkit, ammo pack or a lasting upgrade.';
   if (base.done === 0) return 'Ask me for a task under TASKS. Reach its marker, collect a core, or clear the marked hostiles.';
@@ -3075,18 +3072,44 @@ function buildBranches(hubs) {
 
 // taller background skyline each level
 function buildSurroundings() {
-  const far = Math.min(60 + level * 8, 140);
+  const far = Math.min(60 + level * 8, 140), sky = [];
   for (let i = 0; i < far; i++) {
     const a = rand() * 6.283, dist = 520 + rand() * 880;
-    const w = 30 + rand() * 40, d = 30 + rand() * 40, h = 80 + rand() * (TOP * 0.9);
+    const w = 30 + rand() * 40, d = 30 + rand() * 40; let h = 80 + rand() * (TOP * 0.9);
     const cx = Math.cos(a) * dist, cz = Math.sin(a) * dist;
     if (activeStartHubs().some(home => Math.hypot(cx - home.x, cz - home.z) < 230)) continue;      // universes own their surroundings; skyline never overlaps them
+    if (sky.length < 40) {                                      // a tower with a hub close by is raised/lowered to roughly that hub's height, so a path to it is walkable
+      let nh = null, nd = 1e9;
+      for (const q of levelHubs || []) { if (q.kind === 'start' || q.kind === 'launch' || q.top === undefined) continue; const dd = Math.hypot(q.x - cx, q.z - cz) - (q.hw || 8) - Math.max(w, d) / 2; if (dd > 40 && dd < 420 && dd < nd) { nd = dd; nh = q; } }
+      if (nh) h = clamp(nh.top + (rand() - 0.5) * 20, 60, TOP * 0.95);
+    }
     boxMesh(cx, cz, w, d, h, bldMats[(rand() * 4) | 0]);
     const sol = addSolid(cx - w / 2, cx + w / 2, 0, h, cz - d / 2, cz + d / 2);      // solid walls + a rooftop you can land on
     Object.assign(sol, { cx, cz, top: h, hw: w / 2, hd: d / 2, zone: null });
     decorSites.push({ x: cx, z: cz, y: h, hw: w / 2, hd: d / 2, grp: null });
     if (rand() < 0.3) addNeonSign(cx, cz, w, d, h);
+    sky.push({ kind: 'skyline', x: cx, z: cz, top: h, hw: w / 2, hd: d / 2, zone: null, r: Math.max(w, d) / 2 + 3, roofSolid: sol });
   }
+  // Skyline towers near the network get a stepping-stone path from the closest hub of a similar height, plus a little loot on the roof.
+  let linked = 0, noHub = 0;
+  for (const t of sky) {
+    if (linked >= 16) break;
+    let best = null, bs = 1e9;
+    for (const h of levelHubs || []) {
+      if (h.kind === 'start' || h.kind === 'launch' || h.x === undefined || h.top === undefined) continue;
+      const L = Math.hypot(h.x - t.x, h.z - t.z) - (h.hw || 8) - t.hw, dy = Math.abs(h.top - t.top);
+      if (L < 30 || L > 430 || dy > Math.min(0.2 * L, 50)) continue;      // flat enough to walk both ways
+      if (L + dy < bs) { bs = L + dy; best = h; }
+    }
+    if (!best) { noHub++; continue; }
+    const before = platforms.length, Ld = Math.hypot(best.x - t.x, best.z - t.z); if (Ld > 240) connectFar(best, t); else connect(best, t);
+    if (platforms.length > before) {
+      linked++; levelHubs.push(t);
+      coin(t.x, t.top + 1.4, t.z, null); ammoBox(t.x - 3, t.top + 0.8, t.z + 3);
+      if (rand() < 0.6) spawnBiomeEnemy(t.x - 4, t.top, t.z - 4, t.roofSolid, null, 0.5);
+    }
+  }
+  console.log('[skyline] towers', sky.length, 'linked', linked, 'noHub', noHub, 'hubs', (levelHubs || []).length);
 }
 
 function buildStatic() {
@@ -3881,6 +3904,7 @@ function swordAttack() {
     if (e.y > pos.y + 2.2 || e.y + e.h < pos.y - 0.6) continue;
     damageEnemy(e, 2); burst(new THREE.Vector3(e.x, e.y + e.h / 2, e.z), 0x4fe8ff, 8);     // the energy blade hits hard
   }
+  hurtMonkeysNear(pos.x, pos.y, pos.z, 3.4, 2, true);
 }
 function groundPoundLand() {
   pounding = false; shake = 1; shockRing(pos, 8, 0xffd23a); sfx.pound();
@@ -3888,6 +3912,7 @@ function groundPoundLand() {
     if (e.dead) continue;
     if (Math.hypot(e.x - pos.x, e.z - pos.z) < 7 + e.r && Math.abs(e.y - pos.y) < 2.5) damageEnemy(e, e.boss ? 3 : 2, 'pound');
   }
+  hurtMonkeysNear(pos.x, pos.y, pos.z, 7, 2);
 }
 let combo = 0;
 // Landing on a ledge's bullseye pays out; chains of bullseyes build a combo multiplier.
@@ -4175,8 +4200,32 @@ function raySphere(o, d, cx, cy, cz, r) {
   if (disc < 0) return Infinity;
   const t = -b - Math.sqrt(disc); return t >= 0 ? t : (-b + Math.sqrt(disc) >= 0 ? 0 : Infinity);
 }
+// jungle monkeys are scenery anims (dressSite), not `enemies`; these helpers let every weapon still hit and kill them (2 hp)
+function eachMonkey(fn) {
+  for (const d of dressings.values()) {
+    if (d.k < 0.5) continue;
+    for (const a of d.anims) if (a.k === 'monkey' && !a.dead) { const g = a.mk.g.position; fn(a, d.g.position.x + g.x, d.g.position.y + g.y + 0.8, d.g.position.z + g.z); }
+  }
+}
+function hurtMonkey(a, dmg, x, y, z) {
+  const p = new THREE.Vector3(x, y, z), tick = dmg < 1;
+  a.hp = (a.hp ?? 2) - dmg; a.hop = 0.55; a.t = 1;
+  bloodBurst(p, a.hp > 0 ? (tick ? 3 : 16) : 60, 1.0); if (a.hp > 0) { if (!tick) sfx.monkey(); return; }
+  a.dead = true; a.mk.g.visible = false; sfx.kill();
+  spawnGibs(p, [[0.3, 0.3, 0.3, 0x7a4a24], [0.2, 0.4, 0.2, 0x7a4a24], [0.2, 0.2, 0.2, 0xb00d1a]], 10, 9);
+  splatter(x, y - 0.6, z, 30, 2.2, 0.9); score += 50; toast('+50', 700);
+}
+function hurtMonkeysNear(x, y, z, r, dmg, inFront = false) {
+  const fx = Math.sin(face), fz = Math.cos(face);
+  eachMonkey((a, mx, my, mz) => {
+    const dx = mx - x, dz = mz - z, d = Math.hypot(dx, dz);
+    if (d > r || Math.abs(my - y) > 2.6) return;
+    if (inFront && d > 1.2 && (dx * fx + dz * fz) / d < 0.2) return;
+    hurtMonkey(a, dmg, mx, my, mz);
+  });
+}
 function castRay(o, d, max, ignoreEnemies = false) {
-  let bt = max, be = null, hit = false;
+  let bt = max, be = null, hit = false, bm = null;
   for (const s of solids) { const t = rayBox(o, d, s); if (t < bt) { bt = t; be = null; hit = true; } }
   if (d.y < 0 && o.y > 0) { const t = -o.y / d.y; if (t < bt) { bt = t; be = null; hit = true; } }
   if (ignoreEnemies) return { t: bt, enemy: null, hit };
@@ -4185,7 +4234,8 @@ function castRay(o, d, max, ignoreEnemies = false) {
     const t = raySphere(o, d, e.x, e.y + e.h / 2, e.z, Math.max(e.r, e.h * 0.5) * 0.9 + 0.2);
     if (t < bt) { bt = t; be = e; hit = true; }
   }
-  return { t: bt, enemy: be, hit };
+  eachMonkey((a, x, y, z) => { const t = raySphere(o, d, x, y, z, 0.8); if (t < bt) { bt = t; be = null; hit = true; bm = { a, x, y, z }; } });
+  return { t: bt, enemy: be, hit, monkey: bm };
 }
 // glowing laser beams: an additive coloured sheath around a white-hot core, fading and thinning out
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -4236,6 +4286,7 @@ function shootRay(o, d, dmg, range, st) {
   const h = castRay(o, d, range), end = o.clone().addScaledVector(d, h.t);
   beamShot(o.clone().addScaledVector(d, 0.9), end, st);
   if (h.enemy) damageEnemy(h.enemy, dmg, 'hit');
+  if (h.monkey) hurtMonkey(h.monkey.a, dmg, h.monkey.x, h.monkey.y, h.monkey.z);
   flashFx(end, st.color, 0.2 + st.width * 5, 0.1);
   if (!h.enemy && h.hit) burst(end, st.color, 4);
 }
@@ -4248,6 +4299,7 @@ function shootRail(o, d) {
     const t = raySphere(o, d, e.x, e.y + e.h / 2, e.z, Math.max(e.r, e.h * 0.5) * 0.9 + 0.3);
     if (t < wall.t) { damageEnemy(e, 3, 'hit'); flashFx(new THREE.Vector3(e.x, e.y + e.h / 2, e.z), 0x9fd0ff, 1.0, 0.18); }
   }
+  eachMonkey((a, x, y, z) => { if (raySphere(o, d, x, y, z, 0.9) < wall.t) hurtMonkey(a, 3, x, y, z); });
   shockRing(end, 3, 0x6ab8ff); flashFx(end, 0x9fd0ff, 1.2, 0.2); burst(end, 0x9fd0ff, 14);
   vel.x -= d.x * 7; vel.z -= d.z * 7; if (!onGround) vel.y -= d.y * 5; shake = Math.max(shake, 0.5);
 }
@@ -4345,6 +4397,7 @@ function fireBeam(o, d, dt) {
   while (cont.tick >= 0.1) {                                     // damage ticks 10x a second
     cont.tick -= 0.1;
     if (h.enemy) damageEnemy(h.enemy, 0.45, 'beam');
+    if (h.monkey) hurtMonkey(h.monkey.a, 0.45, h.monkey.x, h.monkey.y, h.monkey.z);
     burst(end, 0x7affe0, 1);
   }
   cont.net += dt;
@@ -4393,6 +4446,7 @@ function explode(p, radius, dmg, owner, kind = 'blast') {
     const d = Math.hypot(e.x - P.x, e.y + e.h / 2 - P.y, e.z - P.z), R = radius + e.r;
     if (d < R && !visualOnly) damageEnemy(e, owner === 'enemy' ? 2 : Math.max(1, Math.round(dmg * (1 - d / R))), 'blast');
   }
+  if (!visualOnly) eachMonkey((a, mx, my, mz) => { if (Math.hypot(mx - P.x, my - P.y, mz - P.z) < radius + 0.5) hurtMonkey(a, 2, mx, my, mz); });
   const dx = pos.x - P.x, dy = pos.y + 1 - P.y, dz = pos.z - P.z, dp = Math.hypot(dx, dy, dz) || 1;
   if (dp < radius && state === 'play') {
     if (owner === 'player') {
@@ -4888,7 +4942,7 @@ function playerUpdate(dt) {
   let dx = fwdX * iz + rX * ix, dz = fwdZ * iz + rZ * ix;
   const dl = Math.hypot(dx, dz); if (dl > 0) { dx /= dl; dz /= dl; }
   const aimEff = aiming && weapon > 0;
-  sprintNow = !!(keys.ShiftLeft || keys.ShiftRight) && !aimEff && !climbing && !pounding && dl > 0;     // hold SHIFT to sprint
+  sprintNow = !!(keys.ShiftLeft || keys.ShiftRight) && !aimEff && !climbing && !pounding && !onVehicle && dl > 0;     // hold SHIFT to sprint (on a vehicle it boosts instead)
   if (sprintNow && onGround && Math.random() < dt * 8) burst(new THREE.Vector3(pos.x, pos.y + 0.1, pos.z), 0xcfcfcf, 1);
 
   if (onGround) { coyote = 0.1; jumps = 0; airT = 0; glide = Math.min(1, glide + dt * 0.8); }
@@ -4935,7 +4989,7 @@ function playerUpdate(dt) {
   if (!pounding && invuln < 1.0 && !climbing && lockT <= 0) {
     const gearMul = gear === 'board' ? 1.42 : 1;
     let rideMul = onVehicle ? (onVehicle.kind === 'buggy' ? 1.8 : 2.1) : 1;
-    boosting = !!onVehicle && !!keys.KeyX && boostE > 0.02 && state === 'play';
+    boosting = !!onVehicle && !!(keys.ShiftLeft || keys.ShiftRight) && boostE > 0.02 && state === 'play';
       if (boosting) { boostE = Math.max(0, boostE - dt / (2.5 * (base && base.upgrades.vehicleNitro ? 1.35 : 1))); rideMul *= 1.75; }
     else boostE = Math.min(1, boostE + dt / 6);
     const sp = (gliding ? RUN * 1.4 : RUN) * (sprintNow ? 1.6 : 1) * (aimEff ? 0.6 : 1) * gearMul * rideMul, acc = (onGround ? (iceUnderfoot() ? 11 : 70) : (gliding ? 46 : 26)) * (onVehicle ? 0.8 : 1);
@@ -5246,7 +5300,7 @@ const missionTracker = document.createElement('div');
 missionTracker.id = 'missionTracker';
 Object.assign(missionTracker.style, { position: 'fixed', display: 'none', zIndex: '2', left: '12px', top: '180px', maxWidth: 'min(360px, calc(100vw - 24px))', boxSizing: 'border-box', padding: '6px 9px', background: 'rgba(3,8,20,.86)', border: '1px solid currentColor', font: '700 12px monospace', textShadow: '0 0 8px currentColor', whiteSpace: 'normal', pointerEvents: 'none' });
 document.body.appendChild(missionTracker);
-let boostE = 1, boosting = false;                                // vehicle nitro: hold X
+let boostE = 1, boosting = false;                                // vehicle nitro: hold SHIFT
 let gear = '', grinding = null, onVehicle = null, hintProp = null, grindScore = 0, parkSeen = false;
 const gearPlate = (g) => ({ board: 0xff3fc8 })[g] || 0x36f6ff;
 
@@ -5600,7 +5654,7 @@ function mount(p) {
   fpvBeforeRide = fpv; fpv = false;
   onVehicle = p; gear = ''; grinding = null;
   p.mesh.visible = true; for (const m of p.padParts || []) m.visible = false;      // the parking plate/beam rode along as a black disc under the vehicle
-  toast(p.kind === 'buggy' ? 'DELOREAN — E to hop out · hold X to boost · ram enemies at speed' : 'HOVER-BIKE — E to hop out · hold X to boost', 2200);
+  toast(p.kind === 'buggy' ? 'DELOREAN — E to hop out · hold SHIFT to boost · ram enemies at speed' : 'HOVER-BIKE — E to hop out · hold SHIFT to boost', 2200);
   sfx.jump(true); shockRing(pos, 3, p.kind === 'buggy' ? 0x58e5ff : 0x36f6ff);
 }
 
@@ -5917,7 +5971,7 @@ function updateVehicleFx(dt, p) {
   if (!p) return;
   const data = p.fx; if (!data) return;
   const time = performance.now() / 1000, speed = Math.hypot(vel.x, vel.z);
-  const isBoosting = !!(onVehicle === p && keys.KeyX && boostE > 0.02 && state === 'play');
+  const isBoosting = !!(onVehicle === p && (keys.ShiftLeft || keys.ShiftRight) && boostE > 0.02 && state === 'play');
   boosting = isBoosting;
   data.boostAcc = (data.boostAcc || 0) + (isBoosting ? dt : 0);
   p.mesh.updateMatrixWorld(true);
@@ -6153,7 +6207,7 @@ let rideTold = false, hintT = 14, hintOn = true;      // the controls bar shows 
 function setHint() {
   const h = $('hint'), ho = (state === 'play' && hintOn && hintT > 0) || paused ? 0.95 : 0; if (setHint._o !== ho) { setHint._o = ho; h.style.transition = 'opacity .8s'; h.style.opacity = ho; }
   if (state === 'play' && hintT > 0) hintT -= 1 / 60;
-  const rd = $('ride'), rt = state !== 'play' || paused ? '' : hintProp ? `[E]  ${hintProp}` : hintNpc ? '[E]  TALK TO THE GUIDE' : onVehicle ? `[E] hop off  ·  hold [X] boost ${'▮'.repeat(Math.round(boostE * 8))}${'▯'.repeat(8 - Math.round(boostE * 8))}` : grinding ? '[SPACE] rail jump' : '';
+  const rd = $('ride'), rt = state !== 'play' || paused ? '' : hintProp ? `[E]  ${hintProp}` : hintNpc ? '[E]  TALK TO THE GUIDE' : onVehicle ? `[E] hop off  ·  hold [SHIFT] boost ${'▮'.repeat(Math.round(boostE * 8))}${'▯'.repeat(8 - Math.round(boostE * 8))}` : grinding ? '[SPACE] rail jump' : '';
   if (rd.textContent !== rt) rd.textContent = rt; rd.style.opacity = rt ? 1 : 0;
   if (state === 'play' && !rideTold && hintT < 10.5 && !hintProp && !onVehicle) { rideTold = true; toast('PRESS ENTER TO RIDE A HOVER-BIKE  ·  SHIFT+ENTER = DELOREAN', 4200); }
   const near = hintProp ? `· E: ${hintProp} ` : hintNpc ? '· E: TALK TO THE GUIDE ' : (grinding ? '· SPACE: rail jump · E bail ' : '');
@@ -6821,6 +6875,7 @@ function animDress(d, T, dt) {
       case 'pulse': { const beat = 1 + 0.06 * Math.sin(T * 2.2 + a.ph); a.m.scale.x = a.sx * beat; a.m.scale.z = a.sz * beat; break; }
       case 'watch': a.m.scale.setScalar(.72 + .35 * Math.sin(T * 5 + a.ph) ** 2); break;
       case 'monkey': {
+        if (a.dead) break;
         const w = a.mk; a.t -= dt;
         if (a.t <= 0) { a.t = 1.2 + Math.random() * 2.2; a.hop = 0.55; a.tx = clamp(a.bx + (Math.random() - 0.5) * 5, -a.ix, a.ix); a.tz = clamp(a.bz + (Math.random() - 0.5) * 5, -a.iz, a.iz); }
         a.hop = Math.max(0, a.hop - dt);
@@ -7357,7 +7412,7 @@ document.addEventListener('pointerlockchange', () => { if (!document.pointerLock
 buildLevel();
 pos.set(start.x, start.y, start.z);
 showMenu(true);
-window.__ng = { ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toFixed(1), z: +q.z.toFixed(1), label: q.label })), mv: () => ({ vy: +vel.y.toFixed(2), onG: onGround, jumps, gliding, glide: +glide.toFixed(2), climbing: !!climbing, pounding, stam: +climbStam.toFixed(2), hp: health, st: state, paused }), bounces: () => solids.filter(s => s.bounce).map(s => ({ x: +(s.cx !== undefined ? s.cx : (s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +(s.cz !== undefined ? s.cz : (s.minz + s.maxz) / 2).toFixed(1), b: +(s.boost || 0).toFixed(1) })), spKinds: () => specials.reduce((a, s) => { const k = (s.sp && s.sp.kind) || s.kind || '?'; a[k] = (a[k] || 0) + 1; return a; }, {}), ladder: () => ({ cur: curPN, top: ladderTop && ladderTop.n, bot: ladderBot && ladderBot.n, len: ladder.length, voidY: VOID_Y }), falls: () => solids.filter(s => s.pn !== undefined).slice(0, 5).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), n: s.pn })), foes: () => enemies.filter(e => !e.dead).map(e => ({ id: e.mesh.id, v: e.variant, hp: +e.hp.toFixed(1), mh: e.maxhp, boss: !!e.boss, d: Math.round(Math.hypot(e.x - pos.x, e.y - pos.y, e.z - pos.z)) })), kit: () => ({ w: weapon, name: WEAPONS[weapon].name, owned: weaponOwned.slice(), ammo: { ...ammo } }), clearFoes: (keepBoss = true) => { let n = 0; for (const e of enemies) if (!e.dead && !(keepBoss && e.boss)) { damageEnemy(e, 99999, 'pound'); n++; } return n; }, setZone: (n, snap = false, quiet = true) => { const z = ZONES.find(x => x.name.toLowerCase() === String(n).toLowerCase()) || null; setZone(z, snap, quiet); return z ? z.name : null; }, get schizo() { return schizoOn; }, set schizo(v) { schizoOn = !!v; document.body.classList.toggle('schizo', schizoOn); }, giveWeapon: n => { const i = WEAPONS.findIndex(w => w.name.toLowerCase() === String(n).toLowerCase()); if (i < 0) return false; unlockWeapon(i); selectWeapon(i); return !!weaponOwned[i]; }, get killStreak() { return killStreak; }, set killStreak(v) { killStreak = v | 0; killStreakT = killStreak > 0 ? 4 : 0; }, get level() { return level; }, set level(v) { level = Math.max(1, v | 0); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; showMsg(''); toast('LEVEL ' + level + ' — ' + theme().name, 1600); }, rails: () => solids.filter(q => q.rail).map(q => { const a = q.rail.pts[0], b = q.rail.pts[q.rail.pts.length - 1]; return [a.x, a.y, a.z, b.x, b.y, b.z, q.rail.len]; }), grinding: () => !!grinding, dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), duel: (v = 'walker', dist = 4, boss = false) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, boss, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (k !== 'board') return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(ZONES.find(z => z.name === n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; },  info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length, propList: props.map(p => ({ k: p.kind, at: p.mesh.position.toArray().map(v => Math.round(v * 10) / 10), taken: p.taken, vis: p.mesh.visible, inLvl: !!(p.mesh.parent && p.mesh.parent !== scene) })) }), missions: () => missionsSnapshot(), acceptMission, completeMission, turnIn, abandonMission, craftList, craft, guideTips, guideGreeting, base: () => ({ ...base, upgrades: { ...base.upgrades }, resources: { ...hotbarRes } }), homeBase: () => ({ guide: !!homeGuide, hintNpc, dialog: guideDialogOpen, slot: mySlot, tower: { x: myStartHub().x, z: myStartHub().z, top: myStartHub().top }, homes: activeStartHubs().map(h => ({ slot: h.slot, x: h.x, z: h.z })), enemiesNearSpawn: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).length, nearSpawns: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).map(e => ({ v: e.variant, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), boss: !!e.boss, mini: !!e.mini, zone: e.zone && e.zone.name })), guides: homeGuides.map(g => ({ slot: g.slot, x: +(g.group.position.x).toFixed(1), z: +(g.group.position.z).toFixed(1) })), parts: homeGuide && homeGuide.group.children.length }), applyNetSlot, missionsSnapshot, monkeys: () => [...dressings.values()].flatMap(d => d.anims.filter(a => a.k === 'monkey').map(a => ({ x: +(d.site.x + a.mk.g.position.x).toFixed(2), y: +(d.site.y + a.mk.g.position.y).toFixed(2), z: +(d.site.z + a.mk.g.position.z).toFixed(2) }))), coins: () => ({ total: items.filter(i => i.type === 'coin' && !i.taken).length, bananas: items.filter(i => i.type === 'coin' && i.banana).length }), gore: () => ({ decals: decals.length, gibs: gibsList.filter(g => !g.dead).length, nearSpawn: decals.filter(r => spawnGoreBlocked(r[0], r[1], r[2])).length + gibsList.filter(g => !g.dead && spawnGoreBlocked(g.mesh.position.x, g.mesh.position.y, g.mesh.position.z)).length }), towers: () => buildingHubs.map((h, i) => ({ i, x: +h.x.toFixed(1), z: +h.z.toFixed(1), top: +h.top.toFixed(1), hw: +h.hw.toFixed(1), hd: +h.hd.toFixed(1), theme: towerThemeFor(h, i), opened: !!h.opened, alive: h.interior ? h.interior.enemies.filter(e => !e.dead).length : 0 })), openTower: (i = 0, themeKey = null) => { const hub = buildingHubs[i]; if (!hub) return null; const r = openTower(hub, themeKey); return r ? { theme: r.theme.name, floors: r.floors.length, enemies: r.enemies.length, loot: r.loot.length, targets: hub.interiorTargets.length } : null; }, interiors: () => ({ inside: inInterior, theme: activeTowerInterior ? activeTowerInterior.theme.name : null, opened: openedTowers.length, targets: interiorTargets.length }) };   // dev hook (console / test tools)
+window.__ng = { ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toFixed(1), z: +q.z.toFixed(1), label: q.label })), mv: () => ({ vy: +vel.y.toFixed(2), onG: onGround, jumps, gliding, glide: +glide.toFixed(2), climbing: !!climbing, pounding, stam: +climbStam.toFixed(2), hp: health, st: state, paused }), bounces: () => solids.filter(s => s.bounce).map(s => ({ x: +(s.cx !== undefined ? s.cx : (s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +(s.cz !== undefined ? s.cz : (s.minz + s.maxz) / 2).toFixed(1), b: +(s.boost || 0).toFixed(1) })), spKinds: () => specials.reduce((a, s) => { const k = (s.sp && s.sp.kind) || s.kind || '?'; a[k] = (a[k] || 0) + 1; return a; }, {}), ladder: () => ({ cur: curPN, top: ladderTop && ladderTop.n, bot: ladderBot && ladderBot.n, len: ladder.length, voidY: VOID_Y }), falls: () => solids.filter(s => s.pn !== undefined).slice(0, 5).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), n: s.pn })), foes: () => enemies.filter(e => !e.dead).map(e => ({ id: e.mesh.id, v: e.variant, hp: +e.hp.toFixed(1), mh: e.maxhp, boss: !!e.boss, d: Math.round(Math.hypot(e.x - pos.x, e.y - pos.y, e.z - pos.z)) })), kit: () => ({ w: weapon, name: WEAPONS[weapon].name, owned: weaponOwned.slice(), ammo: { ...ammo } }), clearFoes: (keepBoss = true) => { let n = 0; for (const e of enemies) if (!e.dead && !(keepBoss && e.boss)) { damageEnemy(e, 99999, 'pound'); n++; } return n; }, setZone: (n, snap = false, quiet = true) => { const z = ZONES.find(x => x.name.toLowerCase() === String(n).toLowerCase()) || null; setZone(z, snap, quiet); return z ? z.name : null; }, get schizo() { return schizoOn; }, set schizo(v) { schizoOn = !!v; document.body.classList.toggle('schizo', schizoOn); }, giveWeapon: n => { const i = WEAPONS.findIndex(w => w.name.toLowerCase() === String(n).toLowerCase()); if (i < 0) return false; unlockWeapon(i); selectWeapon(i); return !!weaponOwned[i]; }, get killStreak() { return killStreak; }, set killStreak(v) { killStreak = v | 0; killStreakT = killStreak > 0 ? 4 : 0; }, get level() { return level; }, set level(v) { level = Math.max(1, v | 0); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; showMsg(''); toast('LEVEL ' + level + ' — ' + theme().name, 1600); }, rails: () => solids.filter(q => q.rail).map(q => { const a = q.rail.pts[0], b = q.rail.pts[q.rail.pts.length - 1]; return [a.x, a.y, a.z, b.x, b.y, b.z, q.rail.len]; }), grinding: () => !!grinding, dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), duel: (v = 'walker', dist = 4, boss = false) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, boss, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (k !== 'board') return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(ZONES.find(z => z.name === n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; },  info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length, propList: props.map(p => ({ k: p.kind, at: p.mesh.position.toArray().map(v => Math.round(v * 10) / 10), taken: p.taken, vis: p.mesh.visible, inLvl: !!(p.mesh.parent && p.mesh.parent !== scene) })) }), missions: () => missionsSnapshot(), acceptMission, completeMission, turnIn, abandonMission, craftList, craft, guideTips, guideGreeting, base: () => ({ ...base, upgrades: { ...base.upgrades }, resources: { ...hotbarRes } }), homeBase: () => ({ guide: !!homeGuide, hintNpc, dialog: guideDialogOpen, slot: mySlot, tower: { x: myStartHub().x, z: myStartHub().z, top: myStartHub().top }, homes: activeStartHubs().map(h => ({ slot: h.slot, x: h.x, z: h.z })), enemiesNearSpawn: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).length, nearSpawns: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).map(e => ({ v: e.variant, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), boss: !!e.boss, mini: !!e.mini, zone: e.zone && e.zone.name })), guides: homeGuides.map(g => ({ slot: g.slot, x: +(g.group.position.x).toFixed(1), z: +(g.group.position.z).toFixed(1) })), parts: homeGuide && homeGuide.group.children.length }), applyNetSlot, missionsSnapshot, monkeys: () => [...dressings.values()].flatMap(d => d.anims.filter(a => a.k === 'monkey' && !a.dead).map(a => ({ x: +(d.site.x + a.mk.g.position.x).toFixed(2), y: +(d.site.y + a.mk.g.position.y).toFixed(2), z: +(d.site.z + a.mk.g.position.z).toFixed(2) }))), coins: () => ({ total: items.filter(i => i.type === 'coin' && !i.taken).length, bananas: items.filter(i => i.type === 'coin' && i.banana).length }), gore: () => ({ decals: decals.length, gibs: gibsList.filter(g => !g.dead).length, nearSpawn: decals.filter(r => spawnGoreBlocked(r[0], r[1], r[2])).length + gibsList.filter(g => !g.dead && spawnGoreBlocked(g.mesh.position.x, g.mesh.position.y, g.mesh.position.z)).length }), towers: () => buildingHubs.map((h, i) => ({ i, x: +h.x.toFixed(1), z: +h.z.toFixed(1), top: +h.top.toFixed(1), hw: +h.hw.toFixed(1), hd: +h.hd.toFixed(1), theme: towerThemeFor(h, i), opened: !!h.opened, alive: h.interior ? h.interior.enemies.filter(e => !e.dead).length : 0 })), openTower: (i = 0, themeKey = null) => { const hub = buildingHubs[i]; if (!hub) return null; const r = openTower(hub, themeKey); return r ? { theme: r.theme.name, floors: r.floors.length, enemies: r.enemies.length, loot: r.loot.length, targets: hub.interiorTargets.length } : null; }, interiors: () => ({ inside: inInterior, theme: activeTowerInterior ? activeTowerInterior.theme.name : null, opened: openedTowers.length, targets: interiorTargets.length }) };   // dev hook (console / test tools)
 
 {   // opened from the relay server with ?room=... -> connect right away
   const qp = new URLSearchParams(location.search || '');
@@ -7417,7 +7472,7 @@ window.__ng.setCull = r => { CULL_R = r; };
 window.__ng.lvl = () => lvl;
 window.__ng.cull = () => ({ tracked: cull.list.length, hidden: cull.hidden, children: lvl.children.length, solids: solids.length, platforms: platforms.length, specials: specials.length, enemies: enemies.length, items: items.length, props: props.length });
 window.__ng.renderInfo = () => new Promise(res => { renderer.info.autoReset = false; renderer.info.reset(); requestAnimationFrame(() => requestAnimationFrame(() => { const i = renderer.info; res({ calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries }); renderer.info.autoReset = true; })); });
-window.__ng.perf = PERF; window.__ng.mars = () => buildMarsRoute();
+window.__ng.perf = PERF; window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute();
 let last = performance.now();
 renderer.setAnimationLoop(now => {
   const P = PERF.enabled; if (P) { renderer.info.reset(); PERF.frame(now); PERF.lapStart(); }
