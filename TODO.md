@@ -74,3 +74,23 @@ None.
 - 2026-10-20 — Cyberpunk/EVA accents — Syntax + geometry-budget + accent-artifact + hitbox checks pass.
 - 2026-10-20 — Enemy sprite rework — Verified shared humanoid body, variant-specific railings, syntax, and hitbox preservation.
 - 2026-10-20 — Retro stages 1–6 — Verified by source grep; no visual test available.
+
+## Vehicle visual overhaul (2 agents)
+- Plan in `PLAN.md` (car = DeLorean-inspired time machine; Agent B = bike model + shared vehicle FX). Lead asked Buffy to review Claude's car pass against the gull-wing coupe silhouette when it lands; not present in current tree yet.
+- 2026-10-21 [BUFFY / Agent A] Earlier model pass made a low-poly arena buggy (tapered orange nose, gunmetal chassis, hazard hood, roll cage + roof lamps, bucket seat/steering wheel, exposed engine/twin exhausts, spoiler, head/tail lamps, solid underglow, 10-sided wheels/hubs/lugs), with 3 palettes and `prop.fx` exhaust/light/glow/body/steer hooks. Syntax + stubbed construction check passed. **Superseded by lead's DeLorean direction**; this is the baseline Claude should replace/rework, not the final requested silhouette.
+- 2026-10-21 [BUFFY / Agent B] Added `makeBikeMesh(prop)` with an opaque low-poly speeder body, faceted nose, cyan side rails, dark windscreen, seated rider, steerable front fork/hover pods, rear thrusters, tail light, ground ring, and spinning turbine discs (spawn-order cyan/green/magenta palettes). Added `prop.fx` hooks and shared boost flames/glow pulse/FOV kick, steering/lean/pitch, hover bob, landing squash/rebound, and capped buggy wheel dust. Stubbed construction test confirms 39 meshes including 7 instanced draws, two spinning pivots, two exhausts, two lights, and one steer pivot; only hover ring is transparent. Inline module syntax PASS; Puppeteer is installed but its Chrome executable is absent. Handoff: visually check with `window.__ng.prop('bike', 5); window.__ng.useProp();`, then test X boost and drop landing; mount/dismount/glide and real-GPU frame timing remain unverified.
+- FX note: solid opaque bike frame/pods/rider/lights; only the thin hover ring and brief exhaust particles use additive transparency. Exhaust spawns cap at two emitters/18 Hz; buggy dust is limited to two single-particle bursts per 0.16 s.
+- Recent: Mars route after moon, vehicle boost (X) + drop absorb + longer glide, solid-polygon weapons, darker lighting.
+
+## Home Base + Mission Board
+- Plan in `PLAN-HOMEBASE.md` (Agent A = base world/NPC/dialogue UI, Agent B = missions/rewards/crafting logic).
+- 2026-10-21 [BUFFY / Agent A] Added a peaceful start rooftop and first-route safe radius (including secondary route spawns), neon safe-zone ring, forge, storage, mission board, banner, lamps and barrels. Built a blocky Guide with short constrained wandering, approach greeting/wave, offer/turn-in marker, and an E-triggered HELP / RECIPES / TASKS / LEAVE panel. The panel gates player input without freezing the world; mission actions call the current logic (`acceptMission`, `abandonMission`, `turnIn`) and recipes use `craftList`/`craft`. Added `__ng.homeBase()` for NPC/prompt/dialog/safe-radius inspection. Syntax and structural checks pending; browser visual/gameplay test unavailable in this environment. Multiplayer slot placement still awaits the documented slot-assignment work.
+
+## Next: Home Base integration and testing
+- Verify `index.html` with a real browser: Guide appearance, dialogue navigation, mission accept/return/turn-in, recipe cost display, and vehicle interaction precedence.
+- Home Base Agent A slice is implemented; Agent B mission/reward/crafting systems are already present in the merged file and are now surfaced by the Guide UI.
+
+- `PLAN-INTERIORS-MP.md`: Part 1 hollow tower interiors (Agent A), Part 2 six-player ring of spawn towers with per-slot Guide + missions (Agent B). Runs after PLAN-HOMEBASE.
+
+## Performance audit
+- `PERFORMANCE_AUDIT.md` written (hypotheses only, nothing measured yet). Next: add perf HUD + renderer.info, capture 3 reference scenes.
