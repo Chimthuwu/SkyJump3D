@@ -4,6 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SkyJump3D</title>
+<meta name="description" content="SkyJump3D - a neon sky-parkour shooter. Jump, glide, ride and fight through a floating city all the way to the Moon and Mars. Play free in your browser. By Chimthuwu.">
+<meta name="theme-color" content="#36f6ff">
+<meta name="author" content="Chimthuwu">
+<link rel="canonical" href="https://sky-jump.pages.dev/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="SkyJump3D by Chimthuwu - github.com/Chimthuwu">
+<meta property="og:title" content="SkyJump3D - neon sky-parkour shooter">
+<meta property="og:description" content="Jump, glide, ride and fight through a floating neon city to the Moon and Mars. Play free in your browser. More projects: github.com/Chimthuwu">
+<meta property="og:url" content="https://sky-jump.pages.dev/">
+<meta property="og:image" content="https://sky-jump.pages.dev/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="First-person view of the neon floating city in SkyJump3D">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="SkyJump3D - neon sky-parkour shooter">
+<meta name="twitter:description" content="Jump, glide, ride and fight through a floating neon city to the Moon and Mars. Play free in your browser.">
+<meta name="twitter:image" content="https://sky-jump.pages.dev/og-image.png">
+<link rel="alternate" type="application/json+oembed" href="https://sky-jump.pages.dev/oembed.json" title="SkyJump3D">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23050817'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23ff3fc8' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%2336f6ff'/%3E%3C/svg%3E">
 <style>
   :root{--neon-cyan:#36f6ff;--neon-pink:#ff3fc8;--neon-lime:#c4ff4d;--panel:rgba(5,10,27,.82)}
@@ -712,11 +731,11 @@ function ammoBox(x, y, z) {
 function weaponPickup(index, x, y, z) {
   const weapon = WEAPONS[index]; if (!weapon) return null;
   const color = new THREE.Color(weapon.col), m = new THREE.Group();
-  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.7, 0), new THREE.MeshBasicMaterial({ color }));
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.1, 5, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.7, 0), new THREE.MeshBasicMaterial({ color, toneMapped: false }));   // not tone-mapped: pickups keep their full saturation
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.1, 5, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }));
   ring.rotation.x = Math.PI / 2;
   // (weapon light pillar removed per user)
-  const pip = new THREE.Mesh(new THREE.OctahedronGeometry(0.16), new THREE.MeshBasicMaterial({ color: 0xffffff })); pip.position.y = 0.9;
+  const pip = new THREE.Mesh(new THREE.OctahedronGeometry(0.16), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false })); pip.position.y = 0.9;
   const label = makeLabel(`${index + 1} · ${weapon.name.toUpperCase()}`); label.position.y = 1.65; label.scale.set(4.4, 1.1, 1);
   m.add(core, ring, pip, label); m.position.set(x, y, z); lvl.add(m);
   const it = { mesh: m, type: 'weapon', weaponIndex: index, taken: false }; items.push(it); return it;
@@ -1917,7 +1936,7 @@ function tryRoad(A, B, ux, uz, eA, eB, D) {
       else if (!bikeTrail && k % 4 === 1) addRail(x - ux * 3, z - uz * 3, y + 1.5, x + ux * 10, z + uz * 10, [0xff3fc8, 0x36f6ff, 0xffd23a][k % 3]);   // GRIND RAIL
     }
     if (k % 2 === 0) coin(x, y + 1.2, z, zone);
-    if (k % 6 === 3 && k > 1 && k < n - 1) spawnBiomeEnemy(x, y, z, sl, zone, depth);
+    if (k % 4 === 1 && k > 1 && k < n - 1) spawnBiomeEnemy(x, y, z, sl, zone, depth);
     if (k % 9 === 5) addCheckpoint(x, y, z, zone);
     if (k % 5 === 4) weaponPickup(2 + ((rand() * (WEAPONS.length - 2)) | 0), x + 2.5, y + 1.2, z + 2.5);
     if (k % 3 === 1) addDashPad(x, y, z, ux, uz);
@@ -1991,14 +2010,14 @@ function connect(A, B) {
     else if (weird) makeSpecial(p, weird, { ph: rand() * 6.28, period: weird === 'piston' ? 2.6 + rand() * 1.6 : 4 + rand() * 3, amp: weird === 'orbit' ? 5 + rand() * 3.5 : weird === 'piston' ? 3.5 + rand() * 2.5 : 4 + rand() * 2.5, lift: rand() < 0.35, px: -uz, pz: ux });
     else {
       if (rand() < 0.3 && p.hw <= 4.4) bounceDress(p);
-      const enemyEvery = zone && zone.name === 'Jungle' ? 1 : zone ? 2 : 3;
+      const enemyEvery = zone ? 1 : 3;
       if (k > 0 && k < n - 1 && k % enemyEvery === 1 && (A.kind !== 'start' || k > 1)) spawnBiomeEnemy(x, y, z, p, zone, depth);
-      if (level > 1 && k % 4 === 3) spawnBiomeEnemy(x - 1.5, y, z + 1.5, p, zone, depth, 0.85);   // second spawn tier: packs of two on zone routes
+      if (k % 4 === 3) spawnBiomeEnemy(x - 1.5, y, z + 1.5, p, zone, depth, 0.85);   // second spawn tier: packs of two on zone routes
       if (k % 4 === 2) ammoBox(x + 1.5, y + 0.8, z - 1.5);
       if (k % 8 === 1) weaponPickup(2 + ((rand() * (WEAPONS.length - 2)) | 0), x - 1.5, y + 1.2, z + 1.5);      // guns all along every route
       if (k % 6 === 3) addCheckpoint(x, y, z, zone);          // save points along long paths
       if (k % 5 === 1 && rand() < 0.5) spawnOreVein(x + 1.5, y, z - 1.5, zone);   // biome ore veins to mine for build blocks
-      if (level >= 2 && k % 5 === 3) spawnBiomeEnemy(x, y, z, p, zone, depth, 0.8);
+      if (k % 5 === 3) spawnBiomeEnemy(x, y, z, p, zone, depth, 0.8);
     }
     if (prev && !weird && !prevWeird && A.kind !== 'arena') {            // GRIND ACROSS LONG GAPS: a rail links the two stones when the jump is big
       const gx = p.cx - prev.cx, gz = p.cz - prev.cz, gd = Math.hypot(gx, gz) || 1, gux = gx / gd, guz = gz / gd;
@@ -2073,7 +2092,7 @@ function connectFar(A, B) {
     if (!quiet) {
       if (k % 3 === 1) addDashPad(x, y, z, ux, uz);                     // dash pads
       if (k % 3 === 2) spawnBiomeEnemy(x, y, z, p, zone, depth);
-      if (level > 1 && k % 7 === 4) spawnBiomeEnemy(x - 1.5, y, z + 1.5, p, zone, depth, 0.85);
+      if (k % 7 === 4) spawnBiomeEnemy(x - 1.5, y, z + 1.5, p, zone, depth, 0.85);
       if (k % 6 === 4) addCheckpoint(x, y, z, zone);                    // a checkpoint every ~6 stones
       if (k % 8 === 2) ammoBox(x + 1.5, y + 0.8, z - 1.5);
       if (k % 8 === 6) heart(x - 1.5, y + 1.0, z + 1.5);
@@ -3199,8 +3218,8 @@ function buildLevelBody() {
     { variant: 'infernal', biome: 'Inferno', name: 'FURNACE SAINT', color: 0xff542c },
     { variant: 'stormWraith', biome: 'Storm', name: 'ION PHANTOM', color: 0x6595ff },
     { variant: 'stalker', biome: 'Horror', name: 'THE RED STALKER', color: 0xff174c },
-    { variant: 'gorilla', biome: 'Horror', name: 'GRAVE APE', color: 0xd2c5b0 },
-    { variant: 'stalker', biome: 'Psychedelic', name: 'THE LAST SIGNAL', color: 0xff174c },
+    { variant: 'shield', biome: 'Horror', name: 'GRAVE WARDEN', color: 0xd2c5b0 },
+    { variant: 'stegosaurus', biome: 'Psychedelic', name: 'THE LAST SIGNAL', color: 0xff3fc8 },
   ];
   const bossCenterX = Math.cos(endA) * 62, bossCenterZ = Math.sin(endA) * 62;
   const bossArena = addSlab(bossCenterX, 0, bossCenterZ, 30, 28, 3, ZONES[ZONES.length - 1], false);
@@ -3213,7 +3232,7 @@ function buildLevelBody() {
     const bossZone = ZONES.find(zone => zone.name === spec.biome) || bossArena.zone;
     const bossSpawnPad = { ...bossArena, zone: bossZone };
     const e = makeWalker(x, 0, z, bossSpawnPad, i >= 8 ? 2.5 : 2.1, true, spec.variant);
-    e.boss = true; e.name = spec.name; e.bossColor = spec.color; e.bossIndex = i; e.bossesTotal = bossRoster.length;
+    e.boss = true; e.name = spec.name; e.bossColor = spec.color; e.bossBiome = spec.biome; e.bossIndex = i; e.bossesTotal = bossRoster.length;
     e.hp = e.maxhp = 18 + level * 3 + i * 2; e.slamCd = 1.7 + i * 0.3; e.pts = 800 + i * 100;
     // A distinct, jewel-toned crown and orbiting halo makes each biome champion readable in the full gauntlet.
     const crest = new THREE.Mesh(new THREE.OctahedronGeometry(0.34, 1), lam(spec.color));
@@ -3245,9 +3264,36 @@ function buildLevelBody() {
   beam.position.set(groundPad.x, (TOP + 120) / 2, groundPad.z); scene.add(beam);
   // the sky network: floating platforms from the roof to rooftops and themed arenas
   levelHubs = buildNetwork(padA);
+  scatterBosses();
   generateMissions();
   for (const home of activeStartHubs()) buildHomeBase(home, home.slot);
   buildSurroundings();
+}
+
+// The signal bosses used to stand together in one pit. Spread them over distinct arena / tower hubs all over the sky
+// (matching biome first, then as far from the others as possible); only THE LAST SIGNAL stays below guarding the terminal.
+function scatterBosses() {
+  const homes = activeStartHubs();
+  const pool = levelHubs.filter(h => (h.kind === 'arena' || h.kind === 'building') && h.top !== undefined && (h.hw || 0) >= 9 && (h.hd || 0) >= 9 && h.top > 40
+    && !homes.some(m => Math.hypot(h.x - m.x, h.z - m.z) < 140) && !(moonInfo && Math.hypot(h.x - moonInfo.col[0], h.z - moonInfo.col[2]) < 70));
+  const used = [];
+  endBosses.forEach((e, i) => {
+    if (i === endBosses.length - 1) return;                                          // the final boss keeps the gauntlet
+    let best = null, bs = -1e9;
+    for (const h of pool) {
+      if (used.includes(h)) continue;
+      const near = Math.min(120, ...used.map(u => Math.hypot(h.x - u.x, h.z - u.z) + Math.abs(h.top - u.top) * 0.5));
+      const biomeMatch = h.zone && e.bossBiome && h.zone.name === e.bossBiome ? 70 : 0;
+      const sc = near + biomeMatch + (h.kind === 'arena' ? 25 : 0) + rand() * 15;
+      if (sc > bs) { bs = sc; best = h; }
+    }
+    if (!best) return;
+    used.push(best);
+    const a = rand() * 6.28, ox = Math.cos(a) * Math.min(5, best.hw * 0.3), oz = Math.sin(a) * Math.min(5, best.hd * 0.3);
+    e.x = best.x + ox; e.z = best.z + oz; e.y = best.top; e.hub = best;
+    e.plat = { minx: best.x - best.hw, maxx: best.x + best.hw, minz: best.z - best.hd, maxz: best.z + best.hd, zone: e.plat && e.plat.zone || best.zone };
+    e.mesh.position.set(e.x, e.y, e.z); e.warn.position.set(e.x, e.y + 0.08, e.z);
+  });
 }
 
 // ---------- player model ----------
@@ -3265,9 +3311,9 @@ const legL = limb(-0.22, 0.8, 0.8, 0x2b3a67), legR = limb(0.22, 0.8, 0.8, 0x2b3a
 // weapon models, all pointing along +z: [sword, pistol, shotgun, rocket launcher]
 // sci-fi arsenal: [energy blade, laser pistol, scatter cannon, plasma launcher, railgun]
 function makeWeaponMeshes() {
-  const gunMat = col => { const c = new THREE.Color(col); if (c.r * 0.3 + c.g * 0.59 + c.b * 0.11 < 0.2) c.lerp(new THREE.Color(0x4a5366), 0.55); return new THREE.MeshLambertMaterial({ color: c, emissive: c.clone().multiplyScalar(0.22), flatShading: true }); };      // weapons: bright steel + coloured bodies, never dark mud
+  const gunMat = col => { const c = new THREE.Color(col); if (c.r * 0.3 + c.g * 0.59 + c.b * 0.11 < 0.2) c.lerp(new THREE.Color(0x4a5366), 0.55); return new THREE.MeshLambertMaterial({ color: c, flatShading: true }); };      // weapons: bright steel + coloured bodies, never dark mud; no emissive wash so the colours stay saturated
   const part = (g, w, h, d, col, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), gunMat(col)); m.position.set(x, y, z); g.add(m); return m; };
-  const glowMat = (c, op = 1) => new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(op < 1 ? 0.6 + op * 0.4 : 1) });      // solid emissive polygons - never see-through
+  const glowMat = (c, op = 1) => new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(op < 1 ? 0.6 + op * 0.4 : 1), toneMapped: false });      // solid emissive polygons - never see-through
   const glow = (g, geo, c, x, y, z, op = 1) => { const m = new THREE.Mesh(geo, glowMat(c, op)); m.position.set(x, y, z); g.add(m); return m; };
   const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
   // 0: energy blade - slim hilt, gold guard, humming cyan blade
@@ -4926,7 +4972,7 @@ function voidLoop() {
   if (state !== 'play' || !moonInfo) return;
   loops++;
   const L = moonInfo.loop;                                                                   // the fall corridor beside the skyway (full of catchable platforms)
-  pos.set(L.x + (Math.random() - 0.5) * 50, moonInfo.y + 140, L.z + (Math.random() - 0.5) * 50);
+  pos.set(L.x + (Math.random() - 0.5) * 50, Math.min(moonInfo.y - 520, TOP + 180) + Math.random() * 60, L.z + (Math.random() - 0.5) * 50);      // restart far below the moon so a fall can't be farmed as a shortcut up
   vel.set(0, -20, 0); onGround = false; pounding = false; climbing = null; glide = 1; combo = 0; invuln = Math.max(invuln, 1);
   camInit = false; shake = Math.max(shake, 0.5); try { $('flash').style.opacity = 1; setTimeout(() => { $('flash').style.opacity = 0; }, 120); } catch (_) {}
   toast(loops === 1 ? 'THERE IS NO FLOOR.' : loops < 4 ? 'You are falling again.' : 'FALLING. FALLING. FALLING.', 2400);
@@ -7501,7 +7547,7 @@ window.__ng.setCull = r => { CULL_R = r; };
 window.__ng.lvl = () => lvl;
 window.__ng.cull = () => ({ tracked: cull.list.length, hidden: cull.hidden, children: lvl.children.length, solids: solids.length, platforms: platforms.length, specials: specials.length, enemies: enemies.length, items: items.length, props: props.length });
 window.__ng.renderInfo = () => new Promise(res => { renderer.info.autoReset = false; renderer.info.reset(); requestAnimationFrame(() => requestAnimationFrame(() => { const i = renderer.info; res({ calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries }); renderer.info.autoReset = true; })); });
-window.__ng.perf = PERF; window.__ng.propsNow = () => props.map(p => ({ k: p.kind, x: +p.mesh.position.x.toFixed(1), y: +p.mesh.position.y.toFixed(1), z: +p.mesh.position.z.toFixed(1) })); window.__ng.bounceNear = (x, z, r = 12) => solids.filter(s => s.bounce && Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z) < r).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +s.maxy.toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), w: +(s.maxx - s.minx).toFixed(1), d: +(s.maxz - s.minz).toFixed(1), boost: s.boost })); window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute();
+window.__ng.perf = PERF; window.__ng.bossesNow = () => endBosses.map(e => ({ n: e.name, v: e.bossRole, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), hub: e.hub ? e.hub.kind : 'bottom' })); window.__ng.enemyCount = () => enemies.filter(e => !e.dead).length; window.__ng.propsNow = () => props.map(p => ({ k: p.kind, x: +p.mesh.position.x.toFixed(1), y: +p.mesh.position.y.toFixed(1), z: +p.mesh.position.z.toFixed(1) })); window.__ng.bounceNear = (x, z, r = 12) => solids.filter(s => s.bounce && Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z) < r).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +s.maxy.toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), w: +(s.maxx - s.minx).toFixed(1), d: +(s.maxz - s.minz).toFixed(1), boost: s.boost })); window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute();
 let last = performance.now();
 renderer.setAnimationLoop(now => {
   const P = PERF.enabled; if (P) { renderer.info.reset(); PERF.frame(now); PERF.lapStart(); }
