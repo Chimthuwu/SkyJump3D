@@ -6,3 +6,7 @@ server/tts-cache/
 
 cf-public/
 .wrangler/
+
+.dev.vars*
+!.dev.vars.example
+!.env.example
