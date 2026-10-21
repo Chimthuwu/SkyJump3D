@@ -2,7 +2,7 @@
   "name": "skyjump3d",
   "private": true,
   "scripts": {
-    "cf:prep": "node -e \"const fs=require('fs');fs.rmSync('cf-public',{recursive:true,force:true});fs.mkdirSync('cf-public');for(const f of ['index.html','LOGO2.png'])fs.copyFileSync(f,'cf-public/'+f);fs.copyFileSync('server/voice-lines.json','cf-public/voice-lines.json')\"",
+    "cf:prep": "node -e \"const fs=require('fs');fs.rmSync('cf-public',{recursive:true,force:true});fs.mkdirSync('cf-public');for(const f of ['index.html'])fs.copyFileSync(f,'cf-public/'+f);fs.copyFileSync('server/voice-lines.json','cf-public/voice-lines.json')\"",
     "cf:dev": "npm run cf:prep && wrangler dev -c cloudflare/wrangler.jsonc",
     "cf:deploy": "npm run cf:prep && wrangler deploy -c cloudflare/wrangler.jsonc"
   },
