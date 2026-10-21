@@ -107,9 +107,6 @@ const server = http.createServer((req, res) => {
   if (url === '/' || url === '/index.html') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
     fs.createReadStream(INDEX).pipe(res);
-  } else if (url === '/LOGO2.png') {
-    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=3600' });
-    fs.createReadStream(path.join(__dirname, '..', 'LOGO2.png')).pipe(res);
   } else if (url === '/voice-lines.json') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(LINES));
   } else if (url === '/net-info') {          // lets the in-game multiplayer wizard detect Tailscale and show the invite link
