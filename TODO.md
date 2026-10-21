@@ -99,5 +99,31 @@ None.
 
 - `PLAN-INTERIORS-MP.md`: Part 1 hollow tower interiors (Agent A), Part 2 six-player ring of spawn towers with per-slot Guide + missions (Agent B). Runs after PLAN-HOMEBASE.
 
+## Six-player spawn towers (Agent B) — 2026-10-21
+- `starts[]` + `mySlot` are live. Single player still builds the original one-roof tower at (10, TOP, 0); a room builds six identical home towers on a 150 m ring at 60° spacing.
+- Each tower gets its own full dressing pass (arsenal, bike, buggy, board, skates, lore terminal, Guide, forge, board) and a `HOME n` landmark. Hub portals on home roofs were removed (they were permanent dormant duds), and branch portal pairs within 40 m / 40 m vertically of a home are skipped so nothing wakes up on the spawn roof.
+- `server/server.js` and the Cloudflare Durable Object now assign slots 0–5, reject the 7th player with `reason: 'lobby full'`, free/reuse slots on leave, send `slot/level/seed` in `hi`, and retain the room level for late joiners. Client `applyNetSlot()` rebuilds the seeded city, drops the player on their own roof, and restores their own base/mission state.
+- Missions use `missionRandom(levelSeed ^ mySlot·0x9E3779B1 ^ 0xBA5E)` and `missionSlots[mySlot]`; IDs are e.g. `L1-S3-2`. Mission markers, turn-in, tracker and Guide all target `myMissionHub()`, not the first start hub. Contract accept/progress/complete is relayed as informational HUD only; `craft`/`base` stay local.
+- Kill credit is now owner-only: a guest tags an enemy it hit; the host's networked kill does not advance the host's own contract, and a guest only gets credit for a kill tag less than 15 s old.
+- Safe zones now cover the whole home-tower columns, not just the roof band; arena garrisons and ride-park placement also keep clear of the ring.
+
+### Verified (2026-10-21)
+- Extracted module `node --check` PASS; `node --check server/server.js` and `cloudflare/worker.js` PASS.
+- Server WS test on :8099: six clients got slots `[0,1,2,3,4,5]`, the 7th got `{t:'full',reason:'lobby full'}`, disconnecting slot 2 and joining again reused slot 2.
+- Headless Edge (software GL) on :8101: solo build has one tower at (0,0) and spawn (10, 580, 0); `applyNetSlot(0..5)` produced six homes/six Guides, correct own tower, 10 m spawn offset, zero enemies near any home, exactly 24 home props (4 per tower), hidden boss bar, zero portals on the six home roofs, and per-slot mission IDs.
+- Two pages in one room received slots 0 and 1 and loaded different home towers; zero page errors. Slot-3 mission list is deterministic across rebuilds and differs from slot 1.
+
+### Known limits
+- Physical traversal from every tower through the generated route graph has not been played end-to-end; routes/portals are deterministic, and each home gets three outgoing connects plus the city portal loop, but this needs an in-browser playtest.
+- Six real browser clients were simulated at the relay layer, not as six full rendering tabs (headless software GL). Real-GPU frame rate remains unmeasured.
+- Reconnect to the same slot is not name-based; the relay gives the lowest free slot.
+
+## Spawn / jungle polish — 2026-10-21
+- Monkeys are still harmless but gently shoulder the player aside at close range (`animDress` monkey branch, positional nudge; no damage, no knockback state).
+- Jungle coins render as low-poly banana bunches; zone is now passed through coin spawns so city/moon coinage stays coins. `__ng.coins()` reports total/banana counts (L1 six-tower build: ~2600 coins, 587 bananas).
+- Road/ramp vehicles within 60 m horizontally and 35 m vertically of a home roof are suppressed, so the home garage is the only ride cluster at spawn.
+- The old always-on `10/10 BOSSES REMAIN` bar is gone. The boss bar now only appears when a boss/Guardian is within 120 m / 55 m, and shows `BOSS n/10 · NAME` or `GUARDIAN · NAME`.
+- Removed permanently-dormant portals from start hubs (they could never unlock).
+
 ## Performance audit
 - `PERFORMANCE_AUDIT.md` written (hypotheses only, nothing measured yet). Next: add perf HUD + renderer.info, capture 3 reference scenes.

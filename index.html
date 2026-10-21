@@ -582,8 +582,31 @@ let groundPad = null;         // street-level target that also clears the level
 let lvl = new THREE.Group();  // everything belonging to the current level (rebuilt each level)
 scene.add(lvl);
 let staticBuilt = false;
-const start = { x: 10, y: TOP, z: 0 };
+const HOME_SLOT_COUNT = 6, SPAWN_RING_R = 150;
+const starts = Array.from({ length: HOME_SLOT_COUNT }, () => ({ x: 10, y: TOP, z: 0 }));
+const startHubs = Array.from({ length: HOME_SLOT_COUNT }, (_, slot) => ({ kind: 'start', slot, x: 0, z: 0, top: TOP, hw: TH, hd: TH, zone: null, r: 20, active: slot === 0 }));
+let mySlot = 0, sixTowerLayout = false, start = starts[0];
 let checkpoint = { ...start };
+// Single player keeps the original one-roof layout. Co-op builds all six towers so late joiners get a home.
+function syncStartLayout(multi = sixTowerLayout) {
+  sixTowerLayout = !!multi;
+  const count = sixTowerLayout ? HOME_SLOT_COUNT : 1;
+  for (let slot = 0; slot < HOME_SLOT_COUNT; slot++) {
+    const active = slot < count, angle = slot * Math.PI * 2 / count, radius = sixTowerLayout ? SPAWN_RING_R : 0;
+    const cx = active ? Math.cos(angle) * radius : 0, cz = active ? Math.sin(angle) * radius : 0;
+    const hub = startHubs[slot];
+    Object.assign(hub, { kind: 'start', slot, x: cx, z: cz, top: TOP, hw: TH, hd: TH, zone: null, r: 20, active });
+    const spawn = starts[slot];
+    spawn.x = active ? cx + Math.cos(angle) * (sixTowerLayout ? 10 : 0) + (sixTowerLayout ? 0 : 10) : cx;
+    spawn.z = active ? cz + Math.sin(angle) * (sixTowerLayout ? 10 : 0) : cz;
+    spawn.y = TOP;
+  }
+  start = starts[mySlot] || starts[0];
+  return start;
+}
+function activeStartHubs() { return startHubs.filter(h => h.active); }
+function myStartHub() { return startHubs[mySlot] || startHubs[0]; }
+syncStartLayout(false);
 
 function addSolid(minx, maxx, miny, maxy, minz, maxz) {
   const s = { minx, maxx, miny, maxy, minz, maxz }; solids.push(s); return s;
@@ -656,10 +679,18 @@ function addBullseye(cx, y, cz, r) {          // one flat textured disc (cheap: 
   const d = new THREE.Mesh(geo, bullMat); d.rotation.x = -Math.PI / 2; d.position.set(cx, y + 0.06, cz); scene.add(d);
 }
 
-function coin(x, y, z) {
-  const g = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 8); g.rotateX(Math.PI / 2);
-  const m = new THREE.Mesh(g, retroMaterial(new THREE.MeshLambertMaterial({ color: 0xffd23a })));
-  m.position.set(x, y, z); scene.add(m); items.push({ mesh: m, type: 'coin', taken: false });
+const BANANA_GEO = new THREE.TorusGeometry(0.4, 0.14, 5, 8, Math.PI * 0.9);
+const BANANA_MAT = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xffe14a, emissive: 0x4a3200, flatShading: true }));
+function coin(x, y, z, zone) {
+  const zz = zone === undefined ? activeZ : zone, jungle = !!(zz && zz.name === 'Jungle');
+  let m;
+  if (jungle) {                                                      // one shared banana mesh: no per-coin geometry or material
+    m = new THREE.Mesh(BANANA_GEO, BANANA_MAT); m.rotation.z = 0.55; m.rotation.y = 0.35;
+  } else {
+    const g = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 8); g.rotateX(Math.PI / 2);
+    m = new THREE.Mesh(g, retroMaterial(new THREE.MeshLambertMaterial({ color: 0xffd23a })));
+  }
+  m.position.set(x, y, z); scene.add(m); items.push({ mesh: m, type: 'coin', taken: false, banana: jungle });
 }
 function ammoBox(x, y, z) {
   const m = new THREE.Group();
@@ -1192,8 +1223,8 @@ function pickEnemy(depth, zone = null) {  // biome rosters control wildlife; dep
   return pool[(rand() * pool.length) | 0];
 }
 function spawnBiomeEnemy(x, y, z, plat, zone, depth, scale = 1) {
-  // Keep the start roof and its first approach calm at every level, including secondary route spawns.
-  if (Math.hypot(x, z) < 50 && y > TOP - 35) return null;
+  // Keep every home tower column and its first approach calm at every level, including secondary route spawns.
+  if (activeStartHubs().some(home => Math.hypot(x - home.x, z - home.z) < 50)) return null;
   const variant = pickEnemy(depth, zone);
   if (variant === 'drone' || variant === 'bomber') { const e = makeDrone(x, y + 3, z, variant, zone); e.zone = zone || null; return e; }
   if (variant === 'ufo') { const e = makeUfo(x, y + 7, z); e.zone = zone || null; return e; }
@@ -1360,6 +1391,7 @@ function buildArena(type, cx, top, cz, zone) {
   for (let i = 0; i < n; i++) {
     const s = A.spawn[i % A.spawn.length], p = s.plat;
     const x = clamp(s.x + (rand() - 0.5) * 4, p.minx + 1.2, p.maxx - 1.2), z = clamp(s.z + (rand() - 0.5) * 4, p.minz + 1.2, p.maxz - 1.2);
+    if (activeStartHubs().some(home => Math.hypot(x - home.x, z - home.z) < 50)) continue;   // arenas never garrison a home roof
     if (jungle && i === 0) makeWalker(x, p.maxy, z, p, 1.05, false, 'dinosaur');
     else if (jungle && i === 1) makeWalker(x, p.maxy, z, p, 0.9, false, 'gorilla');
     else if (jungle && i === 2) makeWalker(x, p.maxy, z, p, 0.95, false, 'stegosaurus');
@@ -1396,7 +1428,7 @@ function buildBuildingHub(cx, cz, w, d, h, zone) {
   buildingHubs.push(hub);
   buildingMesh.userData.towerHub = hub;
   addNeonSign(cx, cz, w, d, h);
-  addBullseye(cx, h + 0.2, cz, 2.2); coin(cx, h + 1.4, cz);
+  addBullseye(cx, h + 0.2, cz, 2.2); coin(cx, h + 1.4, cz, zone);
   if (rand() < 0.5) {        // bounce pad to launch you toward the next building
     const px = cx + w / 2 - 3, pad = addSolid(px - 2, px + 2, h, h + 0.4, cz - 2, cz + 2); pad.bounce = true;
     const pm = new THREE.Mesh(new THREE.BoxGeometry(4, 0.4, 4), retroMaterial(new THREE.MeshLambertMaterial({ color: 0x33e0ff })));
@@ -1436,6 +1468,7 @@ function portalHaloMat(color) {
   return portalHaloMats.get(color);
 }
 let portalCooldown = 0, portalExit = null, activePortalPreview = null, activePortalDestination = null;
+function portalNearHome(x, y, z) { return activeStartHubs().some(home => Math.hypot(x - home.x, z - home.z) < 40 && Math.abs(y - home.top) < 40); }
 function addPortal(x, y, z, color, label, owner = null) {
   for (const s of solids) {                       // exact overlap with a trampoline: the portal owns this spot — retire the pad (portal-vs-bounce clashes otherwise hijack falls)
     if (!s.bounce) continue;
@@ -1458,6 +1491,7 @@ function addPortal(x, y, z, color, label, owner = null) {
   portals.push(portal); return portal;
 }
 function addPortalPair(a, b, label = 'LINK') {
+  if (portalNearHome(a.x, a.y, a.z) || portalNearHome(b.x, b.y, b.z)) return null;   // keep home roofs portal-free
   const dx = b.x - a.x, dz = b.z - a.z;
   const first = addPortal(a.x, a.y, a.z, 0x36f6ff, `${label} ENTRY`);
   const second = addPortal(b.x, b.y, b.z, 0xff3fc8, `${label} EXIT`);
@@ -1514,14 +1548,14 @@ function buildRouteCluster(anchor, ux, uz, zone) {
     if (overlaps) break;
     const p = addPlatform(x, y, z, Math.max(hw, hd), false, 0, zone, true, true, { hw, hd });
     p.cluster = layout.name; if (!first) first = p; last = p;
-    if (i > 0) coin(x, y + 1.2, z);
+    if (i > 0) coin(x, y + 1.2, z, zone);
   }
   if (!last) return false;
-  if (first) {
+  if (first && !portalNearHome(first.cx, first.top, first.cz)) {
     const gate = addPortal(first.cx, first.top, first.cz, color, `${prefix} GATE`);
     gate.cluster = layout.name;
   }
-  if (last && last !== first) {
+  if (last && last !== first && !portalNearHome(last.cx, last.top, last.cz)) {
     const exit = addPortal(last.cx, last.top, last.cz, color, `${prefix} EXIT`);
     exit.cluster = layout.name;
   }
@@ -1530,12 +1564,13 @@ function buildRouteCluster(anchor, ux, uz, zone) {
 }
 function buildHubPortalLoop(hubs) {
   hubs.forEach((hub, i) => {
+    const homeRoof = hub.kind === 'start';     // home roofs use their own routes; a dormant gate here could never wake
     const x = hub.kind === 'arena' ? hub.bull[0] : hub.x;
     const z = hub.kind === 'arena' ? hub.bull[1] : hub.z;
     const zoneLabel = hub.zone ? ({ Psychedelic: 'PSY', Jungle: 'JUNGLE', Frozen: 'ICE', Inferno: 'EMBER', Storm: 'STORM', Horror: 'CRYPT' }[hub.zone.name] || 'ZONE') : 'CITY';
-    const label = hub.kind === 'arena' ? hub.type.toUpperCase() : hub.kind === 'start' ? 'SPAWN HUB' : hub.kind === 'exit' ? 'STREET' : `${zoneLabel} ROOF`;
+    const label = hub.kind === 'arena' ? hub.type.toUpperCase() : hub.kind === 'start' ? `HOME ${hub.slot + 1}` : hub.kind === 'exit' ? 'STREET' : `${zoneLabel} ROOF`;
     const color = portalColors[i % portalColors.length];
-    addPortal(x, hub.top, z, color, `${label} GATE`, hub);
+    if (!homeRoof) addPortal(x, hub.top, z, color, `${label} GATE`, hub);
     addRouteLandmark(x, hub.top, z, 0, hub.zone ? hub.zone.plate : color, label);
   });
   // Every branch exit and hub gate joins one shuffled, cyclic route: no portal is a dead end,
@@ -1637,7 +1672,7 @@ function buildAlienRoute() {
       } else sl = addStatic(x, y, z, hw, hd, shape, (L + i) % 3);
       all.push({ x, y, z, L, i });
       if (!prev) { /* first of the lane */ }
-      if (i % 5 === 2) coin(x, y + 1.2, z);
+      if (i % 5 === 2) coin(x, y + 1.2, z, Z);
       if (i % 90 === 45) { heart(x + 1, y + 1.3, z); ammoBox(x - 1.5, y + 0.8, z); }
       if (i % 40 === 20 && L === 1) addCheckpoint(x, y, z, Z);
       if (!kind && i > 6 && i % 11 === 5 && L !== 2) spawnBiomeEnemy(x, y, z, sl, Z, 0.9, 1);      // xeno packs + patrolling saucers
@@ -1670,7 +1705,7 @@ function buildAlienRoute() {
   beam.position.set(cxm + ux * 60, topY + 300, czm + uz * 60); lvl.add(beam);
   // the lanes' final platforms feed onto the Mars pad: a short run of big stepping stones
   for (let k = 0; k < 4; k++) addStatic(cxm + ux * (k * 11 + 5), topY - 2.2 + k * 0.5, czm + uz * (k * 11 + 5), 3.2, 3.2, 'box', 0);
-  coin(cxm + ux * 60 - 6, topY + 1.2, czm + uz * 60); coin(cxm + ux * 60 + 6, topY + 1.2, czm + uz * 60); heart(cxm + ux * 60, topY + 1.3, czm + uz * 60 + 6);
+  coin(cxm + ux * 60 - 6, topY + 1.2, czm + uz * 60, MOON_ZONE); coin(cxm + ux * 60 + 6, topY + 1.2, czm + uz * 60, MOON_ZONE); heart(cxm + ux * 60, topY + 1.3, czm + uz * 60 + 6);
   WORLD_R = Math.max(WORLD_R, lastD + 900); camera.far = Math.max(camera.far, (lastD + rad) * 1.6); camera.updateProjectionMatrix();
 
   // SPACE CITIES under the lanes: floating islands with towers, alien trees and neon spires, tethered up to the route, each with a launch pad home
@@ -1712,16 +1747,27 @@ function buildAlienRoute() {
     const col = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 24, 6), new THREE.MeshBasicMaterial({ color: 0x7dff4a, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false })); col.position.set(cx, top + 12, cz); lvl.add(col);
     // life down there: a few xenos and a saucer; loot on the rooftops
     for (let e = 0; e < 3; e++) spawnBiomeEnemy(cx + (R() - 0.5) * 30, top, cz + (R() - 0.5) * 30, isl, Z, 0.9, 1);
-    makeUfo(cx, top + 14, cz); heart(cx + 6, top + 1.3, cz); ammoBox(cx - 6, top + 0.8, cz); coin(cx, top + 1.2, cz + 7);
+    makeUfo(cx, top + 14, cz); heart(cx + 6, top + 1.3, cz); ammoBox(cx - 6, top + 0.8, cz); coin(cx, top + 1.2, cz + 7, zone);
   }
   const fin = (m, n) => { m.count = n; m.instanceMatrix.needsUpdate = true; m.frustumCulled = false; lvl.add(m); };
   fin(bI[0], bn[0]); fin(bI[1], bn[1]); fin(trunkI, tn); fin(canI, tn); fin(spireI, sn); fin(rockI, CITIES); fin(plateI, CITIES); fin(tethI, cn);
   console.log('[alien route] platforms', platCount, 'placed', all.length, 'links', links, 'cities', CITIES);
 }
 function buildSkyway(hubs) {
-  const ma = rand() * 6.283, ux = Math.cos(ma), uz = Math.sin(ma), px = -uz, pz = ux;
+  // Pick a skyway bearing that stays well clear of every co-op home tower on the ring.
+  let ma = rand() * 6.283;
+  const homes = hubs.filter(h => h.kind === 'start');
+  if (homes.length > 1) {
+    let best = -1;
+    for (let i = 0; i < 36; i++) {
+      const a = i / 36 * Math.PI * 2, cx = Math.cos(a) * 210, cz = Math.sin(a) * 210;
+      const clear = Math.min(...homes.map(h => Math.hypot(h.x - cx, h.z - cz)));
+      if (clear > best) { best = clear; ma = a; }
+    }
+  }
+  const ux = Math.cos(ma), uz = Math.sin(ma), px = -uz, pz = ux;
   const colR = 210, moonR = 520, baseY = TOP - 12, topY = TOP + 800;
-  const keepOut = [{ x: ux * colR, z: uz * colR, r: 50 }];
+  const keepOut = [{ x: ux * colR, z: uz * colR, r: 50 }, ...homes.map(h => ({ x: h.x, z: h.z, r: 40 }))];
   for (let r = colR + 60; r <= moonR; r += 60) keepOut.push({ x: ux * r, z: uz * r, r: 36 });
   keepOut.push({ x: ux * moonR, z: uz * moonR, r: 240 });
   // launch platform near the column; the roof reaches it by an ordinary platform chain
@@ -1741,13 +1787,13 @@ function buildSkyway(hubs) {
     y += rise; x = nx; z = nz; side = -side;
     addSlab(x, y, z, 7, 7, 2, y > TOP + 100 ? MOON_ZONE : null, true);
     if (i % 4 === 3) { heart(x - 2, y + 1.3, z); ammoBox(x + 2, y + 0.8, z); }
-    coin(x, y + 1.2, z);
+    coin(x, y + 1.2, z, y > TOP + 100 ? MOON_ZONE : null);
   }
   // flat bridge from the top of the column across to the moon
   const n = Math.floor((moonR - 34 - colR) / 12);
   for (let k = 1; k <= n; k++) {
     const r = colR + k * 12 + (px * 0), bx = ux * r + px * Math.sin(k * 0.8) * 4, bz = uz * r + pz * Math.sin(k * 0.8) * 4;
-    addPlatform(bx, topY + k * 0.12, bz, 4.5, false, 0, MOON_ZONE, true, true); if (k % 3 === 0) coin(bx, topY + 1.4, bz);
+    addPlatform(bx, topY + k * 0.12, bz, 4.5, false, 0, MOON_ZONE, true, true); if (k % 3 === 0) coin(bx, topY + 1.4, bz, MOON_ZONE);
   }
   // the moon itself: a huge cratered sphere with an arena on top; landing reaches the moon route
   const mx = ux * moonR, mz = uz * moonR, moonTop = topY + 3, rad = 230;
@@ -1769,13 +1815,13 @@ function buildSkyway(hubs) {
     let x, z;
     if (nearLoop) { const a = rand() * 6.283, r = Math.sqrt(rand()) * 75; x = loop.x + Math.cos(a) * r; z = loop.z + Math.sin(a) * r; }
     else { const a = rand() * 6.283, r = 50 + rand() * 360; x = Math.cos(a) * r; z = Math.sin(a) * r; }
-    if (Math.abs(x) < TH + 12 && Math.abs(z) < TH + 12 && y < TOP + 10) continue;                       // keep clear of the tower
+    if (y < TOP + 10 && homes.some(h => Math.abs(x - h.x) < TH + 12 && Math.abs(z - h.z) < TH + 12)) continue;   // keep clear of every home tower
     if (Math.hypot(x - ux * (colR + 20), z - uz * (colR + 20)) < 14 && y > baseY - 20) continue;       // ...and of the skyway column
     const regionSpanY = level <= 4 ? TOP * 0.8 : Math.max(180, TOP * 0.55);
     const zoneRegion = Math.floor(Math.max(0, y - VOID_Y) / regionSpanY);
     const zone = rand() < 0.45 ? pickAmbientZone(zoneRegion) : (y > TOP + 100 ? MOON_ZONE : null), hw = 2.5 + rand() * 5, hd = 2.5 + rand() * 5;
     const sl = addSlab(x, y, z, hw, hd, 1.5, zone, true); if (nearLoop) ladder.push(sl);
-    if (rand() < 0.35) coin(x, y + 1.2, z);
+    if (rand() < 0.35) coin(x, y + 1.2, z, zone);
     if (rand() < 0.04) heart(x, y + 1.3, z);
   }
   // Sparse, muted debris gives the void depth without turning the horizon into confetti.
@@ -1860,7 +1906,7 @@ function tryRoad(A, B, ux, uz, eA, eB, D) {
       else if (k % (bikeTrail ? 3 : 5) === 2) addRampDir(x - ux * 4, z - uz * 4, y, ux, uz, bikeTrail ? 5 : 4, bikeTrail ? 4.8 : 7, bikeTrail ? 28 : 22);   // KICKER (any angle; bike trails get a lot more)
       else if (!bikeTrail && k % 4 === 1) addRail(x - ux * 3, z - uz * 3, y + 1.5, x + ux * 10, z + uz * 10, [0xff3fc8, 0x36f6ff, 0xffd23a][k % 3]);   // GRIND RAIL
     }
-    if (k % 2 === 0) coin(x, y + 1.2, z);
+    if (k % 2 === 0) coin(x, y + 1.2, z, zone);
     if (k % 6 === 3 && k > 1 && k < n - 1) spawnBiomeEnemy(x, y, z, sl, zone, depth);
     if (k % 9 === 5) addCheckpoint(x, y, z, zone);
     if (k % 5 === 4) weaponPickup(2 + ((rand() * (WEAPONS.length - 2)) | 0), x + 2.5, y + 1.2, z + 2.5);
@@ -1870,7 +1916,9 @@ function tryRoad(A, B, ux, uz, eA, eB, D) {
     let ok = true; for (let k = loopK - 6; k <= loopK + 6; k++) if (!builtK.has(k)) ok = false;
     if (ok) { const t = loopK / n, d = r0 + L * t; addRoadLoop(A.x + ux * d, y0 + (y1 - y0) * t, A.z + uz * d, ux, uz); }
   }
-  if (first) addProp(bikeTrail ? 'bike' : 'buggy', first.x + ux * 3, first.y, first.z + uz * 3);     // a ride waits at the top of every highway
+  const px0 = first ? first.x + ux * 3 : 0, pz0 = first ? first.z + uz * 3 : 0;
+  const nearHome = first && activeStartHubs().some(h => Math.hypot(px0 - h.x, pz0 - h.z) < 60 && first.y > h.top - 35);
+  if (first && !nearHome) addProp(bikeTrail ? 'bike' : 'buggy', px0, first.y, pz0);   // no duplicate rides on the ramps beside the home garage
   return true;
 }
 function connect(A, B) {
@@ -1925,8 +1973,8 @@ function connect(A, B) {
     }
     const p = addPlatform(x, y, z, half, false, 0, zone, true, k % 2 === 1, fp);
     if (!clusterAnchor && t >= 0.38 && t <= 0.62 && p.hw <= 4.8) { clusterAnchor = p; clusterZone = zone; }
-    coin(x, y + 1.2, z);
-    if (prev && k % 2 === 0) for (let u = 0.33; u < 0.9; u += 0.33) coin(prev.cx + (x - prev.cx) * u, prev.top + (y - prev.top) * u + 1.5 + 3 * Math.sin(Math.PI * u), prev.cz + (z - prev.cz) * u);
+    coin(x, y + 1.2, z, zone);
+    if (prev && k % 2 === 0) for (let u = 0.33; u < 0.9; u += 0.33) coin(prev.cx + (x - prev.cx) * u, prev.top + (y - prev.top) * u + 1.5 + 3 * Math.sin(Math.PI * u), prev.cz + (z - prev.cz) * u, zone);
     // weird platforms: movers, crumblers and psychedelic warpers (never the first/last stepping stone)
     const roll = rand(), weird = canMorph && k > 0 && k < n - 1 ? (roll < 0.10 ? 'mover' : roll < 0.19 ? 'orbit' : roll < 0.28 ? 'crumble' : roll < 0.37 ? 'piston' : roll < 0.46 ? 'breath' : roll < 0.472 && psyPlatformEligible() ? 'psy' : '') : '';
     if (weird === 'psy') tryPsySpecial(p, { ph: rand() * 6.28, period: 4 + rand() * 3, amp: 4 + rand() * 2.5, lift: rand() < 0.35, px: -uz, pz: ux, fx: ['trip', 'warp', 'invert'][(rand() * 3) | 0] });
@@ -1953,7 +2001,7 @@ function connect(A, B) {
 }
 // lay out rooftops and arenas around the tower, then link them into a network
 function buildNetwork(exitAngle) {
-  const hubs = [{ kind: 'start', x: 0, z: 0, top: TOP, hw: TH, hd: TH, zone: null, r: 20 }];
+  const hubs = activeStartHubs().map(home => ({ ...home }));   // one roof in solo, all six co-op homes
   const keepOut = buildSkyway(hubs);                 // build the stairway to the moon FIRST so nothing else is placed on top of it
   hubs.push(buildRidePark());                        // the ride park joins the hub network, gets connectivity for free
   const nB = Math.min(9 + level * 2, 22), nA = Math.min(8 + level * 2, 18);
@@ -1982,7 +2030,7 @@ const zoneForRegion = region => biomeForRegion(level, region);
       break;
     }
   }
-  hubs.sort((a, b) => b.top - a.top);            // the start roof is the highest point, so it sorts first
+  hubs.sort((a, b) => b.top - a.top || ((b.kind === 'start') - (a.kind === 'start')));   // spawn roofs stay the highest point and sort first
   for (const h of hubs) if (h.kind !== 'start' && h.kind !== 'launch') h.region = h.region === undefined ? regionForHub(hubs.indexOf(h)) : h.region;
   // last stop: a low platform beside the street target, a safe drop from the street
   const exitPos = { x: Math.cos(exitAngle) * 34, z: Math.sin(exitAngle) * 34 };
@@ -2023,10 +2071,20 @@ const zoneForRegion = region => biomeForRegion(level, region);
     if (WEAPONS[eg].cont) items[items.length - 1].mesh.userData.powerupColor = WEAPONS[eg].col;
   }
   roadBudget = 12; roadSerial = 0; startRoads = 0;
-  for (let i = 1; i < hubs.length; i++) {
+  const spawnHubs = hubs.filter(h => h.kind === 'start'), restHubs = hubs.filter(h => h.kind !== 'start');
+  // Each home tower gets its own outgoing chain (fan out from different first targets), so no player starts stranded.
+  spawnHubs.forEach((home, slot) => {
+    const near = restHubs.slice().sort((a, b) => Math.hypot(a.x - home.x, a.z - home.z) - Math.hypot(b.x - home.x, b.z - home.z));
+    if (!near.length) return;
+    const first = near[(slot * 3) % near.length];
+    connect(home, first);
+    for (let k = 1; k < 3 && k < near.length; k++) connect(home, near[(slot * 3 + k) % near.length]);
+  });
+  for (let i = 0; i < hubs.length; i++) {
+    if (hubs[i].kind === 'start') continue;
     const near = hubs.slice(0, i).sort((a, b) => Math.hypot(a.x - hubs[i].x, a.z - hubs[i].z) - Math.hypot(b.x - hubs[i].x, b.z - hubs[i].z));
-    connect(i <= 3 ? hubs[0] : near[0], hubs[i]);              // every one of the first hubs hangs straight off the start roof
-    if (i > 3 && near.length > 1 && rand() < 0.85) connect(near[1], hubs[i]);     // extra links make it a network, not a tree
+    if (near.length) connect(near[0], hubs[i]);                 // chain the city onto the nearest earlier hub
+    if (near.length > 1 && rand() < 0.85) connect(near[1], hubs[i]);     // extra links make it a network, not a tree
   }
   buildFlow(hubs);                                           // trampoline towers, mega-rails, loops
   const byDist = h => (a, b) => Math.hypot(a.x - h.x, a.z - h.z) - Math.hypot(b.x - h.x, b.z - h.z);
@@ -2079,6 +2137,7 @@ function addMissionCore(mission, point) {
   g.add(core, ring, beam); g.position.set(point.x, point.y + 1.2, point.z); lvl.add(g);
   mission.coreItem = { mesh: g, type: 'dataCore', missionId: mission.id, taken: false }; items.push(mission.coreItem);
 }
+function myMissionHub() { return (levelHubs || []).find(h => h.kind === 'start' && h.slot === mySlot) || myStartHub(); }
 function missionReward(levelIndex, type, distance, rng) {
   const reward = { credits: 45 + levelIndex * 18 + Math.round(distance * 0.12) + (type === 'bossKill' ? 70 : 0), resources: { stone: 2, ore: type === 'collect' ? 2 : 1 }, score: 150 + levelIndex * 35 };
   if (rng() < 0.45) reward.hearts = 1;
@@ -2090,7 +2149,7 @@ function missionReward(levelIndex, type, distance, rng) {
   return reward;
 }
 function generateMissions() {
-  const rng = missionRandom(levelSeed ^ 0xBA5E), hubList = (levelHubs || []).filter(h => h.kind !== 'start' && h.kind !== 'launch' && h.kind !== 'exit' && h.kind !== 'arena' && h.x !== undefined && h.top !== undefined);
+  const rng = missionRandom(levelSeed ^ (mySlot * 0x9E3779B1) ^ 0xBA5E), hubList = (levelHubs || []).filter(h => h.kind !== 'start' && h.kind !== 'launch' && h.kind !== 'exit' && h.kind !== 'arena' && h.x !== undefined && h.top !== undefined);
   for (let i = items.length - 1; i >= 0; i--) if (items[i].type === 'dataCore') {
     items[i].mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
     items[i].mesh.removeFromParent(); items.splice(i, 1);
@@ -2098,7 +2157,7 @@ function generateMissions() {
   if (missionArrow) missionArrow.style.display = 'none';
   if (missionTracker) missionTracker.style.display = 'none';
   missionArrowText = '';
-  missions = missionSlots[slot] = [];
+  slot = mySlot; missions = missionSlots[mySlot] = [];
   activeMission = null;
   if (missionMarker) {
     for (const marker of [missionMarker.target, missionMarker.base]) {
@@ -2108,7 +2167,7 @@ function generateMissions() {
   }
   missionMarker = null;
   if (!hubList.length) return missions;
-  const originHub = (levelHubs || []).find(h => h.kind === 'start') || { x: start.x, z: start.z, top: TOP, hw: TH, hd: TH };
+  const originHub = myMissionHub();
   const origin = missionPositionForHub(originHub), candidates = hubList.filter(h => missionDistance(missionPositionForHub(h), origin) > 38).sort((a, b) => missionDistance(missionPositionForHub(b), origin) - missionDistance(missionPositionForHub(a), origin));
   const farHubs = candidates.length ? candidates : hubList;
   const typeOrder = ['goto', 'collect', 'kill', 'bossKill'], first = Math.floor(rng() * typeOrder.length);
@@ -2158,6 +2217,7 @@ function generateMissions() {
 function missionSetReady(mission) {
   if (!mission || mission.state !== 'active') return false;
   mission.state = 'ready'; mission.progress = mission.count;
+  netMissionSync();
   toast('OBJECTIVE COMPLETE — RETURN TO BASE', 2500); sfx.clear();
   if (guideDialogOpen && guideTab === 'TASKS') renderGuideDialog();
   return true;
@@ -2167,6 +2227,7 @@ function acceptMission(index) {
   const mission = typeof index === 'string' ? missions.find(m => m.id === index) : missions[index | 0];
   if (!mission || mission.state !== 'offered') return { ok: false, reason: 'unavailable' };
   mission.state = 'active'; mission.progress = 0; activeMission = mission;  if (mission.type === 'collect' && mission.coreItem) { mission.coreItem.taken = false; mission.coreItem.mesh.visible = true; }
+  netMissionSync();
   toast(`TASK ACCEPTED — ${mission.title}`, 1800); sfx.coin();
   if (guideDialogOpen && guideTab === 'TASKS') renderGuideDialog();
   return { ok: true, mission };
@@ -2175,10 +2236,10 @@ function abandonMission() {
   if (!activeMission) return false;
   activeMission.state = 'offered'; activeMission.progress = 0;
   if (activeMission.coreItem) { activeMission.coreItem.taken = false; activeMission.coreItem.mesh.visible = false; }
-  activeMission = null; if (guideDialogOpen && guideTab === 'TASKS') renderGuideDialog(); toast('TASK ABANDONED', 1000); return true;
+  activeMission = null; netMissionSync(); if (guideDialogOpen && guideTab === 'TASKS') renderGuideDialog(); toast('TASK ABANDONED', 1000); return true;
 }
 function missionAtBase() {
-  const home = (levelHubs || []).find(h => h.kind === 'start') || { x: start.x, z: start.z, top: TOP };
+  const home = myMissionHub();
   return Math.hypot(pos.x - home.x, pos.z - home.z) < 16 && Math.abs(pos.y - home.top) < 4;
 }
 function turnIn() {
@@ -2191,7 +2252,7 @@ function turnIn() {
   if (reward.ammo) { for (const [key, amount] of Object.entries(reward.ammo)) if (ammo[key] !== undefined) ammo[key] = Math.min(WEAPONS.find(w => w.ammoKey === key)?.ammoCap || 999, ammo[key] + amount); }
   if (reward.weapon !== undefined) unlockWeapon(reward.weapon | 0);
   for (const [key, amount] of Object.entries(reward.resources || {})) if (hotbarRes[key] !== undefined) hotbarRes[key] += amount | 0;
-  mission.state = 'done'; activeMission = null; saveBase(); updateHotbar(); sfx.clear();
+  mission.state = 'done'; activeMission = null; saveBase(); updateHotbar(); netMissionSync(); sfx.clear();
   if (!missions.some(m => m.state === 'offered')) generateMissions();
   else if (mission.coreItem) { mission.coreItem.taken = false; mission.coreItem.mesh.visible = false; }
   if (guideDialogOpen && guideTab === 'TASKS') renderGuideDialog();
@@ -2234,7 +2295,7 @@ function updateMissionMarker(dt) {
     marker.diamond.rotation.y += dt * 1.7;
   }
   baseMarker.group.visible = ready;
-  if (ready) { const home = (levelHubs || []).find(h => h.kind === 'start') || { x: start.x, z: start.z, top: TOP }; baseMarker.group.position.set(home.x, home.top, home.z); baseMarker.diamond.rotation.y -= dt * 1.7; }
+  if (ready) { const home = myMissionHub(); baseMarker.group.position.set(home.x, home.top, home.z); baseMarker.diamond.rotation.y -= dt * 1.7; }
   const tracked = mission;
   if (missionTracker) {
     missionTracker.style.display = 'none';
@@ -2270,7 +2331,7 @@ function updateMissionMarker(dt) {
   if (text !== missionArrowText) { missionArrow.textContent = text; missionArrowText = text; }
   missionArrow.style.left = `${px}%`; missionArrow.style.top = `${py}%`; missionArrow.style.color = `#${(tracked.state === 'ready' ? MISSION_COLORS.base : MISSION_COLORS[tracked.type] || MISSION_COLORS.base).toString(16).padStart(6, '0')}`; missionArrow.style.display = 'block';
 }
-function missionAtPosition() { const h = (levelHubs || []).find(q => q.kind === 'start') || { x: start.x, z: start.z, top: TOP }; return { x: h.x, y: h.top, z: h.z }; }
+function missionAtPosition() { const h = myMissionHub(); return { x: h.x, y: h.top, z: h.z }; }
 function updateMissions(dt) {
   if (state === 'play' && activeMission && activeMission.state === 'active') {
     const m = activeMission;
@@ -2280,6 +2341,11 @@ function updateMissions(dt) {
   updateMissionMarker(dt);
 }
 function missionsSnapshot() { return missions.map(m => ({ ...m, hub: undefined, guardian: undefined, coreItem: undefined, target: { ...m.target }, reward: { ...m.reward, resources: { ...(m.reward.resources || {}) } } })); }
+function netMissionSync() {                       // teammates see each other's contract, never share progress
+  if (!net.on) return;
+  const m = activeMission;
+  netSend({ t: 'mission', slot: mySlot, id: m ? m.id : '', title: m ? m.title : '', state: m ? m.state : 'idle', progress: m ? m.progress : 0, count: m ? m.count : 0 });
+}
 
 const CRAFT_RECIPES = [
   { id: 'ammoPack', name: 'Ammo Pack', desc: 'Shells and rail cells', cost: { stone: 3, ore: 2 }, credits: 20 },
@@ -2353,7 +2419,7 @@ function guideGreeting() {
   return base.done ? 'Back already? The board has another job when you are ready.' : 'Welcome home. There are routes to explore and work on the board.';
 }
 
-function buildHomeBase(hub) {
+function buildHomeBase(hub, slot = mySlot) {
   if (!hub) return null;
   const x = hub.x, z = hub.z, y = hub.top, g = new THREE.Group();
   g.position.set(x, y, z); lvl.add(g);
@@ -2401,11 +2467,13 @@ function buildHomeBase(hub) {
     const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.76, 1.7, 8), lam(color)); barrel.position.set(bx, 0.86, bz); g.add(barrel);
     const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.08, 4, 8), glow(0x36f6ff)); hoop.position.set(bx, 0.88, bz); hoop.rotation.x = Math.PI / 2; g.add(hoop);
   }
-  homeGuide = makeGuide(hub);
+  const guide = makeGuide(hub, slot);
+  homeGuides.push(guide);
+  if (slot === mySlot) homeGuide = guide;
   return g;
 }
 
-function makeGuide(hub) {
+function makeGuide(hub, slot = 0) {
   const group = new THREE.Group(), home = { x: hub.x - 6.3, z: hub.z + 1.4 }, robe = lam(0x364569), face = lam(0xd8c4a9), trim = new THREE.MeshBasicMaterial({ color: 0x36f6ff });
   const part = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); group.add(m); return m; };
   part(new THREE.BoxGeometry(0.92, 1.08, 0.55), robe, 0, 1.28, 0);
@@ -2423,12 +2491,12 @@ function makeGuide(hub) {
   const cover = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.58, 0.1), lam(0x74476e)); book.add(cover);
   const page = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.45, 0.035), trim); page.position.z = 0.065; book.add(page);
   group.position.set(home.x, hub.top, home.z); lvl.add(group);
-  const name = makeLabel('THE GUIDE'); name.position.set(0, 3.25, 0); name.scale.set(3.1, 0.78, 1); group.add(name);
+  const name = makeLabel(slot === mySlot ? 'THE GUIDE' : `GUIDE P${slot + 1}`); name.position.set(0, 3.25, 0); name.scale.set(3.1, 0.78, 1); group.add(name);
   const question = makeLabel('?'), exclaim = makeLabel('!');
   question.position.set(0, 4.25, 0); question.scale.set(0.9, 1.2, 1);
   exclaim.position.copy(question.position); exclaim.scale.copy(question.scale);
   group.add(question, exclaim);
-  return { group, home, target: { ...home }, wait: 1, wave: 0, greeted: false, armL, armR, question, exclaim, hub };
+  return { group, home, target: { ...home }, wait: 1, wave: 0, greeted: false, otherNoticed: false, armL, armR, question, exclaim, hub, slot };
 }
 
 const INTERIOR_THEMES = {
@@ -2656,34 +2724,38 @@ function updateInteriorDecor(dt) {
 }
 
 function updateHomeBase(dt) {
-  const guide = homeGuide;
-  if (!guide) return;
-  const dx = pos.x - guide.group.position.x, dz = pos.z - guide.group.position.z, d = Math.hypot(dx, dz);
   const ready = !!(activeMission && activeMission.state === 'ready');
-  guide.exclaim.visible = ready;
-  guide.question.visible = !ready && !activeMission && missions.some(m => m.state === 'offered');
-  if (d < 12 && state === 'play') {
-    guide.group.rotation.y = Math.atan2(dx, dz);
-    if (!guide.greeted) { guide.greeted = true; guide.wave = 1.3; toast(guideGreeting(), 2200); }
+  const hasOffers = missions.some(m => m.state === 'offered');
+  for (const guide of homeGuides) {
+    const mine = guide.slot === mySlot;
+    const dx = pos.x - guide.group.position.x, dz = pos.z - guide.group.position.z, d = Math.hypot(dx, dz);
+    guide.exclaim.visible = mine && ready;
+    guide.question.visible = mine && !ready && !activeMission && hasOffers;
+    if (d < 12 && state === 'play') {
+      guide.group.rotation.y = Math.atan2(dx, dz);
+      if (mine && !guide.greeted) { guide.greeted = true; guide.wave = 1.3; toast(guideGreeting(), 2200); }
+      if (!mine && d < 3.5 && !guide.otherNoticed) { guide.otherNoticed = true; toast("This is somebody else's post.", 1600); }
+    }
+    if (guide.wait > 0) guide.wait -= dt;
+    else if (Math.hypot(guide.target.x - guide.group.position.x, guide.target.z - guide.group.position.z) < 0.35) {
+      guide.wait = 1.8 + Math.random() * 2.2;
+      const a = Math.random() * Math.PI * 2, r = 1.3 + Math.random() * 2.2;
+      guide.target.x = clamp(guide.home.x + Math.cos(a) * r, guide.hub.x - guide.hub.hw + 3, guide.hub.x + guide.hub.hw - 3);
+      guide.target.z = clamp(guide.home.z + Math.sin(a) * r, guide.hub.z - guide.hub.hd + 3, guide.hub.z + guide.hub.hd - 3);
+    } else {
+      const tx = guide.target.x - guide.group.position.x, tz = guide.target.z - guide.group.position.z, td = Math.hypot(tx, tz) || 1, step = Math.min(td, dt * 1.15);
+      guide.group.position.x += tx / td * step; guide.group.position.z += tz / td * step;
+      if (d >= 12) guide.group.rotation.y = Math.atan2(tx, tz);
+    }
+    guide.wave = Math.max(0, guide.wave - dt);
+    guide.armL.rotation.z = guide.wave > 0 ? -1.8 + Math.sin(performance.now() * 0.012) * 0.22 : 0.12;
+    guide.armR.rotation.z = -0.12;
+    guide.group.position.x = clamp(guide.group.position.x, guide.hub.x - guide.hub.hw + 2.5, guide.hub.x + guide.hub.hw - 2.5);
+    guide.group.position.z = clamp(guide.group.position.z, guide.hub.z - guide.hub.hd + 2.5, guide.hub.z + guide.hub.hd - 2.5);
   }
-  if (guide.wait > 0) guide.wait -= dt;
-  else if (Math.hypot(guide.target.x - guide.group.position.x, guide.target.z - guide.group.position.z) < 0.35) {
-    guide.wait = 1.8 + Math.random() * 2.2;
-    const a = Math.random() * Math.PI * 2, r = 1.3 + Math.random() * 2.2;
-    guide.target.x = clamp(guide.home.x + Math.cos(a) * r, guide.hub.x - guide.hub.hw + 3, guide.hub.x + guide.hub.hw - 3);
-    guide.target.z = clamp(guide.home.z + Math.sin(a) * r, guide.hub.z - guide.hub.hd + 3, guide.hub.z + guide.hub.hd - 3);
-  } else {
-    const tx = guide.target.x - guide.group.position.x, tz = guide.target.z - guide.group.position.z, td = Math.hypot(tx, tz) || 1, step = Math.min(td, dt * 1.15);
-    guide.group.position.x += tx / td * step; guide.group.position.z += tz / td * step;
-    if (d >= 12) guide.group.rotation.y = Math.atan2(tx, tz);
-  }
-  guide.wave = Math.max(0, guide.wave - dt);
-  guide.armL.rotation.z = guide.wave > 0 ? -1.8 + Math.sin(performance.now() * 0.012) * 0.22 : 0.12;
-  guide.armR.rotation.z = -0.12;
-  guide.group.position.x = clamp(guide.group.position.x, guide.hub.x - guide.hub.hw + 2.5, guide.hub.x + guide.hub.hw - 2.5);
-  guide.group.position.z = clamp(guide.group.position.z, guide.hub.z - guide.hub.hd + 2.5, guide.hub.z + guide.hub.hd - 2.5);
 }
 
+const homeGuides = [];
 let guideTab = 'HELP', guideHelpIndex = 0, guideDialogOpen = false, guideFocusIndex = 0, homeGuide = null, hintNpc = false;
 const GUIDE_TABS = ['HELP', 'RECIPES', 'TASKS', 'LEAVE'];
 function openGuideDialog(tab = 'HELP') {
@@ -2776,7 +2848,7 @@ function walkBranch(src, mode, len, aim) {
     else if (canMorph && roll < 0.50) makeSpecial(p, 'breath', { ph: rand() * 6.28, period: 3 + rand() * 2.4 });
     else if (roll < 0.532 && psyPlatformEligible()) tryPsySpecial(p, { ph: rand() * 6.28, fx: ['trip', 'warp', 'invert'][(rand() * 3) | 0] });
     else if (roll < 0.62) bounceDress(p);
-    else { if (rand() < 0.5) coin(p.cx, p.top + 1.2, p.cz); if (rand() < (src.zone && src.zone.name === 'Jungle' ? 0.85 : 0.55)) spawnBiomeEnemy(p.cx, p.top, p.cz, p, src.zone, 0.5); }
+    else { if (rand() < 0.5) coin(p.cx, p.top + 1.2, p.cz, src.zone); if (rand() < (src.zone && src.zone.name === 'Jungle' ? 0.85 : 0.55)) spawnBiomeEnemy(p.cx, p.top, p.cz, p, src.zone, 0.5); }
   };
   for (let k = 0; k < len; k++) {
     heading += (rand() - 0.5) * 0.6;
@@ -2849,7 +2921,7 @@ function buildLevel() {
   lvl = new THREE.Group(); scene.add(lvl);
   routeLandmarks.length = 0;
   buildingHubs.length = interiorTargets.length = openedTowers.length = 0; activeTowerInterior = null; inInterior = false;
-  homeGuide = null; hintNpc = false;
+  homeGuide = null; hintNpc = false; homeGuides.length = 0;
   if (guideDialogOpen) closeGuideDialog(false);
   solids.length = platforms.length = portals.length = enemies.length = items.length = decals.length = gibsList.length = clouds.length = shots.length = 0; buildingBoxes.length = 0; bleeders.length = 0; armoryGun = null; railSolids.length = 0;
   streetReset();
@@ -2859,7 +2931,7 @@ function buildLevel() {
   decalMesh.count = 0; decalNext = 0;
   applyTheme();
   TOP = Math.min(480 + level * 100, 1200);       // MUCH taller towers
-  start.y = TOP; checkpoint = { ...start };
+  syncStartLayout(sixTowerLayout); checkpoint = { ...start };
   seed = 11 + level * 97; levelSeed = seed;
   const sceneAdd = scene.add;
   scene.add = o => lvl.add(o);           // route this function's scene.add calls into the level group
@@ -2871,21 +2943,27 @@ function buildLevel() {
 }
 
 function buildLevelBody() {
-  // tower
-  addSolid(-TH, TH, 0, TOP, -TH, TH);
-  boxMesh(0, 0, TH * 2, TH * 2, TOP, bldMats[0]);
+  // Home towers: one at the origin in single player, six on a ring in co-op.
   const roofTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
     g.fillStyle = '#23305a'; g.fillRect(0, 0, 256, 256);
     for (let i = 0; i < 256; i += 64) { g.fillStyle = i % 128 ? 'rgba(54,246,255,.35)' : 'rgba(255,63,200,.5)'; g.fillRect(i, 0, 3, 256); g.fillRect(0, i, 256, 3); }
     g.fillStyle = 'rgba(255,255,255,.07)'; for (let i = 0; i < 40; i++) g.fillRect((Math.random() * 256) | 0, (Math.random() * 256) | 0, 24, 24);
     const t = trackRetroTexture(new THREE.CanvasTexture(c)); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(TH / 4, TH / 4); return t; })();
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(TH * 2 + 1, 0.2, TH * 2 + 1), retroMaterial(new THREE.MeshLambertMaterial({ map: roofTex, color: 0xffffff, emissive: 0x2a3a78, emissiveIntensity: 0.6 })));
-  roof.position.set(0, TOP + 0.1, 0); scene.add(roof);
-  const spawnPad = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.1, 8), lam(0x36f6ff));
-  spawnPad.position.set(start.x, TOP + 0.05, start.z); scene.add(spawnPad);
-  for (let wi = 2; wi < WEAPONS.length; wi++) weaponPickup(wi, clamp(start.x - 9 + (wi - 2) * 4.5, -TH + 3, TH - 3), TOP + 1.5, clamp(start.z - 11, -TH + 3, TH - 3));      // the whole arsenal laid out at spawn
-  addProp('bike', start.x + 4, TOP, start.z - 5);      // one bike at spawn
-  addProp('buggy', start.x - 5, TOP, start.z - 5);     // DeLorean time machine at spawn
+  const roofMat = retroMaterial(new THREE.MeshLambertMaterial({ map: roofTex, color: 0xffffff, emissive: 0x2a3a78, emissiveIntensity: 0.6 }));
+  for (const home of activeStartHubs()) {
+    const hx = home.x, hz = home.z, spawn = starts[home.slot];
+    addSolid(hx - TH, hx + TH, 0, TOP, hz - TH, hz + TH);
+    boxMesh(hx, hz, TH * 2, TH * 2, TOP, bldMats[0]);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(TH * 2 + 1, 0.2, TH * 2 + 1), roofMat);
+    roof.position.set(hx, TOP + 0.1, hz); scene.add(roof);
+    const spawnPad = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.1, 8), lam(0x36f6ff));
+    spawnPad.position.set(spawn.x, TOP + 0.05, spawn.z); scene.add(spawnPad);
+    for (let wi = 2; wi < WEAPONS.length; wi++) weaponPickup(wi, clamp(hx - 9 + (wi - 2) * 4.5, hx - TH + 3, hx + TH - 3), TOP + 1.5, clamp(hz - 11, hz - TH + 3, hz + TH - 3));      // each home has its own arsenal
+    addProp('bike', hx + 4, TOP, hz - 5);
+    addProp('buggy', hx - 5, TOP, hz - 5);
+    addProp('board', hx + 8, TOP, hz + 4);
+    addProp('skates', hx - 8, TOP, hz + 7);
+  }
   // Spawn rooftop is a peaceful home base; the safe-radius check in spawnBiomeEnemy also
   // protects the first outbound platforms from primary and secondary route spawns.
   buildSky();
@@ -2947,7 +3025,7 @@ function buildLevelBody() {
   // the sky network: floating platforms from the roof to rooftops and themed arenas
   levelHubs = buildNetwork(padA);
   generateMissions();
-  buildHomeBase(levelHubs.find(h => h.kind === 'start') || { kind: 'start', x: 0, z: 0, top: TOP, hw: TH, hd: TH });
+  for (const home of activeStartHubs()) buildHomeBase(home, home.slot);
   buildSurroundings();
 }
 
@@ -3580,6 +3658,7 @@ function damageEnemy(e, dmg, kind = 'hit') {
     }
   }
   if (net.on && !net.host && kind !== 'net') {            // guests don't simulate enemies: report the hit to the host
+    e.netMineAt = performance.now();                      // remember this kill is mine when the host confirms it
     netSend({ t: 'dmg', i: enemies.indexOf(e), d: dmg, px: +pos.x.toFixed(1), pz: +pos.z.toFixed(1), k: kind === 'beam' ? 'beam' : undefined });
     e.hit = 0.18; if (kind !== 'beam') { sfx.hit(); enemyHurtVoice(e); } bloodBurst(new THREE.Vector3(e.x, e.y + e.h / 2, e.z), kind === 'beam' ? 3 : 18, 1.0);
     return;
@@ -3593,7 +3672,7 @@ function damageEnemy(e, dmg, kind = 'hit') {
   if (!tick) burst(new THREE.Vector3(e.x, e.y + e.h / 2, e.z), 0xffe08a, 4);
   bloodBurst(new THREE.Vector3(e.x, e.y + e.h / 2, e.z), tick ? 3 : 26, 1.1); if (!tick || Math.random() < 0.2) splatter(e.x, e.y + 0.5, e.z, 3, 1, 0.5);
   if (e.hp <= 0) {
-    e.dead = true; missionEnemyKilled(e); e.mesh.removeFromParent(); if (e.warn) e.warn.visible = false;
+    e.dead = true; if (kind !== 'net') missionEnemyKilled(e); e.mesh.removeFromParent(); if (e.warn) e.warn.visible = false;   // a guest's hit never advances the host's private contract
     if (net.on && net.host) netSend({ t: 'kill', i: enemies.indexOf(e) });
     spawnOreVein(e.x, e.y, e.z, Math.random() < 0.3 ? activeZ : null);      // enemies drop veins, Minecraft-ish
     enemyGore(e); shake = Math.max(shake, e.boss ? 1.2 : 0.5);
@@ -3679,7 +3758,7 @@ function updateGrowers(dt) {
     }
     if (g.spawned && !g.done && g.foes.length && g.foes.every(f => f.dead)) {
       g.done = true; score += 300; toast('AMBUSH CLEARED  +300', 1800); sfx.clear();
-      heart(g.cx - 2, g.top + 1.3, g.cz); ammoBox(g.cx + 2, g.top + 0.8, g.cz); coin(g.cx, g.top + 1.4, g.cz + 2);
+      heart(g.cx - 2, g.top + 1.3, g.cz); ammoBox(g.cx + 2, g.top + 0.8, g.cz); coin(g.cx, g.top + 1.4, g.cz + 2, g.zone);
     }
   }
 }
@@ -3737,7 +3816,7 @@ function levelClear(why, bonus, remote = false) {      // remote: a teammate cle
     if (!remote) toast(`${endBosses.filter(b => !b.dead).length} SIGNAL BOSSES STILL BLOCK THE EXIT`, 2200);
     return;
   }
-  if (!remote) netSend({ t: 'clear', why, bonus });
+  if (!remote) netSend({ t: 'clear', why, bonus, level: level + 1 });
   state = 'clear'; clearT = 4; vel.set(0, 0, 0); pounding = false;
   if (why === 'boss') bonus = Math.max(bonus, 5000);
   score += bonus; saveBest(); saveGore(); sfx.clear();
@@ -4550,7 +4629,7 @@ function ladderExtend(dir) {        // dir +1 = upward, -1 = downward
       y += dir * (15 + R() * 8);
       const a = R() * 6.283, r = Math.sqrt(R()) * 55, zone = R() < 0.4 ? ZONES[Math.floor(R() * ZONES.length)] : null;
       const sl = addSlab(ladderLoop.x + Math.cos(a) * r, y, ladderLoop.z + Math.sin(a) * r, 2.5 + R() * 4, 2.5 + R() * 4, 1.5, zone, true);
-      sl.pn = n; ladder.push(sl); if (R() < 0.4) coin(sl.cx, y + 1.2, sl.cz);
+      sl.pn = n; ladder.push(sl); if (R() < 0.4) coin(sl.cx, y + 1.2, sl.cz, zone);
       if (dir > 0) ladderTop = { n, y }; else { ladderBot = { n, y }; VOID_Y = Math.min(VOID_Y, y - 60); }
     }
   });
@@ -5548,6 +5627,7 @@ function buildRidePark() {                     // floating street playground; pa
     const a = rand() * 6.283, r = 180 + rand() * 70, y = Math.max(120, TOP * 0.45 + 20 + rand() * 40);
     cx = Math.cos(a) * Math.min(r, 250); cz = Math.sin(a) * r; parkY = y;
     if (Math.hypot(cx, cz) > 250) continue;
+    if (activeStartHubs().some(home => Math.hypot(cx - home.x, cz - home.z) < 52)) continue;   // keep the ride park off the six home roofs
     break;
   }
   const slab = addSlab(cx, parkY, cz, 26, 26, 3, RIDE_ZONE, false);
@@ -5811,13 +5891,10 @@ function updateVisuals(dt) {
     const d = Math.hypot(e.x - pos.x, e.y - pos.y, e.z - pos.z);
     if (d < (e.boss ? 120 : 55) && d < tn) { tn = d; tgt = e; }
   }
-  if (endBosses.some(e => !e.dead) && groundPad && Math.hypot(pos.x - groundPad.x, pos.z - groundPad.z) < 180) {
+  if (tgt) {                                     // only show a boss bar when an actual boss/Guardian is nearby
     bb.style.display = 'block';
-    const bossTgt = endBosses.filter(e => !e.dead).sort((a, b) => Math.hypot(a.x - pos.x, a.y - pos.y, a.z - pos.z) - Math.hypot(b.x - pos.x, b.y - pos.y, b.z - pos.z))[0];
-    if (bossTgt) bb.innerHTML = `${endBosses.filter(e => !e.dead).length}/${endBosses.length} BOSSES REMAIN · ${esc(bossTgt.name)}<div class="bar"><div style="width:${(Math.max(0, bossTgt.hp) / bossTgt.maxhp * 100) | 0}%"></div></div>`;
-  } else if (tgt) {
-    bb.style.display = 'block';
-    bb.innerHTML = `GUARDIAN · ${esc(tgt.name || 'BOSS BOT')}<div class="bar"><div style="width:${(Math.max(0, tgt.hp) / tgt.maxhp * 100) | 0}%"></div></div>`;
+    const label = tgt.boss ? `BOSS ${endBosses.filter(e => !e.dead).length}/${endBosses.length}` : 'GUARDIAN';
+    bb.innerHTML = `${label} · ${esc(tgt.name || 'BOSS BOT')}<div class="bar"><div style="width:${(Math.max(0, tgt.hp) / tgt.maxhp * 100) | 0}%"></div></div>`;
   } else bb.style.display = 'none';
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').textContent = ''; }
 }
@@ -5838,7 +5915,24 @@ function setHint() {
 // ---------- multiplayer: co-op through a tiny relay server (server/server.js) ----------
 // Everyone builds the same seeded level. The HOST simulates enemies and sends snapshots; guests send their hits to the host.
 // Players, shots, beams, blasts, deaths and level clears are shared; pickups, blood and score pickups stay local.
-const net = { ws: null, on: false, id: 0, hostId: 0, host: true, room: '', peers: new Map(), tSend: 0, tSnap: 0, tFull: 0, tHud: 0, atk: 0 };
+const net = { ws: null, on: false, id: 0, hostId: 0, host: true, room: '', slot: -1, peers: new Map(), missions: new Map(), tSend: 0, tSnap: 0, tFull: 0, tHud: 0, atk: 0 };
+// Server assigns one of the six home towers. Rebuild the same seeded city and drop the player on their own roof.
+function applyNetSlot(index, force = false) {
+  const next = clamp(index | 0, 0, HOME_SLOT_COUNT - 1);
+  if (!force && next === mySlot && sixTowerLayout) { net.slot = next; return; }
+  saveBase();
+  mySlot = next; net.slot = next;
+  slot = mySlot;
+  base = ensureBase(slot);
+  Object.assign(hotbarRes, base.resources || {});
+  missions = missionSlots[slot] ||= [];
+  activeMission = missions.find(m => m.state === 'active' || m.state === 'ready') || null;
+  if (typeof updateHotbar === 'function') updateHotbar();
+  syncStartLayout(true);
+  buildLevel();
+  pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); checkpoint = { ...start };
+  toast(`HOME TOWER ${mySlot + 1} — YOUR GUIDE IS WAITING`, 2400);
+}
 let kbX = null, kbZ = null;                // damage knock-back origin override (for hits reported by guests)
 const PEER_COLS = [0xe8452c, 0x2ac26a, 0xd6a82a, 0xb04ae8, 0x2ab0e8, 0xe84a9a, 0xe8e8e8, 0xff8a2a];
 const num = v => (Number.isFinite(v) ? v : 0);
@@ -5903,7 +5997,8 @@ function netSnapshot(all) {
   return out;
 }
 function remoteKill(e) {
-  e.dead = true; missionEnemyKilled(e); e.mesh.removeFromParent(); if (e.warn) e.warn.visible = false;
+  const mine = e.netMineAt && performance.now() - e.netMineAt < 15000;   // only the player who actually hit it gets mission credit
+  e.dead = true; if (mine) missionEnemyKilled(e); e.mesh.removeFromParent(); if (e.warn) e.warn.visible = false;
   sfx.kill(); enemyDeathVoice(e); enemyGore(e); score += e.pts; dropAmmo(e); shake = Math.max(shake, e.boss ? 1.2 : 0.3); killFx(e, e.boss);
   if (e.mini) unlockArena(e.hub);
   if (e.boss && endBosses.every(b => b.dead) && groundPad && groundPad.seal) { groundPad.seal.material.color.setHex(0x5aff8a); groundPad.seal.material.opacity = 0.4; }
@@ -5943,19 +6038,27 @@ function netMessage(m) {
     case 'hi':
       net.id = m.id | 0; net.hostId = m.host | 0; net.host = net.hostId === net.id;
       (m.peers || []).forEach(id => addPeer(id));
+      if (Number.isInteger(m.slot)) {
+        if ((m.level | 0) > 0 && (m.level | 0) !== level) level = clamp(m.level | 0, 1, 99);
+        applyNetSlot(m.slot, true);
+      }
       toast(net.host ? 'Online — you are the host' : 'Online — joined room', 2400); break;
-    case 'full': toast('That room is full', 3000); break;
+    case 'full': toast('That room is full — six players maximum', 3600); break;
     case 'join':
       addPeer(m.id); toast(`Player ${m.id | 0} joined`, 1500);
       if (net.host) netSend({ t: 'state', to: m.id | 0, level, snap: netSnapshot(true) });
       break;
-    case 'leave': { const p = net.peers.get(m.id | 0); toast(`${p ? p.name : 'A player'} left`, 1500); removePeer(m.id | 0); break; }
+    case 'leave': { const p = net.peers.get(m.id | 0); toast(`${p ? p.name : 'A player'} left`, 1500); net.missions.delete(m.id | 0); removePeer(m.id | 0); break; }
     case 'host': net.hostId = m.id | 0; net.host = net.hostId === net.id; if (net.host) toast('You are now the host', 2200); break;
     case 'state':                            // joining mid-game: match the host's level and enemy state
       if (from !== net.hostId) break;
       if ((m.level | 0) !== level && (m.level | 0) > 0) { level = clamp(m.level | 0, 1, 99); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); }
       netApplySnap(m.snap); break;
     case 'p': netPeerUpdate(from, m); break;
+    case 'mission':
+      if (from === net.id) break;
+      net.missions.set(from, { slot: m.slot | 0, title: String(m.title || '').slice(0, 80), state: String(m.state || '').slice(0, 12), progress: m.progress | 0, count: m.count | 0 });
+      break;
     case 'snap': if (from === net.hostId && !net.host) netApplySnap(m.e); break;
     case 'dmg':
       if (net.host) { const e = enemies[m.i | 0]; if (e) { kbX = num(m.px); kbZ = num(m.pz); damageEnemy(e, clamp(num(m.d), 0, 20), m.k === 'beam' ? 'beam' : 'net'); kbX = kbZ = null; } }
@@ -5990,7 +6093,7 @@ function netConnect(server, room) {
   ws.onmessage = ev => { try { netMessage(JSON.parse(ev.data)); } catch (err) { console.warn('net', err); } };
   ws.onclose = () => {
     if (net.on) toast('Disconnected from server', 3000);
-    net.on = false; net.host = true; for (const id of [...net.peers.keys()]) removePeer(id);
+    net.on = false; net.host = true; net.missions.clear(); for (const id of [...net.peers.keys()]) removePeer(id);
   };
   ws.onerror = () => { if (!net.on) toast('Could not reach the server', 3500); };
 }
@@ -6044,8 +6147,9 @@ function updatePeers(dt) {
     const el = $('players');
     if (!net.on) { el.innerHTML = ''; return; }
     const hearts = n => '♥'.repeat(clamp(n, 0, 9));
-    el.innerHTML = `<b>Room ${esc(net.room)}</b><br>` + `<span style="color:#ff6a5a">You${net.host ? ' (host)' : ''} ${hearts(health)}</span><br>` +
-      [...net.peers.values()].map(p => `${esc(p.name)}${p.id === net.hostId ? ' (host)' : ''} ${p.alive ? hearts(p.hp) : '☠'}`).join('<br>');
+    const task = p => { const m = net.missions.get(p.id); return m && m.title ? `<br><span style="color:#8fa5c8">↳ ${esc(m.title)} ${m.state === 'ready' ? '✓' : m.count ? `${m.progress}/${m.count}` : ''}</span>` : ''; };
+    el.innerHTML = `<b>Room ${esc(net.room)} · tower ${net.slot >= 0 ? net.slot + 1 : '?'}/6</b><br>` + `<span style="color:#ff6a5a">You${net.host ? ' (host)' : ''} ${hearts(health)}</span><br>` +
+      [...net.peers.values()].map(p => `${esc(p.name)}${p.id === net.hostId ? ' (host)' : ''} ${p.alive ? hearts(p.hp) : '☠'}${task(p)}`).join('<br>');
   }
 }
 
@@ -6132,7 +6236,7 @@ function finishAwakenArena(s) {
       addBlock(s.cx + hw * .62, s.top, s.cz - hd * .52, 1.15, 1.15, 3.1, zone, 0x293253);
     }
     beacon(s.cx, s.top, s.cz, col);
-    coin(s.cx, s.top + 1.25, s.cz); heart(s.cx + (sp.alongX ? 4 : 0), s.top + 1.2, s.cz + (sp.alongX ? 0 : 4));
+    coin(s.cx, s.top + 1.25, s.cz, zone); heart(s.cx + (sp.alongX ? 4 : 0), s.top + 1.2, s.cz + (sp.alongX ? 0 : 4));
     const count = level > 3 ? 3 : 2;
     for (let i = 0; i < count; i++) {
       const f = i === 0 ? -.38 : .38;
@@ -6216,8 +6320,8 @@ function updatePortals(dt) {
   const t = performance.now() / 1000;
   portalCooldown = Math.max(0, portalCooldown - dt);
   for (const portal of portals) {
-    if (portal.dormant) {                                                   // discovered by standing on its platform (the spawn gate only wakes when another gate links to it)
-      if (state === 'play' && !(portal.owner && portal.owner.kind === 'start') && Math.hypot(pos.x - portal.x, pos.z - portal.z) < 4 && Math.abs(pos.y - portal.y) < 3.5) unlockPortal(portal);
+    if (portal.dormant) {                                                   // discovered by standing on its platform
+      if (state === 'play' && Math.hypot(pos.x - portal.x, pos.z - portal.z) < 4 && Math.abs(pos.y - portal.y) < 3.5) unlockPortal(portal);
       continue;
     }
     if (portal.appearT > 0 && portal.appearT < 1) { portal.appearT = Math.min(1, portal.appearT + dt / 1.3); const e = 1 - Math.pow(1 - portal.appearT, 3); portal.group.scale.set(e, e * (0.4 + 0.6 * e), e); }
@@ -6305,7 +6409,7 @@ function updateSpecials(dt) {
 function spawnGate(spec) {
   inLevel(() => {
     const p = addPlatform(spec.x, spec.y, spec.z, spec.half, false, 0, spec.zone, true);
-    for (const c of spec.coins) coin(c[0], c[1], c[2]);
+    for (const c of spec.coins) coin(c[0], c[1], c[2], spec.zone);
     p.sp = { kind: 'rise', base: baseOf(p), ox: 0, oy: 0, oz: 0, t: 0 };
     specials.push(p); moveSpecial(p, 0, -14, 0);
   });
@@ -6469,7 +6573,13 @@ function animDress(d, T, dt) {
         a.hop = Math.max(0, a.hop - dt);
         if (a.hop > 0) { w.g.position.x += (a.tx - w.g.position.x) * dt * 4; w.g.position.z += (a.tz - w.g.position.z) * dt * 4; }
         w.g.position.y = a.hop > 0 ? Math.sin((1 - a.hop / 0.55) * Math.PI) * 0.9 : 0;
-        w.g.rotation.y = Math.atan2(pos.x - (d.g.position.x + w.g.position.x), pos.z - (d.g.position.z + w.g.position.z));
+        const wx = d.g.position.x + w.g.position.x, wz = d.g.position.z + w.g.position.z;
+        w.g.rotation.y = Math.atan2(pos.x - wx, pos.z - wz);
+        // Monkeys are harmless, but they shoulder the player aside when they get too close.
+        if (state === 'play' && Math.abs(pos.y - (d.site.y + w.g.position.y)) < 2.1) {
+          const pdx = pos.x - wx, pdz = pos.z - wz, pd = Math.hypot(pdx, pdz);
+          if (pd > 0.01 && pd < 1.35) { const nudge = (1.35 - pd) * 0.055; pos.x += pdx / pd * nudge; pos.z += pdz / pd * nudge; }
+        }
         w.armL.rotation.x = Math.sin(T * 6 + a.ph) * 0.8; w.armR.rotation.x = -Math.sin(T * 6 + a.ph) * 0.8; w.tail.rotation.z = Math.sin(T * 4 + a.ph) * 0.5;
         break;
       }
@@ -6988,7 +7098,7 @@ document.addEventListener('pointerlockchange', () => { if (!document.pointerLock
 buildLevel();
 pos.set(start.x, start.y, start.z);
 showMenu(true);
-window.__ng = { ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toFixed(1), z: +q.z.toFixed(1), label: q.label })), mv: () => ({ vy: +vel.y.toFixed(2), onG: onGround, jumps, gliding, glide: +glide.toFixed(2), climbing: !!climbing, pounding, stam: +climbStam.toFixed(2), hp: health, st: state, paused }), bounces: () => solids.filter(s => s.bounce).map(s => ({ x: +(s.cx !== undefined ? s.cx : (s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +(s.cz !== undefined ? s.cz : (s.minz + s.maxz) / 2).toFixed(1), b: +(s.boost || 0).toFixed(1) })), spKinds: () => specials.reduce((a, s) => { const k = (s.sp && s.sp.kind) || s.kind || '?'; a[k] = (a[k] || 0) + 1; return a; }, {}), ladder: () => ({ cur: curPN, top: ladderTop && ladderTop.n, bot: ladderBot && ladderBot.n, len: ladder.length, voidY: VOID_Y }), falls: () => solids.filter(s => s.pn !== undefined).slice(0, 5).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), n: s.pn })), foes: () => enemies.filter(e => !e.dead).map(e => ({ id: e.mesh.id, v: e.variant, hp: +e.hp.toFixed(1), mh: e.maxhp, boss: !!e.boss, d: Math.round(Math.hypot(e.x - pos.x, e.y - pos.y, e.z - pos.z)) })), kit: () => ({ w: weapon, name: WEAPONS[weapon].name, owned: weaponOwned.slice(), ammo: { ...ammo } }), clearFoes: (keepBoss = true) => { let n = 0; for (const e of enemies) if (!e.dead && !(keepBoss && e.boss)) { damageEnemy(e, 99999, 'pound'); n++; } return n; }, setZone: (n, snap = false, quiet = true) => { const z = ZONES.find(x => x.name.toLowerCase() === String(n).toLowerCase()) || null; setZone(z, snap, quiet); return z ? z.name : null; }, get schizo() { return schizoOn; }, set schizo(v) { schizoOn = !!v; document.body.classList.toggle('schizo', schizoOn); }, giveWeapon: n => { const i = WEAPONS.findIndex(w => w.name.toLowerCase() === String(n).toLowerCase()); if (i < 0) return false; unlockWeapon(i); selectWeapon(i); return !!weaponOwned[i]; }, get killStreak() { return killStreak; }, set killStreak(v) { killStreak = v | 0; killStreakT = killStreak > 0 ? 4 : 0; }, get level() { return level; }, set level(v) { level = Math.max(1, v | 0); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; showMsg(''); toast('LEVEL ' + level + ' — ' + theme().name, 1600); }, rails: () => solids.filter(q => q.rail).map(q => { const a = q.rail.pts[0], b = q.rail.pts[q.rail.pts.length - 1]; return [a.x, a.y, a.z, b.x, b.y, b.z, q.rail.len]; }), grinding: () => !!grinding, dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), duel: (v = 'walker', dist = 4, boss = false) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, boss, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (!['board', 'skates'].includes(k)) return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(ZONES.find(z => z.name === n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; },  info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length, propList: props.map(p => ({ k: p.kind, at: p.mesh.position.toArray().map(v => Math.round(v * 10) / 10), taken: p.taken, vis: p.mesh.visible, inLvl: !!(p.mesh.parent && p.mesh.parent !== scene) })) }), missions: () => missionsSnapshot(), acceptMission, completeMission, turnIn, abandonMission, craftList, craft, guideTips, guideGreeting, base: () => ({ ...base, upgrades: { ...base.upgrades }, resources: { ...hotbarRes } }), homeBase: () => ({ guide: !!homeGuide, hintNpc, dialog: guideDialogOpen, enemiesNearSpawn: enemies.filter(e => !e.dead && Math.hypot(e.x, e.z) < 50 && e.y > TOP - 35).length, parts: homeGuide && homeGuide.group.children.length }) };   // dev hook (console / test tools)
+window.__ng = { ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toFixed(1), z: +q.z.toFixed(1), label: q.label })), mv: () => ({ vy: +vel.y.toFixed(2), onG: onGround, jumps, gliding, glide: +glide.toFixed(2), climbing: !!climbing, pounding, stam: +climbStam.toFixed(2), hp: health, st: state, paused }), bounces: () => solids.filter(s => s.bounce).map(s => ({ x: +(s.cx !== undefined ? s.cx : (s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +(s.cz !== undefined ? s.cz : (s.minz + s.maxz) / 2).toFixed(1), b: +(s.boost || 0).toFixed(1) })), spKinds: () => specials.reduce((a, s) => { const k = (s.sp && s.sp.kind) || s.kind || '?'; a[k] = (a[k] || 0) + 1; return a; }, {}), ladder: () => ({ cur: curPN, top: ladderTop && ladderTop.n, bot: ladderBot && ladderBot.n, len: ladder.length, voidY: VOID_Y }), falls: () => solids.filter(s => s.pn !== undefined).slice(0, 5).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), n: s.pn })), foes: () => enemies.filter(e => !e.dead).map(e => ({ id: e.mesh.id, v: e.variant, hp: +e.hp.toFixed(1), mh: e.maxhp, boss: !!e.boss, d: Math.round(Math.hypot(e.x - pos.x, e.y - pos.y, e.z - pos.z)) })), kit: () => ({ w: weapon, name: WEAPONS[weapon].name, owned: weaponOwned.slice(), ammo: { ...ammo } }), clearFoes: (keepBoss = true) => { let n = 0; for (const e of enemies) if (!e.dead && !(keepBoss && e.boss)) { damageEnemy(e, 99999, 'pound'); n++; } return n; }, setZone: (n, snap = false, quiet = true) => { const z = ZONES.find(x => x.name.toLowerCase() === String(n).toLowerCase()) || null; setZone(z, snap, quiet); return z ? z.name : null; }, get schizo() { return schizoOn; }, set schizo(v) { schizoOn = !!v; document.body.classList.toggle('schizo', schizoOn); }, giveWeapon: n => { const i = WEAPONS.findIndex(w => w.name.toLowerCase() === String(n).toLowerCase()); if (i < 0) return false; unlockWeapon(i); selectWeapon(i); return !!weaponOwned[i]; }, get killStreak() { return killStreak; }, set killStreak(v) { killStreak = v | 0; killStreakT = killStreak > 0 ? 4 : 0; }, get level() { return level; }, set level(v) { level = Math.max(1, v | 0); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; showMsg(''); toast('LEVEL ' + level + ' — ' + theme().name, 1600); }, rails: () => solids.filter(q => q.rail).map(q => { const a = q.rail.pts[0], b = q.rail.pts[q.rail.pts.length - 1]; return [a.x, a.y, a.z, b.x, b.y, b.z, q.rail.len]; }), grinding: () => !!grinding, dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), duel: (v = 'walker', dist = 4, boss = false) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, boss, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (!['board', 'skates'].includes(k)) return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(ZONES.find(z => z.name === n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; },  info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length, propList: props.map(p => ({ k: p.kind, at: p.mesh.position.toArray().map(v => Math.round(v * 10) / 10), taken: p.taken, vis: p.mesh.visible, inLvl: !!(p.mesh.parent && p.mesh.parent !== scene) })) }), missions: () => missionsSnapshot(), acceptMission, completeMission, turnIn, abandonMission, craftList, craft, guideTips, guideGreeting, base: () => ({ ...base, upgrades: { ...base.upgrades }, resources: { ...hotbarRes } }), homeBase: () => ({ guide: !!homeGuide, hintNpc, dialog: guideDialogOpen, slot: mySlot, tower: { x: myStartHub().x, z: myStartHub().z, top: myStartHub().top }, homes: activeStartHubs().map(h => ({ slot: h.slot, x: h.x, z: h.z })), enemiesNearSpawn: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).length, nearSpawns: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).map(e => ({ v: e.variant, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), boss: !!e.boss, mini: !!e.mini, zone: e.zone && e.zone.name })), guides: homeGuides.map(g => ({ slot: g.slot, x: +(g.group.position.x).toFixed(1), z: +(g.group.position.z).toFixed(1) })), parts: homeGuide && homeGuide.group.children.length }), applyNetSlot, missionsSnapshot, monkeys: () => [...dressings.values()].flatMap(d => d.anims.filter(a => a.k === 'monkey').map(a => ({ x: +(d.site.x + a.mk.g.position.x).toFixed(2), y: +(d.site.y + a.mk.g.position.y).toFixed(2), z: +(d.site.z + a.mk.g.position.z).toFixed(2) }))), coins: () => ({ total: items.filter(i => i.type === 'coin' && !i.taken).length, bananas: items.filter(i => i.type === 'coin' && i.banana).length }) };   // dev hook (console / test tools)
 
 {   // opened from the relay server with ?room=... -> connect right away
   const qp = new URLSearchParams(location.search || '');
