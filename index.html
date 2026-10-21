@@ -541,6 +541,9 @@ const barkMat = retroMaterial(new THREE.MeshLambertMaterial({ map: barkTex, flat
 const leafMats = [0x2f9e3a, 0x57c84a, 0x1f7a34].map(c => new THREE.MeshLambertMaterial({ color: c, flatShading: true }));
 const canopyGeo = new THREE.IcosahedronGeometry(1, 0);            // one shared canopy blob for every trunk cap
 const buildingBoxes = [];                          // every boxMesh() building, so the jungle can trunkify them
+const buildingHubs = [], interiorTargets = [];
+let activeTowerInterior = null, inInterior = false;
+const openedTowers = [];
 const neonSigns = ['NIGHT CITY', 'AFTERLIFE', 'NOVA', 'NO FUTURE'].map((label, i) => {
   const c = document.createElement('canvas'); c.width = 256; c.height = 96;
   const x = c.getContext('2d'), color = ['#36f6ff', '#ff3fc8', '#c4ff4d', '#9b73ff'][i];
@@ -1165,6 +1168,7 @@ function buildSky() {
   }
 }
 function updateClouds(dt) {
+  if (inInterior) return;
   for (const c of clouds) { c.position.x += c.userData.speed * dt; if (c.position.x > 800) c.position.x = -800; }
   // the haze breathes: slow per-glow pulse so the horizon shimmers instead of sitting flat
   const t = performance.now() / 1000;
@@ -1240,6 +1244,7 @@ function underside(cx, y, cz, r, t) {       // inverted pyramid under floating t
 }
 function addSlab(cx, top, cz, hw, hd, thick, zone, floating = true) {
   const s = addSolid(cx - hw, cx + hw, top - thick, top, cz - hd, cz + hd);
+  if (inInterior) s.interior = true;
   Object.assign(s, { cx, cz, top, hw, hd, zone });
   const body = new THREE.Mesh(new THREE.BoxGeometry(hw * 2, thick, hd * 2), lam(0x5d6676)); body.position.set(cx, top - thick / 2, cz); scene.add(body);
   const c = zone ? zone.plate : 0x36f6ff;
@@ -1380,12 +1385,16 @@ function buildArena(type, cx, top, cz, zone) {
   return A;
 }
 function buildBuildingHub(cx, cz, w, d, h, zone) {
-  boxMesh(cx, cz, w, d, h, bldMats[(rand() * 4) | 0]);
+  const buildingMesh = boxMesh(cx, cz, w, d, h, bldMats[(rand() * 4) | 0]);
   const s = addSolid(cx - w / 2, cx + w / 2, 0, h, cz - d / 2, cz + d / 2);
   Object.assign(s, { cx, cz, top: h, w, d, hw: w / 2, hd: d / 2, targetR: 2.2, zone });
   const c = zone ? zone.plate : 0x36f6ff;
   const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.3, d + 0.6), lam(c, { emissive: c, emissiveIntensity: zone ? 0.45 : 0.55 }));
   roof.position.set(cx, h + 0.05, cz); scene.add(roof); decorSites.push({ x: cx, z: cz, y: h, hw: w / 2, hd: d / 2, grp: null });
+  const hub = { kind: 'building', x: cx, z: cz, top: h, hw: w / 2, hd: d / 2, w, d, zone, r: Math.max(w, d) / 2 + 3, roofSolid: s, roofMesh: roof, buildingMesh };
+  s.building = true; s.hub = hub;
+  buildingHubs.push(hub);
+  buildingMesh.userData.towerHub = hub;
   addNeonSign(cx, cz, w, d, h);
   addBullseye(cx, h + 0.2, cz, 2.2); coin(cx, h + 1.4, cz);
   if (rand() < 0.5) {        // bounce pad to launch you toward the next building
@@ -1398,7 +1407,7 @@ function buildBuildingHub(cx, cz, w, d, h, zone) {
     makeWalker(cx - 4, h, cz - 4, s, 1, false, 'dinosaur');
     makeWalker(cx + 4, h, cz + 3, s, 0.9, false, 'gorilla');
   } else if (level >= 2 || rand() < 0.5) spawnBiomeEnemy(cx - 4, h, cz - 4, s, zone, 0.5);
-  return { kind: 'building', x: cx, z: cz, top: h, hw: w / 2, hd: d / 2, zone, r: Math.max(w, d) / 2 + 3, roofSolid: s };
+  return hub;
 }
 function addNeonSign(cx, cz, w, d, h) {
   const dist = Math.hypot(cx, cz) || 1, nx = -cx / dist, nz = -cz / dist;
@@ -2064,7 +2073,6 @@ function makeMissionMarker(color) {
 }
 function addMissionCore(mission, point) {
   const g = new THREE.Group(), color = MISSION_COLORS.collect;
-  g.visible = false;
   const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.78, 0), new THREE.MeshBasicMaterial({ color, toneMapped: false }));
   const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.08, 4, 10), new THREE.MeshBasicMaterial({ color: 0xeaffff })); ring.rotation.x = Math.PI / 2;
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.42, 12, 6), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false })); beam.position.y = 7;
@@ -2083,13 +2091,15 @@ function missionReward(levelIndex, type, distance, rng) {
 }
 function generateMissions() {
   const rng = missionRandom(levelSeed ^ 0xBA5E), hubList = (levelHubs || []).filter(h => h.kind !== 'start' && h.kind !== 'launch' && h.kind !== 'exit' && h.kind !== 'arena' && h.x !== undefined && h.top !== undefined);
-  for (let i = items.length - 1; i >= 0; i--) if (items[i].type === 'dataCore') { items[i].mesh.removeFromParent(); items.splice(i, 1); }
+  for (let i = items.length - 1; i >= 0; i--) if (items[i].type === 'dataCore') {
+    items[i].mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+    items[i].mesh.removeFromParent(); items.splice(i, 1);
+  }
   if (missionArrow) missionArrow.style.display = 'none';
   if (missionTracker) missionTracker.style.display = 'none';
+  missionArrowText = '';
   missions = missionSlots[slot] = [];
   activeMission = null;
-  if (missionArrow) missionArrow.style.display = 'none';
-  if (missionTracker) missionTracker.style.display = 'none';
   if (missionMarker) {
     for (const marker of [missionMarker.target, missionMarker.base]) {
       marker.group.traverse(o => { if (o.material) o.material.dispose(); });
@@ -2215,7 +2225,7 @@ function updateMissionMarker(dt) {
   if (mission && mission.state === 'active' && mission.type !== 'collect') {
     let target = mission.target;
     if (mission.type === 'kill') {
-      const enemy = enemies.find(e => !e.dead && !e.boss && !e.mini && (!mission.zone || e.zone && e.zone.name === mission.zone));
+      const enemy = enemies.find(e => !e.dead && !e.boss && !e.mini && e.variant !== 'rider' && (!mission.zone || e.zone && e.zone.name === mission.zone));
       if (enemy) target = { x: enemy.x, y: enemy.y + 1, z: enemy.z };
     } else if (mission.type === 'bossKill' && mission.guardian && !mission.guardian.dead) {
       target = { x: mission.guardian.x, y: mission.guardian.y + 1, z: mission.guardian.z };
@@ -2229,7 +2239,7 @@ function updateMissionMarker(dt) {
   if (missionTracker) {
     missionTracker.style.display = 'none';
     if (state === 'play' && tracked && (tracked.state === 'active' || tracked.state === 'ready')) {
-          let trackerTarget = tracked.state === 'ready' ? missionAtPosition() : tracked.target;
+      let trackerTarget = tracked.state === 'ready' ? missionAtPosition() : tracked.target;
       if (tracked.state === 'active' && tracked.type === 'kill') {
         const enemy = enemies.find(e => !e.dead && !e.boss && !e.mini && e.variant !== 'rider' && (!tracked.zone || e.zone && e.zone.name === tracked.zone));
         if (enemy) trackerTarget = { x: enemy.x, y: enemy.y, z: enemy.z };
@@ -2246,7 +2256,7 @@ function updateMissionMarker(dt) {
   if (state !== 'play' || !missionArrow || !tracked || (tracked.state !== 'active' && tracked.state !== 'ready')) { if (missionArrow) missionArrow.style.display = 'none'; missionArrowText = ''; return; }
   let target = tracked.state === 'ready' ? missionAtPosition() : tracked.target;
   if (tracked.state === 'active' && tracked.type === 'kill') {
-    const enemy = enemies.find(e => !e.dead && !e.boss && !e.mini && (!tracked.zone || e.zone && e.zone.name === tracked.zone));
+    const enemy = enemies.find(e => !e.dead && !e.boss && !e.mini && e.variant !== 'rider' && (!tracked.zone || e.zone && e.zone.name === tracked.zone));
     if (enemy) target = { x: enemy.x, y: enemy.y, z: enemy.z };
   } else if (tracked.state === 'active' && tracked.type === 'bossKill' && tracked.guardian && !tracked.guardian.dead) {
     target = { x: tracked.guardian.x, y: tracked.guardian.y, z: tracked.guardian.z };
@@ -2279,13 +2289,13 @@ const CRAFT_RECIPES = [
   { id: 'jumpBoots', name: 'Jump Boots', desc: 'Permanent +8% jump power', cost: { wood: 3, stone: 3 }, credits: 55, upgrade: 'jumpBoots' }
 ];
 function craftList() {
-  return CRAFT_RECIPES.map(recipe => ({ ...recipe, cost: { ...recipe.cost }, affordable: base.credits >= recipe.credits && Object.entries(recipe.cost).every(([key, count]) => hotbarRes[key] >= count), owned: recipe.upgrade ? !!base.upgrades[recipe.upgrade] : false }));
+  return CRAFT_RECIPES.map(recipe => ({ ...recipe, cost: { ...recipe.cost }, affordable: base.credits >= recipe.credits && Object.entries(recipe.cost).every(([key, count]) => hotbarRes[key] >= count) && !(recipe.id === 'medkit' && health >= MAXHP), owned: recipe.upgrade ? !!base.upgrades[recipe.upgrade] : false }));
 }
 function craft(id) {
   const recipe = CRAFT_RECIPES.find(r => r.id === id);
   if (!recipe) return { ok: false, reason: 'unknown-recipe' };
   if (recipe.upgrade && base.upgrades[recipe.upgrade]) return { ok: false, reason: 'already-owned' };
-  if (base.credits < recipe.credits || !Object.entries(recipe.cost).every(([key, count]) => hotbarRes[key] >= count)) return { ok: false, reason: 'missing-materials' };
+  if (base.credits < recipe.credits || !Object.entries(recipe.cost).every(([key, count]) => hotbarRes[key] >= count) || (recipe.id === 'medkit' && health >= MAXHP)) return { ok: false, reason: 'missing-materials' };
   base.credits -= recipe.credits;
   for (const [key, count] of Object.entries(recipe.cost)) hotbarRes[key] -= count;
   if (recipe.upgrade) base.upgrades[recipe.upgrade] = true;
@@ -2293,7 +2303,8 @@ function craft(id) {
     ammo.shells = Math.min(WEAPONS.find(w => w.ammoKey === 'shells').ammoCap, ammo.shells + 6);
     ammo.rails = Math.min(WEAPONS.find(w => w.ammoKey === 'rails').ammoCap, ammo.rails + 2);
   } else if (recipe.id === 'medkit') health = Math.min(MAXHP, health + 1);
-  saveBase(); updateHotbar(); if (guideDialogOpen && guideTab === 'RECIPES') renderGuideDialog(); sfx.coin(); toast(`CRAFTED: ${recipe.name}`, 1500);  return { ok: true, recipe: recipe.id, base: { ...base, upgrades: { ...base.upgrades } }, resources: { ...hotbarRes }, health, ammo: { ...ammo } };
+  saveBase(); updateHotbar(); if (guideDialogOpen && guideTab === 'RECIPES') renderGuideDialog(); sfx.coin(); toast(`CRAFTED: ${recipe.name}`, 1500);
+  return { ok: true, recipe: recipe.id, base: { ...base, upgrades: { ...base.upgrades } }, resources: { ...hotbarRes }, health, ammo: { ...ammo } };
 }
 function guideTips() {
   const tips = [
@@ -2418,6 +2429,230 @@ function makeGuide(hub) {
   exclaim.position.copy(question.position); exclaim.scale.copy(question.scale);
   group.add(question, exclaim);
   return { group, home, target: { ...home }, wait: 1, wave: 0, greeted: false, armL, armR, question, exclaim, hub };
+}
+
+const INTERIOR_THEMES = {
+  server: { name: 'Server Farm', top: '#061626', mid: '#102b3d', bot: '#164453', fog: 0x103040, hemi: 0.42, hemiCol: 0x65e8d2, sun: 0.12, sunCol: 0x36f6ff, cloud: 0x102636, plate: 0x36f6ff, weather: 'none', floor: 0x182938, accent: 0x36f6ff, enemy: 'gunner' },
+  atrium: { name: 'Overgrown Atrium', top: '#071b12', mid: '#123822', bot: '#23472b', fog: 0x183923, hemi: 0.5, hemiCol: 0x9be875, sun: 0.15, sunCol: 0x8aff3e, cloud: 0x183923, plate: 0x8aff3e, weather: 'none', floor: 0x263628, accent: 0x8aff3e, enemy: 'dinosaur' },
+  reactor: { name: 'Flooded Reactor', top: '#210d08', mid: '#3c1b0d', bot: '#532911', fog: 0x3d2113, hemi: 0.42, hemiCol: 0xffa25f, sun: 0.18, sunCol: 0xff6b34, cloud: 0x3b1e12, plate: 0xff743b, weather: 'none', floor: 0x35313a, accent: 0xff743b, enemy: 'infernal' },
+  club: { name: 'Neon Club', top: '#180725', mid: '#2c1047', bot: '#471c61', fog: 0x301444, hemi: 0.38, hemiCol: 0xd88fff, sun: 0.12, sunCol: 0xff3fc8, cloud: 0x2a1040, plate: 0xff3fc8, weather: 'none', floor: 0x251735, accent: 0xff3fc8, enemy: 'shield' },
+  vault: { name: 'Cold Vault', top: '#071929', mid: '#142e45', bot: '#244863', fog: 0x1b3c52, hemi: 0.48, hemiCol: 0x9beaff, sun: 0.12, sunCol: 0x8ae8ff, cloud: 0x17364b, plate: 0x8ae8ff, weather: 'none', floor: 0x2b3c48, accent: 0x8ae8ff, enemy: 'frozenStalker' }
+};
+function towerThemeFor(hub, index = 0) {
+  if (hub.zone && hub.zone.name === 'Jungle') return 'atrium';
+  if (hub.zone && hub.zone.name === 'Inferno') return 'reactor';
+  if (hub.zone && hub.zone.name === 'Psychedelic') return 'club';
+  if (hub.zone && hub.zone.name === 'Frozen') return 'vault';
+  const names = ['server', 'atrium', 'reactor', 'club', 'vault'];
+  const hash = (Math.abs(Math.floor(hub.x * 13 + hub.z * 7 + levelSeed + index * 31)) >>> 0) % names.length;
+  return names[hash];
+}
+function interiorBox(parent, x, y, z, w, h, d, material, solid = false) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material); mesh.position.set(x, y, z); parent.add(mesh);
+  let collision = null;
+  if (solid) { collision = addSolid(x - w / 2, x + w / 2, y - h / 2, y + h / 2, z - d / 2, z + d / 2); collision.interior = true; }
+  return { mesh, solid: collision };
+}
+function interiorFloorRing(parent, hub, y, holeX, holeZ, color, index, roof = false) {
+  const hx = hub.w / 2 - 1.25, hz = hub.d / 2 - 1.25, hole = roof ? 2.8 : 2.35, thick = 0.65;
+  const pieces = [
+    { x: -hx / 2 - hole / 2, z: 0, w: hx - hole / 2, d: hz * 2 },
+    { x: hx / 2 + hole / 2, z: 0, w: hx - hole / 2, d: hz * 2 },
+    { x: 0, z: -hz / 2 - hole / 2, w: hole, d: hz - hole / 2 },
+    { x: 0, z: hz / 2 + hole / 2, w: hole, d: hz - hole / 2 }
+  ];
+  if (roof) {
+    // Roof aperture is centered; floor holes alternate by level so descending requires moving across the atrium.
+    pieces[0].x = -hx / 2 - hole / 2; pieces[1].x = hx / 2 + hole / 2;
+  } else {
+    const dx = holeX, dz = holeZ;
+    pieces[0] = { x: -hx / 2 + Math.max(0, dx + hole / 2) / 2, z: 0, w: Math.max(0.2, hx - Math.max(0, dx + hole / 2)), d: hz * 2 };
+    pieces[1] = { x: hx / 2 - Math.max(0, hole / 2 - dx) / 2, z: 0, w: Math.max(0.2, hx - Math.max(0, hole / 2 - dx)), d: hz * 2 };
+    pieces[2] = { x: 0, z: -hz / 2 + Math.max(0, dz + hole / 2) / 2, w: hx * 2, d: Math.max(0.2, hz - Math.max(0, dz + hole / 2)) };
+    pieces[3] = { x: 0, z: hz / 2 - Math.max(0, hole / 2 - dz) / 2, w: hx * 2, d: Math.max(0.2, hz - Math.max(0, hole / 2 - dz)) };
+  }
+  // The visual ring uses one shape/mesh per level; collision stays in four simple AABBs around the open hatch.
+  const shape = new THREE.Shape(); shape.moveTo(-hx, -hz); shape.lineTo(hx, -hz); shape.lineTo(hx, hz); shape.lineTo(-hx, hz); shape.closePath();
+  const cx = roof ? 0 : holeX, cz = roof ? 0 : holeZ, path = new THREE.Path();
+  path.moveTo(cx - hole / 2, cz - hole / 2); path.lineTo(cx - hole / 2, cz + hole / 2); path.lineTo(cx + hole / 2, cz + hole / 2); path.lineTo(cx + hole / 2, cz - hole / 2); path.closePath(); shape.holes.push(path);
+  const visual = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }));
+  visual.rotation.x = -Math.PI / 2; visual.position.set(hub.x, y, hub.z); parent.add(visual);
+  for (const p of pieces) {
+    const w = Math.max(0.2, p.w), d = Math.max(0.2, p.d), x = hub.x + p.x, z = hub.z + p.z;
+    const s = addSolid(x - w / 2, x + w / 2, y - thick, y, z - d / 2, z + d / 2);
+    Object.assign(s, { cx: x, cz: z, top: y, hw: w / 2, hd: d / 2, zone: activeTowerInterior && activeTowerInterior.zone, interior: true, interiorFloor: true });
+  }
+  return { x: hub.x + cx, y, z: hub.z + cz, hole };
+}
+function interiorShell(hub, floorCount, theme) {
+  const group = new THREE.Group(); lvl.add(group);
+  const wallMat = lam(theme.floor), trimMat = new THREE.MeshBasicMaterial({ color: theme.accent, toneMapped: false });
+  const wall = (x, y, z, w, h, d) => {
+    const o = interiorBox(group, x, y, z, w, h, d, wallMat, true); o.solid.interiorWall = true; return o;
+  };
+  const halfX = hub.w / 2, halfZ = hub.d / 2, t = 1.2, height = hub.top;
+  // Main building volume is replaced by four collision walls; the south wall has a safe ground-side exit.
+  wall(hub.x - halfX + t / 2, height / 2, hub.z, t, height, hub.d);
+  wall(hub.x + halfX - t / 2, height / 2, hub.z, t, height, hub.d);
+  wall(hub.x, height / 2, hub.z - halfZ + t / 2, hub.w - 2 * t, height, t);
+  const exitW = 3.4, frontZ = hub.z + halfZ - t / 2, sideW = Math.max(0.2, (hub.w - 2 * t - exitW) / 2);
+  wall(hub.x - exitW / 2 - sideW / 2, height / 2, frontZ, sideW, height, t);
+  wall(hub.x + exitW / 2 + sideW / 2, height / 2, frontZ, sideW, height, t);
+  wall(hub.x, height - 2.4, frontZ, exitW, 4.8, t);
+  // Center roof hatch and staggered interior floor hatches; full lower floor catches the fall.
+  const roof = interiorFloorRing(group, hub, height + 0.17, 0, 0, theme.accent, -1, true);
+  const n = Math.max(1, floorCount);
+  const floors = [{ x: hub.x, y: 1.3, z: hub.z, hole: 0 }];
+  const holeSpots = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+  for (let i = 1; i <= n; i++) {
+    const y = 1.3 + (height - 3.8) * i / (n + 1), [sx, sz] = holeSpots[(i - 1) % holeSpots.length];
+    const hx = sx * Math.min(halfX * 0.45, 5), hz = sz * Math.min(halfZ * 0.45, 5);
+    floors.push(interiorFloorRing(group, hub, y, hx, hz, theme.accent, i));
+  }
+  // Landing pad at the bottom absorbs any bad hatch drop; the marked side hatch exits to a bouncing city step.
+  const bottom = addSolid(hub.x - 4, hub.x + 4, 0.55, 1.3, hub.z - 4, hub.z + 4);
+  Object.assign(bottom, { cx: hub.x, cz: hub.z, top: 1.3, hw: 4, hd: 4, zone: null, interior: true, interiorExitFloor: true });
+  const exitX = hub.x, exitZ = hub.z + halfZ + 3.8, exit = addSolid(exitX - 2.3, exitX + 2.3, 0.3, 0.8, exitZ - 2.3, exitZ + 2.3);
+  Object.assign(exit, { cx: exitX, cz: exitZ, top: 0.8, hw: 2.3, hd: 2.3, zone: null, bounce: true, boost: 24, interiorExitPad: true });
+  // Ground-level exit threshold and luminous trim (wall collision for the doorway is already in wall[]).
+  for (const w of [
+    [hub.x - halfX + t / 2, hub.z, t, height, hub.d], [hub.x + halfX - t / 2, hub.z, t, height, hub.d],
+    [hub.x, hub.z - halfZ + t / 2, hub.w - 2 * t, height, t],
+    [hub.x - (hub.w - exitW) / 4, frontZ, (hub.w - exitW) / 2, height, t], [hub.x + (hub.w - exitW) / 4, frontZ, (hub.w - exitW) / 2, height, t],
+    [hub.x, frontZ, exitW, height - 4.8, t]
+  ]) {
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(w[2], 0.12, w[4]), trimMat); strip.position.set(w[0], 1.6, w[1]); group.add(strip);
+  }
+  // Hatch marker, stair/rung ladder, and emissive trims make both routes readable without extra real lights.
+  for (let rung = 0; rung < Math.min(24, Math.ceil(height / 9)); rung++) {
+    const y = 4 + rung * 8.5, ladder = interiorBox(group, hub.x - 0.7, y, hub.z + halfZ - 2.1, 0.18, 0.18, 3.8, trimMat).mesh;
+    ladder.rotation.z = 0.08;
+  }
+  for (const [x, z, w, d] of [[hub.x, hub.z - halfZ + 0.2, hub.w - 2, 0.14], [hub.x - halfX + 0.2, hub.z, 0.14, hub.d - 2], [hub.x + halfX - 0.2, hub.z, 0.14, hub.d - 2]]) {
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, d), trimMat); strip.position.set(x, 1.6, z); group.add(strip);
+  }
+  return { group, floors, roof, bottom, exit };
+}
+function interiorDecor(themeKey, hub, shell, seed) {
+  const key = themeKey, theme = INTERIOR_THEMES[key], g = shell.group, rng = missionRandom(seed), box = (x, y, z, w, h, d, color = theme.floor) => interiorBox(g, x, y, z, w, h, d, lam(color), false).mesh;
+  const accent = c => new THREE.MeshBasicMaterial({ color: c, toneMapped: false }), mats = [accent(theme.accent), accent(0x36f6ff), accent(0xff3fc8)];
+  if (key === 'server') {
+    const n = Math.min(30, Math.floor(hub.w * hub.d / 75)), mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(2.2, 5.6, 1.5), lam(0x263544), n), led = new THREE.InstancedMesh(new THREE.BoxGeometry(1.7, 0.16, 0.08), mats[0], n * 2), o = new THREE.Object3D();
+    let made = 0;
+    for (let row = -1; row <= 1 && made < n; row++) for (let col = -2; col <= 2 && made < n; col++) {
+      const x = hub.x + col * 4.2, z = hub.z + row * 5.3;
+      if (Math.abs(x - hub.x) < 2.1 && Math.abs(z - hub.z) < 2.1) continue;
+      o.position.set(x, 3.4, z); o.updateMatrix(); mesh.setMatrixAt(made, o.matrix);
+      for (let j = 0; j < 2; j++) { o.position.set(x, 2.2 + j * 1.5, z + 0.8); o.updateMatrix(); led.setMatrixAt(made * 2 + j, o.matrix); }
+      made++;
+    }
+    mesh.count = led.count = made * (led === mesh ? 1 : 2); g.add(mesh, led);
+    // cable trench stripes and a few turret-shaped hacked sentries.
+    for (let i = -2; i <= 2; i++) box(hub.x + i * 3.6, 0.12, hub.z - hub.hd + 3, 0.36, 0.14, hub.d - 6, i % 2 ? 0x1b3940 : 0x26333b);
+  } else if (key === 'atrium') {
+    for (let i = 0; i < 7; i++) {
+      const a = i * 6.283 / 7, r = Math.min(hub.hw, hub.hd) * 0.42, x = hub.x + Math.cos(a) * r, z = hub.z + Math.sin(a) * r;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.6, Math.min(18, hub.top * 0.35), 6), lam(0x59482d)); trunk.position.set(x, Math.min(18, hub.top * 0.35) / 2 + 1.2, z); g.add(trunk);
+      const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 0), lam(0x5ba344)); crown.scale.set(1.5, 1.1, 1.3); crown.position.set(x, Math.min(18, hub.top * 0.35) + 2.5, z); g.add(crown);
+      const vine = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, Math.max(4, hub.top * 0.4), 5), mats[0]); vine.position.set(x + 1.2, Math.max(4, hub.top * 0.4) / 2 + 1, z + 1); g.add(vine);
+    }
+  } else if (key === 'reactor') {
+    const coolant = new THREE.Mesh(new THREE.BoxGeometry(hub.w - 4, 0.16, hub.d - 4), new THREE.MeshBasicMaterial({ color: 0xff5b27 })); coolant.position.set(hub.x, 1.48, hub.z); coolant.userData.coolant = true; g.add(coolant);
+    const core = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 3.2, 16, 8), lam(0x4a261b)); core.position.set(hub.x, 10, hub.z); g.add(core);
+    for (let i = 0; i < 4; i++) { const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 19, 6), mats[0]); pipe.position.set(hub.x + (i < 2 ? -1 : 1) * 5, 9, hub.z + (i % 2 ? 1 : -1) * 5); g.add(pipe); }
+  } else if (key === 'club') {
+    const tile = new THREE.BoxGeometry(2.1, 0.12, 2.1);
+    for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) { const m = new THREE.Mesh(tile, mats[(Math.abs(x + z) % 3)]); m.position.set(hub.x + x * 2.5, 1.42, hub.z + z * 2.5); g.add(m); }
+    box(hub.x, 2, hub.z - hub.hd + 3, hub.w - 8, 1.4, 3, 0x311d3b);
+    for (const x of [-hub.hw + 4, hub.hw - 4]) { const beam = new THREE.Mesh(new THREE.BoxGeometry(0.2, 13, 0.2), mats[x < 0 ? 1 : 2]); beam.position.set(hub.x + x, 9, hub.z); g.add(beam); }
+  } else {
+    for (let i = 0; i < 8; i++) {
+      const x = hub.x + ((i % 4) - 1.5) * 4.3, z = hub.z + (i < 4 ? -5 : 5);
+      box(x, 2.3, z, 1.7, 3.6, 2.1, 0x344755);
+      box(x, 2.3, z + 1.08, 1.35, 2.7, 0.08, theme.accent);
+      const ice = new THREE.Mesh(new THREE.OctahedronGeometry(0.85, 0), mats[(i % 2) + 1]); ice.position.set(x, 4.6, z); g.add(ice);
+    }
+  }
+  const light = new THREE.PointLight(theme.accent, 1.7, Math.min(42, hub.w * 2), 2); light.position.set(hub.x, Math.min(hub.top * 0.5, 22), hub.z); g.add(light);
+  return { theme, seed: rng() };
+}
+function interiorMiniBoss(theme, hub, floor, themeKey, index) {
+  if (!['reactor', 'club'].includes(themeKey)) return null;
+  const variant = themeKey === 'reactor' ? 'infernal' : 'shield', x = hub.x + (index % 2 ? 4 : -4), z = hub.z + 3;
+  const plat = { minx: hub.x - hub.hw + 1, maxx: hub.x + hub.hw - 1, minz: hub.z - hub.hd + 1, maxz: hub.z + hub.hd - 1, maxy: floor.y, zone: theme };
+  const e = makeWalker(x, floor.y, z, plat, 1.6, false, variant); e.hp = e.maxhp = 8 + level * 2; e.mini = true; e.name = themeKey === 'reactor' ? 'CORE WARDEN' : 'THE DJ'; e.interiorHub = hub; return e;
+}
+function buildInterior_server(hub, floors, shell) { return { enemies: [], loot: [], zone: INTERIOR_THEMES.server, shell, floors, key: 'server' }; }
+function buildInterior_atrium(hub, floors, shell) { return { enemies: [], loot: [], zone: INTERIOR_THEMES.atrium, shell, floors, key: 'atrium' }; }
+function buildInterior_reactor(hub, floors, shell) { return { enemies: [], loot: [], zone: INTERIOR_THEMES.reactor, shell, floors, key: 'reactor' }; }
+function buildInterior_club(hub, floors, shell) { return { enemies: [], loot: [], zone: INTERIOR_THEMES.club, shell, floors, key: 'club' }; }
+function buildInterior_vault(hub, floors, shell) { return { enemies: [], loot: [], zone: INTERIOR_THEMES.vault, shell, floors, key: 'vault' }; }
+function openTower(hub) {
+  if (!hub || hub.opened || !hub.roofSolid || hub.roofSolid.opened) return hub && hub.interior;
+  const index = Math.max(0, buildingHubs.indexOf(hub)), key = towerThemeFor(hub, index), theme = INTERIOR_THEMES[key];
+  const old = hub.roofSolid, solidIndex = solids.indexOf(old); if (solidIndex >= 0) solids.splice(solidIndex, 1);
+  hub.buildingMesh.visible = false; hub.roofMesh.visible = false; old.opened = true; hub.opened = true;
+  // The roof bullseye/coin and bounce pad are removed only from this hub's footprint; outside route meshes stay untouched.
+  for (const item of items) if (!item.taken && item.type === 'coin' && Math.hypot(item.mesh.position.x - hub.x, item.mesh.position.z - hub.z) < 2 && Math.abs(item.mesh.position.y - (hub.top + 1.4)) < 1) { item.taken = true; item.mesh.removeFromParent(); }
+  const floorCount = Math.max(1, Math.min(14, Math.ceil((hub.top - 6) / 22))), shell = interiorShell(hub, floorCount, theme);
+  const result = ({ server: buildInterior_server, atrium: buildInterior_atrium, reactor: buildInterior_reactor, club: buildInterior_club, vault: buildInterior_vault })[key](hub, shell.floors, shell);
+  interiorDecor(key, hub, shell, (levelSeed ^ Math.floor(hub.x * 17 + hub.z * 29)) | 0);
+  result.enemies = [];
+  const hostFloor = shell.floors[Math.max(0, Math.min(shell.floors.length - 1, Math.floor(shell.floors.length * 0.56)))];
+  const variant = theme.enemy, normalCount = key === 'atrium' || key === 'server' ? 3 : 2;
+  if (!net.on || net.host) for (let i = 0; i < normalCount; i++) {
+    const a = i * 6.283 / normalCount, x = hub.x + Math.cos(a) * Math.min(hub.hw * 0.35, 5), z = hub.z + Math.sin(a) * Math.min(hub.hd * 0.35, 5);
+    const plat = { minx: hub.x - hub.hw + 1.4, maxx: hub.x + hub.hw - 1.4, minz: hub.z - hub.hd + 1.4, maxz: hub.z + hub.hd - 1.4, maxy: hostFloor.y, zone: theme, interior: true };
+    const e = makeWalker(x, hostFloor.y, z, plat, 0.9, false, variant); e.zone = theme; e.interiorHub = hub; result.enemies.push(e);
+  }
+  if (!net.on || net.host) { const mini = interiorMiniBoss(theme, hub, hostFloor, key, index); if (mini) result.enemies.push(mini); }
+  const point = shell.floors[Math.max(0, shell.floors.length - 1)];
+  const loot = weaponPickup(2 + index % Math.max(1, WEAPONS.length - 2), hub.x + hub.hw * 0.32, point.y + 1.3, hub.z - hub.hd * 0.28);
+  const ammo = ammoBox(hub.x - hub.hw * 0.32, point.y + 0.9, hub.z - hub.hd * 0.28);
+  loot.interiorHub = ammo.interiorHub = hub;
+  result.loot.push(loot, ammo);
+  const target = { tower: hub, theme: theme.name, x: loot.mesh.position.x, y: loot.mesh.position.y, z: loot.mesh.position.z, r: 5, type: 'interior' };
+  hub.interior = result; hub.interiorTargets = [target]; interiorTargets.push(target); openedTowers.push(hub);
+  // A sealed-looking colored ceiling/background replaces the exterior skyline only when this tower opens.
+  result.background = new THREE.Color(theme.top); result.entered = false;
+  if (Math.hypot(pos.x - hub.x, pos.z - hub.z) < hub.hw - 1 && pos.y < hub.top + 1) enterTowerInterior(hub);
+  toast(`${theme.name.toUpperCase()} OPENED — FIND THE HATCH`, 2400); sfx.portal();
+  return result;
+}
+function enterTowerInterior(hub) {
+  if (!hub || !hub.interior || activeTowerInterior === hub.interior) return;
+  activeTowerInterior = hub.interior; activeTowerInterior.entered = true; inInterior = true;
+  activeTowerInterior.restoreZone = hub.zone || null;
+  setZone(activeTowerInterior.zone, false, true); scene.background = activeTowerInterior.background;
+  activeTowerInterior.ambientT = 7; tone(78, 70, 1.2, 'sine', 0.025);
+}
+function leaveTowerInterior() {
+  if (!inInterior) return;
+  const interior = activeTowerInterior; inInterior = false; activeTowerInterior = null;
+  scene.background = skyTex; setZone(interior && interior.restoreZone || null, false, true);
+  scene.fog.near = 30; scene.fog.far = 270; lastEvolveZone = null;
+  if (interior) interior.entered = false;
+}
+function updateTowerInterior(dt) {
+  if (!activeTowerInterior) return;
+  const hub = activeTowerInterior.shell && openedTowers.find(h => h.interior === activeTowerInterior);
+  if (!hub) { leaveTowerInterior(); return; }
+  const inside = pos.x > hub.x - hub.hw - 0.1 && pos.x < hub.x + hub.hw + 0.1 && pos.z > hub.z - hub.hd - 0.1 && pos.z < hub.z + hub.hd + 0.1 && pos.y > 0 && pos.y < hub.top + 1.2;
+  if (!inside) { leaveTowerInterior(); return; }
+  if (!inInterior) enterTowerInterior(hub);
+  const coolant = activeTowerInterior.shell.group.children.find(o => o.userData.coolant);
+  if (coolant && pos.y < 3 && Math.abs(pos.x - hub.x) < hub.hw - 3 && Math.abs(pos.z - hub.z) < hub.hd - 3 && state === 'play') {
+    activeTowerInterior.hazardT = (activeTowerInterior.hazardT || 0) - dt;
+    if (activeTowerInterior.hazardT <= 0) { activeTowerInterior.hazardT = 1; hurt(1); toast('COOLANT BURN', 800); }
+  }
+  activeTowerInterior.ambientT -= dt;
+  if (activeTowerInterior.ambientT <= 0) { activeTowerInterior.ambientT = 8 + Math.random() * 5; tone(activeTowerInterior.key === 'server' ? 120 : 84, 74, 1.4, 'sine', 0.018); }
+}
+function updateInteriorDecor(dt) {
+  if (!inInterior || !activeTowerInterior) return;
+  const time = performance.now() / 1000;
+  if (activeTowerInterior.key === 'club') for (const mesh of activeTowerInterior.shell.group.children) if (mesh.isMesh && mesh.geometry.type === 'BoxGeometry' && mesh.position.y === 1.42) mesh.material.color.setHSL((time * 0.22 + (mesh.position.x + mesh.position.z) * 0.01) % 1, 0.9, 0.56);
+  if (activeTowerInterior.key === 'reactor') for (const mesh of activeTowerInterior.shell.group.children) if (mesh.userData.coolant) mesh.material.color.setHSL(0.03 + Math.sin(time * 1.4) * 0.025, 0.9, 0.52);
 }
 
 function updateHomeBase(dt) {
@@ -2613,6 +2848,7 @@ function buildLevel() {
   lvl.traverse(o => { if (o.geometry) o.geometry.dispose(); });
   lvl = new THREE.Group(); scene.add(lvl);
   routeLandmarks.length = 0;
+  buildingHubs.length = interiorTargets.length = openedTowers.length = 0; activeTowerInterior = null; inInterior = false;
   homeGuide = null; hintNpc = false;
   if (guideDialogOpen) closeGuideDialog(false);
   solids.length = platforms.length = portals.length = enemies.length = items.length = decals.length = gibsList.length = clouds.length = shots.length = 0; buildingBoxes.length = 0; bleeders.length = 0; armoryGun = null; railSolids.length = 0;
@@ -2648,7 +2884,8 @@ function buildLevelBody() {
   const spawnPad = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.1, 8), lam(0x36f6ff));
   spawnPad.position.set(start.x, TOP + 0.05, start.z); scene.add(spawnPad);
   for (let wi = 2; wi < WEAPONS.length; wi++) weaponPickup(wi, clamp(start.x - 9 + (wi - 2) * 4.5, -TH + 3, TH - 3), TOP + 1.5, clamp(start.z - 11, -TH + 3, TH - 3));      // the whole arsenal laid out at spawn
-  addProp('bike', start.x + 4, TOP, start.z - 5);      // one bike at spawn; the cars wait on the highways
+  addProp('bike', start.x + 4, TOP, start.z - 5);      // one bike at spawn
+  addProp('buggy', start.x - 5, TOP, start.z - 5);     // DeLorean time machine at spawn
   // Spawn rooftop is a peaceful home base; the safe-radius check in spawnBiomeEnemy also
   // protects the first outbound platforms from primary and secondary route spawns.
   buildSky();
@@ -3459,7 +3696,7 @@ function onLand(speed, sol) {
       try { $('subs').textContent = '[IT] You went all the way down. There is nothing here. You are still falling.'; setTimeout(() => { $('subs').textContent = ''; }, 6500); } catch (_) {}
     } else toast('Rock bottom. Again.', 1400);
   }
-  if (state === 'play' && speed < 40) spontaneousArena(sol);
+  if (state === 'play' && speed < 40 && !sol.building && !sol.interior) spontaneousArena(sol);
   if (sol.pn !== undefined && state === 'play') {
     curPN = sol.pn;
     if (ladderTop && sol.pn >= ladderTop.n - 1) ladderExtend(1);
@@ -3469,6 +3706,7 @@ function onLand(speed, sol) {
   if (sol.moon && state === 'play') buildMarsRoute();
   if (sol.mars && state === 'play') levelClear('mars', 6000);
   if (sol.ground) setZone(null); else if (!sol.bounce && !(psy.t > 0)) setZone(sol.zone || null);
+  if (sol.building && state === 'play' && sol.hub) openTower(sol.hub);
   if (sol.sp && sol.sp.kind === 'psy') psyTrigger(sol);
   // Not every landing stays a landing: a few ordinary floating ledges wake up into compact combat arenas.
   if (state === 'play' && popArenaCount < 4 && !sol.arena && !sol.bounce && !sol.awakened && !sol.sp && sol.grp && rand() < 0.115) {
@@ -3601,7 +3839,7 @@ function placeBlock() {                                                // right-
   const plat = standOn && standOn.zone ? standOn.zone : activeZ;
   const res = biomeResource(plat);
   if (hotbarRes[res] < 4) { toast(`NEED 4 ${RESOURCES[res].name} TO PLACE`, 900); sfx.click(); return; }
-  hotbarRes[res] -= 4; updateHotbar();
+  hotbarRes[res] -= 4; updateHotbar(); saveBase();
   const fx = Math.sin(face), fz = Math.cos(face);
   const bx = clamp(pos.x + fx * 3.2, -WORLD_R + 6, WORLD_R - 6), bz = clamp(pos.z + fz * 3.2, -WORLD_R + 6, WORLD_R - 6);
   const by = Math.round((pos.y + 0.6) / 2) * 2;    if (blocked(bx, by, bz, 1.4)) { toast('NO ROOM TO BUILD', 900); hotbarRes[res] += 4; updateHotbar(); saveBase(); return; }
@@ -4075,7 +4313,7 @@ function setZone(z, snap = false, quiet = false) {
   if (window.__zdebug) window.__zdebug.push([z && z.name, snap, new Error().stack.split('\n').slice(2, 5).join(' | ')]);     // dev: who changes the zone?
   if (!snap && z === activeZ) return;
   activeZ = z;
-  const jungleWorld = !!(z && z.name === 'Jungle'), cyberHorror = !!z && !jungleWorld;
+  const interior = !!(z && z.interior), jungleWorld = !!(z && z.name === 'Jungle' && !interior), cyberHorror = !!z && !jungleWorld && !interior;
   document.body.classList.toggle('jungle-world', jungleWorld);
   document.body.classList.toggle('cyber-horror', cyberHorror);
   document.body.classList.toggle('horror-world', true); // every biome is now a different flavour of nightmare
@@ -4083,7 +4321,7 @@ function setZone(z, snap = false, quiet = false) {
   const horror = true;
   if (scene.fog) { scene.fog.near = 30; scene.fog.far = 270; }
   // biome evolution: entering a new biome flips the local wildlife over to its species
-  if (!snap && state === 'play' && z && BIOME_ENEMIES[z.name] && lastEvolveZone !== z) {
+  if (!interior && !snap && state === 'play' && z && BIOME_ENEMIES[z.name] && lastEvolveZone !== z) {
     lastEvolveZone = z;
     spawnEvolutionPack(z);
   }
@@ -4091,8 +4329,8 @@ function setZone(z, snap = false, quiet = false) {
   goal.top.set(src.top); goal.mid.set(src.mid); goal.bot.set(src.bot); goal.fog.set(src.fog);
   goal.hemiCol.set(src.hemiCol); goal.sunCol.set(src.sunCol); goal.cloud.set(src.cloud); goal.hemi = src.hemi; goal.sun = src.sun;
   if (snap) { for (const k of ENV_COLS) env[k].copy(goal[k]); env.hemi = goal.hemi; env.sun = goal.sun; flash = 0; wOp = 0; }
-  trunkify(!!(z && z.name === 'Jungle'));   // jungle takes over: every building becomes a giant tree trunk
-  const w = z ? WEATHER[z.weather] : WEATHER.rain;
+  if (!interior) trunkify(!!(z && z.name === 'Jungle'));   // jungle takes over: every building becomes a giant tree trunk
+  const w = interior ? WEATHER.none : z ? WEATHER[z.weather] : WEATHER.rain;
   wOn = !!w.op; if (w.op) { wCfg = w; wMat.color.setHex(w.color); wMat.size = w.size; }
   else if (!z) { wCfg = WEATHER.rain; wMat.color.setHex(wCfg.color); wMat.size = wCfg.size; wOp = wCfg.op; wMat.opacity = wOp; }
   if (!snap && !quiet && state === 'play') {
@@ -4112,19 +4350,21 @@ function drawSky() {
 }
 function updateEnv(dt, cp) {
   const k = 1 - Math.exp(-dt * 1.4);
-  spaceNow = spaceK(cp.y); starsSpace.visible = spaceNow > 0.02; starsSpace.position.copy(cp); starsSpace.material.opacity = spaceNow;
-  if (activeZ && activeZ.name === 'Psychedelic') {      // the whole sky slowly cycles through the rainbow
+  spaceNow = inInterior ? 0 : spaceK(cp.y); starsSpace.visible = !inInterior && spaceNow > 0.02; starsSpace.position.copy(cp); starsSpace.material.opacity = spaceNow;
+  if (inInterior && activeTowerInterior) scene.background = activeTowerInterior.background;
+  else if (scene.background !== skyTex) scene.background = skyTex;
+  if (!inInterior && activeZ && activeZ.name === 'Psychedelic') {      // the whole sky slowly cycles through the rainbow
     const h = performance.now() / 1000 * 0.07;
     goal.top.setHSL(h % 1, 0.9, 0.16); goal.mid.setHSL((h + 0.33) % 1, 0.9, 0.42); goal.bot.setHSL((h + 0.66) % 1, 0.95, 0.6);
     goal.fog.setHSL((h + 0.15) % 1, 0.8, 0.32); goal.cloud.setHSL((h + 0.5) % 1, 0.9, 0.7);
   }
-  if (activeZ && activeZ.name === 'Jungle') {           // jungle sky breathes: hue drifts slowly through greens
+  if (!inInterior && activeZ && activeZ.name === 'Jungle') {           // jungle sky breathes: hue drifts slowly through greens
     const h = 0.32 + Math.sin(performance.now() / 1000 * 0.13) * 0.045;
     goal.top.setHSL(h, 0.85, 0.09); goal.mid.setHSL((h + 0.86) % 1, 0.8, 0.34); goal.cloud.setHSL((h + 0.5) % 1, 0.75, 0.42);
   }
   for (const c of ENV_COLS) env[c].lerp(goal[c], k);
   env.hemi += (goal.hemi - env.hemi) * k; env.sun += (goal.sun - env.sun) * k;
-  if (activeZ && activeZ.lightning && state === 'play') {
+  if (!inInterior && activeZ && activeZ.lightning && state === 'play') {
     lightT -= dt;
     if (lightT <= 0) { lightT = 3 + Math.random() * 6; flash = 1; setTimeout(() => sfx.thunder(), 250 + Math.random() * 900); skyBolt(); }
   }
@@ -4137,6 +4377,7 @@ function updateEnv(dt, cp) {
       c.rotation.z = Math.sin(t * 0.55 + i * 0.9) * 0.08;
     }
   }
+  scene.fog.near = inInterior ? 4 : 30; scene.fog.far = inInterior ? 62 : 270;
   scene.fog.color.copy(env.fog).lerp(env.mid, 0.55).lerp(white, flash * 0.5).lerp(SPACE_BLACK, spaceNow);
   hemi.color.copy(env.hemiCol); hemi.intensity = (env.hemi * 1.4 + flash * 2) * dreadLight;
   sun.color.copy(env.sunCol); sun.intensity = (env.sun * 1.2 + flash) * dreadLight;
@@ -4164,7 +4405,7 @@ const jumpMul = () => (onVehicle ? (onVehicle.kind === 'buggy' ? 1.2 : 1.35) : 1
 const gravMul = () => (onVehicle && onVehicle.kind === 'bike' ? 0.55 : 1) * (activeZ && activeZ.name === 'Psychedelic' ? 0.7 : 1) * (psy.t > 0 && psy.kind === 'invert' ? 0.45 : 1) * (1 - 0.65 * spaceK(pos.y));      // lighter and lighter the higher you climb
 const thermal = () => !!(activeZ && activeZ.name === 'Inferno');
 function envWind(dt) {
-  if (!activeZ || activeZ.name !== 'Storm' || onGround || climbing) return;
+  if (inInterior || !activeZ || activeZ.name !== 'Storm' || onGround || climbing) return;
   const t = performance.now() / 1000;
   vel.x += Math.sin(t * 0.6) * 9 * dt; vel.z += Math.cos(t * 0.45) * 6 * dt;
 }
@@ -4709,7 +4950,7 @@ function updateItems(dt) {
 
 // ---------- street culture: boards, roller skates, grinds, rides and the RIDE PARK ----------
 const RIDE_ZONE = { name: 'Ride Park', desc: 'grinds, kickers and quarter pipes - the street lives in the sky', top: '#05040f', mid: '#0b0a22', bot: '#231043', fog: 0x170c2b, hemi: 0.5, hemiCol: 0x8f7bd6, sun: 0.4, sunCol: 0xb07aff, cloud: 0x0d0b1c, plate: 0xff3fc8, weather: 'none' };
-let levelHubs = [], missions = [], activeMission = null, missionMarker = null;
+let levelHubs = [], missions = [], activeMission = null, missionMarker = null, missionArrowText = '';
 const missionSlots = [];
 let runDeaths = 0, hasUsedVehicle = false, hasUsedHoverboard = false, guideTipIndex = 0;
 function setBaseSlot(index = 0) {
@@ -4860,126 +5101,191 @@ function makeBikeMesh(prop) {
 }
 
 const BUGGY_GEO = (() => {
-  const wedge = new THREE.BufferGeometry();
-  wedge.setAttribute('position', new THREE.Float32BufferAttribute([
-    -0.9, 0, -0.15, 0.9, 0, -0.15, -0.9, 0.34, -0.15, 0.9, 0.34, -0.15,
-    -0.62, 0, 1.25, 0.62, 0, 1.25, -0.5, 0.13, 1.25, 0.5, 0.13, 1.25,
-  ], 3));
-  wedge.setIndex([
-    0, 5, 4, 0, 1, 5, 2, 6, 7, 2, 7, 3, 4, 5, 7, 4, 7, 6,
-    0, 2, 3, 0, 3, 1, 0, 4, 6, 0, 6, 2, 1, 3, 7, 1, 7, 5,
-  ]);
-  const flatWedge = wedge.toNonIndexed();
-  flatWedge.computeVertexNormals();
   return {
     box: new THREE.BoxGeometry(1, 1, 1),
-    tire: new THREE.CylinderGeometry(0.48, 0.48, 0.34, 10),
-    hub: new THREE.CylinderGeometry(0.27, 0.27, 0.055, 8),
-    exhaust: new THREE.CylinderGeometry(0.11, 0.13, 0.34, 8),
-    steeringWheel: new THREE.TorusGeometry(0.17, 0.027, 5, 10),
+    tire: new THREE.CylinderGeometry(0.44, 0.44, 0.30, 12),
+    hub: new THREE.CylinderGeometry(0.26, 0.26, 0.06, 12),
+    exhaust: new THREE.CylinderGeometry(0.12, 0.14, 0.36, 8),
+    steeringWheel: new THREE.TorusGeometry(0.16, 0.025, 5, 10),
+    fin: new THREE.BoxGeometry(0.035, 0.16, 0.05),
     lug: new THREE.BoxGeometry(0.045, 0.075, 0.09),
-    wedge: flatWedge,
   };
 })();
 
 function makeBuggyMesh(prop) {
-  const g = prop.mesh, body = new THREE.Group(), BODY_Y = 0.62;
+  const g = prop.mesh, body = new THREE.Group(), BODY_Y = 0.58;
   body.position.y = BODY_Y; g.add(body);
   const paletteIndex = props.filter(p => p.kind === 'buggy').length % 3;
-  const accentColor = [0xb9c0ca, 0xcdd2d9, 0xa4acb8][paletteIndex];      // DeLorean: bare brushed stainless steel
-  const dark = lam(0x242832), tireMat = lam(0x111318), metal = lam(0x737b86);
-  const accent = lam(accentColor), hazard = lam(0xd6a63b), black = lam(0x181b20);
-  const glowMat = new THREE.MeshBasicMaterial({ color: 0x7fe8ff });          // time-circuit / flux-capacitor glow
-  const ramMat = new THREE.MeshBasicMaterial({ color: 0xff8a2a });
-  const warmLight = new THREE.MeshBasicMaterial({ color: 0xffe5a1 });
-  const tailLight = new THREE.MeshBasicMaterial({ color: 0xff3044 });
+  const accentColor = [0xc4ccd6, 0xd0d6df, 0xb8c0ca][paletteIndex];      // DeLorean brushed stainless steel
+  const dark = lam(0x22262d), tireMat = lam(0x111317), metal = lam(0x767e8a);
+  const accent = lam(accentColor), black = lam(0x121418), darkGlass = lam(0x0e131b);
+  const white = lam(0xe8edf2);
+  const glowMat = new THREE.MeshBasicMaterial({ color: 0x58e5ff });          // flux capacitor / time circuits cyan
+  const warmLight = new THREE.MeshBasicMaterial({ color: 0xfffae6 });        // quad square halogen headlamps
+  const tailLight = new THREE.MeshBasicMaterial({ color: 0xff2838 });        // red tail/brake lights
+  const amberLight = new THREE.MeshBasicMaterial({ color: 0xff9224 });       // amber indicators / side markers
+  const goldGlow = new THREE.MeshBasicMaterial({ color: 0xffd23a });         // time circuits / hazard symbol
   const boxBatches = new Map(), lights = [];
-  const addBox = (_parent, mat, w, h, d, x, y, z, rx = 0) => {
+  const addBox = (mat, w, h, d, x, y, z, rx = 0, ry = 0, rz = 0) => {
     if (!boxBatches.has(mat)) boxBatches.set(mat, []);
-    boxBatches.get(mat).push({ x, y: y - BODY_Y, z, w, h, d, rx });
+    boxBatches.get(mat).push({ x, y: y - BODY_Y, z, w, h, d, rx, ry, rz });
   };
-  const addTube = (parent, mat, x, y, z, w, h, d) => addBox(parent, mat, w, h, d, x, y, z);
   const flushBoxes = () => {
     const pose = new THREE.Object3D();
     for (const [mat, parts] of boxBatches) {
       const batch = new THREE.InstancedMesh(BUGGY_GEO.box, mat, parts.length);
       for (let i = 0; i < parts.length; i++) {
-        const p = parts[i]; pose.position.set(p.x, p.y, p.z); pose.rotation.set(p.rx, 0, 0); pose.scale.set(p.w, p.h, p.d); pose.updateMatrix(); batch.setMatrixAt(i, pose.matrix);
+        const p = parts[i];
+        pose.position.set(p.x, p.y, p.z);
+        pose.rotation.set(p.rx || 0, p.ry || 0, p.rz || 0);
+        pose.scale.set(p.w, p.h, p.d);
+        pose.updateMatrix();
+        batch.setMatrixAt(i, pose.matrix);
       }
       batch.instanceMatrix.needsUpdate = true; body.add(batch);
-      if (mat === warmLight || mat === tailLight || mat === ramMat || mat === glowMat) lights.push(batch);
+      if (mat === warmLight || mat === tailLight || mat === amberLight || mat === glowMat || mat === goldGlow) lights.push(batch);
     }
   };
-  // DeLorean DMC-12: wedge of bare stainless steel, black bumpers and skirts, louvred rear window, gull-wing doors, glowing time circuits.
-  const glass = lam(0x10151c);
-  addBox(body, accent, 1.8, 0.5, 2.9, 0, 0.85, 0);                       // lower body
-  addBox(body, dark, 1.86, 0.15, 2.55, 0, 0.64, 0);                      // black rocker skirts
-  addBox(body, accent, 1.68, 0.1, 1.25, 0, 1.15, 0.92, 0.13);            // long sloping hood
-  addBox(body, glass, 1.5, 0.78, 0.07, 0, 1.52, 0.34, -0.62);            // raked windscreen
-  addBox(body, accent, 1.58, 0.09, 0.95, 0, 1.86, -0.38);                // flat roof
-  addBox(body, accent, 1.8, 0.34, 0.95, 0, 1.03, -1.0);                  // rear engine deck
+
+  // --- 1. CHASSIS & LOWER BODY ---
+  addBox(dark, 1.90, 0.14, 3.5, 0, 0.44, 0);                               // dark underbody / rocker skirts
+  addBox(accent, 1.86, 0.28, 3.65, 0, 0.62, 0);                             // main stainless steel lower body
+  addBox(black, 1.92, 0.05, 3.75, 0, 0.74, 0);                             // black waistline rub-strip along sides
   for (const side of [-1, 1]) {
-    addBox(body, accent, 0.1, 0.78, 1.0, side * 0.78, 1.5, -0.4, 0);     // roof pillars / door frames
-    addBox(body, glass, 0.05, 0.4, 0.72, side * 0.84, 1.5, 0.02);        // side windows
-    addBox(body, dark, 0.04, 0.5, 0.05, side * 0.91, 0.98, 0.35);        // door shut-lines
-    addBox(body, dark, 0.04, 0.5, 0.05, side * 0.91, 0.98, -0.55);
-    addBox(body, dark, 0.05, 0.05, 0.9, side * 0.91, 1.22, -0.1);        // gull-wing hinge seam
-    addBox(body, glowMat, 0.04, 0.06, 2.2, side * 0.915, 0.86, 0);       // time-circuit side streak
-    addBox(body, dark, 0.7, 0.14, 0.6, side * 1.03, 1.05, 0.86);         // fender flares
-    addBox(body, dark, 0.7, 0.14, 0.6, side * 1.03, 1.05, -0.86);
+    addBox(dark, 0.08, 0.12, 0.88, side * 0.95, 0.76, 1.15);                // front fender lips
+    addBox(dark, 0.08, 0.12, 0.88, side * 0.95, 0.76, -1.05);               // rear fender lips
   }
-  for (let k = 0; k < 5; k++) addBox(body, black, 1.42, 0.05, 0.34, 0, 1.66 - k * 0.09, -0.98 - k * 0.12);   // louvred rear window slats
-  for (let k = 0; k < 4; k++) addBox(body, black, 1.3, 0.035, 0.1, 0, 1.22, -0.9 - k * 0.17);                  // engine-deck vents
-  addBox(body, black, 1.96, 0.22, 0.22, 0, 0.7, 1.5);                    // front bumper
-  addBox(body, black, 1.96, 0.22, 0.22, 0, 0.7, -1.5);                   // rear bumper
-  for (let k = 0; k < 5; k++) addBox(body, black, 1.0, 0.03, 0.06, 0, 0.86 + k * 0.045, 1.46);                  // grille slats
-  addBox(body, dark, 1.2, 0.2, 0.1, 0, 0.97, -1.47);                     // rear light panel
-  addBox(body, tailLight, 1.5, 0.08, 0.08, 0, 1.0, -1.5);
-  addBox(body, tailLight, 0.3, 0.05, 0.1, 0, 0.8, -1.58);
-  addBox(body, accent, 0.5, 0.12, 0.05, 0, 0.84, -1.61);                 // number plate
-  // seats, steering wheel and the flux capacitor between them
-  addBox(body, dark, 0.5, 0.14, 0.55, -0.35, 1.0, -0.15); addBox(body, dark, 0.5, 0.14, 0.55, 0.35, 1.0, -0.15);
-  addBox(body, dark, 0.5, 0.5, 0.12, -0.35, 1.28, -0.45, -0.15); addBox(body, dark, 0.5, 0.5, 0.12, 0.35, 1.28, -0.45, -0.15);
-  addBox(body, glowMat, 0.16, 0.16, 0.16, 0, 1.12, 0.05);                 // flux capacitor
-  addBox(body, dark, 1.4, 0.18, 0.5, 0, 1.14, 0.5);                      // dashboard
-  const steering = new THREE.Mesh(BUGGY_GEO.steeringWheel, metal); steering.position.set(-0.35, 1.3 - BODY_Y, 0.38); steering.rotation.y = Math.PI / 2; body.add(steering);
-  // pop-up headlamps and a Mr. Fusion on the engine deck
-  const accentLights = [];
+
+  // --- 2. FRONT WEDGE NOSE & HOOD ---
+  addBox(accent, 1.76, 0.10, 1.35, 0, 0.88, 1.25, 0.16);                   // low sloping stainless wedge hood
+  addBox(dark, 0.04, 0.04, 1.30, -0.42, 0.89, 1.25, 0.16);                 // twin hood grooves
+  addBox(dark, 0.04, 0.04, 1.30, 0.42, 0.89, 1.25, 0.16);
+  addBox(black, 1.88, 0.24, 0.26, 0, 0.64, 1.94);                          // front black fascia / grille
+  addBox(black, 1.84, 0.08, 0.20, 0, 0.42, 1.92);                          // front chin spoiler
+  addBox(accent, 0.22, 0.06, 0.04, 0, 0.66, 2.08);                         // silver DMC emblem in grille
+  // Quad square headlights + outer amber turn indicators
   for (const side of [-1, 1]) {
-    const head = new THREE.Mesh(BUGGY_GEO.box, warmLight); head.scale.set(0.3, 0.2, 0.08); head.position.set(side * 0.55, 1.02 - BODY_Y, 1.5); body.add(head); lights.push(head); accentLights.push(head);
+    addBox(warmLight, 0.22, 0.12, 0.05, side * 0.52, 0.67, 2.07);
+    addBox(warmLight, 0.22, 0.12, 0.05, side * 0.76, 0.67, 2.07);
+    addBox(amberLight, 0.10, 0.12, 0.05, side * 0.90, 0.67, 2.06);
   }
-  const fusion = new THREE.Mesh(BUGGY_GEO.exhaust, metal); fusion.scale.set(1.5, 1.2, 1.5); fusion.position.set(0.55, 1.35 - BODY_Y, -1.0); body.add(fusion);
-  const fusionGlow = new THREE.Mesh(BUGGY_GEO.box, glowMat); fusionGlow.scale.set(0.2, 0.08, 0.2); fusionGlow.position.set(0.55, 1.56 - BODY_Y, -1.0); body.add(fusionGlow); lights.push(fusionGlow);
+
+  // --- 3. COCKPIT, WINDSHIELD & ROOF ---
+  addBox(darkGlass, 1.54, 0.74, 0.06, 0, 1.15, 0.38, -0.62);               // raked tinted windscreen
+  for (const side of [-1, 1]) {
+    addBox(accent, 0.08, 0.76, 0.08, side * 0.75, 1.15, 0.38, -0.62);      // stainless A-pillars
+  }
+  addBox(accent, 1.48, 0.08, 0.92, 0, 1.42, -0.32);                        // flat stainless roof
+  addBox(dark, 0.06, 0.09, 0.92, 0, 1.43, -0.32);                          // roof center seam
+  // Cockpit interior
+  addBox(dark, 0.48, 0.14, 0.52, -0.34, 0.72, -0.15);                      // driver seat
+  addBox(dark, 0.48, 0.14, 0.52, 0.34, 0.72, -0.15);                       // passenger seat
+  addBox(dark, 0.48, 0.48, 0.12, -0.34, 0.98, -0.42, -0.14);               // backrests
+  addBox(dark, 0.48, 0.48, 0.12, 0.34, 0.98, -0.42, -0.14);
+  addBox(dark, 1.35, 0.22, 0.45, 0, 0.88, 0.46);                           // dashboard
+  const steering = new THREE.Mesh(BUGGY_GEO.steeringWheel, metal);
+  steering.position.set(-0.34, 1.05 - BODY_Y, 0.38); steering.rotation.y = Math.PI / 2; body.add(steering);
+  // Time circuit displays on console
+  addBox(tailLight, 0.22, 0.04, 0.04, 0, 0.96, 0.36);                      // RED: Destination Time
+  addBox(glowMat, 0.22, 0.04, 0.04, 0, 0.91, 0.36);                        // GREEN: Present Time
+  addBox(amberLight, 0.22, 0.04, 0.04, 0, 0.86, 0.36);                     // AMBER: Last Time Departed
+  // Flux Capacitor between the seats!
+  addBox(dark, 0.22, 0.24, 0.14, 0, 1.05, -0.40);                          // flux box casing
+  addBox(glowMat, 0.18, 0.20, 0.04, 0, 1.05, -0.32);                       // glowing cyan flux capacitor face
+  addBox(warmLight, 0.05, 0.10, 0.05, 0, 1.05, -0.31);                     // center pulse emitter
+
+  // --- 4. GULL-WING DOORS (The DeLorean Signature Silhouette!) ---
+  for (const side of [-1, 1]) {
+    // Open/raised gull-wing door panels framing the cockpit
+    addBox(accent, 0.10, 0.62, 0.94, side * 0.86, 1.52, -0.26, 0, 0, -side * 0.42);
+    addBox(darkGlass, 0.06, 0.34, 0.72, side * 0.90, 1.54, -0.26, 0, 0, -side * 0.42);
+    addBox(dark, 0.06, 0.28, 0.96, side * 0.89, 0.78, -0.26);              // lower cabin sill
+  }
+
+  // --- 5. REAR WINDOW BLACK LOUVRES ---
+  for (let k = 0; k < 5; k++) {
+    addBox(black, 1.46, 0.04, 0.22, 0, 1.34 - k * 0.08, -0.84 - k * 0.13, 0.12);
+  }
+
+  // --- 6. TIME MACHINE REAR DECK: TWIN REACTOR HEAT EXCHANGERS & MR. FUSION ---
+  for (const side of [-1, 1]) {
+    // Large rectangular cooling boxes on rear deck (angled slightly outward)
+    addBox(dark, 0.46, 0.38, 0.68, side * 0.58, 0.98, -1.65, 0, side * 0.10, 0);
+    // Radiator cooling slats on rear face
+    for (let r = 0; r < 4; r++) {
+      addBox(black, 0.38, 0.04, 0.04, side * 0.58, 0.84 + r * 0.08, -1.99, 0, side * 0.10, 0);
+    }
+    // Reactor exhaust nozzle
+    addBox(metal, 0.22, 0.20, 0.12, side * 0.58, 0.98, -2.00, 0, side * 0.10, 0);
+  }
+  // Mr. Fusion
+  addBox(white, 0.26, 0.32, 0.26, 0, 1.18, -1.48);                         // white reactor body
+  addBox(black, 0.22, 0.10, 0.22, 0, 1.38, -1.48);                         // black latch cap
+  addBox(goldGlow, 0.12, 0.06, 0.05, 0, 1.20, -1.34);                      // hazard symbol
+
+  // --- 7. GLOWING TIME-CIRCUIT CONDUITS (Flux bands) ---
+  for (const side of [-1, 1]) {
+    addBox(glowMat, 0.04, 0.04, 2.6, side * 0.94, 0.78, 0.15);              // waistline flux cable
+    addBox(glowMat, 0.04, 0.04, 0.8, side * 0.85, 0.86, -1.45, 0, -side * 0.25, 0); // feed into reactor!
+    addBox(glowMat, 0.04, 0.04, 0.6, side * 0.70, 0.92, 1.62, 0, side * 0.20, 0);  // front fender coil
+  }
+  addBox(glowMat, 0.95, 0.04, 0.04, 0, 0.76, -1.98);                       // rear bumper cross-conduit
+
+  // --- 8. REAR FASCIA & GRID TAILLIGHTS ---
+  addBox(black, 1.88, 0.28, 0.18, 0, 0.68, -1.94);                         // rear black panel
+  // Iconic DeLorean grid taillights
+  for (const side of [-1, 1]) {
+    addBox(tailLight, 0.45, 0.12, 0.05, side * 0.65, 0.70, -2.04);          // red tail/brake blocks
+    addBox(amberLight, 0.28, 0.12, 0.05, side * 0.28, 0.70, -2.04);         // amber turn blocks
+  }
+  addBox(accent, 1.92, 0.14, 0.22, 0, 0.46, -1.95);                        // stainless rear bumper
+  addBox(white, 0.38, 0.12, 0.04, 0, 0.46, -2.07);                         // OUTATIME license plate
+
+  // --- 9. EXHAUSTS EMITTERS ---
   const exhausts = [];
   for (const side of [-1, 1]) {
-    const pipe = new THREE.Mesh(BUGGY_GEO.exhaust, metal); pipe.position.set(side * 0.5, 0.78 - BODY_Y, -1.52); pipe.rotation.x = Math.PI / 2; body.add(pipe);
-    const emitter = new THREE.Object3D(); emitter.position.set(side * 0.5, 0.78 - BODY_Y, -1.75); body.add(emitter); exhausts.push(emitter);
+    const emitter = new THREE.Object3D();
+    emitter.position.set(side * 0.58, 0.98 - BODY_Y, -2.05);
+    body.add(emitter);
+    exhausts.push(emitter);
   }
-  const underglow = new THREE.Mesh(new THREE.PlaneGeometry(1.45, 2.15), glowMat); underglow.rotation.x = -Math.PI / 2; underglow.position.set(0, 0.045 - BODY_Y, -0.04); body.add(underglow);
+  const underglow = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 3.2), glowMat);
+  underglow.rotation.x = -Math.PI / 2; underglow.position.set(0, 0.08 - BODY_Y, 0); body.add(underglow);
   flushBoxes();
 
-  // Octagonal tyres with visible five-bolt hubs. Front wheels steer as complete pivots; wheel spin stays independently animated.
+  // --- 10. TURBINE WHEELS WITH FINNED RIMS ---
   const steer = [], lugMat = lam(0xc3c7cc);
-  for (const [wx, wz] of [[-1.06, -0.86], [1.06, -0.86], [-1.06, 0.86], [1.06, 0.86]]) {
+  for (const [wx, wz] of [[-1.02, -1.05], [1.02, -1.05], [-1.02, 1.15], [1.02, 1.15]]) {
     const front = wz > 0, outward = wx < 0 ? -1 : 1, mount = new THREE.Group();
-    mount.position.set(wx, 0.59, wz); g.add(mount);
+    mount.position.set(wx, 0.46, wz); g.add(mount);
     if (front) steer.push(mount);
     const wheel = new THREE.Group(); mount.add(wheel); prop.wheels.push(wheel);
     const tire = new THREE.Mesh(BUGGY_GEO.tire, tireMat); tire.rotation.z = Math.PI / 2; wheel.add(tire);
-    const hub = new THREE.Mesh(BUGGY_GEO.hub, metal); hub.position.x = outward * 0.19; hub.rotation.z = Math.PI / 2; wheel.add(hub);
+    const hub = new THREE.Mesh(BUGGY_GEO.hub, metal); hub.position.x = outward * 0.16; hub.rotation.z = Math.PI / 2; wheel.add(hub);
+    // Turbine fins
+    const fins = new THREE.InstancedMesh(BUGGY_GEO.fin, metal, 10), finPose = new THREE.Object3D();
+    for (let f = 0; f < 10; f++) {
+      const a = f * Math.PI * 2 / 10;
+      finPose.position.set(outward * 0.17, Math.sin(a) * 0.16, Math.cos(a) * 0.16);
+      finPose.rotation.set(0, 0, a + 0.35); finPose.updateMatrix();
+      fins.setMatrixAt(f, finPose.matrix);
+    }
+    fins.instanceMatrix.needsUpdate = true; wheel.add(fins);
+    // Lug nuts + center cap
     const lugs = new THREE.InstancedMesh(BUGGY_GEO.lug, lugMat, 5), bolt = new THREE.Object3D();
     for (let i = 0; i < 5; i++) {
       const a = i * Math.PI * 2 / 5;
-      bolt.position.set(outward * 0.225, Math.sin(a) * 0.34, Math.cos(a) * 0.34); bolt.updateMatrix(); lugs.setMatrixAt(i, bolt.matrix);
+      bolt.position.set(outward * 0.19, Math.sin(a) * 0.14, Math.cos(a) * 0.14); bolt.updateMatrix(); lugs.setMatrixAt(i, bolt.matrix);
     }
     lugs.instanceMatrix.needsUpdate = true; wheel.add(lugs);
+    const cap = new THREE.Mesh(BUGGY_GEO.hub, black); cap.scale.set(0.35, 0.35, 0.8); cap.position.x = outward * 0.18; cap.rotation.z = Math.PI / 2; wheel.add(cap);
   }
-  prop.fx = { exhausts, lights, glowMats: [glowMat, ramMat], body, steer };
+  prop.fx = { exhausts, lights, glowMats: [glowMat, tailLight, amberLight], body, steer, boostColor: 0x58e5ff };
 }
 
 function addProp(kind, x, y, z) {
   const g = new THREE.Group(); g.position.set(x, y, z); scene.add(g);
-  const colors = { bike: 0x36f6ff, buggy: 0xffa73a, board: 0xff3fc8, skates: 0xb0ff63 };
+  const colors = { bike: 0x36f6ff, buggy: 0x58e5ff, board: 0xff3fc8, skates: 0xb0ff63 };
   const isGear = kind === 'board' || kind === 'skates';
   if (!isGear) {
     const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 5, 8), new THREE.MeshBasicMaterial({ color: colors[kind], transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -5025,7 +5331,7 @@ function mount(p) {
   onVehicle = p; gear = ''; grinding = null;
   p.mesh.visible = true;
   toast(p.kind === 'buggy' ? 'DELOREAN — E to hop out · hold X to boost · ram enemies at speed' : 'HOVER-BIKE — E to hop out · hold X to boost', 2200);
-  sfx.jump(true); shockRing(pos, 3, p.kind === 'buggy' ? 0xffa73a : 0x36f6ff);
+  sfx.jump(true); shockRing(pos, 3, p.kind === 'buggy' ? 0x58e5ff : 0x36f6ff);
 }
 
 function dismount() {
@@ -6256,7 +6562,7 @@ function skyBolt() {
 }
 let dressAcc = 0, groundCur = null, monkeyAcc = 0, horrorAcc = 7;
 function updateWorlds(dt) {
-  const T = performance.now() / 1000, z = activeZ;
+  const T = performance.now() / 1000, z = inInterior ? null : activeZ;
   dressAcc += dt;
   if (dressAcc > 0.4) {                      // dress the platforms near you for the active world; strip the rest
     dressAcc = 0;
@@ -6338,6 +6644,7 @@ function makeWatcher() {
 }
 function dreadSting(vol = 0.2) { tone(70, 30, 0.9, 'sawtooth', vol); tone(1800, 200, 0.35, 'square', vol * 0.4); noise(0.4, vol * 0.8, 400); }
 function dreadTick(dt) {
+  if (inInterior) { $('dread').style.opacity = 0; dreadWatcher.visible = false; return; }
   if (state === 'title') { $('dread').style.opacity = 0; return; }
   const zone = activeZ && activeZ.name === 'Horror' ? 0.3 : 0;
   let near = 0; for (const e of enemies) if (!e.dead && Math.abs(e.y - pos.y) < 20 && Math.hypot(e.x - pos.x, e.z - pos.z) < 22) near++;
