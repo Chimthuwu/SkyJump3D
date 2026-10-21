@@ -6561,7 +6561,7 @@ function netMessage(m) {
 }
 function netConnect(server, room) {
   if (net.ws) try { net.ws.close(); } catch (_) {}
-  const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+  const scheme = location.protocol === 'https:' || server === RELAY_HOST ? 'wss' : 'ws';
   let ws;
   try { ws = new WebSocket(`${scheme}://${server}/ws?room=${encodeURIComponent(room)}`); } catch (_) { toast('Could not connect', 3000); return; }
   net.ws = ws; net.room = room;
@@ -7457,6 +7457,8 @@ function menuStart() { begin(); }
 function menuMulti() { menuMode = 'multi'; menuRender(); }
 // ----- guided multiplayer setup: the player is walked through installing Tailscale, running the server and sharing an invite link -----
 const roomVal = () => (($('inRoom').value || '').trim().replace(/[^\w-]/g, '').slice(0, 24) || 'lobby');
+// The public site (Pages) is static and has no relay, so online play goes through the Cloudflare Worker relay.
+const RELAY_HOST = 'skyjump3d.chimske.workers.dev', SITE_URL = 'https://sky-jump.pages.dev/';
 let netInfo = null;
 const servedByServer = () => /^https?:$/.test(location.protocol || '');
 // If this page was opened as a plain file (double-clicked index.html) the server is still reachable at localhost:8080, so look for it there.
@@ -7466,17 +7468,18 @@ function menuHostOpen() {
   menuMode = 'host'; menuRender();
   const q = new URLSearchParams(location.search || '').get('room'); if (q) $('inRoom').value = q.slice(0, 24);
   hostRefresh();
-  fetch(serverOrigin() + '/net-info').then(r => r.json()).then(j => { netInfo = j; hostRefresh(); }).catch(() => { netInfo = null; hostRefresh(); });
+  fetch(serverOrigin() + '/net-info').then(r => r.json()).then(j => { netInfo = j; hostRefresh(); }).catch(() => { netInfo = { port: 443, addresses: [], cloud: true }; hostRefresh(); });      // no local relay (e.g. the Pages site): use the online one
 }
 function hostRefresh() {
   const ts = netInfo && netInfo.addresses.find(a => a.kind === 'tailscale'), other = netInfo && netInfo.addresses.find(a => a.kind !== 'tailscale');
-  setStep('stTs', !!ts); setStep('stSrv', !!netInfo);
+  const cloud = !!(netInfo && netInfo.cloud);
+  setStep('stTs', !!ts || cloud); setStep('stSrv', !!netInfo);
   $('srvHint').style.display = netInfo ? 'none' : 'inline';
-  $('tsNote').textContent = ts ? 'Tailscale detected on this PC - friends use the link below.'
+  $('tsNote').textContent = cloud ? 'Online mode: no Tailscale or server needed - just share the link below.' : ts ? 'Tailscale detected on this PC - friends use the link below.'
     : netInfo ? 'The server does not see a Tailscale connection. Make sure Tailscale is running and signed in, then press REFRESH.'
     : 'Start the server first (step 2) so I can check for Tailscale, then press REFRESH.';
   const addr = ts ? ts.address : other ? other.address : 'localhost';
-  $('inviteAddr').textContent = `http://${addr}:${(netInfo && netInfo.port) || 8080}/?room=${roomVal()}`;
+  $('inviteAddr').textContent = cloud ? `${servedByServer() ? location.origin + '/' : SITE_URL}?room=${roomVal()}` : `http://${addr}:${(netInfo && netInfo.port) || 8080}/?room=${roomVal()}`;
   $('bGo').disabled = !netInfo;
 }
 async function copyText(t) {
@@ -7485,14 +7488,15 @@ async function copyText(t) {
 }
 function hostGo() {
   if (!netInfo) return;
-  if (servedByServer()) { netConnect(location.host, roomVal()); begin(); }
+  if (netInfo.cloud) { netConnect(RELAY_HOST, roomVal()); begin(); }
+  else if (servedByServer()) { netConnect(location.host, roomVal()); begin(); }
   else location.href = `http://localhost:8080/?room=${roomVal()}`;       // from a plain file: hop onto the server's copy of the game, which joins the room by itself
 }
 function menuJoinOpen() { menuMode = 'join'; $('joinMsg').textContent = ''; menuRender(); setTimeout(() => { try { $('inInvite').focus(); } catch (_) {} }, 0); }
 function parseInvite() {
   let t = ($('inInvite').value || '').trim(); if (!t) return null;
   if (!/^https?:\/\//i.test(t)) t = 'http://' + t;
-  try { const u = new URL(t); if (!u.port) u.port = '8080'; if (!u.searchParams.get('room')) u.searchParams.set('room', 'lobby'); return u; } catch (_) { return null; }
+  try { const u = new URL(t); if (!u.port && u.protocol === 'http:') u.port = '8080'; if (!u.searchParams.get('room')) u.searchParams.set('room', 'lobby'); return u; } catch (_) { return null; }
 }
 function joinTest() {
   const u = parseInvite(), m = $('joinMsg');
@@ -7587,7 +7591,10 @@ window.__ng = { ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toF
 
 {   // opened from the relay server with ?room=... -> connect right away
   const qp = new URLSearchParams(location.search || '');
-  if (/^https?:$/.test(location.protocol) && qp.get('room')) netConnect(location.host, qp.get('room').slice(0, 24));
+  if (/^https?:$/.test(location.protocol) && qp.get('room')) {
+    const room = qp.get('room').slice(0, 24);
+    fetch('/net-info').then(r => r.json()).then(() => netConnect(location.host, room)).catch(() => netConnect(RELAY_HOST, room));      // same-origin relay if there is one, else the online relay
+  }
 }
 // ---------- PERF: opt-in profiling (window.__ng.perf). Off by default; when off the loop only reads PERF.enabled once per frame. ----------
 const PERF = {
@@ -7639,12 +7646,12 @@ const PERF = {
   },
 };
 window.__ng.linkGraph = () => linkGraphFn ? linkGraphFn() : null;
-window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.plateInfo = () => platforms.slice(0, 3).map(p => ({ top: p.top, y: p.plate && p.plate.position.y, vis: p.plate && p.plate.visible, col: p.plate && p.plate.material.color.getHex(), em: p.plate && p.plate.material.emissive.getHex(), ei: p.plate && p.plate.material.emissiveIntensity, po: p.plate && p.plate.material.polygonOffset, par: p.plate && p.plate.parent && p.plate.parent.type, h: p.plate && p.plate.geometry.parameters.height })); window.__ng.towerWindows = () => buildingHubs.flatMap(h => h.windows || []).map(w => ({ x: w.x, y: w.y, z: w.z, nx: w.nx, nz: w.nz })); window.__ng.setCull = r => { CULL_R = r; };
+window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.plateInfo = () => platforms.slice(0, 3).map(p => ({ top: p.top, y: p.plate && p.plate.position.y, vis: p.plate && p.plate.visible, col: p.plate && p.plate.material.color.getHex(), em: p.plate && p.plate.material.emissive.getHex(), ei: p.plate && p.plate.material.emissiveIntensity, po: p.plate && p.plate.material.polygonOffset, par: p.plate && p.plate.parent && p.plate.parent.type, h: p.plate && p.plate.geometry.parameters.height })); window.__ng.towerWindows = () => buildingHubs.flatMap(h => h.windows || []).map(w => ({ x: w.x, y: w.y, z: w.z, nx: w.nx, nz: w.nz })); window.__ng.netState = () => ({ on: net.on, room: net.room, peers: net.peers.size, slot: net.slot }); window.__ng.setCull = r => { CULL_R = r; };
 window.__ng.lvl = () => lvl;
 window.__ng.cull = () => ({ tracked: cull.list.length, hidden: cull.hidden, children: lvl.children.length, solids: solids.length, platforms: platforms.length, specials: specials.length, enemies: enemies.length, items: items.length, props: props.length });
 window.__ng.renderInfo = () => new Promise(res => { renderer.info.autoReset = false; renderer.info.reset(); requestAnimationFrame(() => requestAnimationFrame(() => { const i = renderer.info; res({ calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries }); renderer.info.autoReset = true; })); });
 window.__ng.perf = PERF; window.__ng.drawStats = () => { const fr = new THREE.Frustum(), m = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); fr.setFromProjectionMatrix(m); const enemyRoots = new Set(enemies.map(e => e.mesh)); const out = { enemyParts: 0, enemiesVisible: 0, other: 0, instanced: 0, sprites: 0, transparent: 0 }; const seen = new Set(); scene.traverseVisible(o => { if (!o.isMesh && !o.isSprite && !o.isPoints) return; if (o.frustumCulled && o.geometry && !fr.intersectsObject(o)) return; if (o.isSprite) { out.sprites++; return; } let a = o, isE = false; while (a) { if (enemyRoots.has(a)) { isE = true; seen.add(a); break; } a = a.parent; } if (isE) out.enemyParts++; else if (o.isInstancedMesh) out.instanced++; else { out.other++; const k = (o.geometry ? o.geometry.type : '?') + '|' + (o.material && o.material.type) + (o.material && o.material.transparent ? '|T' : '') + '|d' + Math.round(Math.hypot(o.getWorldPosition(new THREE.Vector3()).x - camera.position.x, o.getWorldPosition(new THREE.Vector3()).z - camera.position.z) / 100); (out.k = out.k || {})[k] = (out.k[k] || 0) + 1; } if (o.material && o.material.transparent) out.transparent++; }); out.enemiesVisible = seen.size; return out; }; window.__ng.farWho = () => { const fr = new THREE.Frustum(); fr.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)); const tops = new Map(); scene.traverseVisible(o => { if (!o.isMesh || (o.frustumCulled && !fr.intersectsObject(o))) return; const wp = o.getWorldPosition(new THREE.Vector3()); if (Math.hypot(wp.x - camera.position.x, wp.z - camera.position.z) < 450) return; let a = o; while (a.parent && a.parent !== scene && a.parent !== lvl) a = a.parent; const e = tops.get(a) || { n: 0, cullable: cullable(a), type: a.type, kids: a.children.length, inLvl: a.parent === lvl, ud: Object.keys(a.userData || {}).join(), x: Math.round(a.position.x), y: Math.round(a.position.y), z: Math.round(a.position.z) }; e.n++; tops.set(a, e); }); return [...tops.values()].sort((p, q) => q.n - p.n).slice(0, 8); };
-window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.plateInfo = () => platforms.slice(0, 3).map(p => ({ top: p.top, y: p.plate && p.plate.position.y, vis: p.plate && p.plate.visible, col: p.plate && p.plate.material.color.getHex(), em: p.plate && p.plate.material.emissive.getHex(), ei: p.plate && p.plate.material.emissiveIntensity, po: p.plate && p.plate.material.polygonOffset, par: p.plate && p.plate.parent && p.plate.parent.type, h: p.plate && p.plate.geometry.parameters.height })); window.__ng.towerWindows = () => buildingHubs.flatMap(h => h.windows || []).map(w => ({ x: w.x, y: w.y, z: w.z, nx: w.nx, nz: w.nz })); window.__ng.setCull = (r, big) => { CULL_R = r; CULL_BIG_R = big; cull.t = 0; }; window.__ng.sectors = () => { const out = []; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + 0.2; let n = 0; for (const q of solids) { if (q.cx === undefined || Math.abs(q.top - TOP) > 60) continue; const dx = q.cx - start.x, dz = q.cz - start.z, d = Math.hypot(dx, dz); if (d < 30 || d > 170) continue; let da = Math.abs(Math.atan2(dz, dx) - a); da = Math.min(da, Math.PI * 2 - da); if (da < Math.PI / 8) n++; } out.push(n); } return out; }; window.__ng.bossesNow = () => endBosses.map(e => ({ n: e.name, v: e.bossRole, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), hub: e.hub ? e.hub.kind : 'bottom' })); window.__ng.enemyCount = () => enemies.filter(e => !e.dead).length; window.__ng.propsNow = () => props.map(p => ({ k: p.kind, x: +p.mesh.position.x.toFixed(1), y: +p.mesh.position.y.toFixed(1), z: +p.mesh.position.z.toFixed(1) })); window.__ng.bounceNear = (x, z, r = 12) => solids.filter(s => s.bounce && Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z) < r).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +s.maxy.toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), w: +(s.maxx - s.minx).toFixed(1), d: +(s.maxz - s.minz).toFixed(1), boost: s.boost })); window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute();
+window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.plateInfo = () => platforms.slice(0, 3).map(p => ({ top: p.top, y: p.plate && p.plate.position.y, vis: p.plate && p.plate.visible, col: p.plate && p.plate.material.color.getHex(), em: p.plate && p.plate.material.emissive.getHex(), ei: p.plate && p.plate.material.emissiveIntensity, po: p.plate && p.plate.material.polygonOffset, par: p.plate && p.plate.parent && p.plate.parent.type, h: p.plate && p.plate.geometry.parameters.height })); window.__ng.towerWindows = () => buildingHubs.flatMap(h => h.windows || []).map(w => ({ x: w.x, y: w.y, z: w.z, nx: w.nx, nz: w.nz })); window.__ng.netState = () => ({ on: net.on, room: net.room, peers: net.peers.size, slot: net.slot }); window.__ng.setCull = (r, big) => { CULL_R = r; CULL_BIG_R = big; cull.t = 0; }; window.__ng.sectors = () => { const out = []; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + 0.2; let n = 0; for (const q of solids) { if (q.cx === undefined || Math.abs(q.top - TOP) > 60) continue; const dx = q.cx - start.x, dz = q.cz - start.z, d = Math.hypot(dx, dz); if (d < 30 || d > 170) continue; let da = Math.abs(Math.atan2(dz, dx) - a); da = Math.min(da, Math.PI * 2 - da); if (da < Math.PI / 8) n++; } out.push(n); } return out; }; window.__ng.bossesNow = () => endBosses.map(e => ({ n: e.name, v: e.bossRole, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), hub: e.hub ? e.hub.kind : 'bottom' })); window.__ng.enemyCount = () => enemies.filter(e => !e.dead).length; window.__ng.propsNow = () => props.map(p => ({ k: p.kind, x: +p.mesh.position.x.toFixed(1), y: +p.mesh.position.y.toFixed(1), z: +p.mesh.position.z.toFixed(1) })); window.__ng.bounceNear = (x, z, r = 12) => solids.filter(s => s.bounce && Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z) < r).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +s.maxy.toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), w: +(s.maxx - s.minx).toFixed(1), d: +(s.maxz - s.minz).toFixed(1), boost: s.boost })); window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute();
 let last = performance.now();
 renderer.setAnimationLoop(now => {
   const P = PERF.enabled; if (P) { renderer.info.reset(); PERF.frame(now); PERF.lapStart(); }
