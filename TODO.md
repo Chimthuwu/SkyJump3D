@@ -12,11 +12,14 @@ Spawn-region cleanliness (no portals/gore/duplicate rides), six-player spawn tow
 - Real-GPU performance measurement requires a hardware-GPU browser; tests here use headless software GL.
 
 ## Backlog (ordered, top = highest priority)
+- [ ] **SIX UNIVERSES** — see `PLAN-UNIVERSES.md` (decided: early game x6 on a ~600 m ring, shared skyway/moon/Mars, far skyline towers become homes 2-6, inter-universe platform bridges). Not started; plan written 2026-10-21.
 - [~] Cyberpunk/EVA enemy accents: headless runtime smoke passes, but distance/fog readability still needs a human eyeball pass.
 - [ ] Physical traversal playtest from all six home towers through the generated route graph.
 - [ ] Windows firewall inbound rule for LAN co-op (user/admin action).
 
 ## Done (most recent first)
+- 2026-10-21 [CLAUDE] Moon freeze fixed: `buildAlienRoute` (triggered on moon landing) referenced undefined `zone` (should be `Z`) -> ReferenceError mid-build in the frame loop. Fixed, and `buildMarsRoute` now try/catches the build. Headless `__ng.mars()`: no errors, frames run.
+- 2026-10-21 [CLAUDE] Bouncy platforms keep their biome plate colour (no more forced green); corner spring coils are tinted to the plate via `springMatFor`. Not run in a browser.
 - 2026-10-21 [ANTIGRAVITY] DELOREAN TIME MACHINE MODEL OVERHAUL + RESTORED AT SPAWN:
   (1) The DeLorean car had been removed from the starting spawn rooftop in commit 6affd70; restored alongside the Hover-Bike at spawn (`addProp('buggy', start.x - 5, TOP, start.z - 5)`).
   (2) Full DeLorean DMC-12 Time Machine visual overhaul (`makeBuggyMesh`): low stainless wedge coupe silhouette, raised open gull-wing doors framing cockpit, raked windscreen, quad square halogen headlamps + DMC emblem grille, twin hood grooves, stepped black rear louvres, dual large reactor heat-exchanger exhaust vents on the rear deck with cooling slats and boost fire nozzles, Mr. Fusion reactor canister with hazard badge, glowing cyan flux conduit bands along the waistline and rear, segmented grid taillight assembly, OUTATIME license plate, and 10-fin turbine alloy wheels with DMC center caps.
@@ -56,7 +59,7 @@ Spawn-region cleanliness (no portals/gore/duplicate rides), six-player spawn tow
 - [x] Drone/bomber turned into a giant eyeball — 2026-10-20 — Faceted PS1 sphere as sclera, iris + black pupil front, cyberpunk optic ring (cyan drone / magenta bomber), bomber gets 5 bloodshot veins, rotor halo still spins e.ring, bottom optic nerve, rotor arms/housings kept. Hitboxes (r 0.65 / h 1.1), pts, AI untouched. Syntax + geometry-budget + regression checks pass; no browser play.
 - [x] CRAZY MODE — 2026-10-20 — KeyB toggle in-game, persisted in towerdrop.settings. Chroma-split + CRT scanline wobble in the upscale shader (2 extra texture reads, still O(1)/pixel), toast gets a magenta/cyan pulsing skew. PS1/N64/MODERN presets, gameplay, AI, physics, aim all untouched. Syntax + regression grep checks pass; not play-tested in a browser.
 - [x] Fish Audio enemy voices + multiplayer check + zone worlds — 2026-10-20 (Claude). Superseded: inline syntax now passes, `/tts?kind=boss&cat=boss&n=0` returned real mp3 bytes in the later server sweep, and two-browser multiplayer works. Remaining admin action: rotate the Fish Audio key that was pasted into chat.
-  - Voices: `server/server.js` has `/tts` (only allowlisted lines from `server/voice-lines.json`, cached in `server/tts-cache/`, 300 new clips/hour cap, free model `s2.1-pro-free`, `model` as a HEADER per `Z:\GITHUB\FISH_AUDIO_TTS*.md`). Key is in `server/.env` (git-ignored, never sent to the browser). Cast: walker=Robot, gunner=Lans, charger=doom, shield=Computer, bomber/drone=Robot/Lans, boss+guardians=horror. Client falls back to browser speech when the server has no key / isn't the origin. **Rotate the key at fish.audio/app/developers (it was pasted into chat).**
+  - Voices: `server/server.js` has `/tts` (only allowlisted lines from `server/voice-lines.json`, cached in `server/tts-cache/`, 300 new clips/hour cap, free model `s2.1-pro-free`, `model` as a HEADER per `Z:\GITHUB\FISH_AUDIO_TTS*.md`). Key is in `server/.env` (git-ignored, never sent to the browser). Cast: walker=Robot, gunner=Lans, charger=doom, shield=Computer, bomber/drone=Robot/Lans, boss+guardians=horror. Client falls back to browser speech when the server has no key / isn't the origin. **Key rotated 2026-10-21 and stored only in the git-ignored `server/.env`; a fresh uncached `/tts` request returned 200 with a real mp3, confirming the new key works.**
   - Multiplayer: two real Edge windows in one room saw each other (host + guest, names, hearts). Note: two tabs in ONE browser throttle the background tab, so test with two windows. Friends on LAN are blocked by Windows Firewall (Wi-Fi profile is Public): needs an inbound allow rule for TCP 8080 (admin PowerShell) or use the Tailscale address.
   - Zone worlds (`updateWorlds`, `dressSite`, `buildBackdrop`, `zoneGround`): Inferno verified in a real browser (red sky, flames, embers); Jungle/Psychedelic/Frozen/Storm load without errors, visuals not yet eyeballed. Bug fixed: ground contact needed a 1 cm sink so `onGround` flickered and `onLand` re-fired every few frames (reset the zone, flaky portals). Portals are now flat hatches you can stand on or fall into (`updatePortals`).
 - [x] Mouse control fix — 2026-10-20 — Aim now works both with pointer lock (movementX/Y) and without it (clientX/Y deltas), pointer-lock failures toast instead of force-pausing, mousedown/resume path re-requests the lock, begin() re-locks after fullscreen settles. Syntax + control-flow checks pass; not play-tested in a browser.
@@ -79,6 +82,7 @@ Spawn-region cleanliness (no portals/gore/duplicate rides), six-player spawn tow
 - Headless Edge/Puppeteer is now available and used for runtime, layout, gore, Guide/mission and slot tests. Human visual quality and real-GPU frame rate are still unverified — severity: low for correctness, medium for look/perf.
 
 ## Manual test log
+- 2026-10-21 — Headless Edge: tower interiors — all five themes open, are enterable and render distinctly; roof landing opens the tower; the hatch drops you in without damage; service pads launch you upward; leaving restores the outside zone; the interior contract is offered; zero page errors.
 - 2026-10-21 — Headless Edge: solo plus all six home slots load correctly; no enemies/gore/portals near homes; 3 props per tower; 587 jungle bananas; Guide opens/closes and mission accept → ready → turn-in works; zero page errors.
 - 2026-10-20 — Session summary — Cyberpunk/EVA accent pass shipped on top of the enemy sprite rework; no real-browser play-test performed.
 - 2026-10-20 — Cyberpunk/EVA accents — Syntax + geometry-budget + accent-artifact + hitbox checks pass.
@@ -102,6 +106,24 @@ Spawn-region cleanliness (no portals/gore/duplicate rides), six-player spawn tow
 - 2026-10-21 [BUFFY / Agent B] Verified the integration in `index.html`: mission generation uses its separate level-seeded RNG; the frame loop updates mission state; local and remote kills both route to mission credit; and persistent glide, nitro, jump, credit, and resource effects are wired to use sites. Added disposal of regenerated core pickups, made full-health medkits non-craftable, persisted resources when placing blocks, and aligned kill markers with valid kill targets. Superseded: browser, slot-mapping and Guide/mission tests now pass; see the six-player section.
 
 - `PLAN-INTERIORS-MP.md`: Part 1 hollow tower interiors (Agent A), Part 2 six-player ring of spawn towers with per-slot Guide + missions (Agent B). Runs after PLAN-HOMEBASE.
+
+## Tower interiors (Part 1) — 2026-10-21
+- Landing on a big building hub's roof wakes the tower (`openTower(hub)`): the tower's single solid is pulled out of `solids`, the box mesh is hidden and the volume is rebuilt as a hollow shell — four collision walls, a street-level slab, 1–14 staggered floor rings each with one carved hatch, a bounce pad under every hatch (so the shaft can be climbed from the bottom), a doorway bridge + launch ledge on the ground side, emissive wall trim and an iris-ing roof hatch. Interior floors are catch nets, so falling inside can never kill the player.
+- Five themes, each with its own palette, zone, geometry, enemies and loot: Server Farm (instanced racks, LED grids, cable trenches), Overgrown Atrium (trees and vines through the floors), Flooded Reactor (burning coolant plane + reactor core), Neon Club (pulsing dance floor, stage, DJ guardian), Cold Vault (cryo pods, ice). The theme follows the hub zone (`towerThemeFor`); `__ng.openTower(i, 'server')` forces one.
+- Every interior holds 2–3 biome enemies, a mini-boss (Core Warden / The DJ), a weapon + ammo reward, a mission data core and its own `collect` contract ("Recover the Server Farm Data Core") that pays out at the Guide.
+- Inside, the exterior is suppressed: own sky background, tight fog (4–62), theme hemi/sun, no clouds, no wind, no storm, no dread watchers, no space fade.
+- ONE shared key light serves every interior and is parked at y=-10000 while the player is outside, so opening towers never adds per-frame light cost and the scene light count never changes.
+
+### Verified (2026-10-21)
+- Extracted inline module `node --check` PASS.
+- Headless Edge (software GL), harness `interior-test.cjs` in the repo root: all five themes open, are enterable, render a distinct palette and switch the zone; landing on a roof opens the tower and keeps the player on the roof; dropping through the hatch lands inside with no damage (hp 5/5); the service pad launches the player up the shaft (boost 37.1, vy 28.6); walking out restores the outside zone (`Jungle`, `inside:false`) and daylight; the interior contract is offered ("Recover the Overgrown Atrium Data Core"). Zero page/console errors.
+- Cost from one fixed vantage point outside the tower: closed 89 ms avg / 602 draw calls / 35.5k tris → opened 69.6 ms / 530 / 21.3k. An opened interior adds 68 collision solids and 21 unique geometries; unvisited towers cost nothing because nothing is built until the first landing.
+
+### Known limits
+- Real-GPU frame rate inside an interior is unmeasured (this box only has headless software GL). The inside view measured ~128 ms/frame under SwiftShader — fill-rate bound, not draw-call bound.
+- One shared point light for all interiors; a very large interior may want a second fill.
+- The ground-side exit is a doorway onto a launch ledge that boosts you into the city — there is no drop-to-your-death exit.
+- Each opened tower creates its own data-core contract, so opening many towers shows many contracts at once.
 
 ## Six-player spawn towers (Agent B) — 2026-10-21
 - `starts[]` + `mySlot` are live. Single player still builds the original one-roof tower at (10, TOP, 0); a room builds six identical home towers on a 150 m ring at 60° spacing.
@@ -136,3 +158,36 @@ Spawn-region cleanliness (no portals/gore/duplicate rides), six-player spawn tow
 
 ## Performance audit
 - Perf HUD/renderer.info hooks (`__ng.perf`) are present. Real-GPU capture of the 3 reference scenes is still open; only headless software-GL timing is available here.
+
+## Session notes — 2026-10-21 (late)
+- Far skyline buildings (`buildSurroundings`) now have collision + landable roofs.
+- Monkeys bounce the player off (13 m/s, 0.3 s control lock, no HP loss) instead of a nudge.
+- Home roof: removed forge bench, storage crate and MISSION BOARD sign (ugly/glitchy). Contracts = Guide's TASKS tab, crafting = RECIPES tab.
+- (Suction tubes were for a different project, Futurama — NOT wanted here.) Possible leftover: a 'board' (hoverboard vehicle) prop still spawns at each home (`addProp('board', ...)`), user earlier asked for no hoverboard vehicle.
+
+## Universe links (Agent B)
+- Added in index.html (just before `buildNetwork`): `connectFar(A,B)` (~line 2005), `buildUniverseLinks(hubs)` (~2080), state `farLinks` / `linkGraphFn`; `window.__ng.linkGraph()` returns `{links, unreachable}` (defined next to `__ng.perf`).
+- connectFar: 15-18 m spacing, <=56 stones + mid rest island (12 m slab, checkpoint, ammo, heart, gun, 3-4 enemies), trampolines/dash pads/rails, checkpoint ~every 6, ammo/heart ~every 8; step capped both directions (chain is walkable both ways); returns false if either end has no landing or climb too tall for the cap.
+- buildUniverseLinks: ring pairs i,i+1; diagonals 0-3,1-4,2-5; each universe's highest building -> `launch` hub; each `start` hub -> nearest own-universe hub via `connect`; BFS over universe nodes (launch = 'L'), up to 3 retries, console.warn if still disconnected. Prefers building hubs, avoids arenas (no ghost gating).
+- **HANDOFF / NOT YET WIRED:** nothing calls `buildUniverseLinks(hubs)` yet. Agent A must call it at the end of `buildNetwork` just before `buildBranches(hubs)`, and set `hub.universe = slot` on every hub (launch hub = shared). Hubs without `.universe` are ignored.
+- Verified: module syntax `node --check` only. UNTESTED in-game: jumpability of 18 m gaps, end-landing collisions with `blocked()`, perf of ~6x2+3+6 links (~1000 extra platforms worst case -> check the 450-platform budget in PLAN item 8; reduce CAP or links if needed), BFS on a real 6-universe build.
+
+## Six universes — Part A done + Part B wired (2026-10-21)
+- `UNIVERSE_R = 600`, `universeCentre(slot)`; `syncStartLayout()` now ALWAYS builds six homes on the ring (solo included; `sixTowerLayout` is always true). Single player spawns on slot 0's roof at (610, 580, 0).
+- `buildNetwork` places ~45% of the old arena/building counts around EACH home (`hub.universe = slot`, biome bands rotated per slot); chain/arena/home connects only link hubs < 260 m apart. `WORLD_R = UNIVERSE_R + 420`. `buildSurroundings` skips 230 m around every home, skyline range widened to 520–1400 m. `buildBranches` seeds near every home.
+- Part B (`connectFar`, `buildUniverseLinks`, `__ng.linkGraph()`) is called just before `buildBranches`. Pair choice now ranks by distance + 2.2*height gap and tries the 8 best pairs. Cap raised to 64 stones.
+- Verified headless (`node smoke-universes.cjs`, software GL, zero errors): six towers 600 m out, `applyNetSlot(3)` lands at (-610, 582, 0), link graph: ring 0-1…5-0 all OK, `unreachable: []`.
+- KNOWN: the long diagonals 0-3 and 2-5 (~1100 m) and the skyway ascents from universes 0 and 2 fail (span/height cap); everything is still reachable via the ring + other ascents. Not playtested by hand: 18 m gaps, rest islands, performance (platform/draw-call budget NOT measured yet — measure on a real GPU), enemy density per universe, portals now span all universes.
+- Open: enemy hazards on bridges? Lazy-load decorations for empty universes if perf needs it.
+
+## Perf + rails pass (2026-10-21, after six universes)
+- REMOVED per user: mega-rails (`buildFlow`, `take = 0`) and the automatic grind rails between neighbouring platforms (both `connect` and `connectFar`, gated `if (false && ...)`). Kept: ride-park rails, roof loops, road rails.
+- Distance culling `cullTick` (CULL_R 1000 (340 made the far world vanish; fog does not fully hide distance)) over static `lvl` children; `refreshNearSolids` collision prefilter (75 m box); far enemies/items/movers skip per-frame work. Headless: draw calls 430 -> 212, tris 22k -> 6.8k (software GL; real-GPU fps still unmeasured). Dev: `__ng.renderInfo()`, `__ng.cull()`, `__ng.setCull(r)`.
+- If frame rate is still bad: next levers are 544 enemies and ~4900 items/coins (lazy-spawn per universe), 416 specials.
+
+## Performance audit + fixes (2026-10-21) — reports in `perf/` (CPU_REPORT.md, RENDER_REPORT.md, CODE_REPORT.md)
+- Finding: draw calls were ~18.6k/frame at the spawn roof facing the city (my earlier "200" number came from a bad probe), render JS ~90% of CPU, game logic only ~4-6 ms.
+- Fix 1 (view distance preserved): size-aware `cullTick` — BIG things (>=8 m: towers, platforms, islands) stay drawn to 900 m so the fog-silhouette horizon is unchanged; small things hide beyond 380 m; far enemy bodies hide beyond 170 m but aura/beacon/red aggro arrow stay so hostiles still read across the map; far pickups/vehicles hide past 380 m.
+- Result (render harness `perf/render-spots.cjs`): spawn roof 18,585 -> 3,570 calls, dense cell 18.9k -> 5.2k, opposite roof 19.8k -> 4.8k, low centre 6.0k -> 2.0k, alien void 3.5k -> 0.65k.
+- Fix 2: HUD innerHTML / hint writes only on change; player shadow scans `nearSolids`; shared coin/heart/ammo geometry+materials; collision prefilter; far enemies/items/movers skip per-frame work; no pistons/movers/crumblers within 90 m of a home (spawn platform was jackhammering).
+- NEXT (biggest remaining): ~4.8k platform meshes at spawn view (instance non-special platforms; careful: `sol.grp` is used by spontaneous-arena growth), freeze static matrices (`updateMatrixWorld` 12-17 ms), per-enemy geometry/material sharing (cuts the ~14 s build), pickups as InstancedMesh, `rayBox` closure, render-scale/dpr cap for high-dpi screens.

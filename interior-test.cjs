@@ -119,18 +119,27 @@ async function shotStats(page) {
     return { check: 'interior-contract', offered: interior.length, title: interior[0] ? interior[0].title : null, state: interior[0] ? interior[0].state : null };
   }));
 
-  // 8. frame cost: idle city vs. an open interior (software renderer here, so compare relatively)
+  // 8. frame cost: same viewpoint with the tower closed vs opened, plus the city and the inside
   out.perf = await page.evaluate(async () => {
     window.__ng.level = 1;
     await new Promise(r => setTimeout(r, 600));
-    const before = await window.__ng.perf.capture('city', 4);
     const t = window.__ng.towers()[0];
+    const pick = o => ({ fps: o.fps, 'frame ms avg': o['frame ms avg'], 'frame ms p95': o['frame ms p95'], 'draw calls/frame': o['draw calls/frame'], 'triangles/frame': o['triangles/frame'], solids: o.solids, geometries: o.geometries });
+    // city baseline from the spawn roof (level setter already parks the player there)
+    await new Promise(r => setTimeout(r, 900));
+    const city = await window.__ng.perf.capture('city', 4);
+    // A/B from one fixed vantage point outside the tower (never touch the roof, or it auto-opens)
+    window.__ng.tp(t.x + t.hw + 26, t.top + 8, t.z);
+    await new Promise(r => setTimeout(r, 900));
+    const closed = await window.__ng.perf.capture('tower-closed', 4);
     window.__ng.openTower(0, 'server');
+    await new Promise(r => setTimeout(r, 900));
+    const opened = await window.__ng.perf.capture('tower-open', 4);
+    // and from inside
     window.__ng.tp(t.x, 1.5, t.z);
     await new Promise(r => setTimeout(r, 1200));
     const inside = await window.__ng.perf.capture('interior', 4);
-    const pick = o => ({ fps: o.fps, 'frame ms avg': o['frame ms avg'], 'frame ms p95': o['frame ms p95'], 'draw calls/frame': o['draw calls/frame'], 'triangles/frame': o['triangles/frame'], solids: o.solids, geometries: o.geometries });
-    return { before: pick(before), inside: pick(inside) };
+    return { city: pick(city), closed: pick(closed), opened: pick(opened), inside: pick(inside) };
   });
 
   // 9. screenshots for a visual look

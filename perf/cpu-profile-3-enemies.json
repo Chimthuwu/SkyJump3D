@@ -1,0 +1,447 @@
+{
+ "name": "3-enemies",
+ "seconds": 10.331,
+ "totalMs": 10656.135999999968,
+ "idlePct": 2.1,
+ "perf": {
+  "frames": 48,
+  "frame ms avg": 231.2,
+  "frame ms p95": 266.6,
+  "fps": 4.3,
+  "render submit ms": 48.515,
+  "draw calls/frame": 3702,
+  "triangles/frame": 94659,
+  "geometries": 5368,
+  "textures": 82,
+  "programs": 24,
+  "enemies alive": 559,
+  "solids": 2923,
+  "scene children": 270,
+  "ms/frame player": 1.387,
+  "ms/frame enemies": 0.512,
+  "ms/frame shots": 0.385,
+  "ms/frame items+street": 1.519,
+  "ms/frame missions+evolve+music": 0.179,
+  "ms/frame fx": 1.94,
+  "ms/frame specials": 0.196,
+  "ms/frame worlds+portals+hotbar": 0.046,
+  "ms/frame visuals+hud": 0.358,
+  "ms/frame net+peers+debug": 0.004
+ },
+ "counts": {
+  "tracked": 11008,
+  "hidden": 3224,
+  "children": 12112,
+  "solids": 2923,
+  "platforms": 1772,
+  "specials": 416,
+  "enemies": 559,
+  "items": 4867,
+  "props": 53,
+  "heap": 199000000
+ },
+ "topSelf": [
+  {
+   "fn": "(program)@:0",
+   "msPerSec": 763.09,
+   "pct": 74
+  },
+  {
+   "fn": "updateMatrixWorld@three.module.js:7720",
+   "msPerSec": 61.46,
+   "pct": 6
+  },
+  {
+   "fn": "projectObject@three.module.js:29679",
+   "msPerSec": 34.62,
+   "pct": 3.4
+  },
+  {
+   "fn": "(idle)@:0",
+   "msPerSec": 22.11,
+   "pct": 2.1
+  },
+  {
+   "fn": "intersectsObject@three.module.js:13353",
+   "msPerSec": 20.41,
+   "pct": 2
+  },
+  {
+   "fn": "multiplyMatrices@three.module.js:6224",
+   "msPerSec": 12.48,
+   "pct": 1.2
+  },
+  {
+   "fn": "renderObjects@three.module.js:29931",
+   "msPerSec": 7.43,
+   "pct": 0.7
+  },
+  {
+   "fn": "getParameters@three.module.js:20598",
+   "msPerSec": 6.95,
+   "pct": 0.7
+  },
+  {
+   "fn": "WebGLRenderer.renderBufferDirect@three.module.js:29173",
+   "msPerSec": 5.71,
+   "pct": 0.6
+  },
+  {
+   "fn": "setProgram@three.module.js:30131",
+   "msPerSec": 5.16,
+   "pct": 0.5
+  },
+  {
+   "fn": "updateItems@index.html:5177",
+   "msPerSec": 4.97,
+   "pct": 0.5
+  },
+  {
+   "fn": "updateGibs@index.html:3603",
+   "msPerSec": 4.62,
+   "pct": 0.4
+  },
+  {
+   "fn": "bindVertexArray@:0",
+   "msPerSec": 4.14,
+   "pct": 0.4
+  },
+  {
+   "fn": "copyArray@three.module.js:18319",
+   "msPerSec": 3.2,
+   "pct": 0.3
+  },
+  {
+   "fn": "setValueV3f@three.module.js:18400",
+   "msPerSec": 3.09,
+   "pct": 0.3
+  },
+  {
+   "fn": "uniformMatrix4fv@:0",
+   "msPerSec": 2.89,
+   "pct": 0.3
+  },
+  {
+   "fn": "refreshUniformsCommon@three.module.js:27617",
+   "msPerSec": 2.64,
+   "pct": 0.3
+  },
+  {
+   "fn": "drawElements@:0",
+   "msPerSec": 2.51,
+   "pct": 0.2
+  },
+  {
+   "fn": "upload@three.module.js:19316",
+   "msPerSec": 2.51,
+   "pct": 0.2
+  },
+  {
+   "fn": "refreshFogUniforms@three.module.js:27520",
+   "msPerSec": 2.31,
+   "pct": 0.2
+  },
+  {
+   "fn": "surfaceY@index.html:3476",
+   "msPerSec": 2.3,
+   "pct": 0.2
+  },
+  {
+   "fn": "setValue@three.module.js:19300",
+   "msPerSec": 2.29,
+   "pct": 0.2
+  },
+  {
+   "fn": "needsUpdate@three.module.js:15223",
+   "msPerSec": 2.24,
+   "pct": 0.2
+  },
+  {
+   "fn": "getBindingState@three.module.js:15156",
+   "msPerSec": 1.77,
+   "pct": 0.2
+  },
+  {
+   "fn": "painterSortStable@three.module.js:21250",
+   "msPerSec": 1.76,
+   "pct": 0.2
+  },
+  {
+   "fn": "getProgram@three.module.js:29985",
+   "msPerSec": 1.71,
+   "pct": 0.2
+  },
+  {
+   "fn": "update@three.module.js:13683",
+   "msPerSec": 1.63,
+   "pct": 0.2
+  },
+  {
+   "fn": "setMaterial@three.module.js:23426",
+   "msPerSec": 1.59,
+   "pct": 0.2
+  },
+  {
+   "fn": "markUniformsLightsNeedsUpdate@three.module.js:30506",
+   "msPerSec": 1.58,
+   "pct": 0.2
+  },
+  {
+   "fn": "uniform3f@:0",
+   "msPerSec": 1.54,
+   "pct": 0.1
+  },
+  {
+   "fn": "fromReference@three.module.js:1606",
+   "msPerSec": 1.5,
+   "pct": 0.1
+  },
+  {
+   "fn": "castRay@index.html:4175",
+   "msPerSec": 1.41,
+   "pct": 0.1
+  },
+  {
+   "fn": "arraysEqual@three.module.js:18305",
+   "msPerSec": 1.15,
+   "pct": 0.1
+  },
+  {
+   "fn": "setFromEuler@three.module.js:3413",
+   "msPerSec": 1.05,
+   "pct": 0.1
+  },
+  {
+   "fn": "updateEnemies@index.html:5153",
+   "msPerSec": 1.02,
+   "pct": 0.1
+  },
+  {
+   "fn": "setValueM4@three.module.js:18525",
+   "msPerSec": 1.01,
+   "pct": 0.1
+  },
+  {
+   "fn": "getProgramCacheKey@three.module.js:20925",
+   "msPerSec": 1,
+   "pct": 0.1
+  },
+  {
+   "fn": "setup@three.module.js:15073",
+   "msPerSec": 1,
+   "pct": 0.1
+  },
+  {
+   "fn": "updateStreet@index.html:5969",
+   "msPerSec": 0.92,
+   "pct": 0.1
+  },
+  {
+   "fn": "splatter@index.html:3506",
+   "msPerSec": 0.89,
+   "pct": 0.1
+  }
+ ],
+ "topIncl": [
+  {
+   "fn": "(root)@:0",
+   "msPerSec": 1031.47,
+   "pct": 100
+  },
+  {
+   "fn": "(program)@:0",
+   "msPerSec": 763.09,
+   "pct": 74
+  },
+  {
+   "fn": "onAnimationFrame@three.module.js:13466",
+   "msPerSec": 245.21,
+   "pct": 23.8
+  },
+  {
+   "fn": "(anon)@index.html:7397",
+   "msPerSec": 245.01,
+   "pct": 23.8
+  },
+  {
+   "fn": "onAnimationFrame@three.module.js:29493",
+   "msPerSec": 245.01,
+   "pct": 23.8
+  },
+  {
+   "fn": "WebGLRenderer.render@three.module.js:29530",
+   "msPerSec": 215.37,
+   "pct": 20.9
+  },
+  {
+   "fn": "renderScene@three.module.js:29793",
+   "msPerSec": 81.59,
+   "pct": 7.9
+  },
+  {
+   "fn": "renderObjects@three.module.js:29931",
+   "msPerSec": 81.39,
+   "pct": 7.9
+  },
+  {
+   "fn": "updateMatrixWorld@three.module.js:7720",
+   "msPerSec": 70.38,
+   "pct": 6.8
+  },
+  {
+   "fn": "WebGLRenderer.renderBufferDirect@three.module.js:29173",
+   "msPerSec": 69.59,
+   "pct": 6.7
+  },
+  {
+   "fn": "projectObject@three.module.js:29679",
+   "msPerSec": 60.23,
+   "pct": 5.8
+  },
+  {
+   "fn": "setProgram@three.module.js:30131",
+   "msPerSec": 46.41,
+   "pct": 4.5
+  },
+  {
+   "fn": "(idle)@:0",
+   "msPerSec": 22.11,
+   "pct": 2.1
+  },
+  {
+   "fn": "intersectsObject@three.module.js:13353",
+   "msPerSec": 21.13,
+   "pct": 2
+  },
+  {
+   "fn": "multiplyMatrices@three.module.js:6224",
+   "msPerSec": 12.48,
+   "pct": 1.2
+  },
+  {
+   "fn": "setValue@three.module.js:19300",
+   "msPerSec": 11.06,
+   "pct": 1.1
+  },
+  {
+   "fn": "getProgram@three.module.js:29985",
+   "msPerSec": 11.03,
+   "pct": 1.1
+  },
+  {
+   "fn": "setup@three.module.js:15073",
+   "msPerSec": 10.92,
+   "pct": 1.1
+  },
+  {
+   "fn": "upload@three.module.js:19316",
+   "msPerSec": 9.16,
+   "pct": 0.9
+  },
+  {
+   "fn": "getParameters@three.module.js:20598",
+   "msPerSec": 7.36,
+   "pct": 0.7
+  },
+  {
+   "fn": "updateGibs@index.html:3603",
+   "msPerSec": 7.16,
+   "pct": 0.7
+  },
+  {
+   "fn": "setValueM4@three.module.js:18525",
+   "msPerSec": 7.03,
+   "pct": 0.7
+  },
+  {
+   "fn": "playerUpdate@index.html:4868",
+   "msPerSec": 5.6,
+   "pct": 0.5
+  },
+  {
+   "fn": "updateItems@index.html:5177",
+   "msPerSec": 5.33,
+   "pct": 0.5
+  },
+  {
+   "fn": "setValueV3f@three.module.js:18400",
+   "msPerSec": 4.93,
+   "pct": 0.5
+  },
+  {
+   "fn": "bindVertexArrayObject@three.module.js:15140",
+   "msPerSec": 4.33,
+   "pct": 0.4
+  },
+  {
+   "fn": "bindVertexArray@:0",
+   "msPerSec": 4.14,
+   "pct": 0.4
+  },
+  {
+   "fn": "refreshFogUniforms@three.module.js:27520",
+   "msPerSec": 3.81,
+   "pct": 0.4
+  },
+  {
+   "fn": "useWeapon@index.html:4270",
+   "msPerSec": 3.46,
+   "pct": 0.3
+  },
+  {
+   "fn": "copyArray@three.module.js:18319",
+   "msPerSec": 3.2,
+   "pct": 0.3
+  },
+  {
+   "fn": "refreshMaterialUniforms@three.module.js:27537",
+   "msPerSec": 2.96,
+   "pct": 0.3
+  },
+  {
+   "fn": "uniformMatrix4fv@:0",
+   "msPerSec": 2.89,
+   "pct": 0.3
+  },
+  {
+   "fn": "setMaterial@three.module.js:23426",
+   "msPerSec": 2.87,
+   "pct": 0.3
+  },
+  {
+   "fn": "sort@three.module.js:21396",
+   "msPerSec": 2.82,
+   "pct": 0.3
+  },
+  {
+   "fn": "refreshUniformsCommon@three.module.js:27617",
+   "msPerSec": 2.72,
+   "pct": 0.3
+  },
+  {
+   "fn": "update@three.module.js:18062",
+   "msPerSec": 2.71,
+   "pct": 0.3
+  },
+  {
+   "fn": "render@three.module.js:17617",
+   "msPerSec": 2.59,
+   "pct": 0.3
+  },
+  {
+   "fn": "drawElements@:0",
+   "msPerSec": 2.51,
+   "pct": 0.2
+  },
+  {
+   "fn": "surfaceY@index.html:3476",
+   "msPerSec": 2.3,
+   "pct": 0.2
+  },
+  {
+   "fn": "updateEnemies@index.html:5153",
+   "msPerSec": 2.3,
+   "pct": 0.2
+  }
+ ]
+}

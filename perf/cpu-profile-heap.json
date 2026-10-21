@@ -1,0 +1,32 @@
+{
+ "heapBytesEvery5s": [
+  168816734,
+  174725214,
+  172857386,
+  159779631,
+  157792843,
+  151836970,
+  152727662
+ ],
+ "cull1000": {
+  "calls": 6154,
+  "tris": 165518,
+  "geos": 2346
+ },
+ "cull400": {
+  "calls": 6151,
+  "tris": 165542,
+  "geos": 2346
+ },
+ "cull250": {
+  "calls": 6145,
+  "tris": 165394,
+  "geos": 2346
+ },
+ "cull150": {
+  "calls": 6132,
+  "tris": 165042,
+  "geos": 2346
+ },
+ "cullNote": "setCull only matters if cullTick is called (disabled at index.html:5969)"
+}

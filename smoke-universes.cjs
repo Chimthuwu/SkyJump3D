@@ -1,0 +1,25 @@
+const puppeteer = require('C:/Users/Serge/AppData/Roaming/npm/node_modules/puppeteer');
+const path = require('path');
+const URL = 'file:///' + 'C:/Users/Serge/Desktop/SkyDive/index.html';
+const CR = +process.env.CR || 340;
+(async () => {
+  const browser = await puppeteer.launch({ executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: 'new', args: ['--allow-file-access-from-files','--enable-unsafe-swiftshader','--use-gl=swiftshader','--no-sandbox','--mute-audio','--window-size=1280,800'] });
+  const page = await browser.newPage(); await page.setViewport({ width: 1280, height: 800 });
+  const errors = [];
+  page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
+  page.on('console', m => { const t = m.text(); if (m.type() === 'error' && !/voice-lines|tts-status|ERR_FILE_NOT_FOUND/.test(t)) errors.push('CONSOLE: ' + t); if (/alien route|universe|link/i.test(t)) console.log('LOG', t.slice(0,200)); });
+  const t0 = Date.now();
+  await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 90000 });
+  await page.waitForFunction('window.__ng', { timeout: 90000 });
+  await page.evaluate(() => { const b = document.getElementById('bStart'); if (b) b.click(); });
+  await new Promise(r => setTimeout(r, 6000));
+  const out = {};
+  const w = ms => new Promise(r => setTimeout(r, ms));
+  await page.evaluate(() => window.__ng.setCull(1e9)); await w(1500);
+  out.nocull = await page.evaluate(() => window.__ng.renderInfo());
+  await page.evaluate(r => window.__ng.setCull(r), CR); await w(4000);
+  out.cull = await page.evaluate(() => window.__ng.renderInfo()); out.stat = await page.evaluate(() => window.__ng.cull());
+  console.log(JSON.stringify(out).slice(0, 2500));
+  console.log('elapsed', Date.now() - t0, 'errors', errors.slice(0, 8));
+  await browser.close();
+})();
