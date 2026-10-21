@@ -17,7 +17,7 @@ try {
 } catch (_) {}
 
 const PORT = Number(process.env.PORT) || 8080;
-const MAX_ROOM = 8;
+const MAX_ROOM = 6;              // one player per spawn tower
 const INDEX = path.join(__dirname, '..', 'index.html');
 
 // ---- enemy voices via Fish Audio (free model). Only the phrases in voice-lines.json can be requested, and every clip is cached on disk,
@@ -140,17 +140,20 @@ wss.on('connection', (ws, req) => {
   const q = new URL(req.url, 'http://x').searchParams;
   const name = (q.get('room') || 'lobby').replace(/[^\w-]/g, '').slice(0, 24) || 'lobby';
   let room = rooms.get(name);
-  if (!room) { room = { members: new Map(), host: 0 }; rooms.set(name, room); }
-  if (room.members.size >= MAX_ROOM) { send(ws, { t: 'full' }); ws.close(); return; }
+  if (!room) { room = { members: new Map(), host: 0, slots: new Map() }; rooms.set(name, room); }
+  if (room.members.size >= MAX_ROOM) { send(ws, { t: 'full', reason: 'lobby full' }); ws.close(); return; }
 
   const id = nextId++;
+  let slot = 0; while (slot < MAX_ROOM && room.slots.has(slot)) slot++;
+  if (slot >= MAX_ROOM) { send(ws, { t: 'full', reason: 'lobby full' }); ws.close(); return; }
+  room.slots.set(slot, id);
   room.members.set(id, ws);
   if (!room.host) room.host = id;                      // first in the room hosts the enemy simulation
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
 
-  send(ws, { t: 'hi', id, host: room.host, peers: [...room.members.keys()].filter(i => i !== id) });
-  broadcast(room, { t: 'join', id }, id);
+  send(ws, { t: 'hi', id, host: room.host, slot, level: room.level || 0, seed: 11, peers: [...room.members.keys()].filter(i => i !== id) });
+  broadcast(room, { t: 'join', id, slot }, id);
   console.log(`[${name}] player ${id} joined (${room.members.size} in room, host ${room.host})`);
 
   ws.on('message', data => {
@@ -158,12 +161,14 @@ wss.on('connection', (ws, req) => {
     try { m = JSON.parse(data); } catch { return; }
     if (!m || typeof m !== 'object' || typeof m.t !== 'string') return;
     m.from = id;                                       // server stamps the sender; clients can't spoof it
+    if (m.t === 'clear') room.level = Math.max(room.level || 0, m.level | 0);   // late joiners rebuild at the room's current level
     if (m.to) { const target = room.members.get(m.to | 0); if (target) send(target, m); }
     else broadcast(room, m, id);
   });
 
   ws.on('close', () => {
     room.members.delete(id);
+    if (room.slots.get(slot) === id) room.slots.delete(slot);   // free the tower for the next player
     console.log(`[${name}] player ${id} left (${room.members.size} in room)`);
     if (!room.members.size) { rooms.delete(name); return; }
     if (room.host === id) {                            // host migration: lowest remaining id takes over
@@ -189,4 +194,4 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`  this PC:                 http://localhost:${PORT}/?room=myroom`);
 });
 
-module.exports = { server, wss };
+module.exports = { server, wss, rooms, MAX_ROOM };

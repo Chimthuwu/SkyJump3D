@@ -1,6 +1,6 @@
 // SkyJump3D on Cloudflare: static game (assets) + one Durable Object per co-op room relaying JSON, same protocol as server/server.js.
 // Voices: no Fish key is deployed, so /tts-status reports disabled and the game falls back to browser speech.
-const MAX_ROOM = 8;
+const MAX_ROOM = 6;              // one player per spawn tower
 const MAX_PAYLOAD = 64 * 1024;
 
 export class Room {
@@ -17,17 +17,20 @@ export class Room {
       server.close(1000, 'full');
       return new Response(null, { status: 101, webSocket: client });
     }
+    const used = new Set(live.map((w) => w.deserializeAttachment()?.slot).filter((n) => Number.isInteger(n)));
+    let slot = 0; while (slot < MAX_ROOM && used.has(slot)) slot++;
     const id = await this.ctx.blockConcurrencyWhile(async () => {
       const n = ((await this.ctx.storage.get('next')) ?? 0) + 1;
       await this.ctx.storage.put('next', n);
       return n;
     });
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ id });
+    server.serializeAttachment({ id, slot });
     const peers = live.map((w) => w.deserializeAttachment()?.id).filter(Boolean);
     const host = Math.min(id, ...peers);          // first in the room (lowest id) hosts the enemy simulation
-    server.send(JSON.stringify({ t: 'hi', id, host, peers }));
-    this.broadcast({ t: 'join', id }, id);
+    const level = (await this.ctx.storage.get('level')) || 0;
+    server.send(JSON.stringify({ t: 'hi', id, host, slot, level, seed: 11, peers }));
+    this.broadcast({ t: 'join', id, slot }, id);
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -45,6 +48,7 @@ export class Room {
     try { m = JSON.parse(data); } catch { return; }
     if (!m || typeof m !== 'object' || typeof m.t !== 'string') return;
     m.from = id;                                   // stamped here so clients can't spoof it
+    if (m.t === 'clear') this.ctx.storage.put('level', Math.max(0, m.level | 0)).catch(() => {});   // late joiners match the room
     if (m.to) {
       const target = this.ctx.getWebSockets().find((w) => w.deserializeAttachment()?.id === (m.to | 0));
       if (target) try { target.send(JSON.stringify(m)); } catch {}
