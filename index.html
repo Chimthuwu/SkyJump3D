@@ -2067,7 +2067,8 @@ function addMissionCore(mission, point) {
   g.visible = false;
   const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.78, 0), new THREE.MeshBasicMaterial({ color, toneMapped: false }));
   const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.08, 4, 10), new THREE.MeshBasicMaterial({ color: 0xeaffff })); ring.rotation.x = Math.PI / 2;
-  g.add(core, ring); g.position.set(point.x, point.y + 1.2, point.z); lvl.add(g);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.42, 12, 6), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false })); beam.position.y = 7;
+  g.add(core, ring, beam); g.position.set(point.x, point.y + 1.2, point.z); lvl.add(g);
   mission.coreItem = { mesh: g, type: 'dataCore', missionId: mission.id, taken: false }; items.push(mission.coreItem);
 }
 function missionReward(levelIndex, type, distance, rng) {
@@ -2083,9 +2084,12 @@ function missionReward(levelIndex, type, distance, rng) {
 function generateMissions() {
   const rng = missionRandom(levelSeed ^ 0xBA5E), hubList = (levelHubs || []).filter(h => h.kind !== 'start' && h.kind !== 'launch' && h.kind !== 'exit' && h.kind !== 'arena' && h.x !== undefined && h.top !== undefined);
   for (let i = items.length - 1; i >= 0; i--) if (items[i].type === 'dataCore') { items[i].mesh.removeFromParent(); items.splice(i, 1); }
+  if (missionArrow) missionArrow.style.display = 'none';
+  if (missionTracker) missionTracker.style.display = 'none';
   missions = missionSlots[slot] = [];
   activeMission = null;
   if (missionArrow) missionArrow.style.display = 'none';
+  if (missionTracker) missionTracker.style.display = 'none';
   if (missionMarker) {
     for (const marker of [missionMarker.target, missionMarker.base]) {
       marker.group.traverse(o => { if (o.material) o.material.dispose(); });
@@ -2099,7 +2103,9 @@ function generateMissions() {
   const farHubs = candidates.length ? candidates : hubList;
   const typeOrder = ['goto', 'collect', 'kill', 'bossKill'], first = Math.floor(rng() * typeOrder.length);
   for (let index = 0; index < 4; index++) {
-    const type = typeOrder[(first + index) % typeOrder.length], hub = farHubs[Math.floor(rng() * Math.min(farHubs.length, Math.max(1, Math.ceil(farHubs.length * 0.65))))];
+    const type = typeOrder[(first + index) % typeOrder.length];
+    const pickHubs = type === 'bossKill' ? hubList : farHubs;
+    const hub = pickHubs[Math.floor(rng() * Math.min(pickHubs.length, Math.max(1, Math.ceil(pickHubs.length * 0.65))))];
     const point = missionPositionForHub(hub), distance = missionDistance(point, origin), zone = hub.zone ? hub.zone.name : 'City';
     const mission = { id: `L${level}-S${slot}-${index}`, type, title: '', desc: '', target: { ...point, r: type === 'goto' ? Math.max(6, Math.min(12, hub.r || 8)) : 4 }, zone, count: 1, state: 'offered', reward: missionReward(level, type, distance, rng), progress: 0, hub };
     if (type === 'goto') {
@@ -2115,10 +2121,10 @@ function generateMissions() {
       addMissionCore(mission, mission.target);
     } else if (type === 'kill') {
       const zoneCounts = new Map();
-      for (const e of enemies) if (!e.dead && !e.boss && !e.mini && e.zone && e.zone.name !== 'Ride Park') zoneCounts.set(e.zone.name, (zoneCounts.get(e.zone.name) || 0) + 1);
+      for (const e of enemies) if (!e.dead && !e.boss && !e.mini && e.variant !== 'rider' && e.zone && e.zone.name !== 'Ride Park') zoneCounts.set(e.zone.name, (zoneCounts.get(e.zone.name) || 0) + 1);
       const zones = [...zoneCounts.keys()];
       mission.zone = zones.length ? zones[Math.floor(rng() * zones.length)] : zone;
-      const matching = enemies.filter(e => !e.dead && !e.boss && !e.mini && e.zone && e.zone.name === mission.zone);
+      const matching = enemies.filter(e => !e.dead && !e.boss && !e.mini && e.variant !== 'rider' && e.zone && e.zone.name === mission.zone);
       mission.variant = null; // Any regular enemy in the selected biome counts; avoid stranding a contract on one rare species.
       mission.count = Math.max(1, Math.min(3 + Math.floor(level / 3), matching.length || 1));
       const targetEnemy = matching.find(e => Math.hypot(e.x - origin.x, e.z - origin.z) > 38);
@@ -2177,6 +2183,7 @@ function turnIn() {
   for (const [key, amount] of Object.entries(reward.resources || {})) if (hotbarRes[key] !== undefined) hotbarRes[key] += amount | 0;
   mission.state = 'done'; activeMission = null; saveBase(); updateHotbar(); sfx.clear();
   if (!missions.some(m => m.state === 'offered')) generateMissions();
+  else if (mission.coreItem) { mission.coreItem.taken = false; mission.coreItem.mesh.visible = false; }
   if (guideDialogOpen && guideTab === 'TASKS') renderGuideDialog();
   toast(`TASK COMPLETE · +${reward.credits | 0} CREDITS · +${reward.score | 0} SCORE`, 2600);
   return { ok: true, reward, mission };
@@ -2193,7 +2200,7 @@ function missionEnemyKilled(enemy) {
   if (!mission || mission.state !== 'active' || (mission.type !== 'kill' && mission.type !== 'bossKill')) return;
   if (mission.type === 'bossKill') {
     if (enemy.mini && (!mission.guardian || mission.guardian === enemy)) missionSetReady(mission);
-  } else if (!enemy.boss && !enemy.mini && (!mission.zone || (enemy.zone && enemy.zone.name === mission.zone)) && (!mission.variant || enemy.variant === mission.variant)) {
+  } else if (!enemy.boss && !enemy.mini && enemy.variant !== 'rider' && (!mission.zone || (enemy.zone && enemy.zone.name === mission.zone)) && (!mission.variant || enemy.variant === mission.variant)) {
     mission.progress = Math.min(mission.count, mission.progress + 1);
     if (mission.progress >= mission.count) missionSetReady(mission);
   }
@@ -2201,12 +2208,19 @@ function missionEnemyKilled(enemy) {
 function updateMissionMarker(dt) {
   if (!missionMarker) { if (missionArrow) missionArrow.style.display = 'none'; return; }
   const mission = activeMission, ready = !!(mission && mission.state === 'ready'), marker = missionMarker.target, baseMarker = missionMarker.base;
-  const markerColor = ready ? MISSION_COLORS.base : mission ? MISSION_COLORS[mission.type] : MISSION_COLORS.goto;
+  const markerColor = mission ? MISSION_COLORS[mission.type] : MISSION_COLORS.goto;
   marker.group.children.forEach(child => { if (child.material && child.material.color) child.material.color.setHex(markerColor); });
   baseMarker.group.children.forEach(child => { if (child.material && child.material.color) child.material.color.setHex(MISSION_COLORS.base); });
   marker.group.visible = !!(mission && mission.state === 'active' && mission.type !== 'collect');
   if (mission && mission.state === 'active' && mission.type !== 'collect') {
-    marker.group.position.set(mission.target.x, mission.target.y, mission.target.z);
+    let target = mission.target;
+    if (mission.type === 'kill') {
+      const enemy = enemies.find(e => !e.dead && !e.boss && !e.mini && (!mission.zone || e.zone && e.zone.name === mission.zone));
+      if (enemy) target = { x: enemy.x, y: enemy.y + 1, z: enemy.z };
+    } else if (mission.type === 'bossKill' && mission.guardian && !mission.guardian.dead) {
+      target = { x: mission.guardian.x, y: mission.guardian.y + 1, z: mission.guardian.z };
+    }
+    marker.group.position.set(target.x, target.y, target.z);
     marker.diamond.rotation.y += dt * 1.7;
   }
   baseMarker.group.visible = ready;
@@ -2215,7 +2229,13 @@ function updateMissionMarker(dt) {
   if (missionTracker) {
     missionTracker.style.display = 'none';
     if (state === 'play' && tracked && (tracked.state === 'active' || tracked.state === 'ready')) {
-      const trackerTarget = tracked.state === 'ready' ? missionAtPosition() : tracked.target;
+          let trackerTarget = tracked.state === 'ready' ? missionAtPosition() : tracked.target;
+      if (tracked.state === 'active' && tracked.type === 'kill') {
+        const enemy = enemies.find(e => !e.dead && !e.boss && !e.mini && e.variant !== 'rider' && (!tracked.zone || e.zone && e.zone.name === tracked.zone));
+        if (enemy) trackerTarget = { x: enemy.x, y: enemy.y, z: enemy.z };
+      } else if (tracked.state === 'active' && tracked.type === 'bossKill' && tracked.guardian && !tracked.guardian.dead) {
+        trackerTarget = { x: tracked.guardian.x, y: tracked.guardian.y, z: tracked.guardian.z };
+      }
       const label = tracked.state === 'ready' ? 'RETURN TO HOME BASE' : tracked.title;
       const progress = tracked.type === 'kill' || tracked.type === 'bossKill' ? ` · ${tracked.progress}/${tracked.count}` : '';
       missionTracker.textContent = `▶ ${label} · ${Math.round(missionDistance(pos, trackerTarget))} m${progress}`;
@@ -2224,7 +2244,13 @@ function updateMissionMarker(dt) {
     } else missionTracker.style.display = 'none';
   }
   if (state !== 'play' || !missionArrow || !tracked || (tracked.state !== 'active' && tracked.state !== 'ready')) { if (missionArrow) missionArrow.style.display = 'none'; missionArrowText = ''; return; }
-  const target = tracked.state === 'ready' ? missionAtPosition() : tracked.target;
+  let target = tracked.state === 'ready' ? missionAtPosition() : tracked.target;
+  if (tracked.state === 'active' && tracked.type === 'kill') {
+    const enemy = enemies.find(e => !e.dead && !e.boss && !e.mini && (!tracked.zone || e.zone && e.zone.name === tracked.zone));
+    if (enemy) target = { x: enemy.x, y: enemy.y, z: enemy.z };
+  } else if (tracked.state === 'active' && tracked.type === 'bossKill' && tracked.guardian && !tracked.guardian.dead) {
+    target = { x: tracked.guardian.x, y: tracked.guardian.y, z: tracked.guardian.z };
+  }
   _missionScreen.set(target.x, target.y + 3, target.z).project(camera);
   const visible = _missionScreen.z > -1 && _missionScreen.z < 1 && Math.abs(_missionScreen.x) < 0.82 && Math.abs(_missionScreen.y) < 0.82;
   if (visible) { missionArrow.style.display = 'none'; missionArrowText = ''; return; }
@@ -2232,7 +2258,7 @@ function updateMissionMarker(dt) {
   const label = `${tracked.state === 'ready' ? 'BASE' : tracked.title} · ${Math.round(missionDistance(pos, target))}m`;
   const text = `${angle > -Math.PI / 4 && angle < Math.PI / 4 ? '▶' : angle > Math.PI / 4 && angle < 3 * Math.PI / 4 ? '▼' : angle < -Math.PI / 4 && angle > -3 * Math.PI / 4 ? '▲' : '◀'} ${label}`;
   if (text !== missionArrowText) { missionArrow.textContent = text; missionArrowText = text; }
-  missionArrow.style.left = `${px}%`; missionArrow.style.top = `${py}%`; missionArrow.style.color = `#${(MISSION_COLORS[tracked.type] || MISSION_COLORS.base).toString(16).padStart(6, '0')}`; missionArrow.style.display = 'block';
+  missionArrow.style.left = `${px}%`; missionArrow.style.top = `${py}%`; missionArrow.style.color = `#${(tracked.state === 'ready' ? MISSION_COLORS.base : MISSION_COLORS[tracked.type] || MISSION_COLORS.base).toString(16).padStart(6, '0')}`; missionArrow.style.display = 'block';
 }
 function missionAtPosition() { const h = (levelHubs || []).find(q => q.kind === 'start') || { x: start.x, z: start.z, top: TOP }; return { x: h.x, y: h.top, z: h.z }; }
 function updateMissions(dt) {
@@ -2582,6 +2608,7 @@ function buildStatic() {
 // Builds (or rebuilds) the tower for the current `level`. Everything added goes into `lvl`.
 function buildLevel() {
   if (!staticBuilt) { staticBuilt = true; buildStatic(); }
+  saveBase();
   scene.remove(lvl);
   lvl.traverse(o => { if (o.geometry) o.geometry.dispose(); });
   lvl = new THREE.Group(); scene.add(lvl);
@@ -3219,10 +3246,10 @@ addEventListener('keydown', e => {
   const fresh = !keys[e.code]; keys[e.code] = true;
   if (!fresh) return;
   if (e.code === 'Escape') { if (guideDialogOpen) { closeGuideDialog(); return; } if (state === 'title') return menuKey(e); if (state !== 'title' && (!paused || performance.now() - pausedAt > 250)) setPaused(!paused); return; }
-  if (guideDialogOpen) { guideDialogKey(e); keys[e.code] = false; return; }
   if (e.code === 'F3') { e.preventDefault(); dbgOn = !dbgOn; return; }
   if (e.code === 'F4') { e.preventDefault(); noclip = !noclip; toast(noclip ? 'NOCLIP on (F4 to leave) — Space up, C down' : 'NOCLIP off', 1800); return; }
   if (paused) return;
+  if (guideDialogOpen) { guideDialogKey(e); keys[e.code] = false; return; }
   if (state === 'title') return menuKey(e);
   if (e.code === 'Space') jumpPress = true;
   if (e.code === 'KeyC' || e.code === 'ControlLeft') poundPress = true;      // SHIFT is sprint now
@@ -3574,14 +3601,14 @@ function placeBlock() {                                                // right-
   const plat = standOn && standOn.zone ? standOn.zone : activeZ;
   const res = biomeResource(plat);
   if (hotbarRes[res] < 4) { toast(`NEED 4 ${RESOURCES[res].name} TO PLACE`, 900); sfx.click(); return; }
-  hotbarRes[res] -= 4; updateHotbar(); saveBase(); saveBase();
+  hotbarRes[res] -= 4; updateHotbar();
   const fx = Math.sin(face), fz = Math.cos(face);
   const bx = clamp(pos.x + fx * 3.2, -WORLD_R + 6, WORLD_R - 6), bz = clamp(pos.z + fz * 3.2, -WORLD_R + 6, WORLD_R - 6);
-  const by = Math.round((pos.y + 0.6) / 2) * 2;    if (blocked(bx, by, bz, 1.4)) { toast('NO ROOM TO BUILD', 900); hotbarRes[res] += 4; updateHotbar(); return; }
+  const by = Math.round((pos.y + 0.6) / 2) * 2;    if (blocked(bx, by, bz, 1.4)) { toast('NO ROOM TO BUILD', 900); hotbarRes[res] += 4; updateHotbar(); saveBase(); return; }
   const solid = addSolid(bx - 1.4, bx + 1.4, by - 1, by, bz - 1.4, bz + 1.4);
   Object.assign(solid, { cx: bx, cz: bz, top: by, hw: 1.4, hd: 1.4 });
   solid.playerBuilt = true;
-  const m = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1, 2.8), retroMaterial(new THREE.MeshLambertMaterial({ color: RESOURCES[res].col, flatShading: true })));  m.position.set(bx, by - 0.5, bz); lvl.add(m); sfx.click();
+  const m = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1, 2.8), retroMaterial(new THREE.MeshLambertMaterial({ color: RESOURCES[res].col, flatShading: true })));  m.position.set(bx, by - 0.5, bz); lvl.add(m); saveBase(); sfx.click();
   burst(new THREE.Vector3(bx, by, bz), RESOURCES[res].col, 10); sfx.click();
   toast(`+${RESOURCES[res].name} BLOCK PLACED`, 800);
 }
@@ -5465,9 +5492,9 @@ function updateVisuals(dt) {
   if (psy.t > 0 && psy.kind === 'trip') camera.rotateZ(Math.sin(performance.now() / 330) * 0.08);      // woozy camera while tripping
   updateEnv(dt, camera.position);
 
-  // HUD (hidden behind the main menu)
-  $('hud').style.display = state === 'title' ? 'none' : '';
-  $('hotbar').style.display = state === 'title' ? 'none' : '';  const hearts = '♥'.repeat(Math.max(0, health)) + '<span style="opacity:.35">' + '♥'.repeat(MAXHP - Math.max(0, health)) + '</span>';
+  // HUD (hidden behind the main menu)  $('hud').style.display = state === 'title' ? 'none' : '';
+  $('hotbar').style.display = state === 'title' ? 'none' : '';
+  const hearts = '♥'.repeat(Math.max(0, health)) + '<span style="opacity:.35">' + '♥'.repeat(MAXHP - Math.max(0, health)) + '</span>';
   $('hud').innerHTML = `<div class="hearts">${hearts}</div>Glide<div class="bar"><div style="width:${(glide * 100) | 0}%"></div></div>Grip<div class="bar"><div style="width:${(climbStam * 100) | 0}%;background:#ffb347"></div></div>Energy<div class="bar"><div style="width:${(cont.energy * 100) | 0}%;background:${cont.locked ? '#ff4a4a' : '#3affd0'}"></div></div>` +
     `Level <b>${level}</b> · Altitude <b>${pos.y | 0}</b> m<br>Score <b>${score}</b> · Credits <b>${base.credits}</b> · Best ${Math.max(best.score, score)} (L${best.level})` +
     (curPN !== null && ladderTop ? `<br><span style="color:${curPN < 0 ? '#ff3a5a' : '#ffd23a'}">PLATFORM #${curPN}</span> · deepest #${ladderBot.n} · highest #${ladderTop.n}` : '') +
@@ -6646,8 +6673,7 @@ function debugTick(dt) {
   dbgAcc += dt;
   if (dbgOn && dbgAcc > 0.2) { dbgAcc = 0; $('dbg').textContent = debugReport(); }
   if (!dbgOn) $('dbg').textContent = '';
-}
-$('bResume').onclick = () => setPaused(false);
+}    $('bResume').onclick = () => setPaused(false);
 $('bCopy').onclick = copyReport;
 document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && state !== 'title' && !paused && !guideDialogOpen) setPaused(true); });
 
@@ -6661,18 +6687,70 @@ window.__ng = { ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toF
   const qp = new URLSearchParams(location.search || '');
   if (/^https?:$/.test(location.protocol) && qp.get('room')) netConnect(location.host, qp.get('room').slice(0, 24));
 }
+// ---------- PERF: opt-in profiling (window.__ng.perf). Off by default; when off the loop only reads PERF.enabled once per frame. ----------
+const PERF = {
+  enabled: false, _t: {}, _frames: 0, _m: 0, _ft: [], _lastNow: 0, _calls: 0, _tris: 0, _render: 0, _overlay: null, _ovT: 0, _fire: 0,
+  start() { this.reset(); this.enabled = true; renderer.info.autoReset = false; renderer.info.reset(); this._mkOverlay(); },
+  stop() { this.enabled = false; renderer.info.autoReset = true; if (this._overlay) this._overlay.style.display = 'none'; clearInterval(this._fire); this._fire = 0; },
+  reset() { this._t = {}; this._frames = 0; this._ft = []; this._lastNow = 0; this._calls = 0; this._tris = 0; this._render = 0; },
+  lapStart() { this._m = performance.now(); },
+  lap(name) { const n = performance.now(); this._t[name] = (this._t[name] || 0) + (n - this._m); this._m = n; },
+  frame(now) { if (this._lastNow) { this._ft.push(now - this._lastNow); if (this._ft.length > 3600) this._ft.shift(); } this._lastNow = now; this._frames++; },
+  renderDone(t0) {                       // JS submission time only (NOT GPU time); counters aggregate both passes because autoReset is off
+    this._render += performance.now() - t0; this._calls += renderer.info.render.calls; this._tris += renderer.info.render.triangles;
+  },
+  _snapshot() {
+    const f = Math.max(1, this._frames), out = {}, sorted = this._ft.slice().sort((a, b) => a - b);
+    const avg = this._ft.length ? this._ft.reduce((a, b) => a + b, 0) / this._ft.length : 0;
+    out['frames'] = this._frames; out['frame ms avg'] = +avg.toFixed(2); out['frame ms p95'] = +(sorted[Math.floor(sorted.length * 0.95)] || 0).toFixed(2); out['fps'] = avg ? +(1000 / avg).toFixed(1) : 0;
+    out['render submit ms'] = +(this._render / f).toFixed(3); out['draw calls/frame'] = Math.round(this._calls / f); out['triangles/frame'] = Math.round(this._tris / f);
+    out['geometries'] = renderer.info.memory.geometries; out['textures'] = renderer.info.memory.textures; out['programs'] = renderer.info.programs ? renderer.info.programs.length : 0;
+    out['enemies alive'] = enemies.filter(e => !e.dead).length; out['solids'] = solids.length; out['scene children'] = scene.children.length;
+    for (const k in this._t) out['ms/frame ' + k] = +(this._t[k] / f).toFixed(3);
+    return out;
+  },
+  dump() { const o = this._snapshot(); console.table(o); return o; },
+  async capture(label = 'scene', seconds = 6) {            // reset, run, return the numbers (paste into perf/baseline-<sha>.json)
+    await new Promise(r => setTimeout(r, 1500));            // let the scene settle first
+    this.start(); await new Promise(r => setTimeout(r, seconds * 1000));
+    const o = this._snapshot(); o.label = label; this.stop(); return o;
+  },
+  _mkOverlay() {
+    if (this._overlay) { this._overlay.style.display = 'block'; return; }
+    const d = document.createElement('div'); d.style.cssText = 'position:fixed;right:6px;top:6px;z-index:99;font:11px monospace;color:#7dff4a;background:rgba(0,0,0,.7);padding:4px 6px;white-space:pre;pointer-events:none';
+    document.body.appendChild(d); this._overlay = d;
+  },
+  overlayTick(now) {                                        // at most 4x per second so the overlay doesn't distort what it measures
+    if (now - this._ovT < 250 || !this._overlay) return; this._ovT = now;
+    const o = this._snapshot(), top = Object.keys(o).filter(k => k.startsWith('ms/frame')).sort((a, b) => o[b] - o[a]).slice(0, 4);
+    this._overlay.textContent = `${o['fps']} fps  ${o['frame ms avg']} ms (p95 ${o['frame ms p95']})\ncalls ${o['draw calls/frame']}  tris ${o['triangles/frame']}\n` + top.map(k => `${k.slice(9)} ${o[k]}`).join('\n');
+  },
+  scenes: {                                                 // the three reference scenes (see PERFORMANCE_PLAN.md 0.2)
+    spawn() { document.getElementById('bStart') && state === 'title' && document.getElementById('bStart').click(); pos.set(start.x, start.y, start.z); camYaw = Math.PI; fpPitch = -0.1; },
+    arena() {
+      this.spawn(); for (const e of enemies) if (!e.dead && e.boss) { /* leave bosses alone */ }
+      const kinds = ['walker', 'gunner', 'shield', 'charger', 'gunner'];
+      for (let i = 0; i < 15; i++) makeWalker(pos.x - Math.sin(camYaw) * 8 + (i % 5) * 2 - 4, pos.y, pos.z - Math.cos(camYaw) * 8 + ((i / 5) | 0) * 2 - 2, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, kinds[i % kinds.length]);
+      clearInterval(PERF._fire); PERF._fire = setInterval(() => { atkPress = true; }, 150);        // keep the weapon firing
+    },
+    alien() { this.spawn(); buildMarsRoute(); const m = moonInfo; pos.set(m.x + m.ux * 95, m.y + 6, m.z + m.uz * 95); camYaw = Math.atan2(m.ux, m.uz) + Math.PI; fpPitch = -0.12; },
+  },
+};
+window.__ng.perf = PERF; window.__ng.mars = () => buildMarsRoute();
 let last = performance.now();
 renderer.setAnimationLoop(now => {
+  const P = PERF.enabled; if (P) { renderer.info.reset(); PERF.frame(now); PERF.lapStart(); }
   const dt = paused ? 0 : Math.min((now - last) / 1000, 0.05); last = now;
   if (paused) { /* frozen: the ESC menu is open */ }
-  else if (state === 'play') { playerUpdate(dt); updateEnemies(dt); updateShots(dt); }
+  else if (state === 'play') { playerUpdate(dt); if (P) PERF.lap('player'); updateEnemies(dt); if (P) PERF.lap('enemies'); updateShots(dt); if (P) PERF.lap('shots'); }
   else if (state === 'dead') { deadT -= dt; if (deadT <= 0) respawn(); if (net.on) { updateEnemies(dt); updateShots(dt); } }
   else if (state === 'clear') { updateEnemies(dt); clearT -= dt; if (clearT <= 0) nextLevel(); }
-  updateItems(dt); updateStreet(dt); updateMissions(dt); evolveTick(dt); updateGrowers(dt); dreadTick(dt); musicTick(dt); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); updateClouds(dt); updateSpecials(dt); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar();
-  updateVisuals(dt); setHint();
+  updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); evolveTick(dt); updateGrowers(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); updateClouds(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
+  updateVisuals(dt); setHint(); if (P) PERF.lap('visuals+hud');
   if (guideDialogOpen && state !== 'play') closeGuideDialog(false);
-  netTick(dt); updatePeers(dt); debugTick(dt);
+  netTick(dt); updatePeers(dt); debugTick(dt); if (P) PERF.lap('net+peers+debug');
   upscaleMaterial.uniforms.uTime.value = performance.now() / 1000;
+  const _r0 = P ? performance.now() : 0;
   if (!contextLost) {
     if (retroPreset === 'MODERN') {
       renderer.setRenderTarget(null);
@@ -6691,6 +6769,7 @@ renderer.setAnimationLoop(now => {
       renderer.render(upscaleScene, upscaleCamera);
     }
   }
+  if (P) { PERF.renderDone(_r0); PERF.overlayTick(now); }
 });
 </script>
 </body>
