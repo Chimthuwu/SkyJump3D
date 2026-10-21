@@ -1,0 +1,2115 @@
+{
+ "preset": "MODERN",
+ "spots": {
+  "spawn-roof": {
+   "frame": {
+    "calls": 3570,
+    "tris": 101115,
+    "geos": 2758,
+    "tex": 37,
+    "progs": 25
+   },
+   "analysis": {
+    "counts": {
+     "objects": 37297,
+     "lights": 3,
+     "meshes": 9162,
+     "instancedMeshes": 95,
+     "instancesDrawn": 271,
+     "sprites": 121,
+     "points": 2,
+     "groupsOrObj3D": 3667,
+     "frustumCulledFalse": 5,
+     "matrixAutoUpdateFalse": 0,
+     "matrixWorldAutoUpdateFalse": 3951,
+     "hiddenObjectsInScene": 18447
+    },
+    "cats": {
+     "viewmodel(camera child)": {
+      "visible": 14,
+      "drawn": 14,
+      "tris": 344,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "particles(Points)": {
+      "visible": 2,
+      "drawn": 2,
+      "tris": 500,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:underside cone": {
+      "visible": 1350,
+      "drawn": 606,
+      "tris": 7272,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Sphere:basic:T": {
+      "visible": 3,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Circle:basic:T": {
+      "visible": 19,
+      "drawn": 7,
+      "tris": 92,
+      "transparent": 7,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "building box": {
+      "visible": 25,
+      "drawn": 6,
+      "tris": 72,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "coin": {
+      "visible": 1,
+      "drawn": 1,
+      "tris": 32,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:weapon": {
+      "visible": 244,
+      "drawn": 23,
+      "tris": 756,
+      "transparent": 8,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "prop/vehicle": {
+      "visible": 304,
+      "drawn": 74,
+      "tris": 3441,
+      "transparent": 1,
+      "additive": 1,
+      "instancedDrawn": 161
+     },
+     "sky": {
+      "visible": 13,
+      "drawn": 6,
+      "tris": 12,
+      "transparent": 6,
+      "additive": 6,
+      "instancedDrawn": 0
+     },
+     "cloud": {
+      "visible": 26,
+      "drawn": 15,
+      "tris": 30,
+      "transparent": 15,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Box:lambert": {
+      "visible": 938,
+      "drawn": 486,
+      "tris": 5832,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "enemy:aura/beacon/warn (transp/additive)": {
+      "visible": 1605,
+      "drawn": 722,
+      "tris": 27944,
+      "transparent": 722,
+      "additive": 722,
+      "instancedDrawn": 0
+     },
+     "other:Cylinder:basic:T": {
+      "visible": 1,
+      "drawn": 1,
+      "tris": 32,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "beam/pillar (additive)": {
+      "visible": 32,
+      "drawn": 19,
+      "tris": 608,
+      "transparent": 19,
+      "additive": 19,
+      "instancedDrawn": 0
+     },
+     "other:Sphere:basic": {
+      "visible": 1,
+      "drawn": 1,
+      "tris": 952,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "additive(other)": {
+      "visible": 300,
+      "drawn": 144,
+      "tris": 3296,
+      "transparent": 144,
+      "additive": 144,
+      "instancedDrawn": 0
+     },
+     "item:coin": {
+      "visible": 458,
+      "drawn": 17,
+      "tris": 544,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "instanced(other)": {
+      "visible": 2,
+      "drawn": 2,
+      "tris": 880,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 110
+     },
+     "rail/tube": {
+      "visible": 61,
+      "drawn": 14,
+      "tris": 168,
+      "transparent": 3,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "label/nameplate sprite": {
+      "visible": 15,
+      "drawn": 15,
+      "tris": 30,
+      "transparent": 15,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Torus:basic:T": {
+      "visible": 1,
+      "drawn": 1,
+      "tris": 480,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Cylinder:lambert": {
+      "visible": 52,
+      "drawn": 5,
+      "tris": 152,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Plane:basic": {
+      "visible": 38,
+      "drawn": 3,
+      "tris": 6,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:ore": {
+      "visible": 160,
+      "drawn": 11,
+      "tris": 132,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:heart": {
+      "visible": 7,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:ammo": {
+      "visible": 86,
+      "drawn": 2,
+      "tris": 24,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Plane:basic:T": {
+      "visible": 21,
+      "drawn": 1,
+      "tris": 2,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:lore": {
+      "visible": 10,
+      "drawn": 1,
+      "tris": 12,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:slab": {
+      "visible": 1019,
+      "drawn": 418,
+      "tris": 5484,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:plate": {
+      "visible": 1019,
+      "drawn": 418,
+      "tris": 5016,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:bullseye decal": {
+      "visible": 454,
+      "drawn": 180,
+      "tris": 2160,
+      "transparent": 180,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:checkpoint flag": {
+      "visible": 35,
+      "drawn": 6,
+      "tris": 12,
+      "transparent": 6,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:bounce springs": {
+      "visible": 604,
+      "drawn": 254,
+      "tris": 30480,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "enemy:body parts": {
+      "visible": 295,
+      "drawn": 20,
+      "tris": 240,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "enemy:aura/beacon/warn (opaque rings)": {
+      "visible": 9,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Box:basic": {
+      "visible": 48,
+      "drawn": 7,
+      "tris": 84,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Tube:basic": {
+      "visible": 7,
+      "drawn": 6,
+      "tris": 3600,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Torus:basic": {
+      "visible": 15,
+      "drawn": 3,
+      "tris": 256,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "homebase:guide": {
+      "visible": 85,
+      "drawn": 57,
+      "tris": 634,
+      "transparent": 5,
+      "additive": 0,
+      "instancedDrawn": 0
+     }
+    },
+    "residual": {
+     "other:Circle:basic:T|000000|root=Mesh": 1,
+     "other:Cylinder:basic:T|55e6ff|root=Mesh": 1,
+     "other:Box:lambert|6a727f|root=Mesh": 216,
+     "other:Box:lambert|4ef6ff|root=Mesh": 119,
+     "other:Box:lambert|d1d8e7|root=Mesh": 25,
+     "other:Sphere:basic|d4dbec|root=Mesh": 1,
+     "additive(other)|bfd0ff|root=Mesh": 1,
+     "other:Box:lambert|91ff53|root=Mesh": 73,
+     "instanced(other)|4d6685|root=Mesh": 1,
+     "instanced(other)|74233d|root=Mesh": 1,
+     "other:Box:lambert|ff54cb|root=Mesh": 4,
+     "other:Box:lambert|33e0ff|root=Mesh": 2,
+     "other:Torus:basic:T|ff3fc8|root=Mesh": 1,
+     "other:Box:lambert|767f8e|root=Mesh": 3,
+     "other:Circle:basic:T|ffffff|root=Mesh": 6,
+     "other:Box:lambert|36f6ff|root=Mesh": 2,
+     "other:Cylinder:lambert|8c98b0|root=Mesh": 3,
+     "other:Plane:basic|36f6ff|root=Mesh": 3,
+     "other:Box:lambert|40434e|root=Mesh": 20,
+     "other:Box:lambert|3b3c42|root=Mesh": 20,
+     "additive(other)|8aff3e|root=Mesh": 82,
+     "other:Box:basic|ffd23a|root=Mesh": 2,
+     "other:Plane:basic:T|ffe14a|root=Mesh": 1,
+     "additive(other)|ff3fc8|root=Mesh": 61,
+     "other:Box:lambert|ff3fc8|root=Mesh": 2,
+     "other:Tube:basic|dfff6f|root=Mesh": 1,
+     "other:Tube:basic|a6ff6f|root=Mesh": 1,
+     "other:Tube:basic|6fff93|root=Mesh": 1,
+     "other:Tube:basic|6fffd2|root=Mesh": 1,
+     "other:Tube:basic|6fffff|root=Mesh": 1,
+     "other:Tube:basic|6f94ff|root=Mesh": 1,
+     "other:Torus:basic|36f6ff|root=Group21": 2,
+     "other:Torus:basic|ff3fc8|root=Group21": 1,
+     "other:Box:basic|ff3fc8|root=Group21": 2,
+     "other:Box:basic|36f6ff|root=Group21": 3,
+     "other:Cylinder:lambert|505769|root=Group21": 2
+    },
+    "drawn": 3568,
+    "drawnTris": 101611,
+    "totalVisibleRenderables": 9379,
+    "drawnTransparent": 1135,
+    "drawnAdditive": 892,
+    "drawnOpaque": 2433,
+    "depthWriteOffDrawn": 943,
+    "uniqueMatsVisible": 6616,
+    "uniqueGeosVisible": 6560,
+    "uniqueMatsDrawn": 2792,
+    "uniqueGeosDrawn": 2741,
+    "programs": 25,
+    "cam": [
+     610,
+     582,
+     0
+    ]
+   },
+   "stat": {
+    "cull": {
+     "tracked": 10330,
+     "hidden": 3204,
+     "children": 11453,
+     "solids": 2910,
+     "platforms": 1759,
+     "specials": 318,
+     "enemies": 535,
+     "items": 4860,
+     "props": 53
+    },
+    "CULL_R": 380
+   }
+  },
+  "dense-cell (-250,476,474)": {
+   "frame": {
+    "calls": 5248,
+    "tris": 144360,
+    "geos": 6731,
+    "tex": 113,
+    "progs": 26
+   },
+   "analysis": {
+    "counts": {
+     "objects": 38607,
+     "lights": 3,
+     "meshes": 11841,
+     "instancedMeshes": 145,
+     "instancesDrawn": 541,
+     "sprites": 119,
+     "points": 2,
+     "groupsOrObj3D": 3746,
+     "frustumCulledFalse": 5,
+     "matrixAutoUpdateFalse": 0,
+     "matrixWorldAutoUpdateFalse": 3228,
+     "hiddenObjectsInScene": 17559
+    },
+    "cats": {
+     "viewmodel(camera child)": {
+      "visible": 14,
+      "drawn": 14,
+      "tris": 344,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "particles(Points)": {
+      "visible": 2,
+      "drawn": 2,
+      "tris": 500,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:underside cone": {
+      "visible": 1483,
+      "drawn": 715,
+      "tris": 8583,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Sphere:basic:T": {
+      "visible": 3,
+      "drawn": 3,
+      "tris": 176,
+      "transparent": 3,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Circle:basic:T": {
+      "visible": 26,
+      "drawn": 13,
+      "tris": 156,
+      "transparent": 13,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "building box": {
+      "visible": 26,
+      "drawn": 8,
+      "tris": 96,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "coin": {
+      "visible": 1,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:weapon": {
+      "visible": 236,
+      "drawn": 72,
+      "tris": 2700,
+      "transparent": 18,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "prop/vehicle": {
+      "visible": 367,
+      "drawn": 141,
+      "tris": 8109,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 431
+     },
+     "sky": {
+      "visible": 13,
+      "drawn": 6,
+      "tris": 12,
+      "transparent": 6,
+      "additive": 6,
+      "instancedDrawn": 0
+     },
+     "cloud": {
+      "visible": 26,
+      "drawn": 21,
+      "tris": 42,
+      "transparent": 21,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Box:lambert": {
+      "visible": 948,
+      "drawn": 637,
+      "tris": 7644,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "enemy:aura/beacon/warn (transp/additive)": {
+      "visible": 1607,
+      "drawn": 836,
+      "tris": 32472,
+      "transparent": 836,
+      "additive": 836,
+      "instancedDrawn": 0
+     },
+     "other:Cylinder:basic:T": {
+      "visible": 1,
+      "drawn": 1,
+      "tris": 32,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "beam/pillar (additive)": {
+      "visible": 30,
+      "drawn": 20,
+      "tris": 640,
+      "transparent": 20,
+      "additive": 20,
+      "instancedDrawn": 0
+     },
+     "other:Sphere:basic": {
+      "visible": 1,
+      "drawn": 1,
+      "tris": 952,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "additive(other)": {
+      "visible": 454,
+      "drawn": 224,
+      "tris": 4496,
+      "transparent": 224,
+      "additive": 224,
+      "instancedDrawn": 0
+     },
+     "item:coin": {
+      "visible": 459,
+      "drawn": 92,
+      "tris": 6688,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "instanced(other)": {
+      "visible": 2,
+      "drawn": 2,
+      "tris": 880,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 110
+     },
+     "rail/tube": {
+      "visible": 19,
+      "drawn": 3,
+      "tris": 36,
+      "transparent": 3,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "label/nameplate sprite": {
+      "visible": 15,
+      "drawn": 14,
+      "tris": 28,
+      "transparent": 14,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Torus:basic:T": {
+      "visible": 1,
+      "drawn": 1,
+      "tris": 480,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Plane:basic:T": {
+      "visible": 28,
+      "drawn": 21,
+      "tris": 42,
+      "transparent": 21,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Cylinder:lambert": {
+      "visible": 69,
+      "drawn": 22,
+      "tris": 676,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Plane:basic": {
+      "visible": 40,
+      "drawn": 15,
+      "tris": 30,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:ore": {
+      "visible": 183,
+      "drawn": 56,
+      "tris": 672,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "enemy:body parts": {
+      "visible": 927,
+      "drawn": 434,
+      "tris": 8192,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "enemy:aura/beacon/warn (opaque rings)": {
+      "visible": 106,
+      "drawn": 73,
+      "tris": 2312,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:heart": {
+      "visible": 14,
+      "drawn": 8,
+      "tris": 64,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:ammo": {
+      "visible": 100,
+      "drawn": 30,
+      "tris": 360,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:lore": {
+      "visible": 12,
+      "drawn": 4,
+      "tris": 28,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:slab": {
+      "visible": 1341,
+      "drawn": 491,
+      "tris": 6468,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:plate": {
+      "visible": 1761,
+      "drawn": 491,
+      "tris": 5892,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:bullseye decal": {
+      "visible": 557,
+      "drawn": 231,
+      "tris": 2772,
+      "transparent": 231,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:bounce springs": {
+      "visible": 688,
+      "drawn": 272,
+      "tris": 32640,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:checkpoint flag": {
+      "visible": 46,
+      "drawn": 11,
+      "tris": 22,
+      "transparent": 11,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:support beam": {
+      "visible": 67,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Tube:basic": {
+      "visible": 10,
+      "drawn": 9,
+      "tris": 5400,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:dataCore": {
+      "visible": 3,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "homebase:guide": {
+      "visible": 85,
+      "drawn": 43,
+      "tris": 476,
+      "transparent": 4,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Torus:basic": {
+      "visible": 15,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Box:basic": {
+      "visible": 27,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "zone-dressing": {
+      "visible": 153,
+      "drawn": 131,
+      "tris": 2544,
+      "transparent": 6,
+      "additive": 6,
+      "instancedDrawn": 0
+     },
+     "other:Icosahedron:lambert": {
+      "visible": 140,
+      "drawn": 58,
+      "tris": 1160,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     }
+    },
+    "residual": {
+     "other:Sphere:basic:T|050207|root=Group4": 1,
+     "other:Sphere:basic:T|ff173c|root=Group4": 2,
+     "other:Box:lambert|6a727f|root=Mesh": 252,
+     "other:Box:lambert|4ef6ff|root=Mesh": 140,
+     "other:Cylinder:basic:T|55e6ff|root=Mesh": 1,
+     "other:Box:lambert|d1d8e7|root=Mesh": 24,
+     "other:Sphere:basic|d4dbec|root=Mesh": 1,
+     "additive(other)|bfd0ff|root=Mesh": 1,
+     "other:Box:lambert|91ff53|root=Mesh": 105,
+     "instanced(other)|4d6685|root=Mesh": 1,
+     "instanced(other)|74233d|root=Mesh": 1,
+     "other:Box:lambert|ff54cb|root=Mesh": 4,
+     "other:Box:lambert|33e0ff|root=Mesh": 2,
+     "other:Torus:basic:T|ff3fc8|root=Mesh": 1,
+     "other:Box:lambert|767f8e|root=Mesh": 16,
+     "other:Circle:basic:T|ffffff|root=Mesh": 13,
+     "other:Plane:basic:T|ffffff|root=Mesh": 2,
+     "additive(other)|9b73ff|root=Mesh": 2,
+     "other:Box:lambert|36f6ff|root=Mesh": 15,
+     "other:Cylinder:lambert|8c98b0|root=Mesh": 15,
+     "other:Plane:basic|36f6ff|root=Mesh": 15,
+     "additive(other)|8aff3e|root=Mesh": 146,
+     "other:Box:lambert|40434e|root=Mesh": 20,
+     "other:Box:lambert|3b3c42|root=Mesh": 20,
+     "additive(other)|ff3fc8|root=Mesh": 75,
+     "other:Box:lambert|ff3fc8|root=Mesh": 7,
+     "other:Tube:basic|6fe0ff|root=Mesh": 1,
+     "other:Tube:basic|6fa8ff|root=Mesh": 1,
+     "other:Box:lambert|ffd23a|root=Mesh": 1,
+     "other:Tube:basic|fd6fff|root=Mesh": 1,
+     "other:Tube:basic|ff6fd5|root=Mesh": 1,
+     "other:Tube:basic|ff6f97|root=Mesh": 1,
+     "other:Tube:basic|ffa26f|root=Mesh": 1,
+     "other:Tube:basic|ffdc6f|root=Mesh": 1,
+     "other:Tube:basic|f7ff6f|root=Mesh": 1,
+     "other:Tube:basic|c8ff6f|root=Mesh": 1,
+     "other:Plane:basic:T|ffe14a|root=Mesh": 19,
+     "other:Icosahedron:lambert|1f7a34|root=Mesh": 13,
+     "other:Icosahedron:lambert|2f9e3a|root=Mesh": 11,
+     "other:Icosahedron:lambert|57c84a|root=Mesh": 19,
+     "other:Cylinder:lambert|685243|root=Group14": 7,
+     "other:Box:lambert|417547|root=Group14": 31,
+     "other:Icosahedron:lambert|41834c|root=Group14": 10,
+     "other:Icosahedron:lambert|49a350|root=Group14": 5
+    },
+    "drawn": 5226,
+    "drawnTris": 144816,
+    "totalVisibleRenderables": 12106,
+    "drawnTransparent": 1435,
+    "drawnAdditive": 1092,
+    "drawnOpaque": 3791,
+    "depthWriteOffDrawn": 1165,
+    "uniqueMatsVisible": 7628,
+    "uniqueGeosVisible": 7857,
+    "uniqueMatsDrawn": 3687,
+    "uniqueGeosDrawn": 3886,
+    "programs": 26,
+    "cam": [
+     -252,
+     481,
+     483
+    ]
+   },
+   "stat": {
+    "cull": {
+     "tracked": 10331,
+     "hidden": 3737,
+     "children": 11454,
+     "solids": 2910,
+     "platforms": 1759,
+     "specials": 318,
+     "enemies": 535,
+     "items": 4860,
+     "props": 53
+    },
+    "CULL_R": 380
+   }
+  },
+  "opposite-roof (-590,582,0)": {
+   "frame": {
+    "calls": 4838,
+    "tris": 134985,
+    "geos": 8478,
+    "tex": 143,
+    "progs": 27
+   },
+   "analysis": {
+    "counts": {
+     "objects": 39014,
+     "lights": 3,
+     "meshes": 11292,
+     "instancedMeshes": 107,
+     "instancesDrawn": 271,
+     "sprites": 139,
+     "points": 2,
+     "groupsOrObj3D": 3777,
+     "frustumCulledFalse": 5,
+     "matrixAutoUpdateFalse": 0,
+     "matrixWorldAutoUpdateFalse": 2201,
+     "hiddenObjectsInScene": 18183
+    },
+    "cats": {
+     "viewmodel(camera child)": {
+      "visible": 14,
+      "drawn": 14,
+      "tris": 344,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "particles(Points)": {
+      "visible": 2,
+      "drawn": 2,
+      "tris": 500,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:underside cone": {
+      "visible": 1415,
+      "drawn": 727,
+      "tris": 8727,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Sphere:basic:T": {
+      "visible": 3,
+      "drawn": 3,
+      "tris": 176,
+      "transparent": 3,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Circle:basic:T": {
+      "visible": 21,
+      "drawn": 7,
+      "tris": 92,
+      "transparent": 7,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "building box": {
+      "visible": 28,
+      "drawn": 9,
+      "tris": 108,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "coin": {
+      "visible": 1,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:weapon": {
+      "visible": 316,
+      "drawn": 88,
+      "tris": 3276,
+      "transparent": 24,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "prop/vehicle": {
+      "visible": 299,
+      "drawn": 73,
+      "tris": 3417,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 161
+     },
+     "sky": {
+      "visible": 13,
+      "drawn": 7,
+      "tris": 60,
+      "transparent": 6,
+      "additive": 6,
+      "instancedDrawn": 0
+     },
+     "cloud": {
+      "visible": 26,
+      "drawn": 24,
+      "tris": 48,
+      "transparent": 24,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Box:lambert": {
+      "visible": 944,
+      "drawn": 628,
+      "tris": 7536,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "enemy:aura/beacon/warn (transp/additive)": {
+      "visible": 1605,
+      "drawn": 813,
+      "tris": 31436,
+      "transparent": 813,
+      "additive": 813,
+      "instancedDrawn": 0
+     },
+     "other:Cylinder:basic:T": {
+      "visible": 1,
+      "drawn": 1,
+      "tris": 32,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "beam/pillar (additive)": {
+      "visible": 34,
+      "drawn": 19,
+      "tris": 600,
+      "transparent": 19,
+      "additive": 19,
+      "instancedDrawn": 0
+     },
+     "other:Sphere:basic": {
+      "visible": 1,
+      "drawn": 1,
+      "tris": 952,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "additive(other)": {
+      "visible": 319,
+      "drawn": 144,
+      "tris": 3376,
+      "transparent": 144,
+      "additive": 144,
+      "instancedDrawn": 0
+     },
+     "instanced(other)": {
+      "visible": 2,
+      "drawn": 2,
+      "tris": 880,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 110
+     },
+     "rail/tube": {
+      "visible": 66,
+      "drawn": 50,
+      "tris": 600,
+      "transparent": 3,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "label/nameplate sprite": {
+      "visible": 15,
+      "drawn": 13,
+      "tris": 26,
+      "transparent": 13,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Torus:basic:T": {
+      "visible": 1,
+      "drawn": 1,
+      "tris": 480,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Plane:basic:T": {
+      "visible": 28,
+      "drawn": 22,
+      "tris": 44,
+      "transparent": 22,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Cylinder:lambert": {
+      "visible": 77,
+      "drawn": 22,
+      "tris": 668,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Plane:basic": {
+      "visible": 48,
+      "drawn": 14,
+      "tris": 28,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:ore": {
+      "visible": 218,
+      "drawn": 53,
+      "tris": 636,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:heart": {
+      "visible": 7,
+      "drawn": 5,
+      "tris": 40,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:ammo": {
+      "visible": 120,
+      "drawn": 26,
+      "tris": 312,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:coin": {
+      "visible": 631,
+      "drawn": 124,
+      "tris": 8960,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:lore": {
+      "visible": 10,
+      "drawn": 4,
+      "tris": 28,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:slab": {
+      "visible": 1222,
+      "drawn": 541,
+      "tris": 7480,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:plate": {
+      "visible": 2090,
+      "drawn": 590,
+      "tris": 7868,
+      "transparent": 9,
+      "additive": 9,
+      "instancedDrawn": 0
+     },
+     "platform:bullseye decal": {
+      "visible": 521,
+      "drawn": 236,
+      "tris": 2832,
+      "transparent": 236,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:support beam": {
+      "visible": 123,
+      "drawn": 12,
+      "tris": 144,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:bounce springs": {
+      "visible": 640,
+      "drawn": 291,
+      "tris": 34920,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:checkpoint flag": {
+      "visible": 39,
+      "drawn": 15,
+      "tris": 30,
+      "transparent": 15,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "enemy:body parts": {
+      "visible": 269,
+      "drawn": 62,
+      "tris": 1035,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "enemy:aura/beacon/warn (opaque rings)": {
+      "visible": 12,
+      "drawn": 3,
+      "tris": 168,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Box:basic": {
+      "visible": 50,
+      "drawn": 23,
+      "tris": 276,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Tube:basic": {
+      "visible": 10,
+      "drawn": 8,
+      "tris": 4800,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:dataCore": {
+      "visible": 3,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "homebase:guide": {
+      "visible": 85,
+      "drawn": 43,
+      "tris": 476,
+      "transparent": 4,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Torus:basic": {
+      "visible": 15,
+      "drawn": 2,
+      "tris": 192,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "zone-dressing": {
+      "visible": 153,
+      "drawn": 78,
+      "tris": 1536,
+      "transparent": 4,
+      "additive": 4,
+      "instancedDrawn": 0
+     },
+     "other:Icosahedron:lambert": {
+      "visible": 42,
+      "drawn": 15,
+      "tris": 300,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     }
+    },
+    "residual": {
+     "other:Sphere:basic:T|050207|root=Group4": 1,
+     "other:Sphere:basic:T|ff173c|root=Group4": 2,
+     "other:Circle:basic:T|000000|root=Mesh": 1,
+     "other:Cylinder:basic:T|55e6ff|root=Mesh": 1,
+     "other:Box:lambert|6a727f|root=Mesh": 240,
+     "other:Box:lambert|4ef6ff|root=Mesh": 119,
+     "other:Box:lambert|d1d8e7|root=Mesh": 33,
+     "other:Sphere:basic|d4dbec|root=Mesh": 1,
+     "additive(other)|bfd0ff|root=Mesh": 1,
+     "other:Box:lambert|91ff53|root=Mesh": 90,
+     "instanced(other)|4d6685|root=Mesh": 1,
+     "instanced(other)|74233d|root=Mesh": 1,
+     "other:Box:lambert|ff54cb|root=Mesh": 4,
+     "other:Box:lambert|33e0ff|root=Mesh": 7,
+     "other:Torus:basic:T|ff3fc8|root=Mesh": 1,
+     "other:Circle:basic:T|ffffff|root=Mesh": 6,
+     "other:Box:lambert|767f8e|root=Mesh": 1,
+     "other:Plane:basic:T|ffffff|root=Mesh": 1,
+     "additive(other)|36f6ff|root=Mesh": 1,
+     "additive(other)|9b73ff|root=Mesh": 1,
+     "other:Box:lambert|40434e|root=Mesh": 31,
+     "other:Box:lambert|3b3c42|root=Mesh": 31,
+     "other:Box:basic|ffd23a|root=Mesh": 22,
+     "other:Box:lambert|474c60|root=Mesh": 20,
+     "other:Box:lambert|36f6ff|root=Mesh": 14,
+     "other:Cylinder:lambert|8c98b0|root=Mesh": 14,
+     "other:Plane:basic|36f6ff|root=Mesh": 14,
+     "other:Plane:basic:T|ffe14a|root=Mesh": 21,
+     "additive(other)|8aff3e|root=Mesh": 75,
+     "additive(other)|ff3fc8|root=Mesh": 66,
+     "other:Box:lambert|ff3fc8|root=Mesh": 8,
+     "other:Tube:basic|ffe56f|root=Mesh": 1,
+     "other:Box:lambert|ffd23a|root=Mesh": 1,
+     "other:Tube:basic|efff6f|root=Mesh": 1,
+     "other:Tube:basic|6fffbe|root=Mesh": 1,
+     "other:Tube:basic|6ffff0|root=Mesh": 1,
+     "other:Tube:basic|6fe4ff|root=Mesh": 1,
+     "other:Tube:basic|6faeff|root=Mesh": 1,
+     "other:Tube:basic|886fff|root=Mesh": 1,
+     "other:Tube:basic|fa6fff|root=Mesh": 1,
+     "other:Torus:basic|36f6ff|root=Group21": 1,
+     "other:Torus:basic|ff3fc8|root=Group21": 1,
+     "other:Box:basic|36f6ff|root=Group21": 1,
+     "other:Cylinder:lambert|505769|root=Group21": 1,
+     "other:Cylinder:lambert|685243|root=Group14": 7,
+     "other:Icosahedron:lambert|41834c|root=Group14": 10,
+     "other:Icosahedron:lambert|49a350|root=Group14": 5,
+     "other:Box:lambert|417547|root=Group14": 29
+    },
+    "drawn": 4815,
+    "drawnTris": 135439,
+    "totalVisibleRenderables": 11539,
+    "drawnTransparent": 1350,
+    "drawnAdditive": 995,
+    "drawnOpaque": 3465,
+    "depthWriteOffDrawn": 1081,
+    "uniqueMatsVisible": 7056,
+    "uniqueGeosVisible": 6884,
+    "uniqueMatsDrawn": 3507,
+    "uniqueGeosDrawn": 3464,
+    "programs": 27,
+    "cam": [
+     -590,
+     582,
+     0
+    ]
+   },
+   "stat": {
+    "cull": {
+     "tracked": 10331,
+     "hidden": 4668,
+     "children": 11454,
+     "solids": 2910,
+     "platforms": 1759,
+     "specials": 318,
+     "enemies": 535,
+     "items": 4860,
+     "props": 53
+    },
+    "CULL_R": 380
+   }
+  },
+  "low-centre (0,60,0)": {
+   "frame": {
+    "calls": 1977,
+    "tris": 59235,
+    "geos": 8715,
+    "tex": 143,
+    "progs": 27
+   },
+   "analysis": {
+    "counts": {
+     "objects": 37451,
+     "lights": 3,
+     "meshes": 11840,
+     "instancedMeshes": 29,
+     "instancesDrawn": 110,
+     "sprites": 116,
+     "points": 2,
+     "groupsOrObj3D": 3682,
+     "frustumCulledFalse": 5,
+     "matrixAutoUpdateFalse": 0,
+     "matrixWorldAutoUpdateFalse": 1657,
+     "hiddenObjectsInScene": 17942
+    },
+    "cats": {
+     "viewmodel(camera child)": {
+      "visible": 14,
+      "drawn": 14,
+      "tris": 344,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Circle:basic:T": {
+      "visible": 35,
+      "drawn": 9,
+      "tris": 116,
+      "transparent": 9,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "particles(Points)": {
+      "visible": 2,
+      "drawn": 2,
+      "tris": 500,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:underside cone": {
+      "visible": 2063,
+      "drawn": 289,
+      "tris": 3468,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Sphere:basic:T": {
+      "visible": 3,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "building box": {
+      "visible": 34,
+      "drawn": 13,
+      "tris": 156,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "sky": {
+      "visible": 13,
+      "drawn": 5,
+      "tris": 10,
+      "transparent": 5,
+      "additive": 5,
+      "instancedDrawn": 0
+     },
+     "cloud": {
+      "visible": 26,
+      "drawn": 8,
+      "tris": 16,
+      "transparent": 8,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Box:lambert": {
+      "visible": 1111,
+      "drawn": 108,
+      "tris": 1296,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "enemy:body parts": {
+      "visible": 339,
+      "drawn": 119,
+      "tris": 2397,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "enemy:aura/beacon/warn (opaque rings)": {
+      "visible": 79,
+      "drawn": 37,
+      "tris": 2792,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "enemy:aura/beacon/warn (transp/additive)": {
+      "visible": 1605,
+      "drawn": 413,
+      "tris": 16000,
+      "transparent": 413,
+      "additive": 413,
+      "instancedDrawn": 0
+     },
+     "other:Torus:basic:T": {
+      "visible": 2,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Cylinder:basic:T": {
+      "visible": 1,
+      "drawn": 1,
+      "tris": 32,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "beam/pillar (additive)": {
+      "visible": 35,
+      "drawn": 6,
+      "tris": 192,
+      "transparent": 6,
+      "additive": 6,
+      "instancedDrawn": 0
+     },
+     "other:Sphere:basic": {
+      "visible": 1,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "additive(other)": {
+      "visible": 446,
+      "drawn": 128,
+      "tris": 1656,
+      "transparent": 128,
+      "additive": 128,
+      "instancedDrawn": 0
+     },
+     "item:coin": {
+      "visible": 139,
+      "drawn": 3,
+      "tris": 96,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:heart": {
+      "visible": 7,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "instanced(other)": {
+      "visible": 2,
+      "drawn": 2,
+      "tris": 880,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 110
+     },
+     "other:Torus:basic": {
+      "visible": 31,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Box:basic:T": {
+      "visible": 1,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "coin": {
+      "visible": 8,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "rail/tube": {
+      "visible": 36,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "prop/vehicle": {
+      "visible": 73,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "label/nameplate sprite": {
+      "visible": 15,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Plane:basic:T": {
+      "visible": 10,
+      "drawn": 3,
+      "tris": 6,
+      "transparent": 3,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:ammo": {
+      "visible": 14,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:slab": {
+      "visible": 1714,
+      "drawn": 253,
+      "tris": 4116,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:plate": {
+      "visible": 1714,
+      "drawn": 252,
+      "tris": 3024,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:bullseye decal": {
+      "visible": 799,
+      "drawn": 122,
+      "tris": 1464,
+      "transparent": 122,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:checkpoint flag": {
+      "visible": 69,
+      "drawn": 13,
+      "tris": 26,
+      "transparent": 13,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:bounce springs": {
+      "visible": 1016,
+      "drawn": 171,
+      "tris": 20520,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:weapon": {
+      "visible": 224,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Cylinder:lambert": {
+      "visible": 57,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Plane:basic": {
+      "visible": 13,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:ore": {
+      "visible": 40,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Tube:basic": {
+      "visible": 11,
+      "drawn": 1,
+      "tris": 600,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:dataCore": {
+      "visible": 3,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Box:basic": {
+      "visible": 54,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "homebase:guide": {
+      "visible": 85,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Icosahedron:lambert": {
+      "visible": 42,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     }
+    },
+    "residual": {
+     "other:Box:lambert|6a727f|root=Mesh": 54,
+     "other:Box:lambert|bc4d60|root=Mesh": 1,
+     "other:Circle:basic:T|9f112a|root=Mesh": 1,
+     "other:Box:lambert|4ef6ff|root=Mesh": 20,
+     "other:Cylinder:basic:T|55e6ff|root=Mesh": 1,
+     "other:Box:lambert|91ff53|root=Mesh": 28,
+     "instanced(other)|4d6685|root=Mesh": 1,
+     "instanced(other)|74233d|root=Mesh": 1,
+     "other:Circle:basic:T|ffffff|root=Mesh": 8,
+     "other:Box:lambert|767f8e|root=Mesh": 4,
+     "other:Box:lambert|444c66|root=Mesh": 1,
+     "other:Plane:basic:T|ffffff|root=Mesh": 3,
+     "additive(other)|ff3fc8|root=Mesh": 9,
+     "additive(other)|9b73ff|root=Mesh": 1,
+     "additive(other)|8aff3e|root=Mesh": 116,
+     "other:Tube:basic|ff6fff|root=Mesh": 1,
+     "additive(other)|c4ff4d|root=Mesh": 2
+    },
+    "drawn": 1972,
+    "drawnTris": 59707,
+    "totalVisibleRenderables": 11986,
+    "drawnTransparent": 709,
+    "drawnAdditive": 552,
+    "drawnOpaque": 1263,
+    "depthWriteOffDrawn": 575,
+    "uniqueMatsVisible": 9022,
+    "uniqueGeosVisible": 9025,
+    "uniqueMatsDrawn": 1433,
+    "uniqueGeosDrawn": 1481,
+    "programs": 27,
+    "cam": [
+     0,
+     34,
+     0
+    ]
+   },
+   "stat": {
+    "cull": {
+     "tracked": 10331,
+     "hidden": 5108,
+     "children": 11452,
+     "solids": 2910,
+     "platforms": 1759,
+     "specials": 318,
+     "enemies": 535,
+     "items": 4860,
+     "props": 53
+    },
+    "CULL_R": 380
+   }
+  },
+  "alien-void (moon edge)": {
+   "frame": {
+    "calls": 655,
+    "tris": 67652,
+    "geos": 9192,
+    "tex": 145,
+    "progs": 28
+   },
+   "analysis": {
+    "counts": {
+     "objects": 42582,
+     "lights": 3,
+     "meshes": 4219,
+     "instancedMeshes": 142,
+     "instancesDrawn": 2412,
+     "sprites": 128,
+     "points": 3,
+     "groupsOrObj3D": 4329,
+     "frustumCulledFalse": 21,
+     "matrixAutoUpdateFalse": 0,
+     "matrixWorldAutoUpdateFalse": 1104,
+     "hiddenObjectsInScene": 23700
+    },
+    "cats": {
+     "instanced(other)": {
+      "visible": 19,
+      "drawn": 19,
+      "tris": 52896,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 2412
+     },
+     "particles(Points)": {
+      "visible": 3,
+      "drawn": 3,
+      "tris": 966.6666666666667,
+      "transparent": 2,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "building box": {
+      "visible": 4,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:weapon": {
+      "visible": 272,
+      "drawn": 4,
+      "tris": 150,
+      "transparent": 1,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "prop/vehicle": {
+      "visible": 326,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "sky": {
+      "visible": 13,
+      "drawn": 4,
+      "tris": 8,
+      "transparent": 4,
+      "additive": 4,
+      "instancedDrawn": 0
+     },
+     "cloud": {
+      "visible": 26,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "enemy:aura/beacon/warn (transp/additive)": {
+      "visible": 1821,
+      "drawn": 147,
+      "tris": 3848,
+      "transparent": 147,
+      "additive": 147,
+      "instancedDrawn": 0
+     },
+     "other:Cylinder:basic:T": {
+      "visible": 1,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Box:lambert": {
+      "visible": 347,
+      "drawn": 21,
+      "tris": 252,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:underside cone": {
+      "visible": 324,
+      "drawn": 97,
+      "tris": 1164,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "beam/pillar (additive)": {
+      "visible": 28,
+      "drawn": 6,
+      "tris": 152,
+      "transparent": 6,
+      "additive": 6,
+      "instancedDrawn": 0
+     },
+     "additive(other)": {
+      "visible": 12,
+      "drawn": 2,
+      "tris": 1064,
+      "transparent": 2,
+      "additive": 2,
+      "instancedDrawn": 0
+     },
+     "platform:slab": {
+      "visible": 172,
+      "drawn": 77,
+      "tris": 924,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:plate": {
+      "visible": 184,
+      "drawn": 89,
+      "tris": 1500,
+      "transparent": 12,
+      "additive": 12,
+      "instancedDrawn": 0
+     },
+     "item:coin": {
+      "visible": 32,
+      "drawn": 20,
+      "tris": 640,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Sphere:basic": {
+      "visible": 2,
+      "drawn": 1,
+      "tris": 1840,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Cylinder:lambert": {
+      "visible": 15,
+      "drawn": 1,
+      "tris": 32,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Plane:basic": {
+      "visible": 5,
+      "drawn": 1,
+      "tris": 2,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:ore": {
+      "visible": 8,
+      "drawn": 4,
+      "tris": 48,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Circle:basic:T": {
+      "visible": 1,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "enemy:body parts": {
+      "visible": 243,
+      "drawn": 63,
+      "tris": 1240,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "enemy:aura/beacon/warn (opaque rings)": {
+      "visible": 48,
+      "drawn": 16,
+      "tris": 1056,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:heart": {
+      "visible": 5,
+      "drawn": 2,
+      "tris": 16,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "item:ammo": {
+      "visible": 8,
+      "drawn": 4,
+      "tris": 48,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "label/nameplate sprite": {
+      "visible": 15,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "rail/tube": {
+      "visible": 11,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:bullseye decal": {
+      "visible": 34,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:bounce springs": {
+      "visible": 48,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "homebase:guide": {
+      "visible": 85,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Torus:basic": {
+      "visible": 10,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "other:Box:basic": {
+      "visible": 18,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "platform:checkpoint flag": {
+      "visible": 11,
+      "drawn": 11,
+      "tris": 22,
+      "transparent": 11,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "zone-dressing": {
+      "visible": 2,
+      "drawn": 0,
+      "tris": 0,
+      "transparent": 0,
+      "additive": 0,
+      "instancedDrawn": 0
+     },
+     "particle/fx": {
+      "visible": 339,
+      "drawn": 61,
+      "tris": 732,
+      "transparent": 61,
+      "additive": 0,
+      "instancedDrawn": 0
+     }
+    },
+    "residual": {
+     "instanced(other)|ffffff|root=Mesh": 1,
+     "additive(other)|bfd0ff|root=Mesh": 1,
+     "instanced(other)|4d6685|root=Mesh": 1,
+     "instanced(other)|74233d|root=Mesh": 1,
+     "other:Box:lambert|36f6ff|root=Mesh": 1,
+     "other:Cylinder:lambert|8c98b0|root=Mesh": 1,
+     "other:Plane:basic|36f6ff|root=Mesh": 1,
+     "instanced(other)|434754|root=Mesh": 2,
+     "instanced(other)|7dff4a|root=Mesh": 3,
+     "instanced(other)|ff3fc8|root=Mesh": 3,
+     "instanced(other)|36f6ff|root=Mesh": 2,
+     "other:Sphere:basic|e8c0a8|root=Mesh": 1,
+     "additive(other)|ff7a4a|root=Mesh": 1,
+     "other:Box:lambert|7dff4a|root=Mesh": 2,
+     "instanced(other)|465477|root=Mesh": 1,
+     "instanced(other)|69466d|root=Mesh": 1,
+     "instanced(other)|685062|root=Mesh": 1,
+     "instanced(other)|4fd66e|root=Mesh": 1,
+     "instanced(other)|515464|root=Mesh": 1,
+     "instanced(other)|41434f|root=Mesh": 1,
+     "other:Box:lambert|4786e2|root=Mesh": 12,
+     "other:Box:lambert|475073|root=Mesh": 4,
+     "other:Box:lambert|ffd4ad|root=Mesh": 1,
+     "other:Box:lambert|b43b3f|root=Mesh": 1
+    },
+    "drawn": 653,
+    "drawnTris": 68600.66666666667,
+    "totalVisibleRenderables": 4492,
+    "drawnTransparent": 247,
+    "drawnAdditive": 171,
+    "drawnOpaque": 406,
+    "depthWriteOffDrawn": 186,
+    "uniqueMatsVisible": 3250,
+    "uniqueGeosVisible": 2874,
+    "uniqueMatsDrawn": 444,
+    "uniqueGeosDrawn": 421,
+    "programs": 28,
+    "cam": [
+     0,
+     1383,
+     -615
+    ]
+   },
+   "stat": {
+    "cull": {
+     "tracked": 11086,
+     "hidden": 9577,
+     "children": 12377,
+     "solids": 4028,
+     "platforms": 2111,
+     "specials": 670,
+     "enemies": 665,
+     "items": 5164,
+     "props": 53
+    },
+    "CULL_R": 380
+   }
+  }
+ },
+ "errors": []
+}

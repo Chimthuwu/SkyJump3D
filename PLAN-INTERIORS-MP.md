@@ -53,12 +53,25 @@ real lights (max 4; fake the rest with emissive meshes). Use `InstancedMesh` for
 - Audio: interior ambience swaps through the existing `sfx` / music bus (muffled wind, theme hum).
 
 ### Agent A checklist
-- [ ] `openTower` converts a building into a hollow shell with a working roof hatch; collision correct (no invisible walls, no falling through).
-- [ ] 5 themes with distinct palette, geometry and enemies; interior lighting/fog clearly different from outside.
-- [ ] Reward + (optional) mini-boss in each; leaving restores the outside environment (`setZone`, fog, sky) cleanly.
-- [ ] No cost until a tower is opened; no frame-rate drop.
-- [ ] `window.__ng.openTower(i)` / `__ng.towers()` debug hooks to test every theme quickly.
-- [ ] `node --check` on the extracted script; `TODO.md` handoff notes.
+- [x] `openTower` converts a building into a hollow shell with a working roof hatch; collision correct (no invisible walls, no falling through).
+- [x] 5 themes with distinct palette, geometry and enemies; interior lighting/fog clearly different from outside.
+- [x] Reward + (optional) mini-boss in each; leaving restores the outside environment (`setZone`, fog, sky) cleanly.
+- [x] No cost until a tower is opened; no frame-rate drop.
+- [x] `window.__ng.openTower(i)` / `__ng.towers()` debug hooks to test every theme quickly.
+- [x] `node --check` on the extracted script; `TODO.md` handoff notes.
+
+**Status (2026-10-21, BUFFY / Agent A):** Part 1 shipped in `index.html`. Landing on a building roof
+calls `openTower(sol.hub)`; the tower's single solid is removed from `solids`, the box mesh is hidden and the
+volume is rebuilt as a shell (`interiorShell`): four collision walls, a street-level slab, 1–14 staggered floor
+rings with a carved hatch, a bounce-pad under every hatch so the shaft can be climbed upward, a doorway bridge
+and a launch ledge on the ground side, emissive wall trim and an iris-ing roof hatch. Themes are `server`,
+`atrium`, `reactor`, `club`, `vault` (`INTERIOR_THEMES` + `interiorDecor` + `buildInterior_<name>`); the theme
+is picked by hub zone (`towerThemeFor`). Every interior spawns 2–3 biome enemies, a mini-boss (reactor/club),
+a weapon + ammo reward, a mission data core and a `collect` contract. Deviations from the plan: floor rings
+are square rings with one hatch each (not ramps), the light budget is **one shared key light** for all
+interiors (parked at y=-10000 outside, so the city never pays for extra lights), and the ground-side exit is a
+doorway + launch ledge rather than a drop-out hatch. Verified in headless Edge — see `TODO.md`.
+Debug: `__ng.towers()`, `__ng.openTower(i, 'server')`, `__ng.interiors()`.
 
 ---
 

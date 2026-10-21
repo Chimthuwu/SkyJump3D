@@ -1,0 +1,447 @@
+{
+ "name": "2-run",
+ "seconds": 5.029,
+ "totalMs": 5349.805999999985,
+ "idlePct": 5.4,
+ "perf": {
+  "frames": 85,
+  "frame ms avg": 63.69,
+  "frame ms p95": 83.3,
+  "fps": 15.7,
+  "render submit ms": 25.722,
+  "draw calls/frame": 47,
+  "triangles/frame": 1405,
+  "geometries": 2464,
+  "textures": 72,
+  "programs": 23,
+  "enemies alive": 544,
+  "solids": 2923,
+  "scene children": 26,
+  "ms/frame player": 0.36,
+  "ms/frame enemies": 0.089,
+  "ms/frame shots": 0.002,
+  "ms/frame items+street": 1.499,
+  "ms/frame missions+evolve+music": 0.113,
+  "ms/frame fx": 0.007,
+  "ms/frame specials": 0.156,
+  "ms/frame worlds+portals+hotbar": 0.04,
+  "ms/frame visuals+hud": 0.328,
+  "ms/frame net+peers+debug": 0.004
+ },
+ "counts": {
+  "tracked": 10954,
+  "hidden": 5808,
+  "children": 12094,
+  "solids": 2923,
+  "platforms": 1772,
+  "specials": 416,
+  "enemies": 544,
+  "items": 4867,
+  "props": 53,
+  "heap": 199000000
+ },
+ "topSelf": [
+  {
+   "fn": "(program)@:0",
+   "msPerSec": 534.47,
+   "pct": 50.2
+  },
+  {
+   "fn": "updateMatrixWorld@three.module.js:7720",
+   "msPerSec": 228.95,
+   "pct": 21.5
+  },
+  {
+   "fn": "projectObject@three.module.js:29679",
+   "msPerSec": 88.03,
+   "pct": 8.3
+  },
+  {
+   "fn": "intersectsObject@three.module.js:13353",
+   "msPerSec": 64.32,
+   "pct": 6
+  },
+  {
+   "fn": "(idle)@:0",
+   "msPerSec": 57.65,
+   "pct": 5.4
+  },
+  {
+   "fn": "multiplyMatrices@three.module.js:6224",
+   "msPerSec": 31.52,
+   "pct": 3
+  },
+  {
+   "fn": "updateItems@index.html:5177",
+   "msPerSec": 14.81,
+   "pct": 1.4
+  },
+  {
+   "fn": "updateStreet@index.html:5969",
+   "msPerSec": 7.57,
+   "pct": 0.7
+  },
+  {
+   "fn": "(anon)@index.html:7397",
+   "msPerSec": 3.14,
+   "pct": 0.3
+  },
+  {
+   "fn": "updateSpecials@index.html:6591",
+   "msPerSec": 2.86,
+   "pct": 0.3
+  },
+  {
+   "fn": "enemyContacts@index.html:4714",
+   "msPerSec": 2.79,
+   "pct": 0.3
+  },
+  {
+   "fn": "updateVisuals@index.html:6014",
+   "msPerSec": 2.43,
+   "pct": 0.2
+  },
+  {
+   "fn": "getParameters@three.module.js:20598",
+   "msPerSec": 1.93,
+   "pct": 0.2
+  },
+  {
+   "fn": "physicsStep@index.html:4748",
+   "msPerSec": 1.86,
+   "pct": 0.2
+  },
+  {
+   "fn": "playerShadowTick@index.html:5878",
+   "msPerSec": 1.83,
+   "pct": 0.2
+  },
+  {
+   "fn": "intersectsSprite@three.module.js:13375",
+   "msPerSec": 1.2,
+   "pct": 0.1
+  },
+  {
+   "fn": "applyMatrix4@three.module.js:5290",
+   "msPerSec": 1.09,
+   "pct": 0.1
+  },
+  {
+   "fn": "requestAnimationFrame@:0",
+   "msPerSec": 0.8,
+   "pct": 0.1
+  },
+  {
+   "fn": "dreadTick@index.html:6991",
+   "msPerSec": 0.62,
+   "pct": 0.1
+  },
+  {
+   "fn": "texSubImage2D@:0",
+   "msPerSec": 0.61,
+   "pct": 0.1
+  },
+  {
+   "fn": "setup@three.module.js:15073",
+   "msPerSec": 0.6,
+   "pct": 0.1
+  },
+  {
+   "fn": "updateEnemies@index.html:5153",
+   "msPerSec": 0.52,
+   "pct": 0
+  },
+  {
+   "fn": "setFromObject@three.module.js:4690",
+   "msPerSec": 0.51,
+   "pct": 0
+  },
+  {
+   "fn": "WebGLRenderer.renderBufferDirect@three.module.js:29173",
+   "msPerSec": 0.5,
+   "pct": 0
+  },
+  {
+   "fn": "getProgram@three.module.js:29985",
+   "msPerSec": 0.43,
+   "pct": 0
+  },
+  {
+   "fn": "bindVertexArray@:0",
+   "msPerSec": 0.41,
+   "pct": 0
+  },
+  {
+   "fn": "update@three.module.js:13683",
+   "msPerSec": 0.41,
+   "pct": 0
+  },
+  {
+   "fn": "wind@index.html:3441",
+   "msPerSec": 0.4,
+   "pct": 0
+  },
+  {
+   "fn": "setValueM4@three.module.js:18525",
+   "msPerSec": 0.4,
+   "pct": 0
+  },
+  {
+   "fn": "copy@three.module.js:5200",
+   "msPerSec": 0.4,
+   "pct": 0
+  },
+  {
+   "fn": "WebGLRenderer.render@three.module.js:29530",
+   "msPerSec": 0.4,
+   "pct": 0
+  },
+  {
+   "fn": "setValueV3f@three.module.js:18400",
+   "msPerSec": 0.4,
+   "pct": 0
+  },
+  {
+   "fn": "setValue@three.module.js:19300",
+   "msPerSec": 0.4,
+   "pct": 0
+  },
+  {
+   "fn": "setHint@index.html:6131",
+   "msPerSec": 0.4,
+   "pct": 0
+  },
+  {
+   "fn": "nearestPlayer@index.html:6207",
+   "msPerSec": 0.32,
+   "pct": 0
+  },
+  {
+   "fn": "setTargetAtTime@:0",
+   "msPerSec": 0.31,
+   "pct": 0
+  },
+  {
+   "fn": "clear@:0",
+   "msPerSec": 0.31,
+   "pct": 0
+  },
+  {
+   "fn": "onAnimationFrame@three.module.js:29493",
+   "msPerSec": 0.28,
+   "pct": 0
+  },
+  {
+   "fn": "bindTexture@three.module.js:23584",
+   "msPerSec": 0.27,
+   "pct": 0
+  },
+  {
+   "fn": "updateMissionMarker@index.html:2423",
+   "msPerSec": 0.26,
+   "pct": 0
+  }
+ ],
+ "topIncl": [
+  {
+   "fn": "(root)@:0",
+   "msPerSec": 1063.79,
+   "pct": 100
+  },
+  {
+   "fn": "(program)@:0",
+   "msPerSec": 534.47,
+   "pct": 50.2
+  },
+  {
+   "fn": "onAnimationFrame@three.module.js:13466",
+   "msPerSec": 470.84,
+   "pct": 44.3
+  },
+  {
+   "fn": "onAnimationFrame@three.module.js:29493",
+   "msPerSec": 470.04,
+   "pct": 44.2
+  },
+  {
+   "fn": "(anon)@index.html:7397",
+   "msPerSec": 469.56,
+   "pct": 44.1
+  },
+  {
+   "fn": "WebGLRenderer.render@three.module.js:29530",
+   "msPerSec": 425.79,
+   "pct": 40
+  },
+  {
+   "fn": "updateMatrixWorld@three.module.js:7720",
+   "msPerSec": 259.88,
+   "pct": 24.4
+  },
+  {
+   "fn": "projectObject@three.module.js:29679",
+   "msPerSec": 155.96,
+   "pct": 14.7
+  },
+  {
+   "fn": "intersectsObject@three.module.js:13353",
+   "msPerSec": 65.82,
+   "pct": 6.2
+  },
+  {
+   "fn": "(idle)@:0",
+   "msPerSec": 57.65,
+   "pct": 5.4
+  },
+  {
+   "fn": "multiplyMatrices@three.module.js:6224",
+   "msPerSec": 31.52,
+   "pct": 3
+  },
+  {
+   "fn": "updateItems@index.html:5177",
+   "msPerSec": 14.81,
+   "pct": 1.4
+  },
+  {
+   "fn": "updateStreet@index.html:5969",
+   "msPerSec": 10.42,
+   "pct": 1
+  },
+  {
+   "fn": "renderObjects@three.module.js:29931",
+   "msPerSec": 8.95,
+   "pct": 0.8
+  },
+  {
+   "fn": "renderScene@three.module.js:29793",
+   "msPerSec": 8.95,
+   "pct": 0.8
+  },
+  {
+   "fn": "WebGLRenderer.renderBufferDirect@three.module.js:29173",
+   "msPerSec": 8.56,
+   "pct": 0.8
+  },
+  {
+   "fn": "setProgram@three.module.js:30131",
+   "msPerSec": 6.24,
+   "pct": 0.6
+  },
+  {
+   "fn": "playerUpdate@index.html:4868",
+   "msPerSec": 5.18,
+   "pct": 0.5
+  },
+  {
+   "fn": "physicsStep@index.html:4748",
+   "msPerSec": 4.64,
+   "pct": 0.4
+  },
+  {
+   "fn": "updateVisuals@index.html:6014",
+   "msPerSec": 3.44,
+   "pct": 0.3
+  },
+  {
+   "fn": "updateSpecials@index.html:6591",
+   "msPerSec": 2.86,
+   "pct": 0.3
+  },
+  {
+   "fn": "enemyContacts@index.html:4714",
+   "msPerSec": 2.79,
+   "pct": 0.3
+  },
+  {
+   "fn": "getProgram@three.module.js:29985",
+   "msPerSec": 2.56,
+   "pct": 0.2
+  },
+  {
+   "fn": "upload@three.module.js:19316",
+   "msPerSec": 2.28,
+   "pct": 0.2
+  },
+  {
+   "fn": "getParameters@three.module.js:20598",
+   "msPerSec": 1.93,
+   "pct": 0.2
+  },
+  {
+   "fn": "playerShadowTick@index.html:5878",
+   "msPerSec": 1.83,
+   "pct": 0.2
+  },
+  {
+   "fn": "setTexture2D@three.module.js:24454",
+   "msPerSec": 1.48,
+   "pct": 0.1
+  },
+  {
+   "fn": "setValueT1@three.module.js:18755",
+   "msPerSec": 1.28,
+   "pct": 0.1
+  },
+  {
+   "fn": "updateMatrixWorld@three.module.js:12485",
+   "msPerSec": 1.22,
+   "pct": 0.1
+  },
+  {
+   "fn": "intersectsSprite@three.module.js:13375",
+   "msPerSec": 1.2,
+   "pct": 0.1
+  },
+  {
+   "fn": "applyMatrix4@three.module.js:5290",
+   "msPerSec": 1.09,
+   "pct": 0.1
+  },
+  {
+   "fn": "setup@three.module.js:15073",
+   "msPerSec": 1.02,
+   "pct": 0.1
+  },
+  {
+   "fn": "setValue@three.module.js:19300",
+   "msPerSec": 1,
+   "pct": 0.1
+  },
+  {
+   "fn": "updateEnemies@index.html:5153",
+   "msPerSec": 0.83,
+   "pct": 0.1
+  },
+  {
+   "fn": "dreadTick@index.html:6991",
+   "msPerSec": 0.82,
+   "pct": 0.1
+  },
+  {
+   "fn": "requestAnimationFrame@:0",
+   "msPerSec": 0.8,
+   "pct": 0.1
+  },
+  {
+   "fn": "update@three.module.js:17464",
+   "msPerSec": 0.72,
+   "pct": 0.1
+  },
+  {
+   "fn": "update@three.module.js:18062",
+   "msPerSec": 0.72,
+   "pct": 0.1
+  },
+  {
+   "fn": "texSubImage2D@:0",
+   "msPerSec": 0.61,
+   "pct": 0.1
+  },
+  {
+   "fn": "texSubImage2D@three.module.js:23670",
+   "msPerSec": 0.61,
+   "pct": 0.1
+  }
+ ]
+}
