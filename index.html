@@ -343,6 +343,7 @@ const upscaleMaterial = new THREE.ShaderMaterial({
     uniform float uCrazy;
     uniform float uTime;
     varying vec2 vUv;
+    #include <tonemapping_pars_fragment>
 
     vec3 linearToSrgb(vec3 value) {
       vec3 low = value * 12.92;
@@ -378,6 +379,7 @@ const upscaleMaterial = new THREE.ShaderMaterial({
       } else {
         raw = texture2D(tDiffuse, uv).rgb;
       }
+      raw = ACESFilmicToneMapping(max(raw, vec3(0.0)));      // the low-res target is untonemapped; apply the same ACES curve MODERN gets so every look has matching colours
       vec3 color = linearToSrgb(raw);
       vec2 sourcePixel = mod(floor(vUv * uSourceResolution), 4.0);
       float threshold = ((bayer4(sourcePixel) + 0.5) / 16.0 - 0.5) / 31.0 * uDither;
@@ -616,6 +618,7 @@ function springMatFor(hex) {
 }
 function bounceDress(p) {                       // keeps the biome plate colour; the four corner coils are what mark a trampoline
   if (portals.some(q => Math.hypot(q.x - p.cx, q.z - p.cz) < 1.2 && Math.abs(q.y - p.top) < 1.0)) return;   // a portal already owns this exact spot
+  if (props.some(q => !q.taken && Math.abs(q.mesh.position.x - p.cx) < p.hw + 2.6 && Math.abs(q.mesh.position.z - p.cz) < p.hd + 2.6 && Math.abs(q.mesh.position.y - p.top) < 0.7)) return;   // a ride is parked here
   p.bounce = true; p.boost = 24 + rand() * 14;
   const sm = springMatFor(p.plate.material.color.getHex());
   for (const [ox, oz] of [[p.hw, p.hd], [-p.hw, p.hd], [p.hw, -p.hd], [-p.hw, -p.hd]]) {
@@ -5613,7 +5616,24 @@ function makeBuggyMesh(prop) {
   prop.fx = { exhausts, lights, glowMats: [glowMat, tailLight, amberLight], body, steer, boostColor: 0x58e5ff };
 }
 
+// a ride must never sit on a trampoline / launch pad: slide it to the nearest spot on the same surface that has none
+function propSpotClear(x, y, z) {
+  let floor = false;
+  for (const s of solids) {
+    if (Math.abs(s.maxy - y) > 0.7) continue;
+    const inside = x > s.minx && x < s.maxx && z > s.minz && z < s.maxz;
+    if (s.bounce) { if (x > s.minx - 2.6 && x < s.maxx + 2.6 && z > s.minz - 2.6 && z < s.maxz + 2.6) return false; }
+    else if (inside) floor = true;
+  }
+  return floor;
+}
 function addProp(kind, x, y, z) {
+  if (!propSpotClear(x, y, z)) {
+    search: for (let r = 2; r <= 12; r += 2) for (let k = 0; k < 12; k++) {
+      const a = k / 12 * Math.PI * 2, nx = x + Math.cos(a) * r, nz = z + Math.sin(a) * r;
+      if (propSpotClear(nx, y, nz)) { x = nx; z = nz; break search; }
+    }
+  }
   const g = new THREE.Group(); g.position.set(x, y, z); scene.add(g);
   const colors = { bike: 0x36f6ff, buggy: 0x58e5ff, board: 0xff3fc8 };
   const isGear = kind === 'board', padParts = [];
