@@ -2064,20 +2064,34 @@ function makeMissionMarker(color) {
 }
 function addMissionCore(mission, point) {
   const g = new THREE.Group(), color = MISSION_COLORS.collect;
+  g.visible = false;
   const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.78, 0), new THREE.MeshBasicMaterial({ color, toneMapped: false }));
   const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.08, 4, 10), new THREE.MeshBasicMaterial({ color: 0xeaffff })); ring.rotation.x = Math.PI / 2;
   g.add(core, ring); g.position.set(point.x, point.y + 1.2, point.z); lvl.add(g);
   mission.coreItem = { mesh: g, type: 'dataCore', missionId: mission.id, taken: false }; items.push(mission.coreItem);
 }
 function missionReward(levelIndex, type, distance, rng) {
-  return { credits: 45 + levelIndex * 18 + Math.round(distance * 0.12) + (type === 'bossKill' ? 70 : 0), resources: { stone: 2, ore: type === 'collect' ? 2 : 1 }, score: 150 + levelIndex * 35 };
+  const reward = { credits: 45 + levelIndex * 18 + Math.round(distance * 0.12) + (type === 'bossKill' ? 70 : 0), resources: { stone: 2, ore: type === 'collect' ? 2 : 1 }, score: 150 + levelIndex * 35 };
+  if (rng() < 0.45) reward.hearts = 1;
+  else reward.ammo = { shells: 4, rails: 1 };
+  if (type === 'bossKill') {
+    const nextWeapon = WEAPONS.findIndex((w, i) => i >= 2 && !weaponOwned[i]);
+    if (nextWeapon >= 2) reward.weapon = nextWeapon;
+  }
+  return reward;
 }
 function generateMissions() {
-  const rng = missionRandom(levelSeed ^ 0xBA5E), hubList = (levelHubs || []).filter(h => h.kind !== 'start' && h.kind !== 'launch' && h.kind !== 'exit' && h.x !== undefined && h.top !== undefined);
+  const rng = missionRandom(levelSeed ^ 0xBA5E), hubList = (levelHubs || []).filter(h => h.kind !== 'start' && h.kind !== 'launch' && h.kind !== 'exit' && h.kind !== 'arena' && h.x !== undefined && h.top !== undefined);
+  for (let i = items.length - 1; i >= 0; i--) if (items[i].type === 'dataCore') { items[i].mesh.removeFromParent(); items.splice(i, 1); }
   missions = missionSlots[slot] = [];
   activeMission = null;
   if (missionArrow) missionArrow.style.display = 'none';
-  if (missionMarker) { missionMarker.target.group.removeFromParent(); missionMarker.base.group.removeFromParent(); }
+  if (missionMarker) {
+    for (const marker of [missionMarker.target, missionMarker.base]) {
+      marker.group.traverse(o => { if (o.material) o.material.dispose(); });
+      marker.group.removeFromParent();
+    }
+  }
   missionMarker = null;
   if (!hubList.length) return missions;
   const originHub = (levelHubs || []).find(h => h.kind === 'start') || { x: start.x, z: start.z, top: TOP, hw: TH, hd: TH };
@@ -2095,6 +2109,7 @@ function generateMissions() {
       const stones = platforms.filter(p => p.cx !== undefined && !p.ghost && !p.arena && missionDistance({ x: p.cx, y: p.top, z: p.cz }, origin) > 42);
       const stone = stones.length ? stones[Math.floor(rng() * stones.length)] : null;
       if (stone) { mission.target = { x: stone.cx, y: stone.top, z: stone.cz, r: 3.2 }; mission.hub = null; }
+      else { mission.target = { ...point, r: 3.2 }; mission.hub = null; }
       mission.title = `Recover the ${zone} Data Core`;
       mission.desc = 'Find the floating data core and carry its signal back to the Home Base.';
       addMissionCore(mission, mission.target);
@@ -2104,11 +2119,12 @@ function generateMissions() {
       const zones = [...zoneCounts.keys()];
       mission.zone = zones.length ? zones[Math.floor(rng() * zones.length)] : zone;
       const matching = enemies.filter(e => !e.dead && !e.boss && !e.mini && e.zone && e.zone.name === mission.zone);
-      const variants = new Map(); for (const e of matching) variants.set(e.variant, (variants.get(e.variant) || 0) + 1);
-      mission.variant = [...variants.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-      mission.count = Math.max(1, Math.min(3 + Math.floor(level / 3), matching.filter(e => !mission.variant || e.variant === mission.variant).length || 1));
-      mission.title = `Clear ${mission.count} ${mission.variant || mission.zone} Hostiles`;
-      mission.desc = `Defeat ${mission.count} ${mission.variant ? `${mission.variant} units in ${mission.zone}` : `${mission.zone} enemies`}.`;
+      mission.variant = null; // Any regular enemy in the selected biome counts; avoid stranding a contract on one rare species.
+      mission.count = Math.max(1, Math.min(3 + Math.floor(level / 3), matching.length || 1));
+      const targetEnemy = matching.find(e => Math.hypot(e.x - origin.x, e.z - origin.z) > 38);
+      if (targetEnemy) mission.target = { x: targetEnemy.x, y: targetEnemy.y, z: targetEnemy.z, r: 14 };
+      mission.title = `Clear ${mission.count} ${mission.zone} Hostiles`;
+      mission.desc = `Defeat ${mission.count} regular hostiles in the ${mission.zone} zone.`;
     } else {
       const guardians = enemies.filter(e => !e.dead && e.mini && e.hub && !e.hub.locked);
       const guardian = guardians.length ? guardians[Math.floor(rng() * guardians.length)] : enemies.find(e => !e.dead && e.mini);
@@ -2127,26 +2143,27 @@ function missionSetReady(mission) {
   if (!mission || mission.state !== 'active') return false;
   mission.state = 'ready'; mission.progress = mission.count;
   toast('OBJECTIVE COMPLETE — RETURN TO BASE', 2500); sfx.clear();
+  if (guideDialogOpen && guideTab === 'TASKS') renderGuideDialog();
   return true;
 }
 function acceptMission(index) {
   if (activeMission) return { ok: false, reason: activeMission.state === 'ready' ? 'return-to-base' : 'already-active' };
   const mission = typeof index === 'string' ? missions.find(m => m.id === index) : missions[index | 0];
   if (!mission || mission.state !== 'offered') return { ok: false, reason: 'unavailable' };
-  mission.state = 'active'; mission.progress = 0; activeMission = mission;
-  if (mission.type === 'collect' && mission.coreItem) mission.coreItem.taken = false;
+  mission.state = 'active'; mission.progress = 0; activeMission = mission;  if (mission.type === 'collect' && mission.coreItem) { mission.coreItem.taken = false; mission.coreItem.mesh.visible = true; }
   toast(`TASK ACCEPTED — ${mission.title}`, 1800); sfx.coin();
+  if (guideDialogOpen && guideTab === 'TASKS') renderGuideDialog();
   return { ok: true, mission };
 }
 function abandonMission() {
   if (!activeMission) return false;
   activeMission.state = 'offered'; activeMission.progress = 0;
-  if (activeMission.coreItem) activeMission.coreItem.taken = false;
-  activeMission = null; toast('TASK ABANDONED', 1000); return true;
+  if (activeMission.coreItem) { activeMission.coreItem.taken = false; activeMission.coreItem.mesh.visible = false; }
+  activeMission = null; if (guideDialogOpen && guideTab === 'TASKS') renderGuideDialog(); toast('TASK ABANDONED', 1000); return true;
 }
 function missionAtBase() {
   const home = (levelHubs || []).find(h => h.kind === 'start') || { x: start.x, z: start.z, top: TOP };
-  return Math.hypot(pos.x - home.x, pos.z - home.z) < 11 && Math.abs(pos.y - home.top) < 4;
+  return Math.hypot(pos.x - home.x, pos.z - home.z) < 16 && Math.abs(pos.y - home.top) < 4;
 }
 function turnIn() {
   const mission = activeMission;
@@ -2160,6 +2177,7 @@ function turnIn() {
   for (const [key, amount] of Object.entries(reward.resources || {})) if (hotbarRes[key] !== undefined) hotbarRes[key] += amount | 0;
   mission.state = 'done'; activeMission = null; saveBase(); updateHotbar(); sfx.clear();
   if (!missions.some(m => m.state === 'offered')) generateMissions();
+  if (guideDialogOpen && guideTab === 'TASKS') renderGuideDialog();
   toast(`TASK COMPLETE · +${reward.credits | 0} CREDITS · +${reward.score | 0} SCORE`, 2600);
   return { ok: true, reward, mission };
 }
@@ -2183,6 +2201,9 @@ function missionEnemyKilled(enemy) {
 function updateMissionMarker(dt) {
   if (!missionMarker) { if (missionArrow) missionArrow.style.display = 'none'; return; }
   const mission = activeMission, ready = !!(mission && mission.state === 'ready'), marker = missionMarker.target, baseMarker = missionMarker.base;
+  const markerColor = ready ? MISSION_COLORS.base : mission ? MISSION_COLORS[mission.type] : MISSION_COLORS.goto;
+  marker.group.children.forEach(child => { if (child.material && child.material.color) child.material.color.setHex(markerColor); });
+  baseMarker.group.children.forEach(child => { if (child.material && child.material.color) child.material.color.setHex(MISSION_COLORS.base); });
   marker.group.visible = !!(mission && mission.state === 'active' && mission.type !== 'collect');
   if (mission && mission.state === 'active' && mission.type !== 'collect') {
     marker.group.position.set(mission.target.x, mission.target.y, mission.target.z);
@@ -2191,7 +2212,18 @@ function updateMissionMarker(dt) {
   baseMarker.group.visible = ready;
   if (ready) { const home = (levelHubs || []).find(h => h.kind === 'start') || { x: start.x, z: start.z, top: TOP }; baseMarker.group.position.set(home.x, home.top, home.z); baseMarker.diamond.rotation.y -= dt * 1.7; }
   const tracked = mission;
-  if (!missionArrow || !tracked || (tracked.state !== 'active' && tracked.state !== 'ready')) { if (missionArrow) missionArrow.style.display = 'none'; missionArrowText = ''; return; }
+  if (missionTracker) {
+    missionTracker.style.display = 'none';
+    if (state === 'play' && tracked && (tracked.state === 'active' || tracked.state === 'ready')) {
+      const trackerTarget = tracked.state === 'ready' ? missionAtPosition() : tracked.target;
+      const label = tracked.state === 'ready' ? 'RETURN TO HOME BASE' : tracked.title;
+      const progress = tracked.type === 'kill' || tracked.type === 'bossKill' ? ` · ${tracked.progress}/${tracked.count}` : '';
+      missionTracker.textContent = `▶ ${label} · ${Math.round(missionDistance(pos, trackerTarget))} m${progress}`;
+      missionTracker.style.color = `#${(tracked.state === 'ready' ? MISSION_COLORS.base : MISSION_COLORS[tracked.type]).toString(16).padStart(6, '0')}`;
+      missionTracker.style.display = 'block';
+    } else missionTracker.style.display = 'none';
+  }
+  if (state !== 'play' || !missionArrow || !tracked || (tracked.state !== 'active' && tracked.state !== 'ready')) { if (missionArrow) missionArrow.style.display = 'none'; missionArrowText = ''; return; }
   const target = tracked.state === 'ready' ? missionAtPosition() : tracked.target;
   _missionScreen.set(target.x, target.y + 3, target.z).project(camera);
   const visible = _missionScreen.z > -1 && _missionScreen.z < 1 && Math.abs(_missionScreen.x) < 0.82 && Math.abs(_missionScreen.y) < 0.82;
@@ -2235,8 +2267,7 @@ function craft(id) {
     ammo.shells = Math.min(WEAPONS.find(w => w.ammoKey === 'shells').ammoCap, ammo.shells + 6);
     ammo.rails = Math.min(WEAPONS.find(w => w.ammoKey === 'rails').ammoCap, ammo.rails + 2);
   } else if (recipe.id === 'medkit') health = Math.min(MAXHP, health + 1);
-  saveBase(); updateHotbar(); sfx.coin(); toast(`CRAFTED: ${recipe.name}`, 1500);
-  return { ok: true, recipe: recipe.id, base, resources: { ...hotbarRes }, health, ammo: { ...ammo } };
+  saveBase(); updateHotbar(); if (guideDialogOpen && guideTab === 'RECIPES') renderGuideDialog(); sfx.coin(); toast(`CRAFTED: ${recipe.name}`, 1500);  return { ok: true, recipe: recipe.id, base: { ...base, upgrades: { ...base.upgrades } }, resources: { ...hotbarRes }, health, ammo: { ...ammo } };
 }
 function guideTips() {
   const tips = [
@@ -2267,8 +2298,8 @@ function guideTips() {
     'Use F3 to inspect position and nearby collision boxes; F4 toggles a no-clip fly-through for debugging.'
   ];
   if (health <= 2) return 'You are low on hearts. Grab a heart pickup or craft a medkit with leaf and wood before another hard landing.';
-  if (!weaponOwned.slice(2).some(Boolean)) return 'You only have your starter kit. Follow the weapon beacons and bring back a new gun from the route.';
   if (activeMission && activeMission.state === 'ready') return 'Your task is ready to turn in. Return to the Home Base and talk to me for your reward.';
+  if (!weaponOwned.slice(2).some(Boolean)) return 'You only have your starter kit. Follow the weapon beacons and bring back a new gun from the route.';
   if (runDeaths > 0) return 'You have fallen before; respawning keeps your task. Checkpoints shorten the way back into the route.';
   if (!hasUsedVehicle) return 'Your rides are parked nearby. Press E at the bike or DeLorean, then hold X to boost.';
   if (!hasUsedHoverboard) return 'You have not tried the hoverboard yet. Use your second jump, then hold SPACE to glide on it.';
@@ -2426,21 +2457,23 @@ function renderGuideDialog() {
       const ingredients = Object.entries(recipe.ingredients || recipe.cost || {}).map(([key, amount]) => `${esc(key)} ${hotbarRes[key] >= amount ? '✓' : '✗'} ${hotbarRes[key] || 0}/${amount}`).join(' · ');
       const canCraft = recipe.affordable !== undefined ? recipe.affordable : recipe.craftable !== undefined ? recipe.craftable : Object.entries(recipe.ingredients || recipe.cost || {}).every(([key, amount]) => (hotbarRes[key] || 0) >= amount);
       const owned = recipe.owned ? ' · OWNED' : '';
-      return `<article class="guide-card"><h3>${title}</h3><div>${desc}</div><div class="guide-meta">${ingredients}${recipe.credits ? ` · ${recipe.credits} credits` : ''}${owned}</div><div class="guide-actions"><button type="button" data-craft="${id}" ${canCraft && !recipe.owned ? '' : 'disabled'}>CRAFT</button></div></article>`;
+      const creditCheck = base.credits >= (recipe.credits || 0) ? '✓' : '✗';
+      return `<article class="guide-card"><h3>${title}</h3><div>${desc}</div><div class="guide-meta">${ingredients} · ${creditCheck} ${recipe.credits || 0} credits (${base.credits})${owned}</div><div class="guide-actions"><button type="button" data-craft="${id}" ${canCraft && !recipe.owned ? '' : 'disabled'}>CRAFT</button></div></article>`;
     }).join('');
-    content.querySelectorAll('[data-craft]').forEach(button => { button.onclick = () => { const result = craft(button.dataset.craft); toast(result === false || result && result.ok === false ? 'CRAFT FAILED' : 'ITEM CRAFTED', 1400); renderGuideDialog(); }; });
+    content.querySelectorAll('[data-craft]').forEach(button => { button.onclick = () => { const result = craft(button.dataset.craft); toast(result && result.ok ? `CRAFTED: ${result.recipe}` : 'CRAFT FAILED', 1400); renderGuideDialog(); }; });
   } else if (guideTab === 'TASKS') {
     const available = typeof missionsSnapshot === 'function' ? missionsSnapshot() : missions;
     const active = activeMission;
     const stateLine = active ? `<p class="guide-meta">ACTIVE · ${esc(active.state.toUpperCase())} · ${active.progress}/${active.count}</p>` : '<p class="guide-meta">No active contract. Choose one when you are ready.</p>';
     const cards = available.map(m => {
       const reward = `${m.reward && m.reward.credits || 0} credits`;
+      const difficulty = m.type === 'bossKill' ? 'ELITE' : m.count >= 4 || level >= 5 ? 'HARD' : level >= 3 || m.count >= 3 ? 'STANDARD' : 'EASY';
       const isActive = active && active.id === m.id;
       let action = '';
       if (isActive && m.state === 'ready') action = '<button type="button" data-task="turnin">TURN IN</button><button type="button" class="warn" data-task="abandon">ABANDON</button>';
       else if (isActive) action = '<button type="button" class="warn" data-task="abandon">ABANDON</button>';
       else if (m.state === 'offered' && !active) action = `<button type="button" data-task="accept" data-id="${esc(m.id)}">ACCEPT</button>`;
-      return `<article class="guide-card"><h3>${esc(m.title)} ${m.type === 'goto' ? '⌖' : m.type === 'collect' ? '◆' : m.type === 'bossKill' ? '♛' : '✦'}</h3><div>${esc(m.desc)}</div><div class="guide-meta">${esc(m.zone)} · ${reward} · ${esc(m.type)}</div>${action ? `<div class="guide-actions">${action}</div>` : ''}</article>`;
+      return `<article class="guide-card"><h3>${esc(m.title)} ${m.type === 'goto' ? '⌖' : m.type === 'collect' ? '◆' : m.type === 'bossKill' ? '♛' : '✦'}</h3><div>${esc(m.desc)}</div><div class="guide-meta">${esc(m.zone)} · ${reward} · ${esc(m.type)} · ${difficulty}</div>${action ? `<div class="guide-actions">${action}</div>` : ''}</article>`;
     }).join('');
     content.innerHTML = `${stateLine}${cards || '<p>No contracts are posted right now.</p>'}`;
     content.querySelectorAll('[data-task]').forEach(button => { button.onclick = () => {
@@ -3435,7 +3468,6 @@ function onLand(speed, sol) {
 let clearT = 0;
 function levelClear(why, bonus, remote = false) {      // remote: a teammate cleared it, everyone advances together
   if (state !== 'play' && !(remote && state === 'dead')) return;
-  if (activeMission && activeMission.state !== 'done') { activeMission = null; missions = missionSlots[slot] = []; }
   if (endBosses.some(b => !b.dead)) {
     if (!remote) toast(`${endBosses.filter(b => !b.dead).length} SIGNAL BOSSES STILL BLOCK THE EXIT`, 2200);
     return;
@@ -3542,15 +3574,14 @@ function placeBlock() {                                                // right-
   const plat = standOn && standOn.zone ? standOn.zone : activeZ;
   const res = biomeResource(plat);
   if (hotbarRes[res] < 4) { toast(`NEED 4 ${RESOURCES[res].name} TO PLACE`, 900); sfx.click(); return; }
-  hotbarRes[res] -= 4; updateHotbar();
+  hotbarRes[res] -= 4; updateHotbar(); saveBase(); saveBase();
   const fx = Math.sin(face), fz = Math.cos(face);
   const bx = clamp(pos.x + fx * 3.2, -WORLD_R + 6, WORLD_R - 6), bz = clamp(pos.z + fz * 3.2, -WORLD_R + 6, WORLD_R - 6);
   const by = Math.round((pos.y + 0.6) / 2) * 2;    if (blocked(bx, by, bz, 1.4)) { toast('NO ROOM TO BUILD', 900); hotbarRes[res] += 4; updateHotbar(); return; }
   const solid = addSolid(bx - 1.4, bx + 1.4, by - 1, by, bz - 1.4, bz + 1.4);
   Object.assign(solid, { cx: bx, cz: bz, top: by, hw: 1.4, hd: 1.4 });
   solid.playerBuilt = true;
-  const m = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1, 2.8), retroMaterial(new THREE.MeshLambertMaterial({ color: RESOURCES[res].col, flatShading: true })));
-  m.position.set(bx, by - 0.5, bz); lvl.add(m); sfx.click();
+  const m = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1, 2.8), retroMaterial(new THREE.MeshLambertMaterial({ color: RESOURCES[res].col, flatShading: true })));  m.position.set(bx, by - 0.5, bz); lvl.add(m); sfx.click();
   burst(new THREE.Vector3(bx, by, bz), RESOURCES[res].col, 10); sfx.click();
   toast(`+${RESOURCES[res].name} BLOCK PLACED`, 800);
 }
@@ -4102,7 +4133,7 @@ function updateEnv(dt, cp) {
 }
 // gameplay side-effects of the active zone / the surface underfoot
 const iceUnderfoot = () => onGround && standOn && standOn.zone && standOn.zone.name === 'Frozen';
-const jumpMul = () => (onVehicle ? (onVehicle.kind === 'buggy' ? 1.2 : 1.35) : 1) * (standOn && standOn.zone && standOn.zone.name === 'Jungle' ? 0.88 : 1);
+const jumpMul = () => (onVehicle ? (onVehicle.kind === 'buggy' ? 1.2 : 1.35) : 1) * (standOn && standOn.zone && standOn.zone.name === 'Jungle' ? 0.88 : 1) * (base && base.upgrades.jumpBoots ? 1.08 : 1);
 const gravMul = () => (onVehicle && onVehicle.kind === 'bike' ? 0.55 : 1) * (activeZ && activeZ.name === 'Psychedelic' ? 0.7 : 1) * (psy.t > 0 && psy.kind === 'invert' ? 0.45 : 1) * (1 - 0.65 * spaceK(pos.y));      // lighter and lighter the higher you climb
 const thermal = () => !!(activeZ && activeZ.name === 'Inferno');
 function envWind(dt) {
@@ -4114,7 +4145,7 @@ function envWind(dt) {
 // ---------- wall climbing ----------
 function wallJump() {
   const c = climbing; climbing = null;
-  vel.set(c.nx * 8, JUMP, c.nz * 8); jumps = 1; lockT = 0.3; onGround = false; face = Math.atan2(c.nx, c.nz);
+  vel.set(c.nx * 8, JUMP * jumpMul(), c.nz * 8); jumps = 1; lockT = 0.3; onGround = false; face = Math.atan2(c.nx, c.nz);
   burst(pos, 0xdddddd, 6); sfx.jump(true);
 }
 function mantle(c) {
@@ -4323,10 +4354,10 @@ function playerUpdate(dt) {
   if (jumpPress) {
     if (climbing) wallJump();
     else if ((onGround || coyote > 0) && jumps === 0) {
-      vel.y = JUMP * jumpMul() * (base && base.upgrades.jumpBoots ? 1.08 : 1); jumps = 1; onGround = false; coyote = 0; pounding = false; sfx.jump(false);
+      vel.y = JUMP * jumpMul(); jumps = 1; onGround = false; coyote = 0; pounding = false; sfx.jump(false);
     } else if (!onGround && jumps === 1 && !pounding) {
       hasUsedHoverboard = true;
-      vel.y = JUMP2 * (base && base.upgrades.jumpBoots ? 1.08 : 1); jumps = 2; pounding = false; gliding = false;
+      vel.y = JUMP2 * jumpMul(); jumps = 2; pounding = false; gliding = false;
       burst(pos, 0xffffff, 5); sfx.jump(true);
     }
     jumpPress = false;
@@ -4352,7 +4383,8 @@ function playerUpdate(dt) {
 
   // glide / parachute (hold space while falling)
   gliding = !onGround && keys.Space && vel.y < 0.5 && glide > 0 && !pounding && airT > 0.2 && !climbing;
-  if (gliding) glide = Math.max(0, glide - dt / (GLIDE_TIME * (onVehicle ? 3.5 : 1)));      // vehicles hover ~3.5x longer than you can on foot
+  const glideUpgrade = base && base.upgrades.glideTank ? 1.25 : 1;
+  if (gliding) glide = Math.max(0, glide - dt / (GLIDE_TIME * glideUpgrade * (onVehicle ? 3.5 : 1)));      // vehicles hover ~3.5x longer than you can on foot
 
   // horizontal control
   boosting = false;
@@ -4360,7 +4392,7 @@ function playerUpdate(dt) {
     const gearMul = gear === 'board' ? 1.42 : gear === 'skates' ? 1.28 : 1;
     let rideMul = onVehicle ? (onVehicle.kind === 'buggy' ? 1.8 : 2.1) : 1;
     boosting = !!onVehicle && !!keys.KeyX && boostE > 0.02 && state === 'play';
-      if (boosting) { boostE = Math.max(0, boostE - dt / 2.5); rideMul *= 1.75; }
+      if (boosting) { boostE = Math.max(0, boostE - dt / (2.5 * (base && base.upgrades.vehicleNitro ? 1.35 : 1))); rideMul *= 1.75; }
     else boostE = Math.min(1, boostE + dt / 6);
     const sp = (gliding ? RUN * 1.4 : RUN) * (sprintNow ? 1.6 : 1) * (aimEff ? 0.6 : 1) * gearMul * rideMul, acc = (onGround ? (iceUnderfoot() ? 11 : 70) : (gliding ? 46 : 26)) * (onVehicle ? 0.8 : 1);
     const hasIn = dx * dx + dz * dz > 1e-4, tx = hasIn ? dx * sp : (boosting ? Math.sin(face) * sp : 0), tz = hasIn ? dz * sp : (boosting ? Math.cos(face) * sp : 0);
@@ -4602,7 +4634,7 @@ function announceEshay() {
 }
 function updateItems(dt) {
   for (const it of items) {
-    if (it.taken) continue;
+    if (it.taken || (it.type === 'dataCore' && !it.mesh.visible)) continue;
     it.mesh.rotation.y += dt * 3;
     if (state !== 'play') continue;
     const m = it.mesh.position;
@@ -4611,7 +4643,7 @@ function updateItems(dt) {
       if (it.type === 'ammo' && !ammoPickupUseful()) continue;
       if (it.type === 'dataCore') {
         if (!activeMission || activeMission.id !== it.missionId || activeMission.state !== 'active') continue;
-        it.taken = true; it.mesh.removeFromParent(); sfx.coin(); toast('DATA CORE SECURED — RETURN TO BASE', 1700);
+        it.taken = true; it.mesh.visible = false; sfx.coin(); toast('DATA CORE SECURED — RETURN TO BASE', 1700);
         missionSetReady(activeMission);
         continue;
       }
@@ -4664,6 +4696,10 @@ const missionArrow = document.createElement('div');
 missionArrow.id = 'missionArrow';
 Object.assign(missionArrow.style, { position: 'fixed', display: 'none', zIndex: '8', pointerEvents: 'none', padding: '5px 9px', color: '#36f6ff', background: 'rgba(3,8,20,.85)', border: '1px solid currentColor', font: '700 13px monospace', textShadow: '0 0 8px currentColor', whiteSpace: 'nowrap' });
 document.body.appendChild(missionArrow);
+const missionTracker = document.createElement('div');
+missionTracker.id = 'missionTracker';
+Object.assign(missionTracker.style, { position: 'fixed', display: 'none', zIndex: '2', left: '12px', top: '180px', maxWidth: 'min(360px, calc(100vw - 24px))', boxSizing: 'border-box', padding: '6px 9px', background: 'rgba(3,8,20,.86)', border: '1px solid currentColor', font: '700 12px monospace', textShadow: '0 0 8px currentColor', whiteSpace: 'normal', pointerEvents: 'none' });
+document.body.appendChild(missionTracker);
 let boostE = 1, boosting = false;                                // vehicle nitro: hold X
 let gear = '', grinding = null, onVehicle = null, hintProp = null, grindScore = 0, parkSeen = false;
 const gearPlate = (g) => ({ board: 0xff3fc8, skates: 0xb0ff63 })[g] || 0x36f6ff;
@@ -5431,10 +5467,9 @@ function updateVisuals(dt) {
 
   // HUD (hidden behind the main menu)
   $('hud').style.display = state === 'title' ? 'none' : '';
-  $('hotbar').style.display = state === 'title' ? 'none' : '';
-  const hearts = '♥'.repeat(Math.max(0, health)) + '<span style="opacity:.35">' + '♥'.repeat(MAXHP - Math.max(0, health)) + '</span>';
+  $('hotbar').style.display = state === 'title' ? 'none' : '';  const hearts = '♥'.repeat(Math.max(0, health)) + '<span style="opacity:.35">' + '♥'.repeat(MAXHP - Math.max(0, health)) + '</span>';
   $('hud').innerHTML = `<div class="hearts">${hearts}</div>Glide<div class="bar"><div style="width:${(glide * 100) | 0}%"></div></div>Grip<div class="bar"><div style="width:${(climbStam * 100) | 0}%;background:#ffb347"></div></div>Energy<div class="bar"><div style="width:${(cont.energy * 100) | 0}%;background:${cont.locked ? '#ff4a4a' : '#3affd0'}"></div></div>` +
-    `Level <b>${level}</b> · Altitude <b>${pos.y | 0}</b> m<br>Score <b>${score}</b> · Best ${Math.max(best.score, score)} (L${best.level})` +
+    `Level <b>${level}</b> · Altitude <b>${pos.y | 0}</b> m<br>Score <b>${score}</b> · Credits <b>${base.credits}</b> · Best ${Math.max(best.score, score)} (L${best.level})` +
     (curPN !== null && ladderTop ? `<br><span style="color:${curPN < 0 ? '#ff3a5a' : '#ffd23a'}">PLATFORM #${curPN}</span> · deepest #${ladderBot.n} · highest #${ladderTop.n}` : '') +
     (combo > 0 ? ` · <span style="color:#ffd23a">Bullseye combo x${combo}</span>` : '') + '<br>' + weaponHud();
   const bb = $('bossbar');
@@ -5461,7 +5496,7 @@ function setHint() {
   const rd = $('ride'), rt = state !== 'play' || paused ? '' : hintProp ? `[E]  ${hintProp}` : hintNpc ? '[E]  TALK TO THE GUIDE' : onVehicle ? `[E] hop off  ·  hold [X] boost ${'▮'.repeat(Math.round(boostE * 8))}${'▯'.repeat(8 - Math.round(boostE * 8))}` : grinding ? '[SPACE] rail jump' : '';
   if (rd.textContent !== rt) rd.textContent = rt; rd.style.opacity = rt ? 1 : 0;
   if (state === 'play' && !rideTold && hintT < 10.5 && !hintProp && !onVehicle) { rideTold = true; toast('PRESS ENTER TO RIDE A HOVER-BIKE  ·  SHIFT+ENTER = DELOREAN', 4200); }
-  const near = hintProp ? `· ENTER: ${hintProp} ` : hintNpc ? '· E: TALK TO THE GUIDE ' : (grinding ? '· SPACE: rail jump · ENTER bail ' : '');
+  const near = hintProp ? `· E: ${hintProp} ` : hintNpc ? '· E: TALK TO THE GUIDE ' : (grinding ? '· SPACE: rail jump · E bail ' : '');
   $('hint').textContent = state === 'play'
     ? 'WASD move · SHIFT sprint · double-jump summons your HOVERBOARD (hold SPACE to ride) · C pound · click/F fire (hold for beams) · RIGHT-CLICK aim · 1-7 or wheel: weapons · jump at a wall to climb (SPACE wall-jump) · step into neon portals to travel · ' + near + 'CAPS/V first-person · ENTER ride (anywhere; SHIFT+ENTER buggy) · R respawn · M sound · N music · G gore · H this bar'
     : '';
@@ -6620,7 +6655,7 @@ document.addEventListener('pointerlockchange', () => { if (!document.pointerLock
 buildLevel();
 pos.set(start.x, start.y, start.z);
 showMenu(true);
-window.__ng = { ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toFixed(1), z: +q.z.toFixed(1), label: q.label })), mv: () => ({ vy: +vel.y.toFixed(2), onG: onGround, jumps, gliding, glide: +glide.toFixed(2), climbing: !!climbing, pounding, stam: +climbStam.toFixed(2), hp: health, st: state, paused }), bounces: () => solids.filter(s => s.bounce).map(s => ({ x: +(s.cx !== undefined ? s.cx : (s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +(s.cz !== undefined ? s.cz : (s.minz + s.maxz) / 2).toFixed(1), b: +(s.boost || 0).toFixed(1) })), spKinds: () => specials.reduce((a, s) => { const k = (s.sp && s.sp.kind) || s.kind || '?'; a[k] = (a[k] || 0) + 1; return a; }, {}), ladder: () => ({ cur: curPN, top: ladderTop && ladderTop.n, bot: ladderBot && ladderBot.n, len: ladder.length, voidY: VOID_Y }), falls: () => solids.filter(s => s.pn !== undefined).slice(0, 5).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), n: s.pn })), foes: () => enemies.filter(e => !e.dead).map(e => ({ id: e.mesh.id, v: e.variant, hp: +e.hp.toFixed(1), mh: e.maxhp, boss: !!e.boss, d: Math.round(Math.hypot(e.x - pos.x, e.y - pos.y, e.z - pos.z)) })), kit: () => ({ w: weapon, name: WEAPONS[weapon].name, owned: weaponOwned.slice(), ammo: { ...ammo } }), clearFoes: (keepBoss = true) => { let n = 0; for (const e of enemies) if (!e.dead && !(keepBoss && e.boss)) { damageEnemy(e, 99999, 'pound'); n++; } return n; }, setZone: (n, snap = false, quiet = true) => { const z = ZONES.find(x => x.name.toLowerCase() === String(n).toLowerCase()) || null; setZone(z, snap, quiet); return z ? z.name : null; }, get schizo() { return schizoOn; }, set schizo(v) { schizoOn = !!v; document.body.classList.toggle('schizo', schizoOn); }, giveWeapon: n => { const i = WEAPONS.findIndex(w => w.name.toLowerCase() === String(n).toLowerCase()); if (i < 0) return false; unlockWeapon(i); selectWeapon(i); return !!weaponOwned[i]; }, get killStreak() { return killStreak; }, set killStreak(v) { killStreak = v | 0; killStreakT = killStreak > 0 ? 4 : 0; }, get level() { return level; }, set level(v) { level = Math.max(1, v | 0); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; showMsg(''); toast('LEVEL ' + level + ' — ' + theme().name, 1600); }, rails: () => solids.filter(q => q.rail).map(q => { const a = q.rail.pts[0], b = q.rail.pts[q.rail.pts.length - 1]; return [a.x, a.y, a.z, b.x, b.y, b.z, q.rail.len]; }), grinding: () => !!grinding, dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), duel: (v = 'walker', dist = 4, boss = false) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, boss, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (!['board', 'skates'].includes(k)) return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(ZONES.find(z => z.name === n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; },  info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length, propList: props.map(p => ({ k: p.kind, at: p.mesh.position.toArray().map(v => Math.round(v * 10) / 10), taken: p.taken, vis: p.mesh.visible, inLvl: !!(p.mesh.parent && p.mesh.parent !== scene) })) }), missions: () => missionsSnapshot(), acceptMission, completeMission, base: () => ({ ...base, upgrades: { ...base.upgrades }, resources: { ...hotbarRes } }), homeBase: () => ({ guide: !!homeGuide, hintNpc, dialog: guideDialogOpen, enemiesNearSpawn: enemies.filter(e => !e.dead && Math.hypot(e.x, e.z) < 50 && e.y > TOP - 35).length, parts: homeGuide && homeGuide.group.children.length }) };   // dev hook (console / test tools)
+window.__ng = { ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toFixed(1), z: +q.z.toFixed(1), label: q.label })), mv: () => ({ vy: +vel.y.toFixed(2), onG: onGround, jumps, gliding, glide: +glide.toFixed(2), climbing: !!climbing, pounding, stam: +climbStam.toFixed(2), hp: health, st: state, paused }), bounces: () => solids.filter(s => s.bounce).map(s => ({ x: +(s.cx !== undefined ? s.cx : (s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +(s.cz !== undefined ? s.cz : (s.minz + s.maxz) / 2).toFixed(1), b: +(s.boost || 0).toFixed(1) })), spKinds: () => specials.reduce((a, s) => { const k = (s.sp && s.sp.kind) || s.kind || '?'; a[k] = (a[k] || 0) + 1; return a; }, {}), ladder: () => ({ cur: curPN, top: ladderTop && ladderTop.n, bot: ladderBot && ladderBot.n, len: ladder.length, voidY: VOID_Y }), falls: () => solids.filter(s => s.pn !== undefined).slice(0, 5).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), n: s.pn })), foes: () => enemies.filter(e => !e.dead).map(e => ({ id: e.mesh.id, v: e.variant, hp: +e.hp.toFixed(1), mh: e.maxhp, boss: !!e.boss, d: Math.round(Math.hypot(e.x - pos.x, e.y - pos.y, e.z - pos.z)) })), kit: () => ({ w: weapon, name: WEAPONS[weapon].name, owned: weaponOwned.slice(), ammo: { ...ammo } }), clearFoes: (keepBoss = true) => { let n = 0; for (const e of enemies) if (!e.dead && !(keepBoss && e.boss)) { damageEnemy(e, 99999, 'pound'); n++; } return n; }, setZone: (n, snap = false, quiet = true) => { const z = ZONES.find(x => x.name.toLowerCase() === String(n).toLowerCase()) || null; setZone(z, snap, quiet); return z ? z.name : null; }, get schizo() { return schizoOn; }, set schizo(v) { schizoOn = !!v; document.body.classList.toggle('schizo', schizoOn); }, giveWeapon: n => { const i = WEAPONS.findIndex(w => w.name.toLowerCase() === String(n).toLowerCase()); if (i < 0) return false; unlockWeapon(i); selectWeapon(i); return !!weaponOwned[i]; }, get killStreak() { return killStreak; }, set killStreak(v) { killStreak = v | 0; killStreakT = killStreak > 0 ? 4 : 0; }, get level() { return level; }, set level(v) { level = Math.max(1, v | 0); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; showMsg(''); toast('LEVEL ' + level + ' — ' + theme().name, 1600); }, rails: () => solids.filter(q => q.rail).map(q => { const a = q.rail.pts[0], b = q.rail.pts[q.rail.pts.length - 1]; return [a.x, a.y, a.z, b.x, b.y, b.z, q.rail.len]; }), grinding: () => !!grinding, dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), duel: (v = 'walker', dist = 4, boss = false) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, boss, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (!['board', 'skates'].includes(k)) return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(ZONES.find(z => z.name === n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; },  info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length, propList: props.map(p => ({ k: p.kind, at: p.mesh.position.toArray().map(v => Math.round(v * 10) / 10), taken: p.taken, vis: p.mesh.visible, inLvl: !!(p.mesh.parent && p.mesh.parent !== scene) })) }), missions: () => missionsSnapshot(), acceptMission, completeMission, turnIn, abandonMission, craftList, craft, guideTips, guideGreeting, base: () => ({ ...base, upgrades: { ...base.upgrades }, resources: { ...hotbarRes } }), homeBase: () => ({ guide: !!homeGuide, hintNpc, dialog: guideDialogOpen, enemiesNearSpawn: enemies.filter(e => !e.dead && Math.hypot(e.x, e.z) < 50 && e.y > TOP - 35).length, parts: homeGuide && homeGuide.group.children.length }) };   // dev hook (console / test tools)
 
 {   // opened from the relay server with ?room=... -> connect right away
   const qp = new URLSearchParams(location.search || '');
@@ -6636,7 +6671,6 @@ renderer.setAnimationLoop(now => {
   updateItems(dt); updateStreet(dt); updateMissions(dt); evolveTick(dt); updateGrowers(dt); dreadTick(dt); musicTick(dt); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); updateClouds(dt); updateSpecials(dt); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar();
   updateVisuals(dt); setHint();
   if (guideDialogOpen && state !== 'play') closeGuideDialog(false);
-  else if (guideDialogOpen) renderGuideDialog();
   netTick(dt); updatePeers(dt); debugTick(dt);
   upscaleMaterial.uniforms.uTime.value = performance.now() / 1000;
   if (!contextLost) {
