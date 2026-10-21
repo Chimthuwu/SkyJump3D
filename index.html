@@ -676,7 +676,7 @@ function addBullseye(cx, y, cz, r) {          // one flat textured disc (cheap: 
     bullMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, polygonOffset: true, polygonOffsetFactor: -1 });
   }
   const key = r.toFixed(2); const geo = bullGeo[key] || (bullGeo[key] = new THREE.CircleGeometry(r * 2.1, 12));
-  const d = new THREE.Mesh(geo, bullMat); d.rotation.x = -Math.PI / 2; d.position.set(cx, y + 0.06, cz); scene.add(d);
+  const d = new THREE.Mesh(geo, bullMat); d.rotation.x = -Math.PI / 2; d.position.set(cx, y + 0.06, cz); scene.add(d); return d;
 }
 
 const BANANA_GEO = new THREE.TorusGeometry(0.4, 0.14, 5, 8, Math.PI * 0.9);
@@ -696,7 +696,7 @@ function ammoBox(x, y, z) {
   const m = new THREE.Group();
   const crate = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.5), retroMaterial(new THREE.MeshLambertMaterial({ color: 0xffc233 })));
   const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.73, 0.12, 0.53), new THREE.MeshBasicMaterial({ color: 0xfff0a1 }));
-  stripe.position.y = 0.04; m.add(crate, stripe); m.position.set(x, y, z); lvl.add(m); items.push({ mesh: m, type: 'ammo', taken: false });
+  stripe.position.y = 0.04; m.add(crate, stripe);  m.position.set(x, y, z); lvl.add(m); items.push({ mesh: m, type: 'ammo', taken: false }); return items[items.length - 1];
 }
 function weaponPickup(index, x, y, z) {
   const weapon = WEAPONS[index]; if (!weapon) return null;
@@ -1417,18 +1417,18 @@ function buildArena(type, cx, top, cz, zone) {
   return A;
 }
 function buildBuildingHub(cx, cz, w, d, h, zone) {
-  const buildingMesh = boxMesh(cx, cz, w, d, h, bldMats[(rand() * 4) | 0]);
+  const bldMat = bldMats[(rand() * 4) | 0], buildingMesh = boxMesh(cx, cz, w, d, h, bldMat);
   const s = addSolid(cx - w / 2, cx + w / 2, 0, h, cz - d / 2, cz + d / 2);
   Object.assign(s, { cx, cz, top: h, w, d, hw: w / 2, hd: d / 2, targetR: 2.2, zone });
   const c = zone ? zone.plate : 0x36f6ff;
   const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.3, d + 0.6), lam(c, { emissive: c, emissiveIntensity: zone ? 0.45 : 0.55 }));
   roof.position.set(cx, h + 0.05, cz); scene.add(roof); decorSites.push({ x: cx, z: cz, y: h, hw: w / 2, hd: d / 2, grp: null });
-  const hub = { kind: 'building', x: cx, z: cz, top: h, hw: w / 2, hd: d / 2, w, d, zone, r: Math.max(w, d) / 2 + 3, roofSolid: s, roofMesh: roof, buildingMesh };
+  const hub = { kind: 'building', x: cx, z: cz, top: h, hw: w / 2, hd: d / 2, w, d, zone, r: Math.max(w, d) / 2 + 3, roofSolid: s, roofMesh: roof, buildingMesh, mat: bldMat, bullMesh: null, opened: false, interior: null };
   s.building = true; s.hub = hub;
   buildingHubs.push(hub);
   buildingMesh.userData.towerHub = hub;
   addNeonSign(cx, cz, w, d, h);
-  addBullseye(cx, h + 0.2, cz, 2.2); coin(cx, h + 1.4, cz, zone);
+  hub.bullMesh = addBullseye(cx, h + 0.2, cz, 2.2); coin(cx, h + 1.4, cz, zone);
   if (rand() < 0.5) {        // bounce pad to launch you toward the next building
     const px = cx + w / 2 - 3, pad = addSolid(px - 2, px + 2, h, h + 0.4, cz - 2, cz + 2); pad.bounce = true;
     const pm = new THREE.Mesh(new THREE.BoxGeometry(4, 0.4, 4), retroMaterial(new THREE.MeshLambertMaterial({ color: 0x33e0ff })));
@@ -1468,7 +1468,7 @@ function portalHaloMat(color) {
   return portalHaloMats.get(color);
 }
 let portalCooldown = 0, portalExit = null, activePortalPreview = null, activePortalDestination = null;
-function portalNearHome(x, y, z) { return activeStartHubs().some(home => Math.hypot(x - home.x, z - home.z) < 40 && Math.abs(y - home.top) < 40); }
+function portalNearHome(x, y, z) { return activeStartHubs().some(home => Math.hypot(x - home.x, z - home.z) < 80); }   // no gate anywhere around a home tower
 function addPortal(x, y, z, color, label, owner = null) {
   for (const s of solids) {                       // exact overlap with a trampoline: the portal owns this spot — retire the pad (portal-vs-bounce clashes otherwise hijack falls)
     if (!s.bounce) continue;
@@ -1570,7 +1570,7 @@ function buildHubPortalLoop(hubs) {
     const zoneLabel = hub.zone ? ({ Psychedelic: 'PSY', Jungle: 'JUNGLE', Frozen: 'ICE', Inferno: 'EMBER', Storm: 'STORM', Horror: 'CRYPT' }[hub.zone.name] || 'ZONE') : 'CITY';
     const label = hub.kind === 'arena' ? hub.type.toUpperCase() : hub.kind === 'start' ? `HOME ${hub.slot + 1}` : hub.kind === 'exit' ? 'STREET' : `${zoneLabel} ROOF`;
     const color = portalColors[i % portalColors.length];
-    if (!homeRoof) addPortal(x, hub.top, z, color, `${label} GATE`, hub);
+    if (!homeRoof && !portalNearHome(x, hub.top, z)) addPortal(x, hub.top, z, color, `${label} GATE`, hub);
     addRouteLandmark(x, hub.top, z, 0, hub.zone ? hub.zone.plate : color, label);
   });
   // Every branch exit and hub gate joins one shuffled, cyclic route: no portal is a dead end,
@@ -2500,11 +2500,11 @@ function makeGuide(hub, slot = 0) {
 }
 
 const INTERIOR_THEMES = {
-  server: { name: 'Server Farm', top: '#061626', mid: '#102b3d', bot: '#164453', fog: 0x103040, hemi: 0.42, hemiCol: 0x65e8d2, sun: 0.12, sunCol: 0x36f6ff, cloud: 0x102636, plate: 0x36f6ff, weather: 'none', floor: 0x182938, accent: 0x36f6ff, enemy: 'gunner' },
-  atrium: { name: 'Overgrown Atrium', top: '#071b12', mid: '#123822', bot: '#23472b', fog: 0x183923, hemi: 0.5, hemiCol: 0x9be875, sun: 0.15, sunCol: 0x8aff3e, cloud: 0x183923, plate: 0x8aff3e, weather: 'none', floor: 0x263628, accent: 0x8aff3e, enemy: 'dinosaur' },
-  reactor: { name: 'Flooded Reactor', top: '#210d08', mid: '#3c1b0d', bot: '#532911', fog: 0x3d2113, hemi: 0.42, hemiCol: 0xffa25f, sun: 0.18, sunCol: 0xff6b34, cloud: 0x3b1e12, plate: 0xff743b, weather: 'none', floor: 0x35313a, accent: 0xff743b, enemy: 'infernal' },
-  club: { name: 'Neon Club', top: '#180725', mid: '#2c1047', bot: '#471c61', fog: 0x301444, hemi: 0.38, hemiCol: 0xd88fff, sun: 0.12, sunCol: 0xff3fc8, cloud: 0x2a1040, plate: 0xff3fc8, weather: 'none', floor: 0x251735, accent: 0xff3fc8, enemy: 'shield' },
-  vault: { name: 'Cold Vault', top: '#071929', mid: '#142e45', bot: '#244863', fog: 0x1b3c52, hemi: 0.48, hemiCol: 0x9beaff, sun: 0.12, sunCol: 0x8ae8ff, cloud: 0x17364b, plate: 0x8ae8ff, weather: 'none', floor: 0x2b3c48, accent: 0x8ae8ff, enemy: 'frozenStalker' }
+  server: { name: 'Server Farm', desc: 'humming racks, hacked turrets and a stolen data core', interior: true, top: '#061626', mid: '#102b3d', bot: '#164453', fog: 0x103040, hemi: 0.42, hemiCol: 0x65e8d2, sun: 0.12, sunCol: 0x36f6ff, cloud: 0x102636, plate: 0x36f6ff, weather: 'none', floor: 0x182938, accent: 0x36f6ff, enemy: 'gunner' },
+  atrium: { name: 'Overgrown Atrium', desc: 'a dead garden growing through the floors', interior: true, top: '#071b12', mid: '#123822', bot: '#23472b', fog: 0x183923, hemi: 0.5, hemiCol: 0x9be875, sun: 0.15, sunCol: 0x8aff3e, cloud: 0x183923, plate: 0x8aff3e, weather: 'none', floor: 0x263628, accent: 0x8aff3e, enemy: 'dinosaur' },
+  reactor: { name: 'Flooded Reactor', desc: 'burning coolant, catwalks and a core warden', interior: true, top: '#210d08', mid: '#3c1b0d', bot: '#532911', fog: 0x3d2113, hemi: 0.42, hemiCol: 0xffa25f, sun: 0.18, sunCol: 0xff6b34, cloud: 0x3b1e12, plate: 0xff743b, weather: 'none', floor: 0x35313a, accent: 0xff743b, enemy: 'infernal' },
+  club: { name: 'Neon Club', desc: 'pulsing tiles, a stage and a very large DJ', interior: true, top: '#180725', mid: '#2c1047', bot: '#471c61', fog: 0x301444, hemi: 0.38, hemiCol: 0xd88fff, sun: 0.12, sunCol: 0xff3fc8, cloud: 0x2a1040, plate: 0xff3fc8, weather: 'none', floor: 0x251735, accent: 0xff3fc8, enemy: 'shield' },
+  vault: { name: 'Cold Vault', desc: 'a frozen archive of cryo pods', interior: true, ice: true, top: '#071929', mid: '#142e45', bot: '#244863', fog: 0x1b3c52, hemi: 0.48, hemiCol: 0x9beaff, sun: 0.12, sunCol: 0x8ae8ff, cloud: 0x17364b, plate: 0x8ae8ff, weather: 'none', floor: 0x2b3c48, accent: 0x8ae8ff, enemy: 'frozenStalker' }
 };
 function towerThemeFor(hub, index = 0) {
   if (hub.zone && hub.zone.name === 'Jungle') return 'atrium';
@@ -2521,42 +2521,36 @@ function interiorBox(parent, x, y, z, w, h, d, material, solid = false) {
   if (solid) { collision = addSolid(x - w / 2, x + w / 2, y - h / 2, y + h / 2, z - d / 2, z + d / 2); collision.interior = true; }
   return { mesh, solid: collision };
 }
-function interiorFloorRing(parent, hub, y, holeX, holeZ, color, index, roof = false) {
-  const hx = hub.w / 2 - 1.25, hz = hub.d / 2 - 1.25, hole = roof ? 2.8 : 2.35, thick = 0.65;
+function interiorFloorRing(parent, hub, y, holeX, holeZ, color, index, roof = false, theme = null) {
+  const hx = hub.w / 2 - 1.25, hz = hub.d / 2 - 1.25, hole = roof ? 2.8 : 2.35, half = hole / 2, thick = 0.65;
+  // Collision: four slabs that leave exactly one square hatch at (holeX, holeZ).
+  const lEnd = holeX - half, rStart = holeX + half, nEnd = holeZ - half, fStart = holeZ + half;
   const pieces = [
-    { x: -hx / 2 - hole / 2, z: 0, w: hx - hole / 2, d: hz * 2 },
-    { x: hx / 2 + hole / 2, z: 0, w: hx - hole / 2, d: hz * 2 },
-    { x: 0, z: -hz / 2 - hole / 2, w: hole, d: hz - hole / 2 },
-    { x: 0, z: hz / 2 + hole / 2, w: hole, d: hz - hole / 2 }
+    { x: (-hx + lEnd) / 2, z: 0, w: Math.max(0.2, lEnd + hx), d: hz * 2 },
+    { x: (rStart + hx) / 2, z: 0, w: Math.max(0.2, hx - rStart), d: hz * 2 },
+    { x: 0, z: (-hz + nEnd) / 2, w: hx * 2, d: Math.max(0.2, nEnd + hz) },
+    { x: 0, z: (fStart + hz) / 2, w: hx * 2, d: Math.max(0.2, hz - fStart) }
   ];
-  if (roof) {
-    // Roof aperture is centered; floor holes alternate by level so descending requires moving across the atrium.
-    pieces[0].x = -hx / 2 - hole / 2; pieces[1].x = hx / 2 + hole / 2;
-  } else {
-    const dx = holeX, dz = holeZ;
-    pieces[0] = { x: -hx / 2 + Math.max(0, dx + hole / 2) / 2, z: 0, w: Math.max(0.2, hx - Math.max(0, dx + hole / 2)), d: hz * 2 };
-    pieces[1] = { x: hx / 2 - Math.max(0, hole / 2 - dx) / 2, z: 0, w: Math.max(0.2, hx - Math.max(0, hole / 2 - dx)), d: hz * 2 };
-    pieces[2] = { x: 0, z: -hz / 2 + Math.max(0, dz + hole / 2) / 2, w: hx * 2, d: Math.max(0.2, hz - Math.max(0, dz + hole / 2)) };
-    pieces[3] = { x: 0, z: hz / 2 - Math.max(0, hole / 2 - dz) / 2, w: hx * 2, d: Math.max(0.2, hz - Math.max(0, hole / 2 - dz)) };
-  }
-  // The visual ring uses one shape/mesh per level; collision stays in four simple AABBs around the open hatch.
+  // The visual ring uses one shape/mesh per level; the shape's y axis maps onto world -z.
   const shape = new THREE.Shape(); shape.moveTo(-hx, -hz); shape.lineTo(hx, -hz); shape.lineTo(hx, hz); shape.lineTo(-hx, hz); shape.closePath();
-  const cx = roof ? 0 : holeX, cz = roof ? 0 : holeZ, path = new THREE.Path();
-  path.moveTo(cx - hole / 2, cz - hole / 2); path.lineTo(cx - hole / 2, cz + hole / 2); path.lineTo(cx + hole / 2, cz + hole / 2); path.lineTo(cx + hole / 2, cz - hole / 2); path.closePath(); shape.holes.push(path);
+  const cx = holeX, cy = -holeZ, path = new THREE.Path();
+  path.moveTo(cx - half, cy - half); path.lineTo(cx - half, cy + half); path.lineTo(cx + half, cy + half); path.lineTo(cx + half, cy - half); path.closePath(); shape.holes.push(path);
   const visual = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }));
   visual.rotation.x = -Math.PI / 2; visual.position.set(hub.x, y, hub.z); parent.add(visual);
   for (const p of pieces) {
     const w = Math.max(0.2, p.w), d = Math.max(0.2, p.d), x = hub.x + p.x, z = hub.z + p.z;
     const s = addSolid(x - w / 2, x + w / 2, y - thick, y, z - d / 2, z + d / 2);
-    Object.assign(s, { cx: x, cz: z, top: y, hw: w / 2, hd: d / 2, zone: activeTowerInterior && activeTowerInterior.zone, interior: true, interiorFloor: true });
+    Object.assign(s, { cx: x, cz: z, top: y, hw: w / 2, hd: d / 2, zone: theme, interior: true, interiorFloor: true, interiorCatch: true });
   }
-  return { x: hub.x + cx, y, z: hub.z + cz, hole };
+  return { x: hub.x + holeX, y, z: hub.z + holeZ, hole, spot: [holeX, holeZ] };
 }
 function interiorShell(hub, floorCount, theme) {
   const group = new THREE.Group(); lvl.add(group);
-  const wallMat = lam(theme.floor), trimMat = new THREE.MeshBasicMaterial({ color: theme.accent, toneMapped: false });
+  const baseMat = hub.buildingMesh && hub.buildingMesh.material ? hub.buildingMesh.material : lam(theme.floor);
+  const wallMat = baseMat.clone(); wallMat.side = THREE.DoubleSide;
+  const trimMat = new THREE.MeshBasicMaterial({ color: theme.accent, toneMapped: false });
   const wall = (x, y, z, w, h, d) => {
-    const o = interiorBox(group, x, y, z, w, h, d, wallMat, true); o.solid.interiorWall = true; return o;
+    const o = interiorBox(group, x, y, z, w, h, d, wallMat, true); o.solid.interiorWall = true; o.solid.zone = theme; return o;
   };
   const halfX = hub.w / 2, halfZ = hub.d / 2, t = 1.2, height = hub.top;
   // Main building volume is replaced by four collision walls; the south wall has a safe ground-side exit.
@@ -2567,39 +2561,46 @@ function interiorShell(hub, floorCount, theme) {
   wall(hub.x - exitW / 2 - sideW / 2, height / 2, frontZ, sideW, height, t);
   wall(hub.x + exitW / 2 + sideW / 2, height / 2, frontZ, sideW, height, t);
   wall(hub.x, height - 2.4, frontZ, exitW, 4.8, t);
-  // Center roof hatch and staggered interior floor hatches; full lower floor catches the fall.
-  const roof = interiorFloorRing(group, hub, height + 0.17, 0, 0, theme.accent, -1, true);
+  // Street-level slab: the tower's ground floor, so the interior never opens onto the void.
+  const ground = addSolid(hub.x - halfX + t, hub.x + halfX - t, 0, 0.7, hub.z - halfZ + t, hub.z + halfZ - t);
+  Object.assign(ground, { cx: hub.x, cz: hub.z, top: 0.7, hw: halfX - t, hd: halfZ - t, zone: theme, interior: true, interiorFloor: true, interiorCatch: true });
+  // Center roof hatch and staggered interior floor hatches; descending means moving across the atrium.
+  const roof = interiorFloorRing(group, hub, height + 0.17, 0, 0, theme.accent, -1, true, theme);
   const n = Math.max(1, floorCount);
-  const floors = [{ x: hub.x, y: 1.3, z: hub.z, hole: 0 }];
+  const floors = [{ x: hub.x, y: 0.7, z: hub.z, hole: 0, spot: [0, 0] }];
   const holeSpots = [[-1, 0], [0, 1], [1, 0], [0, -1]];
   for (let i = 1; i <= n; i++) {
     const y = 1.3 + (height - 3.8) * i / (n + 1), [sx, sz] = holeSpots[(i - 1) % holeSpots.length];
     const hx = sx * Math.min(halfX * 0.45, 5), hz = sz * Math.min(halfZ * 0.45, 5);
-    floors.push(interiorFloorRing(group, hub, y, hx, hz, theme.accent, i));
+    floors.push(interiorFloorRing(group, hub, y, hx, hz, theme.accent, i, false, theme));
   }
-  // Landing pad at the bottom absorbs any bad hatch drop; the marked side hatch exits to a bouncing city step.
-  const bottom = addSolid(hub.x - 4, hub.x + 4, 0.55, 1.3, hub.z - 4, hub.z + 4);
-  Object.assign(bottom, { cx: hub.x, cz: hub.z, top: 1.3, hw: 4, hd: 4, zone: null, interior: true, interiorExitFloor: true });
-  const exitX = hub.x, exitZ = hub.z + halfZ + 3.8, exit = addSolid(exitX - 2.3, exitX + 2.3, 0.3, 0.8, exitZ - 2.3, exitZ + 2.3);
-  Object.assign(exit, { cx: exitX, cz: exitZ, top: 0.8, hw: 2.3, hd: 2.3, zone: null, bounce: true, boost: 24, interiorExitPad: true });
-  // Ground-level exit threshold and luminous trim (wall collision for the doorway is already in wall[]).
-  for (const w of [
-    [hub.x - halfX + t / 2, hub.z, t, height, hub.d], [hub.x + halfX - t / 2, hub.z, t, height, hub.d],
-    [hub.x, hub.z - halfZ + t / 2, hub.w - 2 * t, height, t],
-    [hub.x - (hub.w - exitW) / 4, frontZ, (hub.w - exitW) / 2, height, t], [hub.x + (hub.w - exitW) / 4, frontZ, (hub.w - exitW) / 2, height, t],
-    [hub.x, frontZ, exitW, height - 4.8, t]
-  ]) {
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(w[2], 0.12, w[4]), trimMat); strip.position.set(w[0], 1.6, w[1]); group.add(strip);
+  // Service pads: one bounce pad per floor, always under the NEXT hatch, so the shaft can be climbed from below.
+  for (let i = 0; i < floors.length; i++) {
+    const from = floors[i], next = floors[i + 1], spot = next ? next.spot : [0, 0], target = next ? next.y : height + 0.17;
+    const rise = Math.max(5, target - from.y + 3), gAvg = GRAV * (1 - 0.65 * spaceK(from.y + rise / 2));
+    const boost = Math.max(22, Math.min(TERM - 2, Math.sqrt(2 * gAvg * rise)));
+    const pad = addSolid(hub.x + spot[0] - 2, hub.x + spot[0] + 2, from.y, from.y + 0.4, hub.z + spot[1] - 2, hub.z + spot[1] + 2);
+    Object.assign(pad, { cx: hub.x + spot[0], cz: hub.z + spot[1], top: from.y + 0.4, hw: 2, hd: 2, zone: theme, bounce: true, boost, interior: true, interiorPad: true });
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(4, 0.4, 4), trimMat); plate.position.set(hub.x + spot[0], from.y + 0.2, hub.z + spot[1]); group.add(plate);
   }
-  // Hatch marker, stair/rung ladder, and emissive trims make both routes readable without extra real lights.
-  for (let rung = 0; rung < Math.min(24, Math.ceil(height / 9)); rung++) {
-    const y = 4 + rung * 8.5, ladder = interiorBox(group, hub.x - 0.7, y, hub.z + halfZ - 2.1, 0.18, 0.18, 3.8, trimMat).mesh;
-    ladder.rotation.z = 0.08;
+  // Ground-side exit: a short bridge through the doorway onto a launch ledge above the open city.
+  const bridge = addSolid(hub.x - exitW / 2, hub.x + exitW / 2, 0.1, 0.7, hub.z + halfZ - t, hub.z + halfZ + 4.4);
+  Object.assign(bridge, { cx: hub.x, cz: hub.z + halfZ + 1.6, top: 0.7, hw: exitW / 2, hd: 2.8, zone: null, interior: true });
+  const exit = addSolid(hub.x - 2.2, hub.x + 2.2, 0.1, 0.7, hub.z + halfZ + 4.4, hub.z + halfZ + 8.6);
+  Object.assign(exit, { cx: hub.x, cz: hub.z + halfZ + 6.5, top: 0.7, hw: 2.2, hd: 2.1, zone: null, bounce: true, boost: 30, interiorExitPad: true });
+  const exitPlate = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.3, 4.2), trimMat); exitPlate.position.set(hub.x, 0.85, hub.z + halfZ + 6.5); group.add(exitPlate);
+  // Emissive trim at the foot of every wall keeps the room readable without extra real lights.
+  for (const [x, z, w, d] of [[hub.x, hub.z - halfZ + 0.25, hub.w - 2 * t, 0.16], [hub.x - halfX + 0.25, hub.z, 0.16, hub.d - 2 * t], [hub.x + halfX - 0.25, hub.z, 0.16, hub.d - 2 * t]]) {
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, d), trimMat); strip.position.set(x, 1.0, z); group.add(strip);
   }
-  for (const [x, z, w, d] of [[hub.x, hub.z - halfZ + 0.2, hub.w - 2, 0.14], [hub.x - halfX + 0.2, hub.z, 0.14, hub.d - 2], [hub.x + halfX - 0.2, hub.z, 0.14, hub.d - 2]]) {
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, d), trimMat); strip.position.set(x, 1.6, z); group.add(strip);
+  // The roof hatch: two panels that iris open the moment the tower wakes up.
+  const hatch = new THREE.Group(), panels = [];
+  for (const side of [-1, 1]) {
+    const p = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.24, 2.9), wallMat.clone());
+    p.position.set(side * 1.45, 0, 0); p.userData.slide = side; panels.push(p); hatch.add(p);
   }
-  return { group, floors, roof, bottom, exit };
+  hatch.position.set(hub.x, height + 0.3, hub.z); group.add(hatch);
+  return { group, floors, roof, ground, exit, bridge, hatch: { group: hatch, panels, k: 0 } };
 }
 function interiorDecor(themeKey, hub, shell, seed) {
   const key = themeKey, theme = INTERIOR_THEMES[key], g = shell.group, rng = missionRandom(seed), box = (x, y, z, w, h, d, color = theme.floor) => interiorBox(g, x, y, z, w, h, d, lam(color), false).mesh;
@@ -2614,7 +2615,7 @@ function interiorDecor(themeKey, hub, shell, seed) {
       for (let j = 0; j < 2; j++) { o.position.set(x, 2.2 + j * 1.5, z + 0.8); o.updateMatrix(); led.setMatrixAt(made * 2 + j, o.matrix); }
       made++;
     }
-    mesh.count = led.count = made * (led === mesh ? 1 : 2); g.add(mesh, led);
+    mesh.count = made; led.count = made * 2; g.add(mesh, led);
     // cable trench stripes and a few turret-shaped hacked sentries.
     for (let i = -2; i <= 2; i++) box(hub.x + i * 3.6, 0.12, hub.z - hub.hd + 3, 0.36, 0.14, hub.d - 6, i % 2 ? 0x1b3940 : 0x26333b);
   } else if (key === 'atrium') {
@@ -2650,18 +2651,26 @@ function interiorMiniBoss(theme, hub, floor, themeKey, index) {
   const plat = { minx: hub.x - hub.hw + 1, maxx: hub.x + hub.hw - 1, minz: hub.z - hub.hd + 1, maxz: hub.z + hub.hd - 1, maxy: floor.y, zone: theme };
   const e = makeWalker(x, floor.y, z, plat, 1.6, false, variant); e.hp = e.maxhp = 8 + level * 2; e.mini = true; e.name = themeKey === 'reactor' ? 'CORE WARDEN' : 'THE DJ'; e.interiorHub = hub; return e;
 }
-function buildInterior_server(hub, floors, shell) { return { enemies: [], loot: [], zone: INTERIOR_THEMES.server, shell, floors, key: 'server' }; }
-function buildInterior_atrium(hub, floors, shell) { return { enemies: [], loot: [], zone: INTERIOR_THEMES.atrium, shell, floors, key: 'atrium' }; }
-function buildInterior_reactor(hub, floors, shell) { return { enemies: [], loot: [], zone: INTERIOR_THEMES.reactor, shell, floors, key: 'reactor' }; }
-function buildInterior_club(hub, floors, shell) { return { enemies: [], loot: [], zone: INTERIOR_THEMES.club, shell, floors, key: 'club' }; }
-function buildInterior_vault(hub, floors, shell) { return { enemies: [], loot: [], zone: INTERIOR_THEMES.vault, shell, floors, key: 'vault' }; }
-function openTower(hub) {
+function buildInterior_server(hub, floors, shell) { return { enemies: [], loot: [], theme: INTERIOR_THEMES.server, zone: INTERIOR_THEMES.server, shell, floors, key: 'server' }; }
+function buildInterior_atrium(hub, floors, shell) { return { enemies: [], loot: [], theme: INTERIOR_THEMES.atrium, zone: INTERIOR_THEMES.atrium, shell, floors, key: 'atrium' }; }
+function buildInterior_reactor(hub, floors, shell) { return { enemies: [], loot: [], theme: INTERIOR_THEMES.reactor, zone: INTERIOR_THEMES.reactor, shell, floors, key: 'reactor' }; }
+function buildInterior_club(hub, floors, shell) { return { enemies: [], loot: [], theme: INTERIOR_THEMES.club, zone: INTERIOR_THEMES.club, shell, floors, key: 'club' }; }
+function buildInterior_vault(hub, floors, shell) { return { enemies: [], loot: [], theme: INTERIOR_THEMES.vault, zone: INTERIOR_THEMES.vault, shell, floors, key: 'vault' }; }
+function openTower(hub, forceKey = null) {
   if (!hub || hub.opened || !hub.roofSolid || hub.roofSolid.opened) return hub && hub.interior;
-  const index = Math.max(0, buildingHubs.indexOf(hub)), key = towerThemeFor(hub, index), theme = INTERIOR_THEMES[key];
+  const index = Math.max(0, buildingHubs.indexOf(hub)), key = forceKey && INTERIOR_THEMES[forceKey] ? forceKey : towerThemeFor(hub, index), theme = INTERIOR_THEMES[key];
   const old = hub.roofSolid, solidIndex = solids.indexOf(old); if (solidIndex >= 0) solids.splice(solidIndex, 1);
   hub.buildingMesh.visible = false; hub.roofMesh.visible = false; old.opened = true; hub.opened = true;
-  // The roof bullseye/coin and bounce pad are removed only from this hub's footprint; outside route meshes stay untouched.
+  // The roof bullseye and coin leave with the hatch; the rest of the roof dressing stays untouched.
+  if (hub.bullMesh) { hub.bullMesh.removeFromParent(); hub.bullMesh = null; }
   for (const item of items) if (!item.taken && item.type === 'coin' && Math.hypot(item.mesh.position.x - hub.x, item.mesh.position.z - hub.z) < 2 && Math.abs(item.mesh.position.y - (hub.top + 1.4)) < 1) { item.taken = true; item.mesh.removeFromParent(); }
+  for (let i = decorSites.length - 1; i >= 0; i--) {
+    const site = decorSites[i];
+    if (site.x === hub.x && site.z === hub.z && Math.abs(site.y - hub.top) < 1) {
+      const dressed = dressings.get(site); if (dressed) { dressed.g.removeFromParent(); dressings.delete(site); }
+      decorSites.splice(i, 1);
+    }
+  }
   const floorCount = Math.max(1, Math.min(14, Math.ceil((hub.top - 6) / 22))), shell = interiorShell(hub, floorCount, theme);
   const result = ({ server: buildInterior_server, atrium: buildInterior_atrium, reactor: buildInterior_reactor, club: buildInterior_club, vault: buildInterior_vault })[key](hub, shell.floors, shell);
   interiorDecor(key, hub, shell, (levelSeed ^ Math.floor(hub.x * 17 + hub.z * 29)) | 0);
@@ -2675,16 +2684,30 @@ function openTower(hub) {
   }
   if (!net.on || net.host) { const mini = interiorMiniBoss(theme, hub, hostFloor, key, index); if (mini) result.enemies.push(mini); }
   const point = shell.floors[Math.max(0, shell.floors.length - 1)];
-  const loot = weaponPickup(2 + index % Math.max(1, WEAPONS.length - 2), hub.x + hub.hw * 0.32, point.y + 1.3, hub.z - hub.hd * 0.28);
-  const ammo = ammoBox(hub.x - hub.hw * 0.32, point.y + 0.9, hub.z - hub.hd * 0.28);
-  loot.interiorHub = ammo.interiorHub = hub;
+  const loot = weaponPickup(2 + index % Math.max(1, WEAPONS.length - 2), hub.x + hub.hw * 0.32, point.y + 0.9, hub.z - hub.hd * 0.28);
+  const ammo = ammoBox(hub.x - hub.hw * 0.32, point.y + 0.6, hub.z - hub.hd * 0.28);
+  if (loot) loot.interiorHub = hub; if (ammo) ammo.interiorHub = hub;
   result.loot.push(loot, ammo);
-  const target = { tower: hub, theme: theme.name, x: loot.mesh.position.x, y: loot.mesh.position.y, z: loot.mesh.position.z, r: 5, type: 'interior' };
+  const target = { tower: hub, theme: theme.name, x: loot ? loot.mesh.position.x : hub.x, y: loot ? loot.mesh.position.y : point.y, z: loot ? loot.mesh.position.z : hub.z, r: 5, type: 'interior' };
   hub.interior = result; hub.interiorTargets = [target]; interiorTargets.push(target); openedTowers.push(hub);
   // A sealed-looking colored ceiling/background replaces the exterior skyline only when this tower opens.
   result.background = new THREE.Color(theme.top); result.entered = false;
-  if (Math.hypot(pos.x - hub.x, pos.z - hub.z) < hub.hw - 1 && pos.y < hub.top + 1) enterTowerInterior(hub);
-  toast(`${theme.name.toUpperCase()} OPENED — FIND THE HATCH`, 2400); sfx.portal();
+  // Keep the player on the new roof ring instead of dropping them into the shaft.
+  if (Math.abs(pos.x - hub.x) < hub.hw && Math.abs(pos.z - hub.z) < hub.hd && pos.y > hub.top - 3) {
+    pos.y = hub.top + 0.5; vel.y = Math.max(0, vel.y);
+    if (Math.abs(pos.x - hub.x) < 2.4 && Math.abs(pos.z - hub.z) < 2.4) { pos.x = hub.x + 3.4; pos.z = hub.z + 1.6; }
+  }
+  // A contract for the tower you just woke up: the data core inside pays out at the Guide.
+  const mission = {
+    id: `L${level}-S${mySlot}-T${index}`, type: 'collect', title: `Recover the ${theme.name} Data Core`,
+    desc: `The ${theme.name} is awake. Drop through the roof hatch, grab the data core and bring it back to the Home Base.`,
+    target: { x: target.x, y: target.y, z: target.z, r: 3.4 }, zone: theme.name, count: 1, state: 'offered',
+    reward: missionReward(level, 'collect', 70, missionRandom(levelSeed ^ (index * 977))), progress: 0, hub: null, interior: true
+  };
+  addMissionCore(mission, mission.target);
+  const list = missionSlots[mySlot] ||= []; if (list !== missions) missions.push(mission); list.push(mission);
+  if (Math.hypot(pos.x - hub.x, pos.z - hub.z) < hub.hw - 1 && pos.y < hub.top - 0.05) enterTowerInterior(hub);
+  toast(`${theme.name.toUpperCase()} OPENED — ROOF HATCH IS CLEAR`, 2400); sfx.portal();
   return result;
 }
 function enterTowerInterior(hub) {
@@ -2702,12 +2725,17 @@ function leaveTowerInterior() {
   if (interior) interior.entered = false;
 }
 function updateTowerInterior(dt) {
-  if (!activeTowerInterior) return;
-  const hub = activeTowerInterior.shell && openedTowers.find(h => h.interior === activeTowerInterior);
-  if (!hub) { leaveTowerInterior(); return; }
-  const inside = pos.x > hub.x - hub.hw - 0.1 && pos.x < hub.x + hub.hw + 0.1 && pos.z > hub.z - hub.hd - 0.1 && pos.z < hub.z + hub.hd + 0.1 && pos.y > 0 && pos.y < hub.top + 1.2;
+  let hub = activeTowerInterior ? openedTowers.find(h => h.interior === activeTowerInterior) : null;
+  if (!hub) {
+    // Walking into an opened tower's hull is what pulls the player into its interior world.
+    for (const candidate of openedTowers) {
+      if (Math.abs(pos.x - candidate.x) < candidate.hw && Math.abs(pos.z - candidate.z) < candidate.hd && pos.y < candidate.top - 0.05 && pos.y > 0) { hub = candidate; break; }
+    }
+    if (!hub) return;
+    enterTowerInterior(hub);
+  }
+  const inside = Math.abs(pos.x - hub.x) < hub.hw + 0.1 && Math.abs(pos.z - hub.z) < hub.hd + 0.1 && pos.y > 0 && pos.y < hub.top - 0.05;
   if (!inside) { leaveTowerInterior(); return; }
-  if (!inInterior) enterTowerInterior(hub);
   const coolant = activeTowerInterior.shell.group.children.find(o => o.userData.coolant);
   if (coolant && pos.y < 3 && Math.abs(pos.x - hub.x) < hub.hw - 3 && Math.abs(pos.z - hub.z) < hub.hd - 3 && state === 'play') {
     activeTowerInterior.hazardT = (activeTowerInterior.hazardT || 0) - dt;
@@ -2962,7 +2990,6 @@ function buildLevelBody() {
     addProp('bike', hx + 4, TOP, hz - 5);
     addProp('buggy', hx - 5, TOP, hz - 5);
     addProp('board', hx + 8, TOP, hz + 4);
-    addProp('skates', hx - 8, TOP, hz + 7);
   }
   // Spawn rooftop is a peaceful home base; the safe-radius check in spawnBiomeEnemy also
   // protects the first outbound platforms from primary and secondary route spawns.
@@ -3117,15 +3144,8 @@ player.add(torso, chestPlate, head, cap, visor, armL, armR, legL, legR);
 player.scale.setScalar(0.85);
 const model = new THREE.Group(); model.add(player); scene.add(model);
 
-// street gear ∨s worn on the player model: a board under the feet, skates on the boots
+// street gear worn on the player model: a skateboard under the feet
 const gearBoard = makeBoard(); gearBoard.position.set(0, -0.05, 0.15); gearBoard.rotation.y = Math.PI; gearBoard.scale.setScalar(0.85); gearBoard.visible = false; player.add(gearBoard);
-const gearSkateL = new THREE.Group(), gearSkateR = new THREE.Group();
-for (const [g, side] of [[gearSkateL, -1], [gearSkateR, 1]]) {
-  const boot = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.22, 0.52), lam(0x2a3444)); g.add(boot);
-  const strip = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.06, 0.42), new THREE.MeshBasicMaterial({ color: 0xb0ff63 })); strip.position.y = -0.12; g.add(strip);
-  for (let w = 0; w < 4; w++) { const wheel = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffffff })); wheel.position.set(0, -0.18, 0.18 - w * 0.12); g.add(wheel); }
-  g.position.set(side * 0.22, 0.32, 0.02); player.add(g); g.visible = false;
-}
 
 // first-person viewmodel: weapons parented to the camera
 scene.add(camera);
@@ -3312,7 +3332,9 @@ scene.add(decalMesh);
 const dummy = new THREE.Object3D(), tmpCol = new THREE.Color();
 let decalNext = 0, goreDirty = false;
 // record: [x, y, z, scaleX, scaleY, spin, colorIdx, normalX, normalZ]  (normal 0,0 = lies on a floor)
+function spawnGoreBlocked(x, y, z) { return activeStartHubs().some(h => Math.hypot(x - h.x, z - h.z) < (h.hw || TH) + 6 && y > h.top - 60); }
 function putDecal(r) {
+  if (spawnGoreBlocked(r[0], r[1], r[2])) return;          // home roofs stay clean, including old saved splatter
   const i = decals.length < MAXDEC ? decals.length : decalNext++ % MAXDEC;
   if (decals.length < MAXDEC) decals.push(r); else decals[i] = r;
   dummy.position.set(r[0], r[1], r[2]); dummy.scale.set(r[3], r[4], 1);
@@ -3360,8 +3382,8 @@ const rnd2 = v => Math.round(v * 100) / 100;
 function saveGore() {
   if (!goreDirty) return; goreDirty = false;
   try {
-    const d = decals.slice(-2500).map(r => r.map(rnd2));
-    const g = gibsList.filter(q => q.rest).slice(-200).map(q => [...q.mesh.position.toArray(), ...q.dims, q.col, ...q.mesh.rotation.toArray().slice(0, 3)].map(rnd2));
+    const d = decals.filter(r => !spawnGoreBlocked(r[0], r[1], r[2])).slice(-2500).map(r => r.map(rnd2));
+    const g = gibsList.filter(q => q.rest && !q.dead && !spawnGoreBlocked(q.mesh.position.x, q.mesh.position.y, q.mesh.position.z)).slice(-200).map(q => [...q.mesh.position.toArray(), ...q.dims, q.col, ...q.mesh.rotation.toArray().slice(0, 3)].map(rnd2));
     localStorage.setItem(goreKey(), JSON.stringify({ d, g }));
   } catch (_) {}
 }
@@ -3374,7 +3396,7 @@ function loadGore() {
   try {
     const o = JSON.parse(localStorage.getItem(goreKey())); if (!o) return;
     for (const r of o.d || []) putDecal(r);
-    for (const q of o.g || []) gibsList.push(addRestingGib(q.slice(0, 3), q.slice(3, 6), q[6], q.slice(7, 10)));
+    for (const q of o.g || []) if (!spawnGoreBlocked(q[0], q[1], q[2])) gibsList.push(addRestingGib(q.slice(0, 3), q.slice(3, 6), q[6], q.slice(7, 10)));
   } catch (_) {}
   goreDirty = false;
 }
@@ -3439,7 +3461,8 @@ function updateGibs(dt) {
       if (Math.abs(g.vel.y) > 4) {
         g.vel.y *= -0.35; g.vel.x *= 0.6; g.vel.z *= 0.6; g.spin.multiplyScalar(0.6);
         bloodBurst(p, 4, 0.4); splatter(p.x, p.y, p.z, 2, 0.6, 0.5);
-      } else { g.rest = true; goreDirty = true; splatter(p.x, p.y, p.z, 2, 0.3, 0.9); }
+      } else if (spawnGoreBlocked(p.x, p.y + 0.5, p.z)) { g.rest = true; g.dead = true; g.mesh.removeFromParent(); g.mesh.geometry.dispose(); }
+      else { g.rest = true; goreDirty = true; splatter(p.x, p.y, p.z, 2, 0.3, 0.9); }
     }
     if (p.y < -20) g.rest = true;
   }
@@ -3784,7 +3807,9 @@ function onLand(speed, sol) {
   }
   if (sol.moon && state === 'play') buildMarsRoute();
   if (sol.mars && state === 'play') levelClear('mars', 6000);
-  if (sol.ground) setZone(null); else if (!sol.bounce && !(psy.t > 0)) setZone(sol.zone || null);
+  if (sol.ground) setZone(null);
+  else if (sol.interior) { if (activeTowerInterior) setZone(activeTowerInterior.zone, false, true); }
+  else if (!sol.bounce && !(psy.t > 0)) setZone(sol.zone || null);
   if (sol.building && state === 'play' && sol.hub) openTower(sol.hub);
   if (sol.sp && sol.sp.kind === 'psy') psyTrigger(sol);
   // Not every landing stays a landing: a few ordinary floating ledges wake up into compact combat arenas.
@@ -3800,9 +3825,9 @@ function onLand(speed, sol) {
     burst(pos, onVehicle.kind === 'buggy' ? 0xffa73a : 0x36f6ff, 10); shockRing(pos, 4, 0xffd23a); sfx.click && sfx.click();
     if (speed > 85) { hurt(1); toast('Suspension bottomed out!'); } else if (speed > 30) toast('SUSPENSION ABSORBED THE DROP', 900);
   }
-  else if (speed >= SPLAT) return die('SPLAT!', 'Too far, too fast. Glide (hold SPACE) or ground-pound (SHIFT) before you land.');
-  else if (speed > 40) { hurt(2); toast('Hard landing!'); combo = 0; }
-  else if (speed > 32) { hurt(1); toast('Ouch!'); combo = 0; }
+  else if (speed >= SPLAT) { if (sol.interiorCatch) toast('THE NET CAUGHT YOU', 1200); else return die('SPLAT!', 'Too far, too fast. Glide (hold SPACE) or ground-pound (SHIFT) before you land.'); }
+  else if (speed > 40) { if (!sol.interiorCatch) hurt(2); toast(sol.interiorCatch ? 'SOFT LANDING' : 'Hard landing!'); combo = 0; }
+  else if (speed > 32) { if (!sol.interiorCatch) hurt(1); toast(sol.interiorCatch ? 'SOFT LANDING' : 'Ouch!'); combo = 0; }
   else if (speed > 12) burst(pos, 0xcccccc, 4);
   if (sol.ground && groundPad && state === 'play') {
     const d = Math.hypot(pos.x - groundPad.x, pos.z - groundPad.z);
@@ -4479,7 +4504,7 @@ function updateEnv(dt, cp) {
   updateDreadWatcher(dt, cp);
 }
 // gameplay side-effects of the active zone / the surface underfoot
-const iceUnderfoot = () => onGround && standOn && standOn.zone && standOn.zone.name === 'Frozen';
+const iceUnderfoot = () => onGround && standOn && standOn.zone && (standOn.zone.name === 'Frozen' || standOn.zone.ice);
 const jumpMul = () => (onVehicle ? (onVehicle.kind === 'buggy' ? 1.2 : 1.35) : 1) * (standOn && standOn.zone && standOn.zone.name === 'Jungle' ? 0.88 : 1) * (base && base.upgrades.jumpBoots ? 1.08 : 1);
 const gravMul = () => (onVehicle && onVehicle.kind === 'bike' ? 0.55 : 1) * (activeZ && activeZ.name === 'Psychedelic' ? 0.7 : 1) * (psy.t > 0 && psy.kind === 'invert' ? 0.45 : 1) * (1 - 0.65 * spaceK(pos.y));      // lighter and lighter the higher you climb
 const thermal = () => !!(activeZ && activeZ.name === 'Inferno');
@@ -4736,7 +4761,7 @@ function playerUpdate(dt) {
   // horizontal control
   boosting = false;
   if (!pounding && invuln < 1.0 && !climbing && lockT <= 0) {
-    const gearMul = gear === 'board' ? 1.42 : gear === 'skates' ? 1.28 : 1;
+    const gearMul = gear === 'board' ? 1.42 : 1;
     let rideMul = onVehicle ? (onVehicle.kind === 'buggy' ? 1.8 : 2.1) : 1;
     boosting = !!onVehicle && !!keys.KeyX && boostE > 0.02 && state === 'play';
       if (boosting) { boostE = Math.max(0, boostE - dt / (2.5 * (base && base.upgrades.vehicleNitro ? 1.35 : 1))); rideMul *= 1.75; }
@@ -5027,7 +5052,7 @@ function updateItems(dt) {
   }
 }
 
-// ---------- street culture: boards, roller skates, grinds, rides and the RIDE PARK ----------
+// ---------- street culture: boards, grinds, rides and the RIDE PARK ----------
 const RIDE_ZONE = { name: 'Ride Park', desc: 'grinds, kickers and quarter pipes - the street lives in the sky', top: '#05040f', mid: '#0b0a22', bot: '#231043', fog: 0x170c2b, hemi: 0.5, hemiCol: 0x8f7bd6, sun: 0.4, sunCol: 0xb07aff, cloud: 0x0d0b1c, plate: 0xff3fc8, weather: 'none' };
 let levelHubs = [], missions = [], activeMission = null, missionMarker = null, missionArrowText = '';
 const missionSlots = [];
@@ -5049,7 +5074,7 @@ Object.assign(missionTracker.style, { position: 'fixed', display: 'none', zIndex
 document.body.appendChild(missionTracker);
 let boostE = 1, boosting = false;                                // vehicle nitro: hold X
 let gear = '', grinding = null, onVehicle = null, hintProp = null, grindScore = 0, parkSeen = false;
-const gearPlate = (g) => ({ board: 0xff3fc8, skates: 0xb0ff63 })[g] || 0x36f6ff;
+const gearPlate = (g) => ({ board: 0xff3fc8 })[g] || 0x36f6ff;
 
 function spawnRiderGroup(x, y, z, slab, n = 2, spread = 4) {
   if (!slab) return;
@@ -5173,8 +5198,6 @@ function makeBikeMesh(prop) {
 
   // A thin ground-level hover ring; the bike's armor remains opaque and solid.
   flushBoxes();
-  const groundRing = new THREE.Mesh(BIKE_GEO.ring, new THREE.MeshBasicMaterial({ color: palette.glow, transparent: true, opacity: 0.24, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
-  groundRing.rotation.x = Math.PI / 2; groundRing.position.y = 0.055; groundRing.scale.set(0.62, 0.42, 1); body.add(groundRing);
   const rider = makeRiderVisual(); body.add(rider);
   prop.fx = { exhausts, lights, glowMats: accents, body, steer, hoverParts: [cyan, cyanDark], hover: true, boostColor: palette.glow };
 }
@@ -5364,8 +5387,8 @@ function makeBuggyMesh(prop) {
 
 function addProp(kind, x, y, z) {
   const g = new THREE.Group(); g.position.set(x, y, z); scene.add(g);
-  const colors = { bike: 0x36f6ff, buggy: 0x58e5ff, board: 0xff3fc8, skates: 0xb0ff63 };
-  const isGear = kind === 'board' || kind === 'skates';
+  const colors = { bike: 0x36f6ff, buggy: 0x58e5ff, board: 0xff3fc8 };
+  const isGear = kind === 'board';
   if (!isGear) {
     const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 5, 8), new THREE.MeshBasicMaterial({ color: colors[kind], transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false }));
     pillar.position.y = 2.5; g.add(pillar);
@@ -5382,12 +5405,6 @@ function addProp(kind, x, y, z) {
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 1.2), new THREE.MeshBasicMaterial({ color: 0xff3fc8 })); stripe.position.y = 0.28; g.add(stripe);
     for (const [wx, wz] of [[-0.16, 0.48], [0.16, 0.48], [-0.16, -0.48], [0.16, -0.48]]) {
       const wheel = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 5), new THREE.MeshBasicMaterial({ color: 0xff3fc8 })); wheel.position.set(wx, 0.14, wz); g.add(wheel); prop.wheels.push(wheel);
-    }
-  } else if (kind === 'skates') {
-    for (const side of [-1, 1]) {
-      const boot = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.24, 0.52), lam(0x2a3444)); boot.position.set(side * 0.28, 0.16, 0); g.add(boot);
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.42), new THREE.MeshBasicMaterial({ color: 0xb0ff63 })); strip.position.set(side * 0.28, 0.06, 0); g.add(strip);
-      for (let w = 0; w < 4; w++) { const wheel = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffffff })); wheel.position.set(side * 0.28, 0.06, 0.2 - w * 0.14); g.add(wheel); prop.wheels.push(wheel); }
     }
   }
   props.push(prop); return prop;
@@ -5432,7 +5449,7 @@ function useProp() {                                 // ENTER: mount a vehicle /
   if (!p) { summonRide(keys.ShiftLeft || keys.ShiftRight ? 'buggy' : 'bike'); return; }
   if (p.gear) {
     gear = p.gear; p.taken = true; p.mesh.visible = false;
-    toast(gear === 'board' ? 'SKATEBOARD ON — speed up, drift wide, grind rails' : 'ROLLER SKATES ON — nimble little legend', 2200);
+    toast('SKATEBOARD ON — speed up, drift wide, grind rails', 2200);
     sfx.coin(); shockRing(pos, 4, gearPlate(gear)); score += 25;
   } else mount(p);
 }
@@ -5476,7 +5493,7 @@ function curveRail(ctrl, col = 0x36f6ff, rainbow = true) {          // smooth sp
   return s;
 }
 function tryLatchRail() {
-  if (grinding || railCd > 0 || onGround || vel.y > 0.6) return false;                 // anyone can grind: foot, board, skates, bike or buggy
+  if (grinding || railCd > 0 || onGround || vel.y > 0.6) return false;                 // anyone can grind: foot, board, bike or buggy
   let best = null, bd = 1.9, bdd = 0;
   for (const s of solids) {
     const r = s.rail; if (!r) continue; const bb = r.bb;
@@ -5496,7 +5513,7 @@ function tryLatchRail() {
   if (r.dirSign > 0 && r.len - bdd < 4) r.dirSign = -1; else if (r.dirSign < 0 && bdd < 4) r.dirSign = 1;        // never latch facing straight off the end
   r.speed = clamp(Math.hypot(vel.x, vel.z, vel.y * 0.5) * 1.05, 10, 40) + (onVehicle ? 4 : 0);
   grinding = best; vel.set(0, 0, 0); onGround = false; climbing = null; pounding = false; gliding = false;
-  grindScore = gear === 'skates' ? 12 : 10;
+  grindScore = 10;
   score += grindScore; sfx.jump(true); burst(pos, gearPlate(gear), 8); toast(`GRIND! +${grindScore}`, 800);
   return true;
 }
@@ -5750,6 +5767,15 @@ function updateVehicleFx(dt, p) {
 
 function updateStreet(dt) {
   playerShadowTick(); updateHomeBase(dt);
+  updateTowerInterior(dt); updateInteriorDecor(dt);
+  // Standing on a building roof wakes that tower (the landing hook catches the very first touch).
+  if (state === 'play' && standOn && standOn.building && standOn.hub && !standOn.hub.opened) openTower(standOn.hub);
+  for (const hub of openedTowers) {                       // the roof hatch irises open right after the tower wakes
+    const shell = hub.interior && hub.interior.shell;
+    if (!shell || !shell.hatch) continue;
+    shell.hatch.k = Math.min(1, shell.hatch.k + dt * 1.3);
+    for (const p of shell.hatch.panels) p.position.x = p.userData.slide * (1.45 + shell.hatch.k * 2.3);
+  }
   railCd = Math.max(0, railCd - dt); updateDashPads(dt);
   if (rainbowRails.length) { const hh = (performance.now() * 0.00018) % 1; rainbowRails.forEach((m, i) => m.color.setHSL((hh + i * 0.07) % 1, 1, 0.58)); }
   for (const it of props) if (!it.taken) it.mesh.rotation.y += dt * 2;   // idle props gently spin (wheels shine when you ride)
@@ -5757,6 +5783,8 @@ function updateStreet(dt) {
   if (onVehicle) {
     const p = onVehicle;
     p.mesh.visible = true;
+    pShadow.visible = false;
+    blob.visible = false;
     p.mesh.position.set(pos.x, pos.y - 0.1, pos.z);
     p.mesh.rotation.y = face;
     const boost = Math.hypot(vel.x, vel.z);
@@ -5770,14 +5798,14 @@ function updateStreet(dt) {
   hintProp = null; hintNpc = false;
   if (state === 'play' && !guideDialogOpen && !onVehicle && !grinding) {
     const p = nearestProp();
-    if (p) hintProp = p.gear ? `pick up ${p.gear === 'board' ? 'your SKATEBOARD' : 'ROLLER SKATES'}` : `ride the ${p.kind === 'buggy' ? 'DELOREAN' : 'HOVER-BIKE'}`;
+    if (p) hintProp = p.gear ? 'pick up your SKATEBOARD' : `ride the ${p.kind === 'buggy' ? 'DELOREAN' : 'HOVER-BIKE'}`;
     else if (homeGuide && Math.hypot(homeGuide.group.position.x - pos.x, homeGuide.group.position.z - pos.z) < 3.5 && Math.abs(homeGuide.hub.top - pos.y) < 4) hintNpc = true;
   }
   if (state === 'play' && activeZ && activeZ.name === 'Ride Park' && !parkSeen) { parkSeen = true; toast('RIDE PARK — ENTER to ride · leap onto rails to GRIND', 3400); }
 }
 
 // ---------- state/cleanup for street gear ----------
-function streetReset() { props.length = 0; rainbowRails.length = 0; dashPads.length = 0; railCd = 0; gear = ''; grinding = null; if (onVehicle) fpv = fpvBeforeRide; onVehicle = null; hintProp = null; hintNpc = false; parkSeen = false; for (const m of [gearBoard, gearSkateL, gearSkateR]) m.visible = false; }
+function streetReset() { props.length = 0; rainbowRails.length = 0; dashPads.length = 0; railCd = 0; gear = ''; grinding = null; if (onVehicle) fpv = fpvBeforeRide; onVehicle = null; hintProp = null; hintNpc = false; parkSeen = false; gearBoard.visible = false; }
 
 // ---------- visuals ----------
 const camPos = new THREE.Vector3();
@@ -5838,12 +5866,11 @@ function updateVisuals(dt) {
   const sideV = vel.x * Math.cos(face) - vel.z * Math.sin(face);                          // lean into turns
   leanK += (clamp(sideV * 0.05, -0.45, 0.45) - leanK) * Math.min(1, dt * 8);
   boardW.visible = glideK > 0.05 && !fpv && state !== 'dead';
-  gearBoard.visible = (gear === 'board' || gear === 'skates') && state !== 'dead';     // skate deck worn under the feet
+  gearBoard.visible = gear === 'board' && state !== 'dead';     // skate deck worn under the feet
   if (gearBoard.visible) { gearBoard.position.set(0, grinding ? -0.16 : -0.05, 0.15); gearBoard.rotation.y = Math.PI; }
-  gearSkateL.visible = gearSkateR.visible = gear === 'skates' && state !== 'dead';
-  if (onVehicle && onVehicle.mesh) {                                                   // mirror the board: skates blend with it
+  if (onVehicle && onVehicle.mesh) {                                                   // mirror the board under the rider
     onVehicle.mesh.rotation.x = clamp(-vel.y * 0.02, -0.25, 0.25);
-    if (gear === 'board' || gear === 'skates') gearBoard.visible = false;
+    if (gear === 'board') gearBoard.visible = false;
   }
   if (boardW.visible) {
     boardW.position.set(pos.x, pos.y - 0.02, pos.z); boardW.rotation.set(clamp(-vel.y * 0.04, -0.35, 0.35), face, -leanK); boardW.scale.setScalar(glideK);
@@ -7098,7 +7125,7 @@ document.addEventListener('pointerlockchange', () => { if (!document.pointerLock
 buildLevel();
 pos.set(start.x, start.y, start.z);
 showMenu(true);
-window.__ng = { ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toFixed(1), z: +q.z.toFixed(1), label: q.label })), mv: () => ({ vy: +vel.y.toFixed(2), onG: onGround, jumps, gliding, glide: +glide.toFixed(2), climbing: !!climbing, pounding, stam: +climbStam.toFixed(2), hp: health, st: state, paused }), bounces: () => solids.filter(s => s.bounce).map(s => ({ x: +(s.cx !== undefined ? s.cx : (s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +(s.cz !== undefined ? s.cz : (s.minz + s.maxz) / 2).toFixed(1), b: +(s.boost || 0).toFixed(1) })), spKinds: () => specials.reduce((a, s) => { const k = (s.sp && s.sp.kind) || s.kind || '?'; a[k] = (a[k] || 0) + 1; return a; }, {}), ladder: () => ({ cur: curPN, top: ladderTop && ladderTop.n, bot: ladderBot && ladderBot.n, len: ladder.length, voidY: VOID_Y }), falls: () => solids.filter(s => s.pn !== undefined).slice(0, 5).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), n: s.pn })), foes: () => enemies.filter(e => !e.dead).map(e => ({ id: e.mesh.id, v: e.variant, hp: +e.hp.toFixed(1), mh: e.maxhp, boss: !!e.boss, d: Math.round(Math.hypot(e.x - pos.x, e.y - pos.y, e.z - pos.z)) })), kit: () => ({ w: weapon, name: WEAPONS[weapon].name, owned: weaponOwned.slice(), ammo: { ...ammo } }), clearFoes: (keepBoss = true) => { let n = 0; for (const e of enemies) if (!e.dead && !(keepBoss && e.boss)) { damageEnemy(e, 99999, 'pound'); n++; } return n; }, setZone: (n, snap = false, quiet = true) => { const z = ZONES.find(x => x.name.toLowerCase() === String(n).toLowerCase()) || null; setZone(z, snap, quiet); return z ? z.name : null; }, get schizo() { return schizoOn; }, set schizo(v) { schizoOn = !!v; document.body.classList.toggle('schizo', schizoOn); }, giveWeapon: n => { const i = WEAPONS.findIndex(w => w.name.toLowerCase() === String(n).toLowerCase()); if (i < 0) return false; unlockWeapon(i); selectWeapon(i); return !!weaponOwned[i]; }, get killStreak() { return killStreak; }, set killStreak(v) { killStreak = v | 0; killStreakT = killStreak > 0 ? 4 : 0; }, get level() { return level; }, set level(v) { level = Math.max(1, v | 0); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; showMsg(''); toast('LEVEL ' + level + ' — ' + theme().name, 1600); }, rails: () => solids.filter(q => q.rail).map(q => { const a = q.rail.pts[0], b = q.rail.pts[q.rail.pts.length - 1]; return [a.x, a.y, a.z, b.x, b.y, b.z, q.rail.len]; }), grinding: () => !!grinding, dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), duel: (v = 'walker', dist = 4, boss = false) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, boss, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (!['board', 'skates'].includes(k)) return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(ZONES.find(z => z.name === n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; },  info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length, propList: props.map(p => ({ k: p.kind, at: p.mesh.position.toArray().map(v => Math.round(v * 10) / 10), taken: p.taken, vis: p.mesh.visible, inLvl: !!(p.mesh.parent && p.mesh.parent !== scene) })) }), missions: () => missionsSnapshot(), acceptMission, completeMission, turnIn, abandonMission, craftList, craft, guideTips, guideGreeting, base: () => ({ ...base, upgrades: { ...base.upgrades }, resources: { ...hotbarRes } }), homeBase: () => ({ guide: !!homeGuide, hintNpc, dialog: guideDialogOpen, slot: mySlot, tower: { x: myStartHub().x, z: myStartHub().z, top: myStartHub().top }, homes: activeStartHubs().map(h => ({ slot: h.slot, x: h.x, z: h.z })), enemiesNearSpawn: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).length, nearSpawns: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).map(e => ({ v: e.variant, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), boss: !!e.boss, mini: !!e.mini, zone: e.zone && e.zone.name })), guides: homeGuides.map(g => ({ slot: g.slot, x: +(g.group.position.x).toFixed(1), z: +(g.group.position.z).toFixed(1) })), parts: homeGuide && homeGuide.group.children.length }), applyNetSlot, missionsSnapshot, monkeys: () => [...dressings.values()].flatMap(d => d.anims.filter(a => a.k === 'monkey').map(a => ({ x: +(d.site.x + a.mk.g.position.x).toFixed(2), y: +(d.site.y + a.mk.g.position.y).toFixed(2), z: +(d.site.z + a.mk.g.position.z).toFixed(2) }))), coins: () => ({ total: items.filter(i => i.type === 'coin' && !i.taken).length, bananas: items.filter(i => i.type === 'coin' && i.banana).length }) };   // dev hook (console / test tools)
+window.__ng = { ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toFixed(1), z: +q.z.toFixed(1), label: q.label })), mv: () => ({ vy: +vel.y.toFixed(2), onG: onGround, jumps, gliding, glide: +glide.toFixed(2), climbing: !!climbing, pounding, stam: +climbStam.toFixed(2), hp: health, st: state, paused }), bounces: () => solids.filter(s => s.bounce).map(s => ({ x: +(s.cx !== undefined ? s.cx : (s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +(s.cz !== undefined ? s.cz : (s.minz + s.maxz) / 2).toFixed(1), b: +(s.boost || 0).toFixed(1) })), spKinds: () => specials.reduce((a, s) => { const k = (s.sp && s.sp.kind) || s.kind || '?'; a[k] = (a[k] || 0) + 1; return a; }, {}), ladder: () => ({ cur: curPN, top: ladderTop && ladderTop.n, bot: ladderBot && ladderBot.n, len: ladder.length, voidY: VOID_Y }), falls: () => solids.filter(s => s.pn !== undefined).slice(0, 5).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), n: s.pn })), foes: () => enemies.filter(e => !e.dead).map(e => ({ id: e.mesh.id, v: e.variant, hp: +e.hp.toFixed(1), mh: e.maxhp, boss: !!e.boss, d: Math.round(Math.hypot(e.x - pos.x, e.y - pos.y, e.z - pos.z)) })), kit: () => ({ w: weapon, name: WEAPONS[weapon].name, owned: weaponOwned.slice(), ammo: { ...ammo } }), clearFoes: (keepBoss = true) => { let n = 0; for (const e of enemies) if (!e.dead && !(keepBoss && e.boss)) { damageEnemy(e, 99999, 'pound'); n++; } return n; }, setZone: (n, snap = false, quiet = true) => { const z = ZONES.find(x => x.name.toLowerCase() === String(n).toLowerCase()) || null; setZone(z, snap, quiet); return z ? z.name : null; }, get schizo() { return schizoOn; }, set schizo(v) { schizoOn = !!v; document.body.classList.toggle('schizo', schizoOn); }, giveWeapon: n => { const i = WEAPONS.findIndex(w => w.name.toLowerCase() === String(n).toLowerCase()); if (i < 0) return false; unlockWeapon(i); selectWeapon(i); return !!weaponOwned[i]; }, get killStreak() { return killStreak; }, set killStreak(v) { killStreak = v | 0; killStreakT = killStreak > 0 ? 4 : 0; }, get level() { return level; }, set level(v) { level = Math.max(1, v | 0); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; showMsg(''); toast('LEVEL ' + level + ' — ' + theme().name, 1600); }, rails: () => solids.filter(q => q.rail).map(q => { const a = q.rail.pts[0], b = q.rail.pts[q.rail.pts.length - 1]; return [a.x, a.y, a.z, b.x, b.y, b.z, q.rail.len]; }), grinding: () => !!grinding, dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), duel: (v = 'walker', dist = 4, boss = false) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, boss, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (k !== 'board') return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(ZONES.find(z => z.name === n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; },  info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length, propList: props.map(p => ({ k: p.kind, at: p.mesh.position.toArray().map(v => Math.round(v * 10) / 10), taken: p.taken, vis: p.mesh.visible, inLvl: !!(p.mesh.parent && p.mesh.parent !== scene) })) }), missions: () => missionsSnapshot(), acceptMission, completeMission, turnIn, abandonMission, craftList, craft, guideTips, guideGreeting, base: () => ({ ...base, upgrades: { ...base.upgrades }, resources: { ...hotbarRes } }), homeBase: () => ({ guide: !!homeGuide, hintNpc, dialog: guideDialogOpen, slot: mySlot, tower: { x: myStartHub().x, z: myStartHub().z, top: myStartHub().top }, homes: activeStartHubs().map(h => ({ slot: h.slot, x: h.x, z: h.z })), enemiesNearSpawn: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).length, nearSpawns: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).map(e => ({ v: e.variant, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), boss: !!e.boss, mini: !!e.mini, zone: e.zone && e.zone.name })), guides: homeGuides.map(g => ({ slot: g.slot, x: +(g.group.position.x).toFixed(1), z: +(g.group.position.z).toFixed(1) })), parts: homeGuide && homeGuide.group.children.length }), applyNetSlot, missionsSnapshot, monkeys: () => [...dressings.values()].flatMap(d => d.anims.filter(a => a.k === 'monkey').map(a => ({ x: +(d.site.x + a.mk.g.position.x).toFixed(2), y: +(d.site.y + a.mk.g.position.y).toFixed(2), z: +(d.site.z + a.mk.g.position.z).toFixed(2) }))), coins: () => ({ total: items.filter(i => i.type === 'coin' && !i.taken).length, bananas: items.filter(i => i.type === 'coin' && i.banana).length }), gore: () => ({ decals: decals.length, gibs: gibsList.filter(g => !g.dead).length, nearSpawn: decals.filter(r => spawnGoreBlocked(r[0], r[1], r[2])).length + gibsList.filter(g => !g.dead && spawnGoreBlocked(g.mesh.position.x, g.mesh.position.y, g.mesh.position.z)).length }), towers: () => buildingHubs.map((h, i) => ({ i, x: +h.x.toFixed(1), z: +h.z.toFixed(1), top: +h.top.toFixed(1), hw: +h.hw.toFixed(1), hd: +h.hd.toFixed(1), theme: towerThemeFor(h, i), opened: !!h.opened, alive: h.interior ? h.interior.enemies.filter(e => !e.dead).length : 0 })), openTower: (i = 0, themeKey = null) => { const hub = buildingHubs[i]; if (!hub) return null; const r = openTower(hub, themeKey); return r ? { theme: r.theme.name, floors: r.floors.length, enemies: r.enemies.length, loot: r.loot.length, targets: hub.interiorTargets.length } : null; }, interiors: () => ({ inside: inInterior, theme: activeTowerInterior ? activeTowerInterior.theme.name : null, opened: openedTowers.length, targets: interiorTargets.length }) };   // dev hook (console / test tools)
 
 {   // opened from the relay server with ?room=... -> connect right away
   const qp = new URLSearchParams(location.search || '');
