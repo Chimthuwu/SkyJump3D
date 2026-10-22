@@ -317,7 +317,14 @@ THREE.Object3D.prototype.add = function (...objects) {
   for (const object of objects) if (object && object.traverse) object.traverse(retrofitObject);
   return originalObjectAdd.apply(this, objects);
 };
-const renderer = new THREE.WebGLRenderer({ antialias: retroPreset === 'MODERN' });
+const renderer = (() => {
+  try { return new THREE.WebGLRenderer({ antialias: retroPreset === 'MODERN' }); }
+  catch (err) {            // Chrome blocks WebGL for a page after repeated context loss (or the GPU is disabled): say so instead of a blank screen
+    const d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#05060f;color:#ff8a7a;font:16px monospace;text-align:center;padding:24px';
+    d.textContent = 'WebGL could not start (' + (err && err.message || err) + '). Fully close and reopen the browser (check chrome://gpu shows WebGL: Hardware accelerated), then reload.';
+    document.body.appendChild(d); throw err;
+  }
+})();
 renderer.setPixelRatio(1);
 renderer.setSize(innerWidth, innerHeight);
 renderer.setClearColor(0x000000, 1);
