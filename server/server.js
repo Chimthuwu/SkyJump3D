@@ -41,7 +41,8 @@ const CAST = {            // enemy kind -> voice, delivery cue and speed (the ga
   bomber:  { id: VOICE_IDS.goblin,     cue: '[hysterical]', speed: 1.25 },
   drone:   { id: VOICE_IDS.horrorGirl, cue: '[whispering]', speed: 1.15 },
   boss:    { id: VOICE_IDS.demon,      cue: '[angry]', speed: 0.8 },
-  inner:   { id: VOICE_IDS.horrorGirl, cue: '[whispering]', speed: 0.9 },   // the voices "inside your head"
+  inner:   { id: VOICE_IDS.horrorGirl, cue: '[whispering]', speed: 0.9 },
+  yell:    { id: VOICE_IDS.horrorGirl, cue: '[screaming]', speed: 1.2 },   // schizoyell lines (TRAMPOLINE!?!!!)   // the voices "inside your head"
 };
 let synthQueue = Promise.resolve(), synthsThisHour = [], inflight = new Map();
 // keep the disk cache bounded (default 500 clips ≈ 25–50 MB): drop the oldest files when over the cap
@@ -80,7 +81,7 @@ function fishSynth(text, cast) {
 }
 async function serveTts(url, res) {
   const q = new URL(url, 'http://x').searchParams, kind = q.get('kind'), cat = q.get('cat'), n = Number(q.get('n'));
-  const cast = CAST[kind], list = LINES[cat];
+  const cast = cat === 'schizoyell' ? CAST.yell : CAST[kind], list = LINES[cat];
   const fail = (code, msg) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: msg })); };
   if (!FISH_KEY) return fail(503, 'voices not configured');
   if (!cast || !list || !Number.isInteger(n) || n < 0 || n >= list.length) return fail(400, 'bad request');

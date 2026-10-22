@@ -1,13 +1,56 @@
 {
   "grunt": [
-    "They are watching you.", "Look behind you.", "Don't trust the colors.", "Kill them all.", "Keep moving. Do not stop.", "Jump. The next one is real.",
-    "Did you hear that? Nobody else did.", "They know your name.", "The floor is lying.", "Shoot first.", "They were never people.", "Listen. Listen to us."
+    "They are watching you.",
+    "Look behind you.",
+    "Don't trust the colors.",
+    "Kill them all.",
+    "Keep moving. Do not stop.",
+    "Jump. The next one is real.",
+    "Did you hear that? Nobody else did.",
+    "They know your name.",
+    "The floor is lying.",
+    "Shoot first.",
+    "They were never people.",
+    "Listen. Listen to us."
   ],
   "boss": [
-    "We have been talking to you for a long time.", "Do not listen to the others. Listen to us.", "Kill them all. They are not real.", "Every voice here is yours.",
-    "Look at me. Do not look away.", "Nothing here is what it seems."
+    "We have been talking to you for a long time.",
+    "Do not listen to the others. Listen to us.",
+    "Kill them all. They are not real.",
+    "Every voice here is yours.",
+    "Look at me. Do not look away.",
+    "Nothing here is what it seems."
   ],
   "death": [
-    "Wake up.", "That was not real.", "Again.", "You are still here.", "Did you see it?", "Shh. Start again."
+    "Wake up.",
+    "That was not real.",
+    "Again.",
+    "You are still here.",
+    "Did you see it?",
+    "Shh. Start again."
+  ],
+  "schizo": [
+    "Did you hear that?",
+    "It is in the walls.",
+    "You are not alone up here.",
+    "Count the platforms. Count them again.",
+    "Somebody is standing right behind you.",
+    "The sky is wrong. Look at it.",
+    "Why are you still falling?",
+    "They took the ground away on purpose.",
+    "I can see you breathing.",
+    "That wasn't the wind.",
+    "Don't look at the moon.",
+    "Your hands are not your hands.",
+    "We are so happy you came back.",
+    "The stairs go down forever.",
+    "Somebody put you here.",
+    "Shhh. They can hear you."
+  ],
+  "schizoyell": [
+    "TRAMPOLINE!?!!!!! TRAMBOPOLINE!?!!!!!!",
+    "TRAMPOLINE?!!!! TRAMPOLINE!!!!!!!",
+    "TRAM-BO-POLINE!?!!!!!",
+    "TRAMPOLINE!?!!!! TRAMPOLINE!?!!!!!!"
   ]
 }

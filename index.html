@@ -193,7 +193,7 @@
   <button id="bResume">Resume (Esc)</button><button id="bCopy">Copy debug report</button><button id="bMenu">Main menu</button>
   <pre id="pauseInfo"></pre>
   <p class="tip">Sound: <b>M</b> mute everything &middot; <b>L</b> enemy voice lines on/off.</p>
-  <p class="tip">Dev tools: <b>F3</b> live coordinate overlay · <b>F4</b> fly-through mode (no collision) · describe a bug by pasting this report.</p>
+  <p class="tip">Dev tools: <b>F2</b> performance HUD (FPS, frame graph, draw calls) · <b>F3</b> live coordinate overlay · <b>F4</b> fly-through mode (no collision) · describe a bug by pasting this report.</p>
 </div></div>
 <div id="scope"></div>
 <div id="cross"></div>
@@ -4219,6 +4219,7 @@ addEventListener('keydown', e => {
   const fresh = !keys[e.code]; keys[e.code] = true;
   if (!fresh) return;
   if (e.code === 'Escape') { if (guideDialogOpen) { closeGuideDialog(); return; } if (state === 'title') return menuKey(e); if (state !== 'title' && (!paused || performance.now() - pausedAt > 250)) setPaused(!paused); return; }
+  if (e.code === 'F2') { e.preventDefault(); PERF.toggle(); return; }
   if (e.code === 'F3') { e.preventDefault(); dbgOn = !dbgOn; return; }
   if (e.code === 'F4') { e.preventDefault(); noclip = !noclip; toast(noclip ? 'NOCLIP on (F4 to leave) — Space up, C down' : 'NOCLIP off', 1800); return; }
   if (paused) return;
@@ -7673,6 +7674,7 @@ const LINES = {
           'Did you hear that? Nobody else did.', 'They know your name.', 'The floor is lying.', 'Shoot first.', 'They were never people.', 'Listen. Listen to us.'],
   boss: ['We have been talking to you for a long time.', 'Do not listen to the others. Listen to us.', 'Kill them all. They are not real.', 'Every voice here is yours.', 'Look at me. Do not look away.', 'Nothing here is what it seems.'],
   death: ['Wake up.', 'That was not real.', 'Again.', 'You are still here.', 'Did you see it?', 'Shh. Start again.'],
+  schizo: [], schizoyell: [],      // filled from /voice-lines.json (pre-recorded in /voices/)
 };
 const VOICE = {      // pitch / rate / colour per enemy kind
   walker: { pitch: 0.6, rate: 0.95, col: '#ff7a8a', who: 'THEY' }, gunner: { pitch: 1.5, rate: 1.15, col: '#5ff0e0', who: 'WHISPER' },
@@ -7897,8 +7899,10 @@ function dreadTick(dt) {
 function innerVoices(dt) {
   if (state !== 'play' || muted || !voiceLines || !ttsOn || paused) return;
   innerAcc -= dt; if (innerAcc > 0) return;
-  innerAcc = 70 + Math.random() * 70;
-  say({ x: camera.position.x + (Math.random() - 0.5) * 3, y: pos.y + 1.5, z: camera.position.z + (Math.random() - 0.5) * 3, inner: true }, pickLine(Math.random() < 0.3 ? 'boss' : 'grunt'));
+  innerAcc = 28 + Math.random() * 40;
+  const r = Math.random(), cat = r < 0.14 && LINES.schizoyell.length ? 'schizoyell' : r < 0.6 && LINES.schizo.length ? 'schizo' : Math.random() < 0.3 ? 'boss' : 'grunt';
+  say({ x: camera.position.x + (Math.random() - 0.5) * 3, y: pos.y + 1.5, z: camera.position.z + (Math.random() - 0.5) * 3, inner: true }, pickLine(cat), cat === 'schizoyell');
+  if (cat === 'schizoyell') { shake = Math.max(shake, 0.35); dreadSting(0.12); }
 }
 // loudness and left/right position from where the enemy is relative to the camera
 function voiceOut(e) {
@@ -7939,9 +7943,13 @@ function alienCall(e) {
 // Real voices come from the game server (Fish Audio, cached per line); without the server we fall back to the browser's built-in voice.
 let ttsOn = false, ttsFails = 0, curVoiceSrc = null, curVoiceSrcs = null, innerAcc = 18 + Math.random() * 12;
 const ttsBufs = new Map(), ttsPending = new Set();
-function checkTts() { fetch('/tts-status').then(r => (r.ok ? r.json() : null)).then(j => { ttsOn = !!(j && j.enabled); if (!ttsOn) setTimeout(checkTts, 20000); }).catch(() => { setTimeout(checkTts, 20000); }); }
+let ttsStatic = null;      // hosted site: no Fish server, so play the pre-rendered clips shipped in /voices/
+function checkTts() {
+  const staticFallback = () => fetch('/voices/manifest.json').then(r => (r.ok ? r.json() : null)).then(m => { if (Array.isArray(m) && m.length) { ttsStatic = new Set(m); ttsOn = true; } else setTimeout(checkTts, 20000); }).catch(() => { setTimeout(checkTts, 20000); });
+  fetch('/tts-status').then(r => (r.ok ? r.json() : null)).then(j => { if (j && j.enabled) { ttsStatic = null; ttsOn = true; } else staticFallback(); }).catch(staticFallback);
+}
 checkTts();
-fetch('/voice-lines.json').then(r => (r.ok ? r.json() : null)).then(j => { if (j && j.grunt && j.boss && j.death) { LINES.grunt = j.grunt; LINES.boss = j.boss; LINES.death = j.death; } }).catch(() => {});
+fetch('/voice-lines.json').then(r => (r.ok ? r.json() : null)).then(j => { if (j && j.grunt && j.boss && j.death) { LINES.grunt = j.grunt; LINES.boss = j.boss; LINES.death = j.death; if (j.schizo) LINES.schizo = j.schizo; if (j.schizoyell) LINES.schizoyell = j.schizoyell; } }).catch(() => {});
 // audio effects per voice: octave-down twin, echo, ring-mod, distortion, low-pass, reverb
 const VFX = { walker: ['double', 'echo'], gunner: ['ring', 'echo'], charger: ['dist', 'double'], shield: ['lowpass', 'reverb'], bomber: ['dist'], drone: ['ring'],
               boss: ['double', 'reverb', 'echo'], inner: ['whisperdouble', 'reverb', 'echo'] };
@@ -7990,7 +7998,8 @@ function playFish(e, k, line, urgent) {
   if (hit) { play(hit); return; }
   if (ttsPending.has(key)) return;
   ttsPending.add(key);
-  fetch(`/tts?kind=${k}&cat=${line.cat}&n=${line.n}`).then(r => { if (!r.ok) throw new Error('tts ' + r.status); return r.arrayBuffer(); })
+  if (ttsStatic && !ttsStatic.has(`${k}-${line.cat}-${line.n}`)) { ttsPending.delete(key); return; }
+  fetch(ttsStatic ? `/voices/${k}-${line.cat}-${line.n}.mp3` : `/tts?kind=${k}&cat=${line.cat}&n=${line.n}`).then(r => { if (!r.ok) throw new Error('tts ' + r.status); return r.arrayBuffer(); })
     .then(ab => actx.decodeAudioData(ab)).then(buf => { ttsBufs.set(key, buf); ttsPending.delete(key); ttsFails = 0; play(buf); })
     .catch(() => { ttsPending.delete(key); if (++ttsFails >= 4) { ttsOn = false; ttsFails = 0; setTimeout(checkTts, 20000); } });          // server hiccup -> pause voices briefly, then re-check (never the robotic browser voice)
 }
@@ -8224,14 +8233,36 @@ const PERF = {
   },
   _mkOverlay() {
     if (this._overlay) { this._overlay.style.display = 'block'; return; }
-    const d = document.createElement('div'); d.style.cssText = 'position:fixed;right:6px;top:6px;z-index:99;font:11px monospace;color:#7dff4a;background:rgba(0,0,0,.7);padding:4px 6px;white-space:pre;pointer-events:none';
-    document.body.appendChild(d); this._overlay = d;
+    const d = document.createElement('div'); d.style.cssText = 'position:fixed;right:6px;top:6px;z-index:99;font:11px/1.35 monospace;color:#7dff4a;background:rgba(0,0,0,.72);padding:5px 7px;pointer-events:none;min-width:200px';
+    const t = document.createElement('div'); t.style.whiteSpace = 'pre';
+    const g = document.createElement('canvas'); g.width = 200; g.height = 44; g.style.cssText = 'display:block;margin-top:3px;width:200px;height:44px';
+    d.append(t, g); document.body.appendChild(d); this._overlay = d; this._txt = t; this._gfx = g;
   },
   overlayTick(now) {                                        // at most 4x per second so the overlay doesn't distort what it measures
     if (now - this._ovT < 250 || !this._overlay) return; this._ovT = now;
-    const o = this._snapshot(), top = Object.keys(o).filter(k => k.startsWith('ms/frame')).sort((a, b) => o[b] - o[a]).slice(0, 4);
-    this._overlay.textContent = `${o['fps']} fps  ${o['frame ms avg']} ms (p95 ${o['frame ms p95']})\ncalls ${o['draw calls/frame']}  tris ${o['triangles/frame']}\n` + top.map(k => `${k.slice(9)} ${o[k]}`).join('\n');
+    const o = this._snapshot(), n = this._ft.length, recent = this._ft.slice(-120), r = recent.slice().sort((a, b) => a - b);
+    const rAvg = recent.length ? recent.reduce((a, b) => a + b, 0) / recent.length : 0, fps = rAvg ? 1000 / rAvg : 0;
+    const low1 = r.length ? 1000 / r[Math.min(r.length - 1, Math.floor(r.length * 0.99))] : 0, max = r.length ? r[r.length - 1] : 0;
+    const hitches = recent.filter(v => v > 50).length, mem = performance.memory ? (performance.memory.usedJSHeapSize / 1048576).toFixed(0) + ' MB heap' : 'heap n/a';
+    const top = Object.keys(o).filter(k => k.startsWith('ms/frame')).sort((a, b) => o[b] - o[a]).slice(0, 4);
+    const col = fps >= 55 ? '#7dff4a' : fps >= 30 ? '#ffd24a' : '#ff5a4a';
+    this._txt.style.color = col;
+    this._txt.textContent = `${fps.toFixed(0)} FPS  ${rAvg.toFixed(1)} ms
+1% low ${low1.toFixed(0)}  worst ${max.toFixed(0)} ms  hitches ${hitches}
+` +
+      `calls ${o['draw calls/frame']}  tris ${(o['triangles/frame'] / 1000).toFixed(0)}k  submit ${o['render submit ms']} ms
+` +
+      `geo ${o['geometries']}  tex ${o['textures']}  ${mem}
+res ${outputWidth}x${outputHeight}  ${retroPreset}  enemies ${o['enemies alive']}
+` +
+      top.map(k => `${k.slice(9)} ${o[k]}`).join('\n');
+    const c = this._gfx.getContext('2d'), W = 200, H = 44; c.clearRect(0, 0, W, H);
+    const y = ms => H - Math.min(H, ms / 50 * H);                   // 0..50 ms scale; guides at 16.7 (60fps) and 33.3 (30fps)
+    c.strokeStyle = 'rgba(255,255,255,.25)'; c.beginPath(); for (const g of [16.7, 33.3]) { c.moveTo(0, y(g)); c.lineTo(W, y(g)); } c.stroke();
+    const hist = this._ft.slice(-W);
+    for (let i = 0; i < hist.length; i++) { c.fillStyle = hist[i] <= 17.5 ? '#7dff4a' : hist[i] <= 34 ? '#ffd24a' : '#ff5a4a'; c.fillRect(W - hist.length + i, y(hist[i]), 1, H - y(hist[i])); }
   },
+  toggle() { this.enabled ? this.stop() : this.start(); },
   scenes: {                                                 // the three reference scenes (see PERFORMANCE_PLAN.md 0.2)
     spawn() { document.getElementById('bStart') && state === 'title' && document.getElementById('bStart').click(); pos.set(start.x, start.y, start.z); camYaw = Math.PI; fpPitch = -0.1; },
     arena() {
