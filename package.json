@@ -2,7 +2,7 @@
   "name": "skyjump3d",
   "private": true,
   "scripts": {
-    "cf:prep": "node -e \"const fs=require('fs');fs.rmSync('cf-public',{recursive:true,force:true});fs.mkdirSync('cf-public');for(const f of ['index.html'])fs.copyFileSync(f,'cf-public/'+f);for(const f of ['og-image.png','oembed.json'])fs.copyFileSync(f,'cf-public/'+f);fs.copyFileSync('server/voice-lines.json','cf-public/voice-lines.json')\"",
+    "cf:prep": "node -e \"const fs=require('fs');fs.rmSync('cf-public',{recursive:true,force:true});fs.mkdirSync('cf-public');for(const f of ['index.html'])fs.copyFileSync(f,'cf-public/'+f);for(const f of ['og-image.png','oembed.json'])fs.copyFileSync(f,'cf-public/'+f);fs.copyFileSync('server/voice-lines.json','cf-public/voice-lines.json');fs.cpSync('voices','cf-public/voices',{recursive:true})\"",
     "cf:dev": "npm run cf:prep && wrangler dev -c cloudflare/wrangler.jsonc",
     "cf:deploy": "npm run cf:prep && wrangler deploy -c cloudflare/wrangler.jsonc",
     "deploy:pages": "npm run cf:prep && wrangler pages deploy cf-public --project-name sky-jump --branch main"
