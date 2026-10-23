@@ -58,10 +58,19 @@ Put an optional Fish Audio key in `server/.env` (git-ignored) to enable voice li
 npm run deploy:pages
 ```
 
-That builds `cf-public/` from `index.html` + `server/voice-lines.json` and uploads it to the
+That builds `cf-public/` from `index.html` + `server/voice-lines.json` (+ `voices/`, `music/`, `levels/`, `arenas/`) and uploads it to the
 `sky-jump` Pages project on the `main` branch. To make pushes deploy automatically instead, connect
 the GitHub repo in Cloudflare Dashboard → Workers & Pages → `sky-jump` → Settings → Builds &
 deployments, with build command `npm run cf:prep` and output directory `cf-public`.
+
+## Spec levels, arenas and tests (developer notes)
+
+- **Spec levels** live in `levels/*.js` (lazy ES modules, one `kit` API, see `LEVEL-EXPANSION-PLAN.md`). They need the game served over http (not `file://`):
+  `python -m http.server 8080`, then open `http://localhost:8080/?spec=nostalgia-overdose` and press START. They are single-player only and are not part of the normal level list (`SP_ONLY_DESCENT`).
+- **Random per-game home roof**: every page load gets a fresh `gameSalt` (rack order, ride spots, banner, barrels, rooftop props); co-op rooms adopt the host's salt.
+- **Soundtrack**: `music/track01..19.mp3`, a random track every time (never the same twice in a row).
+- **Tests** (`tests/`, portable Playwright + Chromium with software GL, so numbers are for before/after comparison only, never real-GPU evidence): `sh tests/run-all.sh`
+  (needs `npm pack three@0.160.0` into `.qa-cache/three`, and `cd server && npm install` for the relay tests). Evidence lands in `tests/out/`; the Gate 1 evidence is committed in `docs/evidence/gate1/`.
 
 ## Project docs
 
