@@ -139,7 +139,10 @@
   #menu input{margin-left:10px;padding:8px 10px;width:min(240px,50vw);font:600 16px Consolas,monospace;color:#e9fbff;background:#0a1226;border:1px solid #ff3fc8;border-radius:4px;outline:none}
   #menu input:focus{box-shadow:0 0 10px #ff3fc8}
   #menu .hint{margin-top:22px;font-size:13px;opacity:.6;letter-spacing:.1em}
-  #menuMulti,#menuHost,#menuJoin,#menuBye{display:none}
+  #menuMulti,#menuHost,#menuJoin,#menuBye,#menuLevels{display:none}
+  #menuLevels button{text-align:left;padding:12px 18px}
+  #menuLevels button span.lvlSub{display:block;font-size:12px;font-weight:400;letter-spacing:.04em;opacity:.75;margin-top:4px;text-shadow:none}
+  #menuLevels button:disabled span.lvlSub{opacity:.55}
   #menu .steps{list-style:none;padding:0;margin:0 auto 14px;max-width:660px;text-align:left}
   #menu .steps li{display:flex;gap:12px;align-items:flex-start;margin:10px 0;line-height:1.5}
   #menu .steps li>b:first-child{flex:none;width:22px;text-align:center;color:#ff3fc8}
@@ -200,6 +203,11 @@
   <h1>SkyJump3D</h1>
   <div class="sub" id="menuSub">You're on the roof of a towering neon city. The only way is down &mdash; hop between floating platforms, stomp or blast the bots, beat each arena's Guardian, and reach the street.</div>
   <div id="menuMain"><button id="bStart">START</button><button id="bMulti">MULTIPLAYER</button><button id="bExit">EXIT</button></div>
+  <div id="menuLevels">
+    <div class="sub">Choose a level.</div>
+    <div id="lvlList"></div>
+    <button id="bLevelsBack">BACK</button>
+  </div>
   <div id="menuMulti">
     <div class="sub">Co-op for 2&ndash;8 players. Pick a role and I'll walk you through the setup.</div>
     <button id="bHost">HOST A GAME</button><button id="bJoin">JOIN A GAME</button><button id="bBack">BACK</button>
@@ -8636,17 +8644,34 @@ function enemyDeathVoice(e) {
 // ---------- main menu: START / MULTIPLAYER / EXIT ----------
 const menuBtns = ['bStart', 'bMulti', 'bExit'];
 let menuSel = 0, menuMode = 'main';
+// LEVEL SELECT: pure data so a second real level is a data-only addition later (no UI rewrite).
+// Each entry: id, display name/subtitle (player-facing copy only), unlocked, startFn (what actually begins play).
+const LEVELS = [
+  { id: 'descent', name: 'Lil Spasticism', subtitle: "The one endless procedural descent — floating platforms all the way down.", unlocked: true, startFn: () => preloadThen(begin) },
+  { id: 'locked1', name: '???', subtitle: 'LOCKED — COMING SOON', unlocked: false },
+  { id: 'locked2', name: '???', subtitle: 'LOCKED — COMING SOON', unlocked: false },
+  { id: 'locked3', name: '???', subtitle: 'LOCKED — COMING SOON', unlocked: false },
+];
+let levelSel = 0;
+function buildLevelButtons() {
+  const list = $('lvlList');
+  list.innerHTML = LEVELS.map((lv, i) => `<button id="lvlBtn${i}" ${lv.unlocked ? '' : 'disabled'}>${lv.name}<span class="lvlSub">${lv.subtitle}</span></button>`).join('');
+  LEVELS.forEach((lv, i) => { const b = $('lvlBtn' + i); if (b) { if (lv.unlocked) b.onclick = () => lv.startFn(); b.onmouseenter = () => { if (lv.unlocked) { levelSel = i; menuLevelsRender(); } }; } });
+}
+function menuLevelsRender() { LEVELS.forEach((lv, i) => { const b = $('lvlBtn' + i); if (b) b.className = (i === levelSel && lv.unlocked) ? 'sel' : ''; }); }
 function menuRender() {
   $('menuSub').style.display = menuMode === 'main' ? 'block' : 'none';
   menuBtns.forEach((id, i) => { $(id).className = i === menuSel ? 'sel' : ''; });
   $('menuMain').style.display = menuMode === 'main' ? 'block' : 'none';
+  $('menuLevels').style.display = menuMode === 'levels' ? 'block' : 'none';
   $('menuMulti').style.display = menuMode === 'multi' ? 'block' : 'none';
   $('menuHost').style.display = menuMode === 'host' ? 'block' : 'none';
   $('menuJoin').style.display = menuMode === 'join' ? 'block' : 'none';
   $('menuBye').style.display = menuMode === 'bye' ? 'block' : 'none';
+  if (menuMode === 'levels') menuLevelsRender();
 }
 function showMenu(v) { $('menu').style.display = v ? 'flex' : 'none'; if (v) menuRender(); }
-function menuStart() { preloadThen(begin); }
+function menuStart() { menuMode = 'levels'; levelSel = 0; menuRender(); }      // START now opens level select; the actual descent begins from LEVELS[i].startFn()
 // PRELOAD: show a loading screen, finish the platform merge, then compile EVERY shader variant that exists anywhere in the level (hidden objects included),
 // so nothing hitches the first time a new enemy, biome or effect comes into view.
 function preloadThen(go) {
@@ -8735,6 +8760,12 @@ function menuKey(e) {
     else if (e.code === 'Enter' || e.code === 'Space') [menuStart, menuMulti, menuExit][menuSel]();
     else if (e.code === 'KeyP') menuMulti();
     menuRender();
+  } else if (menuMode === 'levels') {
+    const n = LEVELS.length, step = dir => { let j = levelSel; for (let k = 0; k < n; k++) { j = (j + dir + n) % n; if (LEVELS[j].unlocked) { levelSel = j; break; } } };
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') { step(-1); menuLevelsRender(); }
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') { step(1); menuLevelsRender(); }
+    else if (e.code === 'Enter' || e.code === 'Space') { if (LEVELS[levelSel] && LEVELS[levelSel].unlocked) LEVELS[levelSel].startFn(); }
+    else if (e.code === 'Escape') { menuMode = 'main'; menuRender(); }
   } else if (menuMode === 'multi') {
     if (e.code === 'KeyH') menuHostOpen(); else if (e.code === 'KeyJ') menuJoinOpen(); else if (e.code === 'Escape') { menuMode = 'main'; menuRender(); }
   } else if (menuMode === 'host' || menuMode === 'join') {
@@ -8742,6 +8773,7 @@ function menuKey(e) {
   } else if (e.code === 'Enter' || e.code === 'Escape') { menuMode = 'main'; menuRender(); }
 }
 $('bStart').onclick = menuStart; $('bMulti').onclick = menuMulti; $('bExit').onclick = menuExit;
+buildLevelButtons(); $('bLevelsBack').onclick = () => { menuMode = 'main'; menuRender(); };
 $('bHost').onclick = menuHostOpen; $('bJoin').onclick = menuJoinOpen;
 $('bBack').onclick = () => { menuMode = 'main'; menuRender(); }; $('bBye').onclick = () => { menuMode = 'main'; menuRender(); };
 $('bBack2').onclick = $('bBack3').onclick = () => { menuMode = 'multi'; menuRender(); };
@@ -8871,7 +8903,7 @@ res ${outputWidth}x${outputHeight} @${adaptRes.scale.toFixed(2)}x  ${retroPreset
   },
   toggle() { this.enabled ? this.stop() : this.start(); },
   scenes: {                                                 // the three reference scenes (see PERFORMANCE_PLAN.md 0.2)
-    spawn() { document.getElementById('bStart') && state === 'title' && document.getElementById('bStart').click(); pos.set(start.x, start.y, start.z); camYaw = Math.PI; fpPitch = -0.1; },
+    spawn() { state === 'title' && LEVELS[0].startFn(); pos.set(start.x, start.y, start.z); camYaw = Math.PI; fpPitch = -0.1; },
     arena() {
       this.spawn(); for (const e of enemies) if (!e.dead && e.boss) { /* leave bosses alone */ }
       const kinds = ['walker', 'gunner', 'shield', 'charger', 'gunner'];
