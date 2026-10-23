@@ -3199,172 +3199,304 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     }
   }
 
-  // NOSTALGIA OVERDOSE: THE PURE LINEAR HIGHWAY — no radial scatter at all. One outrun road leaves each home tower and
-  // runs out into the horizon in BIG chunks separated by real jump gaps (dash pad -> kicker lip -> air -> lower deck).
-  // The road only ever descends, so the three acts play in order via the height bands (nosZoneForY): Sunset Strip up top,
-  // Tracking Error mid-air, Arcade Overdrive at the floor. Service decks = hubs (bosses, guns, checkpoints, portals);
-  // rival rider packs chase you down the tarmac. Write it all with the seeded rand() so co-op clients build the same road.
+  // ================================================================
+  // NOSTALGIA OVERDOSE — 'HORIZON DRIVE' (full rewrite; zero of the old chunk/gap road survives)
+  // One CONTINUOUS vaporwave highway per active slot, and the player STARTS ON THE ROAD:
+  //   * THE ROAD NEVER BREAKS — every segment butts flush against the next (the cursor
+  //     advances by each segment's exact length). No void holes, no floating islands, no
+  //     semi-platform scatter. "Lots of jumps" = kickers / dash pads / boost arches that
+  //     launch you and land you back on the same tarmac.
+  //   * NOT A TOWER SPAWN — the on-ramp strip floats just past the home tower's base
+  //     footprint; starts[slot] is retargeted onto the road, so spawn and respawn put you
+  //     on the tarmac. The tower is scenery, not furniture.
+  //   * ONE SEALED DESCENT — the road drops through long stepped downhill ramps (never
+  //     holes) so the three acts play in altitude order: Sunset Strip high, Tracking
+  //     Error mid-air, Arcade Overdrive at the low neon floor.
+  //   * ONE SEALED TURN — a single 90-degree bend seeded per slot, eaten by a wide plaza
+  //     roundabout (spring pad + weapon + checkpoint); fat pads overlap the road ends, so
+  //     even the bend is hole-free.
+  //   * FALL RULES (documented on purpose) — off-road = void drop. Below y=0 BEFORE
+  //     touching the TOLL GATE (the level's only isThreshold solid: a y=0 underpass bay
+  //     by the tower) = plain respawn; after touching it, below-0 falls drop into the
+  //     VCR exactly as before. LEVEL CLEAR = the FINISH PLAZA at the end of the drive
+  //     (ground slab + bullseye + sealing ring, same contract as the default street pad).
+  //   * Seeded rand() only — co-op clients build an identical highway.
+  // ================================================================
   const nosRoadAudit = { chunks: 0, totalLength: 0, gaps: [], arenas: 0, services: 0, traffic: 0, hubs: [] };
-  function buildRoadChunk(template, cx, cy, cz, bearing, length, width, prog, zone = NOS_ZONES[0]) {
-    const ux = Math.cos(bearing), uz = Math.sin(bearing), nx = -uz, nz = ux;
-    const halfL = length * 0.5, hx = Math.abs(ux) * halfL + Math.abs(nx) * width * 0.5, hz = Math.abs(uz) * halfL + Math.abs(nz) * width * 0.5;
-    const road = addSolid(cx - hx, cx + hx, cy - 1.5, cy, cz - hz, cz + hz);
-    Object.assign(road, { cx, cz, top: cy, hw: hx, hd: hz, zone, road: true, nosRoadChunk: true, template, prog });
-    const roadMark = (w, h, l, lateral, forward, color, material = null) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, l), material || new THREE.MeshBasicMaterial({ color, toneMapped: false }));
-      m.position.set(cx + nx * lateral + ux * forward, cy + h * 0.5 + 0.04, cz + nz * lateral + uz * forward); m.rotation.y = Math.PI / 2 - bearing; scene.add(m); m.userData.noCull = true; return m;
-    };
-    const body = new THREE.Mesh(new THREE.BoxGeometry(width, 1.5, length), lam(0x20162b)); body.position.set(cx, cy - 0.75, cz); body.rotation.y = Math.PI / 2 - bearing; scene.add(body); body.userData.noCull = true;
-    roadMark(width - 0.3, 0.09, length - 0.2, 0, 0, 0x171421);
-    for (const side of [-1, 1]) roadMark(0.32, 0.12, length - 0.35, side * (width * 0.5 - 0.22), 0, zone.plate);
-    // three visible lanes: paired dashed dividers plus a dashed centre stripe
-    for (const lane of [-1, 1]) for (let d = -halfL + 2; d < halfL - 1; d += 8) roadMark(0.12, 0.08, 4.1, lane * width / 6, d, 0xf4e8c8);
-    for (let d = -halfL + 2; d < halfL - 1; d += 8) roadMark(0.28, 0.09, 4.2, 0, d, 0xffd23a);
-    if (template === 'billboard-arch') {
-      const arch = lam(0xff35bd); for (const side of [-1, 1]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.65, 7, 0.65), arch); post.position.set(cx + nx * side * (width * 0.5 + 0.5), cy + 3.5, cz + nz * side * (width * 0.5 + 0.5)); scene.add(post); }
-      const beam = new THREE.Mesh(new THREE.BoxGeometry(width + 1.3, 0.8, 0.8), arch); beam.position.set(cx, cy + 7, cz); beam.rotation.y = Math.PI / 2 - bearing; scene.add(beam);
-      const boost = addSolid(cx - hx, cx + hx, cy, cy + 0.35, cz - hz, cz + hz); Object.assign(boost, { cx, cz, top: cy + 0.35, hw: hx, hd: hz, bounce: true, boost: 34, road: true });
+
+  // road chrome per zone act (body/edge/dash re-tint; zone.plate stays the zone's own neon)
+  const NOS_ROAD_STYLES = [
+    { tarmac: 0x140b26, edge: 0xff35bd, dash: 0xffd23a, palmEvery: 2 },   // Sunset Strip
+    { tarmac: 0x0e2028, edge: 0x36f6ff, dash: 0x9ad0ff, palmEvery: 4 },   // Tracking Error
+    { tarmac: 0x0a0a12, edge: 0x7dff4a, dash: 0xff2bd6, palmEvery: 0 },   // Arcade Overdrive
+  ];
+  const nosRoadZone = prog => NOS_ZONES[prog < 0.34 ? 0 : prog < 0.69 ? 1 : 2];
+  const nxOf = bearing => -Math.sin(bearing), nzOf = bearing => Math.cos(bearing);
+
+  // shared low-poly dressing geometry (visual only, no collision)
+  let _nosDress = null;
+  function nosDress() {
+    if (!_nosDress) {
+      const trunk = new THREE.CylinderGeometry(0.22, 0.46, 7.5, 6),
+        frond = new THREE.BoxGeometry(4.6, 0.12, 1.0); frond.translate(2.1, 0, 0);
+      _nosDress = {
+        trunk, frond,
+        trunkMat: new THREE.MeshLambertMaterial({ color: 0x180a2c }),
+        frondMat: new THREE.MeshLambertMaterial({ color: 0x2b0f4a }),
+        postMat: new THREE.MeshLambertMaterial({ color: 0x271046 }),
+      };
     }
-      if (template === 'oncoming') {
-      const lanes = [-width / 3, width / 3];
-      for (let i = 0; i < lanes.length; i++) {
-        const vehicle = makeWalker(cx + nx * lanes[i], cy, cz + uz * (i ? -length * 0.22 : length * 0.22), road, 0.9, false, 'rider');
-        vehicle.roadTraffic = true; vehicle.trafficBearing = bearing + (i ? Math.PI : 0); vehicle.speed *= 1.6; vehicle.variant = 'rider'; nosRoadAudit.traffic++;
-      }
-    }
-  const start = { x: cx - ux * halfL, y: cy, z: cz - uz * halfL }, end = { x: cx + ux * halfL, y: cy, z: cz + uz * halfL };
-  return { a: start, b: end, template, prog, solid: road };
+    return _nosDress;
   }
-  // Smooth kicker: ONE full-width solid per step, 0.25 rise each (the player auto-steps it, so it reads as a slope), a single tilted wedge for
-  // the visual, and a bounce lip on the top. Axis-aligned only (the NOS road bearing is snapped to 90 degrees).
-  function buildRoadGapRamp(anchor, bearing, width, boost = 30, run = 20, rise = 2) {
-    const ux = Math.round(Math.cos(bearing)), uz = Math.round(Math.sin(bearing)), n = 8, sw = run / n, sh = rise / n;
+  function nosPalm(x, y, z, lean = 0) {
+    const d = nosDress(), g = new THREE.Group();
+    const t = new THREE.Mesh(d.trunk, d.trunkMat);
+    t.scale.y = 0.8 + rand() * 0.5; t.position.y = 7.5 * t.scale.y * 0.5; if (lean) t.rotation.z = lean * 0.12;
+    g.add(t);
+    for (let i = 0; i < 6; i++) {
+      const f = new THREE.Mesh(d.frond, d.frondMat);
+      f.position.y = 7.5 * t.scale.y; f.rotation.order = 'YXZ';
+      f.rotation.y = i / 6 * Math.PI * 2 + rand() * 0.5; f.rotation.x = -0.62 - rand() * 0.35;
+      g.add(f);
+    }
+    g.position.set(x, y, z); scene.add(g);
+  }
+  function nosBillboard(x, y, z, head, col) {          // neon panel on stalks beside the road
+    const d = nosDress(), w = 8, h = 4.4, hgt = 6.5 + rand() * 2.5, g = new THREE.Group();
+    for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.5, hgt, 0.5), d.postMat); p.position.set(nxOf(head) * s * w * 0.42, hgt * 0.5, nzOf(head) * s * w * 0.42); g.add(p); }
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, 0.5), d.postMat); frame.position.set(0, hgt, 0); g.add(frame);
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: col, toneMapped: false, side: THREE.DoubleSide, transparent: true, opacity: 0.85 }));
+    panel.position.set(0, hgt - h * 0.32, 0.05); panel.rotation.y = Math.PI / 2; g.add(panel);
+    g.position.set(x, y, z); g.rotation.y = head; scene.add(g);
+    return g;
+  }
+  // full-width ramp on the road: dy > 0 = kicker with a bounce lip, dy < 0 = stepped downhill descent; never a hole
+  function nosRamp(anchor, bearing, width, run, dy, boost = 0) {
+    const ux = Math.round(Math.cos(bearing)), uz = Math.round(Math.sin(bearing));
     addDashPad(anchor.x - ux * 9, anchor.y, anchor.z - uz * 9, ux, uz);
-    const hwid = (width - 1) / 2, box = (f0, f1, y0, y1) => {
-      const xa = anchor.x + ux * f0 - (uz ? hwid : 0), xb = anchor.x + ux * f1 + (uz ? hwid : 0), za = anchor.z + uz * f0 - (ux ? hwid : 0), zb = anchor.z + uz * f1 + (ux ? hwid : 0);
+    const hw = (width - 1) / 2, box = (f0, f1, y0, y1) => {
+      const xa = anchor.x + ux * f0 - (uz ? hw : 0), xb = anchor.x + ux * f1 + (uz ? hw : 0);
+      const za = anchor.z + uz * f0 - (ux ? hw : 0), zb = anchor.z + uz * f1 + (ux ? hw : 0);
       return addSolid(Math.min(xa, xb), Math.max(xa, xb), y0, y1, Math.min(za, zb), Math.max(za, zb));
     };
-    for (let i = 0; i < n; i++) box(i * sw, (i + 1) * sw, anchor.y, anchor.y + sh * (i + 1));
-    const pad = box(run, run + 1.6, anchor.y + rise - 0.2, anchor.y + rise + 0.25); Object.assign(pad, { bounce: true, boost });
-    const len = Math.hypot(run, rise), wedge = new THREE.Mesh(new THREE.BoxGeometry(width - 1, 0.3, len), lam(0x2a3350));
-    wedge.position.set(anchor.x + ux * run * 0.5, anchor.y + rise * 0.5 - 0.1, anchor.z + uz * run * 0.5); wedge.rotation.order = 'YXZ'; wedge.rotation.y = Math.PI / 2 - Math.atan2(uz, ux); wedge.rotation.x = -Math.atan2(rise, run);
+    const n = 8, sw = run / n, sh = dy / n;
+    for (let i = 0; i < n; i++) {                       // downhill: real descending steps (each tread its own slab, top at its step); uphill: kicker rising from road level
+      const topI = anchor.y + sh * (i + 1), tread = box(i * sw, (i + 1) * sw, dy < 0 ? topI - 9 : anchor.y - 9, topI);
+      tread.nosRampTread = true;
+    }
+    const wedge = new THREE.Mesh(new THREE.BoxGeometry(width - 1, 0.34, Math.hypot(run, Math.abs(dy))), lam(0x2a3350));
+    wedge.position.set(anchor.x + ux * run * 0.5, anchor.y + dy * 0.5 - 0.12, anchor.z + uz * run * 0.5);
+    wedge.rotation.order = 'YXZ'; wedge.rotation.y = Math.PI / 2 - Math.atan2(uz, ux); wedge.rotation.x = -Math.atan2(dy, run);
     scene.add(wedge); wedge.userData.noCull = true;
-    const lip = new THREE.Mesh(new THREE.BoxGeometry(uz ? width - 1 : 1.6, 0.12, ux ? width - 1 : 1.6), new THREE.MeshBasicMaterial({ color: 0x36f6ff, toneMapped: false }));
-    lip.position.set(anchor.x + ux * (run + 0.8), anchor.y + rise + 0.2, anchor.z + uz * (run + 0.8)); scene.add(lip); lip.userData.noCull = true;
+    if (boost) {                                        // up-ramps only: bounce lip throws you back down the road
+      const pad = box(run, run + 1.7, anchor.y + dy, anchor.y + dy + 0.3);
+      Object.assign(pad, { cx: anchor.x + ux * (run + 0.85), cz: anchor.z + uz * (run + 0.85), top: anchor.y + dy + 0.3, bounce: true, boost, road: true });
+      const lip = new THREE.Mesh(new THREE.BoxGeometry(uz ? width - 1 : 1.7, 0.12, ux ? width - 1 : 1.7), new THREE.MeshBasicMaterial({ color: 0x36f6ff, toneMapped: false }));
+      lip.position.set(anchor.x + ux * (run + 0.85), anchor.y + dy + 0.28, anchor.z + uz * (run + 0.85)); scene.add(lip); lip.userData.noCull = true;
+    }
   }
-  function buildRoadServiceDeck(anchor, bearing, zone, slot, chunk) {
+  // neon boost arch: a full-width booster tread hurls you through the arch — a jump without a hole
+  function nosBoostArch(cx, y, cz, bearing, width, zoneCol) {
+    const ux = Math.cos(bearing), uz = Math.sin(bearing), archMat = lam(0xff35bd);
+    for (const s of [-1, 1]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.7, 8.5, 0.7), archMat); post.position.set(cx + nxOf(bearing) * s * (width * 0.5 + 0.6), y + 4.25, cz + nzOf(bearing) * s * (width * 0.5 + 0.6)); post.rotation.y = bearing; scene.add(post); }
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(width + 2.2, 0.8, 0.8), archMat); beam.position.set(cx, y + 8.1, cz); beam.rotation.y = Math.PI / 2 - bearing; scene.add(beam);
+    const hx = uz ? width * 0.45 : 0.75, hz = ux ? width * 0.45 : 0.75;
+    const tread = addSolid(cx - hx, cx + hx, y, y + 0.35, cz - hz, cz + hz);
+    Object.assign(tread, { cx, cz, top: y + 0.35, bounce: true, boost: 34, road: true });
+    const glow = new THREE.Mesh(new THREE.BoxGeometry(uz ? width * 0.9 : 1.1, 0.14, ux ? width * 0.9 : 1.1), new THREE.MeshBasicMaterial({ color: zoneCol, toneMapped: false }));
+    glow.position.set(cx, y + 0.12, cz); scene.add(glow); glow.userData.noCull = true;
+  }
+  // EVERY road segment: one tarmac strip, lane paint, neon edges, shoulder posts. Flush ends guaranteed by the caller.
+  function nosSegment(x0, z0, y, bearing, length, width, prog, run, idx) {
     const ux = Math.cos(bearing), uz = Math.sin(bearing), nx = -uz, nz = ux;
-    const x = anchor.x + nx * 25, z = anchor.z + nz * 25, y = anchor.y;
-    if (blocked(x, y, z, 8)) return null;
-    const slab = addSlab(x, y, z, 8, 8, 2.5, zone, true);
-    const hub = { kind: 'building', x, z, top: y, hw: 8, hd: 8, w: 16, d: 16, zone, r: 10, deck: true, nosBand: zone.nos - 1, universe: slot, roadChunk: chunk, slab };
-    loreTerminal(x, y, z); addCheckpoint(x, y, z + 2, zone); weaponPickup(2 + ((rand() * (WEAPONS.length - 2)) | 0), x - 3, y + 1.2, z - 3);
-    spawnRiderGroup(x, y, z, slab, Math.min(3, 1 + level), 4); nosRoadAudit.services++;
+    const halfL = length * 0.5, hx = Math.abs(ux) * halfL + Math.abs(nx) * width * 0.5, hz = Math.abs(uz) * halfL + Math.abs(nz) * width * 0.5;
+    const cx = x0 + ux * halfL, cz = z0 + uz * halfL, zone = nosRoadZone(prog), style = NOS_ROAD_STYLES[zone.nos - 1];
+    const road = addSolid(cx - hx, cx + hx, y - 2.4, y, cz - hz, cz + hz);
+    Object.assign(road, { cx, cz, top: y, hw: (uz ? width : length) * 0.5, hd: (ux ? width : length) * 0.5, zone, road: true, nosRoadChunk: true, prog, nosSeg: true, nosRun: run, nosIdx: idx });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(width, 2.4, length), lam(style.tarmac));
+    body.position.set(cx, y - 1.2, cz); body.rotation.y = Math.PI / 2 - bearing; scene.add(body); body.userData.noCull = true;
+    const paint = (w, h, l, lateral, fwd, color) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, l), new THREE.MeshBasicMaterial({ color, toneMapped: false }));
+      m.position.set(cx + nx * lateral + ux * fwd, y + h * 0.5 + 0.05, cz + nz * lateral + uz * fwd);
+      m.rotation.y = Math.PI / 2 - bearing; scene.add(m);
+    };
+    paint(width - 0.4, 0.08, length - 0.2, 0, 0, style.tarmac === 0x0a0a12 ? 0x11111c : 0x1b1233);
+    for (const side of [-1, 1]) paint(0.34, 0.1, length - 0.3, side * (width * 0.5 - 0.3), 0, style.edge);
+    for (const lane of [-1, 1]) for (let d = -halfL + 2; d < halfL - 1; d += 9) paint(0.13, 0.07, 4.2, lane * width / 6, d, style.dash);
+    for (let d = -halfL + 2; d < halfL - 1; d += 11) paint(0.26, 0.08, 4.4, 0, d, style.dash);
+    const d0 = nosDress();                              // shoulder posts mark the edge (visual only)
+    for (const side of [-1, 1]) for (let d = -halfL + 5; d < halfL; d += 12) {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.26, 1.5 + (((d / 12) | 0) % 2) * 0.5, 0.26), d0.postMat);
+      p.position.set(cx + nx * side * (width * 0.5 + 0.15) + ux * d, y + 0.75, cz + nz * side * (width * 0.5 + 0.15) + uz * d); scene.add(p);
+    }
+    nosRoadAudit.chunks++; nosRoadAudit.totalLength += length;
+    return { a: { x: x0, y, z: z0 }, b: { x: x0 + ux * length, y, z: z0 + uz * length }, solid: road, cx, cz, len: length, prog, zone };
+  }
+  const nosSegHead = seg => Math.atan2(seg.b.z - seg.a.z, seg.b.x - seg.a.x);
+  const nosSegPoint = (seg, t) => ({ x: seg.a.x + (seg.b.x - seg.a.x) * t, y: seg.a.y, z: seg.a.z + (seg.b.z - seg.a.z) * t });
+  // pit stop: a widened layby flush with the road's shoulder (bike + weapon + ammo + heart + checkpoint)
+  function nosLayby(seg, slot, hubs) {
+    const pos = nosSegPoint(seg, 0.5), head = nosSegHead(seg);
+    const outX = nxOf(head), outZ = nzOf(head), side = (Math.floor(seg.prog * 10) % 2 ? 1 : -1);
+    const zone = seg.zone, style = NOS_ROAD_STYLES[zone.nos - 1];
+    const alongX = Math.abs(Math.cos(head)) > 0.5, L = 22, W = 11;
+    const hx2 = alongX ? L * 0.5 : W * 0.5, hd2 = alongX ? W * 0.5 : L * 0.5;
+    const cx = pos.x + outX * side * (8.5 + W * 0.5), cz = pos.z + outZ * side * (8.5 + W * 0.5), y = seg.solid.top;
+    const pad = addSolid(cx - hx2, cx + hx2, y - 2.4, y, cz - hd2, cz + hd2);
+    Object.assign(pad, { cx, cz, top: y, hw: hx2, hd: hd2, zone, road: true, nosRoadChunk: true });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(alongX ? L : W, 2.4, alongX ? W : L), lam(style.tarmac));
+    body.position.set(cx, y - 1.2, cz); scene.add(body); body.userData.noCull = true;
+    const hub = { kind: 'building', x: cx, z: cz, top: y, hw: hx2, hd: hd2, w: L, d: L, zone, r: 10, deck: true, layby: true, universe: slot, slab: pad };
+    hubs.push(hub);
+    weaponPickup([3, 4, 3, 4, 2][Math.floor(seg.prog * 5)], cx + outX * side * 2, y + 1.4, cz + outZ * side * 2);
+    ammoBox(cx - outX * side * 3.4, y + 1.2, cz - outZ * side * 3.4);
+    heart(cx + outX * side * 3.2, y + 1, cz + outZ * side * 3.2);
+    addCheckpoint(cx - outX * side * 1.2, y + 1, cz - outZ * side * 1.2, zone);
+    addProp('bike', cx + outX * side * 4.6, y, cz + outZ * side * 4.6);
+    spawnRiderGroup(cx, y, cz, pad, 2, 6); nosRoadAudit.services++;
+    nosBillboard(cx + outX * side * 8, y, cz + outZ * side * 8, head + Math.PI / 2, style.edge);
+    if (zone.nos === 1) nosPalm(cx - outX * side * 6.5, y, cz - outZ * side * 6.5, side);
     return hub;
   }
-  function pickNosTemplate(prog, index) {
-    const cycle = ['straight', 'oncoming', 'overpass', 'straight', 'billboard-arch', 'straight', 'mall', 'oncoming', 'straight', 'billboard-arch', 'straight', 'oncoming'];
-    return cycle[index % cycle.length];
+  // THE HIGHWAY — one continuous drive per slot; one seeded bend; ramps and arches instead of holes
+  function buildNosHighway(slot, home, hubs) {
+    const c = universeCentre(slot), bearing0 = Math.round(c.angle / (Math.PI / 2)) * (Math.PI / 2);
+    const ux0 = Math.cos(bearing0), uz0 = Math.sin(bearing0);
+    // on-ramp floats just past the tower's base footprint; the player STARTS HERE, on the road
+    const startX = home.x + ux0 * (TH + 42), startZ = home.z + uz0 * (TH + 42), startY = Math.max(TOP * 0.62 + 18, TOP + 8);
+    const segCount = Math.min(32, 22 + level * 3), width = 18;
+    const yStart = startY, y1 = Math.max(TOP * 0.45, 60), y2 = 24, yEnd = 6;
+    // 3+3+1 seeded ramp segments carry the whole descent; every other segment is flat jump country
+    const rA0 = Math.floor(segCount * 0.30), rB0 = Math.floor(segCount * 0.58), rC = Math.floor(segCount * 0.85);
+    const dropByIndex = {};
+    dropByIndex[rA0] = dropByIndex[rA0 + 1] = dropByIndex[rA0 + 2] = (yStart - y1) / 3;
+    dropByIndex[rB0] = dropByIndex[rB0 + 1] = dropByIndex[rB0 + 2] = (y1 - y2) / 3;
+    dropByIndex[rC] = y2 - yEnd;
+    const rampLen = drop => Math.min(200, Math.max(95, drop * 3.2));
+    const bendAt = Math.floor(segCount * 0.5), bendDir = rand() < 0.5 ? 1 : -1;
+    let cursor = { x: startX, y: yStart, z: startZ }, bearing = bearing0;
+    const startHub = { kind: 'building', x: startX, z: startZ, top: yStart, hw: 9, hd: 9, w: 18, d: 18, zone: NOS_ZONES[0], r: 10, roadStart: true, universe: slot };
+    hubs.push(startHub);
+    Object.assign(starts[slot], { x: startX, y: yStart + 0.25, z: startZ, onRoad: true });
+    if (slot === mySlot) checkpoint = { x: startX, y: yStart + 2, z: startZ };
+    // START STRIP: checker row down the tarmac, neon title arch, starter weapon on the road, dash pad ahead
+    for (let k = -4; k <= 4; k++) { const m = new THREE.Mesh(new THREE.BoxGeometry(uz0 ? width * 0.92 : 1.8, 0.1, ux0 ? width * 0.92 : 1.8), lam(k % 2 ? 0xffffff : 0x12081f)); m.position.set(startX + ux0 * k * 1.8, startY + 0.06, startZ + uz0 * k * 1.8); scene.add(m); m.userData.noCull = true; }
+    nosBillboard(startX + nxOf(bearing0) * 13.5, startY, startZ + nzOf(bearing0) * 13.5, bearing0, 0xffd23a);
+    weaponPickup(2, startX - ux0 * 4 + nxOf(bearing0) * 5, startY + 1.5, startZ - uz0 * 4 + nzOf(bearing0) * 5);
+    addDashPad(startX + ux0 * 14, startY, startZ + uz0 * 14, ux0, uz0);
+    const titleArch = new THREE.Mesh(new THREE.BoxGeometry(uz0 ? 22 : 0.9, 0.9, ux0 ? 22 : 0.9), new THREE.MeshBasicMaterial({ color: 0xff35bd, toneMapped: false }));
+    titleArch.position.set(startX + ux0 * 9, startY + 9.5, startZ + uz0 * 9); scene.add(titleArch); titleArch.userData.noCull = true;
+    for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.9, 9.5, 0.9), lam(0x271046)); p.position.set(startX + ux0 * 9 + nxOf(bearing0) * s * 11.5, startY + 4.75, startZ + uz0 * 9 + nzOf(bearing0) * s * 11.5); scene.add(p); }
+    const title = makeLabel('★ NOSTALGIA OVERDOSE ★'); title.position.set(startX + ux0 * 9, startY + 11.4, startZ + uz0 * 9); title.scale.set(15, 3.75, 1); scene.add(title); title.userData.noCull = true;
+    connect(home, startHub);                            // same-height call: chain is a no-op, the portal loop carries the tower <-> road hop
+    for (let i = 0; i < segCount; i++) {
+      const prog = segCount <= 1 ? 0.5 : i / (segCount - 1), zone = nosRoadZone(prog), style = NOS_ROAD_STYLES[zone.nos - 1];
+      const at = snippet => ({ x: cursor.x + Math.cos(bearing) * snippet, y: cursor.y, z: cursor.z + Math.sin(bearing) * snippet });
+      if (i === bendAt) {                               // THE TURN: normal tarmac first, then a fat plaza swallows the corner
+        const len = 72 + rand() * 30;
+        const seg = nosSegment(cursor.x, cursor.z, cursor.y, bearing, len, width, prog, slot, i);
+        const nu = Math.cos(bearing + bendDir * Math.PI / 2), nv = Math.sin(bearing + bendDir * Math.PI / 2);
+        const c1 = { x: seg.b.x + Math.cos(bearing) * 3, z: seg.b.z + Math.sin(bearing) * 3 }, c2 = { x: seg.b.x + nu * 15, z: seg.b.z + nv * 15 };
+        const cX = (c1.x + c2.x) / 2, cZ = (c1.z + c2.z) / 2;
+        const minX = Math.min(c1.x, c2.x, cX) - 12, maxX = Math.max(c1.x, c2.x, cX) + 12;
+        const minZ = Math.min(c1.z, c2.z, cZ) - 12, maxZ = Math.max(c1.z, c2.z, cZ) + 12;
+        const plaza = addSolid(minX, maxX, cursor.y - 2.4, cursor.y, minZ, maxZ);
+        const px = (minX + maxX) / 2, pz = (minZ + maxZ) / 2, hwP = (maxX - minX) / 2, hdP = (maxZ - minZ) / 2;
+        Object.assign(plaza, { cx: px, cz: pz, top: cursor.y, hw: hwP, hd: hdP, zone, road: true, nosRoadChunk: true, plaza: true });
+        const pb = new THREE.Mesh(new THREE.BoxGeometry(hwP * 2, 2.4, hdP * 2), lam(style.tarmac)); pb.position.set(px, cursor.y - 1.2, pz); scene.add(pb); pb.userData.noCull = true;
+        const spring = addSolid(px - 2, px + 2, cursor.y, cursor.y + 0.4, pz - 2, pz + 2); Object.assign(spring, { cx: px, cz: pz, top: cursor.y + 0.4, bounce: true, boost: 30 });
+        weaponPickup(3, px + 6, cursor.y + 1.4, pz + 6); ammoBox(px - 6, cursor.y + 1.2, pz - 6);
+        addCheckpoint(px, cursor.y + 1, pz - 8, zone);
+        nosPalm(px - hwP + 6, cursor.y, pz - hdP + 6, 3); nosPalm(px + hwP - 6, cursor.y, pz + hdP - 6, -3);
+        spawnRiderGroup(px, cursor.y, pz, plaza, 3, 9); nosRoadAudit.services++;
+        hubs.push({ kind: 'building', x: px, z: pz, top: cursor.y, hw: hwP, hd: hdP, w: hwP * 2, d: hdP * 2, zone, r: 12, deck: true, plaza: true, universe: slot, slab: plaza });
+        cursor = { x: c2.x + nu * 10, y: cursor.y, z: c2.z + nv * 10 };      // new road starts INSIDE the plaza
+        bearing += bendDir * Math.PI / 2;                                   // exactly 90 degrees, still axis-snapped
+        continue;
+      }
+      const dy = dropByIndex[i] ? -dropByIndex[i] : 0, len = dy ? rampLen(-dy) : 74 + rand() * 36;
+      const seg = nosSegment(cursor.x, cursor.z, cursor.y, bearing, len, width, prog, slot, i);
+      if (dy) {                                           // downhill ramp = steep stair treads the runner auto-eats
+        nosRamp({ x: cursor.x, y: cursor.y, z: cursor.z }, bearing, width, len - 2, dy);
+        nosRoadAudit.gaps.push(len);
+      } else {                                            // flat segment = jump country
+        if (i % 3 === 1 || rand() < 0.4) { const p = at(0.62); nosRamp(p, bearing, width, 18 + rand() * 5, 2.2, 26 + prog * 9); nosRoadAudit.gaps.push(18 + rand() * 5 + 42); }
+        if (rand() < 0.5) { const p = at(0.24); addRampDir(p.x, p.z, cursor.y, Math.cos(bearing), Math.sin(bearing), 4, 7, 24 + prog * 8); nosRoadAudit.gaps.push(56); }
+        if (rand() < 0.34 && zone.nos !== 3) { const p = at(0.5); addRail(p.x - Math.cos(bearing) * 6, p.z - Math.sin(bearing) * 6, cursor.y + 1.5, p.x + Math.cos(bearing) * 13, p.z + Math.sin(bearing) * 13, [0xff3fc8, 0x36f6ff, 0xffd23a][i % 3]); }
+      }
+      if (i % 4 === 2) { const p = at(0.44); nosBoostArch(p.x, cursor.y, p.z, bearing, width, style.edge); }
+      for (let k = 2; k < len - 4; k += 13) coin(cursor.x + Math.cos(bearing) * k + nxOf(bearing) * (k % 26 < 13 ? -3 : 3), cursor.y + 1.2, cursor.z + Math.sin(bearing) * k + nzOf(bearing) * (k % 26 < 13 ? -3 : 3), zone);
+      if (i % 2 === 1) { spawnRiderGroup(seg.cx, cursor.y, seg.cz, seg.solid, Math.min(4, 2 + level), 8); nosRoadAudit.traffic += 2; }
+      if (i % 3 === 2) { const p = at(0.82); spawnBiomeEnemy(p.x, cursor.y, p.z, seg.solid, zone, prog); }
+      if (i % 5 === 3 && zone.nos !== 2) nosLayby(seg, slot, hubs);
+      if (style.palmEvery && i % style.palmEvery === 0) {
+        const nx = nxOf(bearing), nz = nzOf(bearing);
+        nosPalm(cursor.x + nx * (width * 0.5 + 4), cursor.y, cursor.z + nz * (width * 0.5 + 4), 1.5);
+        nosPalm(cursor.x - nx * (width * 0.5 + 4), cursor.y, cursor.z - nz * (width * 0.5 + 4), -1.5);
+      }
+      cursor = { x: seg.b.x, y: seg.b.y + dy, z: seg.b.z };      // a ramp segment carries its drop into the next segment's height
+    }
+    return nosFinishPlaza(cursor, bearing, slot, hubs);   // FINISH plaza is the level-clear target
   }
-  function splineChunks(origin, bearing, count, roadLevel, slot, hubs, home = null) {
-    let cursor = { ...origin }, angle = bearing, priorBearing = bearing, lastTurn = 0, prior = null, totalGap = 0;
-    const roads = [], templates = [];
-    for (let i = 0; i < count; i++) {
-      const prog = count <= 1 ? 1 : i / (count - 1), template = pickNosTemplate(prog, i), zone = NOS_ZONES[prog < 0.34 ? 0 : prog < 0.69 ? 1 : 2];
-      // long contiguous road chunks; a REAL gap only every third chunk (growing with progress), a kicker ramp once per chunk, a small drop only at gaps
-      const length = 100 + rand() * 30, width = 18, gapAfter = i % 3 === 2 && i < count - 1, gap = 10 + prog * 14 + (rand() - 0.5) * 3;
-      if (prior) {
-        const dropY = prior.gapAfter ? 2 + prog * 3 : 0;
-        cursor = { x: cursor.x + (prior.gapAfter ? Math.cos(angle) * gap : 0), y: cursor.y - dropY, z: cursor.z + (prior.gapAfter ? Math.sin(angle) * gap : 0) };
-        if (prior.gapAfter) { totalGap += gap; nosRoadAudit.gaps.push(gap); }
-        lastTurn = angle - priorBearing;
-      }
-      const nextY = cursor.y;
-      const chunkBearing = angle;
-      const centre = { x: cursor.x + Math.cos(chunkBearing) * length * 0.5, y: nextY, z: cursor.z + Math.sin(chunkBearing) * length * 0.5 };
-      const chunk = buildRoadChunk(template, centre.x, centre.y, centre.z, chunkBearing, length, width, prog, zone);
-      chunk.gapAfter = gapAfter;
-      { const f = gapAfter ? length - 24 : length * 0.5 + 8, ux = Math.cos(chunkBearing), uz = Math.sin(chunkBearing);
-        buildRoadGapRamp({ x: cursor.x + ux * f, y: nextY, z: cursor.z + uz * f }, chunkBearing, width, gapAfter ? 32 + prog * 10 : 22); }
-      priorBearing = chunkBearing;
-      angle = chunkBearing;
-      if (template === 'ramp-up' || template === 'ramp-down') {
-        chunk.solid.ramp = template;
-      }
-      if (template === 'overpass') { const crossY = nextY - 9, cross = buildRoadChunk('overpass-cross', centre.x + Math.cos(angle + Math.PI / 2) * 30, crossY, centre.z + Math.sin(angle + Math.PI / 2) * 30, angle + Math.PI / 2, 60, 14, prog, NOS_ZONES[2]); roads.push(cross); }
-      if (template === 'mall') { const arena = buildArena('runway', centre.x, nextY + 0.3, centre.z, zone); arena.gated = true; arena.universe = slot; arena.region = i; hubs.push(arena); nosRoadAudit.arenas++; chunk.template = 'mall'; }
-      // The shared y=0 checkered START LINE, rather than the home-roof launch chunk, is the lazy underworld trigger.
-      if (i % 3 === 1) { const service = buildRoadServiceDeck(chunk.b, angle, zone, slot, i); if (service) hubs.push(service); }
-      if (template === 'mall') { chunk.solid.targetR = 2.2; addBullseye(centre.x, nextY, centre.z, 2.2); }
-      chunk.solid.entry = chunk.a; chunk.solid.exit = chunk.b; chunk.solid.pathHub = { kind: 'road', x: centre.x, z: centre.z, top: nextY, hw: width / 2, hd: length / 2, zone, slot, chunkIndex: i };
-      roads.push(chunk); templates.push(template); nosRoadAudit.chunks++; nosRoadAudit.totalLength += length;
-      prior = chunk;      cursor = { ...chunk.b };
-      spawnRiderGroup(centre.x, nextY, centre.z, chunk.solid, Math.min(4, 2 + roadLevel), 7);
+  // the FINISH plaza: checkered strip, HORIZON arch, bullseye + sealing ring — LEVEL CLEAR lands here
+  function nosFinishPlaza(cursor, bearing, slot, hubs) {
+    const zone = NOS_ZONES[2], length = 64, width = 26;
+    const alongX = Math.abs(Math.cos(bearing)) > 0.5;
+    const hx = alongX ? length * 0.5 : width * 0.5, hz = alongX ? width * 0.5 : length * 0.5;
+    const cx = cursor.x + Math.cos(bearing) * length * 0.5, cz = cursor.z + Math.sin(bearing) * length * 0.5;
+    const pad = addSolid(cx - hx, cx + hx, cursor.y - 3, cursor.y, cz - hz, cz + hz);
+    Object.assign(pad, { cx, cz, top: cursor.y, hw: hx, hd: hz, zone, road: true, nosRoadChunk: true, finish: true, ground: true, targetR: 1.8 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(hx * 2, 3, hz * 2), lam(0x0a0a12)); body.position.set(cx, cursor.y - 1.5, cz); scene.add(body); body.userData.noCull = true;
+    for (const side of [-1, 1]) { const e = new THREE.Mesh(new THREE.BoxGeometry(alongX ? hx * 2 - 0.4 : 0.4, 0.14, alongX ? 0.4 : hz * 2 - 0.4), new THREE.MeshBasicMaterial({ color: 0xff2bd6, toneMapped: false }));
+      e.position.set(cx + nxOf(bearing) * side * (hx - 0.3), cursor.y + 0.08, cz + nzOf(bearing) * side * (hz - 0.3)); scene.add(e); }
+    for (let k = 6; k < length - 6; k += 2.4) {
+      const soft = k % 4.8 < 2.4 ? 0xffffff : 0x12081f, m = new THREE.Mesh(new THREE.BoxGeometry(alongX ? 1.2 : width * 0.9, 0.1, alongX ? width * 0.9 : 1.2), lam(soft));
+      m.position.set(cx + Math.cos(bearing) * (k - length * 0.5), cursor.y + 0.07, cz + Math.sin(bearing) * (k - length * 0.5)); m.rotation.y = Math.PI / 2 - bearing; scene.add(m); m.userData.noCull = true;
     }
-    if (home) {
-      const hub = { kind: 'road', x: origin.x, z: origin.z, top: origin.y, hw: 9, hd: 9, zone: NOS_ZONES[0], r: 10, universe: slot, roadStart: true };
-      connect(home, hub); hubs.push(hub);
-    }
-    return { roads, templates, end: cursor, bearing: angle, gapMean: totalGap / Math.max(1, count - 1) };
+    addBullseye(cx, cursor.y, cz, 1.8);
+    const seal = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.18, 5, 18), new THREE.MeshBasicMaterial({ color: 0xff174c, transparent: true, opacity: 0.9 }));
+    seal.rotation.x = Math.PI / 2; seal.position.set(cx, cursor.y + 0.25, cz); scene.add(seal);
+    const arch = new THREE.Mesh(new THREE.BoxGeometry(alongX ? 0.9 : 31, 0.9, alongX ? 31 : 0.9), new THREE.MeshBasicMaterial({ color: 0xffd23a, toneMapped: false }));
+    arch.position.set(cx + Math.cos(bearing) * (length * 0.5 - 6), cursor.y + 10, cz + Math.sin(bearing) * (length * 0.5 - 6)); scene.add(arch); arch.userData.noCull = true;
+    for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.9, 10, 0.9), lam(0x271046)); p.position.set(cx + Math.cos(bearing) * (length * 0.5 - 6) + nxOf(bearing) * s * 15.5, cursor.y + 5, cz + Math.sin(bearing) * (length * 0.5 - 6) + nzOf(bearing) * s * 15.5); scene.add(p); }
+    const label = makeLabel('HORIZON — FINISH LINE'); label.position.set(cx + Math.cos(bearing) * (length * 0.5 - 6), cursor.y + 11.6, cz + Math.sin(bearing) * (length * 0.5 - 6)); label.scale.set(16, 4, 1); scene.add(label); label.userData.noCull = true;
+    heart(cx - Math.cos(bearing) * 10, cursor.y + 1, cz - Math.sin(bearing) * 10);
+    ammoBox(cx - Math.cos(bearing) * 8 + nxOf(bearing) * 5, cursor.y + 1.2, cz - Math.sin(bearing) * 8 + nzOf(bearing) * 5);
+    addCheckpoint(cx - Math.cos(bearing) * 14, cursor.y + 1, cz - Math.sin(bearing) * 14, zone);
+    spawnRiderGroup(cx, cursor.y, cz, pad, 3, 9); nosRoadAudit.services++;
+    const hub = { kind: 'exit', x: cx, z: cz, top: cursor.y, hw: hx, hd: hz, zone, r: 12, severity: 3, universe: slot, slab: pad };
+    hubs.push(hub);
+    return { hub, seal, pad, cx, cz, top: cursor.y };
   }
   function buildNosNetwork(exitAngle) {
     const hubs = activeStartHubs().map(home => ({ ...home }));
-    const active = activeStartHubs(), roadPerSlot = Math.min(12, 8 + level);
     nosRoadAudit.chunks = nosRoadAudit.totalLength = nosRoadAudit.arenas = nosRoadAudit.services = nosRoadAudit.traffic = 0; nosRoadAudit.gaps.length = 0; nosRoadAudit.hubs.length = 0;
-    const thresholdHome = active[mySlot] || active[0];
-    const startLinePos = { x: thresholdHome.x + Math.cos(exitAngle) * 44, z: thresholdHome.z + Math.sin(exitAngle) * 44 };
-    const startLine = addSlab(startLinePos.x, 0, startLinePos.z, 12, 4, 2.2, NOS_ZONES[0], false); startLine.road = true;
-    const checker = new THREE.Mesh(new THREE.BoxGeometry(20, 0.12, 1.2), lam(0xffffff)); checker.position.set(startLinePos.x, 0.1, startLinePos.z); scene.add(checker); checker.userData.noCull = true;
-    const label = makeLabel('★ START LINE · THRESHOLD'); label.position.set(startLinePos.x, 3.2, startLinePos.z); scene.add(label); label.userData.noCull = true;
-    const startHub = { kind: 'building', x: startLinePos.x, z: startLinePos.z, top: 0, hw: 12, hd: 4, zone: NOS_ZONES[0], r: 12, universe: mySlot };
-    hubs.push(startHub);
-    connect(active[mySlot] || active[0], startHub);
-    startLine.isThreshold = true; startLine.template = 'START LINE';
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(4, 0.16, 6, 24), new THREE.MeshBasicMaterial({ color: 0xffd23a, toneMapped: false })); ring.rotation.x = Math.PI / 2; ring.position.set(startLinePos.x, 0.18, startLinePos.z); scene.add(ring);
-    groundPad = { x: startLinePos.x, z: startLinePos.z, solid: startLine };
-    const allRoadEnds = [];
+    const active = activeStartHubs();
+    let myFinish = null;
     for (let slot = 0; slot < active.length; slot++) {
-      const home = active[slot], centre = universeCentre(slot), bearing = Math.round(centre.angle / (Math.PI / 2)) * (Math.PI / 2);
-      const launch = { x: home.x + Math.cos(bearing) * (TH + 3), y: TOP, z: home.z + Math.sin(bearing) * (TH + 3) };
-      const startPlatform = addSlab(launch.x, TOP, launch.z, 5, 5, 1.6, NOS_ZONES[0], false);
-      addRampDir(home.x + Math.cos(bearing) * (TH - 9), home.z + Math.sin(bearing) * (TH - 9), TOP, Math.cos(bearing), Math.sin(bearing), 4, 8, 32);
-      addDashPad(home.x + Math.cos(bearing) * (TH - 6), TOP, home.z + Math.sin(bearing) * (TH - 6), Math.cos(bearing), Math.sin(bearing));
-      const path = splineChunks(launch, bearing, roadPerSlot, level, slot, hubs, home);
-      allRoadEnds.push(path);
+      const built = buildNosHighway(slot, active[slot], hubs);
+      if (slot === mySlot) myFinish = built;
     }
-    const finalPath = allRoadEnds[mySlot], exit = addSlab(finalPath.end.x, finalPath.end.y, finalPath.end.z, 9, 9, 2, NOS_ZONES[2], false);
-    exit.targetR = 2.2; exit.severity = 3; addBullseye(exit.cx, exit.top, exit.cz, 2.2);
-    const exitHub = { kind: 'exit', x: exit.cx, z: exit.cz, top: exit.top, hw: 9, hd: 9, zone: NOS_ZONES[2], r: 12, severity: 3, universe: mySlot }; hubs.push(exitHub);
-    for (const road of finalPath.roads) if (road.template === 'mall') road.solid.targetR = 2.2;
-    let mall = null; for (const road of finalPath.roads) if (road.template === 'mall') mall = road;
-    if (mall) {
-      const mallExit = addSlab(mall.solid.cx, mall.solid.top + 1.4, mall.solid.cz, 10, 10, 2, NOS_ZONES[2], false);
-      mallExit.targetR = 2.2; mallExit.severity = 3; addBullseye(mallExit.cx, mallExit.top, mallExit.cz, 2.2);
+    if (myFinish) {                                     // level clear = land on the finish-line target
+      groundPad = { x: myFinish.cx, z: myFinish.cz, solid: myFinish.pad };
+      groundPad.seal = myFinish.seal;
     }
-    connect({ kind: 'road', x: finalPath.end.x, z: finalPath.end.z, top: finalPath.end.y, hw: 9, hd: 9, zone: NOS_ZONES[2] }, exitHub);
-    for (let slot = 1; slot < allRoadEnds.length; slot++) {
-      const a = allRoadEnds[slot - 1].roads.at(-1), b = allRoadEnds[slot].roads[0];
-      connect({ kind: 'road', x: a.b.x, z: a.b.z, top: a.b.y, hw: 8, hd: 8, zone: NOS_ZONES[2], universe: slot - 1 }, { kind: 'road', x: b.a.x, z: b.a.z, top: b.a.y, hw: 8, hd: 8, zone: NOS_ZONES[0], universe: slot });
-    }
-    buildHubPortalLoop(hubs);
-    connectDecksFar(hubs);
+    // TOLL GATE — the level's ONLY isThreshold solid (a y=0 underpass bay beside the tower);
+    // touching it arms the VCR exactly like the old start line did, and below-0 falls join the machine
+    const home0 = active[mySlot] || active[0], c0 = universeCentre(mySlot), bearing0 = Math.round(c0.angle / (Math.PI / 2)) * (Math.PI / 2);
+    const tollX = home0.x + Math.cos(bearing0) * 46, tollZ = home0.z + Math.sin(bearing0) * 46;
+    const toll = addSlab(tollX, 0, tollZ, 12, 4, 2.2, NOS_ZONES[0], false); toll.road = true;
+    toll.isThreshold = true; toll.template = 'TOLL GATE';
+    hubs.push({ kind: 'building', x: tollX, z: tollZ, top: 0, hw: 12, hd: 4, zone: NOS_ZONES[0], r: 12, universe: mySlot, slab: toll });
+    const tollGlow = new THREE.Mesh(new THREE.BoxGeometry(20, 0.5, 1.4), new THREE.MeshBasicMaterial({ color: 0xffd23a, toneMapped: false }));
+    tollGlow.position.set(tollX, 0.16, tollZ); tollGlow.rotation.y = Math.PI / 2 - bearing0; scene.add(tollGlow); tollGlow.userData.noCull = true;
+    const tollLabel = makeLabel("TOLL · CAN'T GO BACK UP · YET"); tollLabel.position.set(tollX, 3.4, tollZ); scene.add(tollLabel); tollLabel.userData.noCull = true;
+    buildHubPortalLoop(hubs);                           // portals + route landmarks over every road hub
     nosRoadAudit.hubs = hubs;
-    if (finalPath) {
-      const farthest = finalPath.roads.reduce((r, q) => Math.max(r, Math.hypot(q.solid.cx, q.solid.cz)), 0);
-      WORLD_R = Math.max(WORLD_R, farthest + 180);
-      camera.far = Math.max(camera.far, WORLD_R * 1.6); camera.updateProjectionMatrix();
-    }
+    let farthest = 0; for (const h of hubs) farthest = Math.max(farthest, Math.hypot(h.x, h.z));
+    WORLD_R = Math.max(WORLD_R, farthest + 220);
+    camera.far = Math.max(camera.far, WORLD_R * 1.6); camera.updateProjectionMatrix();
     return hubs;
-  }
-  function connectDecksFar(hubs) {                             // deck-to-deck across the void when two roads cross paths
-    for (let i = 0; i < hubs.length; i++) {
-      const a = hubs[i]; if (a.kind !== 'building' || !a.deck) continue;
-      for (let j = i + 1; j < hubs.length; j++) {
-        const b = hubs[j]; if (b.kind !== 'building' || !b.deck) continue;
-        if (Math.hypot(a.x - b.x, a.z - b.z) > 200 || Math.abs(a.top - b.top) > 160) continue;
-        if (rand() < 0.35) connect(a, b);
-      }
-    }
   }
 
   // ================================================================
