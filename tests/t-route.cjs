@@ -10,7 +10,7 @@ const out = path.join(__dirname, 'out', id); fs.mkdirSync(out, { recursive: true
   const ev = (f, a) => page.evaluate(f, a); const R = { id, steps: [] };
   await page.addScriptTag({ path: path.join(__dirname, 'bot.js') });
   const t0 = Date.now();
-  await page.click('#bStart');
+  await page.evaluate(() => document.getElementById('bStart').click());
   await page.waitForFunction(() => __ng.levels.state().active && __dbg.state === 'play', null, { timeout: 120000 });
   R.menuToPlayMs = Date.now() - t0;
   await page.waitForTimeout(1500);

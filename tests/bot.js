@@ -20,7 +20,7 @@
           if (jumpTap && now - jumpTap > 60) { set('Space', false); jumpTap = 0; }
           if (st === 'clear') return fin(true, 'level clear');
           if (st === 'dead' || mv.st === 'dead') { releaseAll(); if (lastState !== 'dead') { deaths++; log.push(`died near ${wps[i - 1].id}->${wps[i].id} at ${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)}`); } lastState = 'dead'; if (deaths > maxDeaths) return fin(false, 'too many deaths'); return requestAnimationFrame(frame); }
-          if (lastState === 'dead') { lastState = 'play'; i = Math.max(1, i - 1); for (let k = i; k > 0; k--) { if (!wps[k].point && inside(p, wps[k], 1)) { i = Math.min(k + 1, wps.length - 1); break; } } legT = now; log.push(`respawned; retargeting ${wps[i].id}`); }
+          if (lastState === 'dead') { lastState = 'play'; let best = -1; for (let k = 0; k < wps.length; k++) if (!wps[k].point && inside(p, wps[k], 1) && Math.abs(p.y - wps[k].y) < 2) { best = k; if (k >= i - 6) break; } i = best >= 0 ? Math.min(best + 1, wps.length - 1) : Math.max(1, i - 1); legT = now; log.push(`respawned; retargeting ${wps[i].id}`); }
           if (mv.paused) { releaseAll(); return requestAnimationFrame(frame); }
           let T = wps[i];
           // arrival
@@ -34,7 +34,7 @@
           set('KeyW', true);
           set('ShiftLeft', dh > 3.5 || !og);
           // jumping
-          const cur = A && !A.point ? A : null;
+          let cur = null; for (let k = i - 1; k >= 0; k--) if (!wps[k].point) { cur = wps[k]; break; }      // last PLATFORM waypoint (a pickup point doesn't replace it)
           const rise = (T.y || 0) - p.y;
           if (og && T.kind !== 'walk' && T.kind !== 'pad') {
             let go = false;
@@ -45,7 +45,7 @@
           } else if (!og) {
             const edgeD = T.point ? dh : Math.hypot(Math.max(0, Math.abs(p.x - T.x) - T.hw), Math.max(0, Math.abs(p.z - T.z) - T.hd));
             if (mv.jumps === 1 && v.y <= 0.3 && p.y < T.y + 0.7 && edgeD > 0.6 && !jumpTap) { set('Space', true); jumpTap = now; }                    // double jump when we'd otherwise fall short
-            else if (!jumpTap) set('Space', v.y < -11 && rise < -8 && mv.jumps >= 1);                                                              // hold Space = glide on long drops
+            else if (!jumpTap) set('Space', (v.y < -11 && rise < -8 && mv.jumps >= 1) || v.y < -17);      // glide: long drops, and any panic fall                                                              // hold Space = glide on long drops
           } else if (!jumpTap) set('Space', false);
           requestAnimationFrame(frame);
         };

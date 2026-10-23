@@ -7,7 +7,7 @@ const out = path.join(__dirname, 'out', id); fs.mkdirSync(out, { recursive: true
 (async () => {
   const { srv, url } = await serve(); const br = await launch();
   const { page, errors } = await openGame(br, url, { dbg: true, viewport: { width: 1600, height: 900 }, query: '?spec=' + id });
-  await page.click('#bStart');
+  await page.evaluate(() => document.getElementById('bStart').click());
   await page.waitForFunction(() => __ng.levels.state().active && __dbg.state === 'play', null, { timeout: 120000 }); await page.waitForTimeout(2000);
   const shots = await page.evaluate(async () => {
     const { THREE, scene, renderer, solids } = __dbg; const spec = __ng.levels.spec(), g = __ng.levels.graph();
@@ -17,7 +17,9 @@ const out = path.join(__dirname, 'out', id); fs.mkdirSync(out, { recursive: true
     for (const c of spec.cells) marks.push({ t: 'CELL ' + c.id, x: c.x, y: c.y, z: c.z, c: '#ffd23a' });
     marks.push({ t: 'EXIT', x: 318, y: 10, z: 0, c: '#ff4466' });
     for (const m of marks) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 90, 8), new THREE.MeshBasicMaterial({ color: m.c })); p.position.set(m.x, m.y + 45, m.z); p.name = 'qa-marker'; scene.add(p); }
-    scene.fog = null;
+    scene.fog = null; scene.background = new THREE.Color(0x1a2030);
+    for (const c of scene.children) if (c !== __dbg.lvl && !c.isLight && c.name !== 'qa-marker') c.visible = false;      // hide sky dome / props so the greybox reads clearly
+    const fill = new THREE.AmbientLight(0xffffff, 1.4); scene.add(fill);
     const W = renderer.domElement.width, H = renderer.domElement.height, saved = renderer.getRenderTarget();
     const shot = (cam, label) => {
       renderer.setRenderTarget(null); renderer.setViewport(0, 0, W, H); renderer.clear(true, true, true); renderer.render(scene, cam);

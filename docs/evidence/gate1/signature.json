@@ -1,0 +1,156 @@
+{
+ "level": "od",
+ "skyCity": {
+  "platforms": 6847,
+  "footprint": {
+   "w": 2681.22,
+   "d": 2529.5,
+   "area": 6782144.81
+  },
+  "elevation": {
+   "min": -152,
+   "max": 1498.33,
+   "histNorm": [
+    0,
+    0.01,
+    0.01,
+    0.07,
+    0.2,
+    0.12,
+    0.11,
+    0.15,
+    0.31,
+    0.01,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0.01,
+    0
+   ]
+  },
+  "sizes": {
+   "median": 1.6,
+   "p90": 4.71,
+   "hist": {
+    "<2": 3458,
+    "2-4": 1644,
+    "4-8": 1550,
+    "8-16": 136,
+    "16+": 59
+   }
+  }
+ },
+ "level_sig": {
+  "platforms": 230,
+  "footprint": {
+   "w": 657,
+   "d": 124,
+   "area": 81468
+  },
+  "elevation": {
+   "min": 0,
+   "max": 66.5,
+   "histNorm": [
+    0.13,
+    0.08,
+    0.09,
+    0.12,
+    0.06,
+    0.05,
+    0.06,
+    0.06,
+    0.05,
+    0.05,
+    0.06,
+    0.09,
+    0.01,
+    0.02,
+    0.01,
+    0.01,
+    0.02,
+    0.01,
+    0.01,
+    0.02
+   ]
+  },
+  "sizes": {
+   "median": 2,
+   "p90": 5,
+   "hist": {
+    "<2": 103,
+    "2-4": 47,
+    "4-8": 68,
+    "8-16": 11,
+    "16+": 1
+   }
+  },
+  "graph": {
+   "nodes": 130,
+   "edges": 133,
+   "components": 1,
+   "loops": 4,
+   "branchNodes": 9,
+   "reachable": true,
+   "route": {
+    "hops": 44,
+    "length": 887.6,
+    "straightXZ": 638,
+    "dy": 10,
+    "ratio": 1.39
+   },
+   "gaps": {
+    "n": 44,
+    "p50": 5,
+    "p90": 6,
+    "max": 6
+   }
+  }
+ },
+ "compare": {
+  "axes": [
+   {
+    "axis": "footprint",
+    "differs": true,
+    "why": "81468 vs 6782144.81"
+   },
+   {
+    "axis": "elevation",
+    "differs": true,
+    "why": "JS 0.62"
+   },
+   {
+    "axis": "platforms",
+    "differs": true,
+    "why": "230/2/5 vs 6847/1.6/4.71"
+   },
+   {
+    "axis": "branch/loop",
+    "differs": true,
+    "why": "branches 9/1000 loops 4/400"
+   },
+   {
+    "axis": "gaps",
+    "differs": true,
+    "why": "KS 0.65"
+   },
+   {
+    "axis": "objective",
+    "differs": true,
+    "why": "straight 638/600 dy 10/-580 ratio 1.39/1.5"
+   },
+   {
+    "axis": "topology",
+    "differs": true,
+    "why": "horizontal-traverse-with-vertical-hub vs descent-hub-network"
+   }
+  ],
+  "differing": 7,
+  "pass": true
+ },
+ "note": "sky-city graph axes (branch/loop/gaps/objective) are approximations: the generator declares no traversal graph. footprint/elevation/platform axes are measured."
+}

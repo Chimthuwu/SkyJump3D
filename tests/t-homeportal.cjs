@@ -2,7 +2,7 @@
 const { serve, launch, openGame } = require('./lib.cjs');
 (async () => {
   const { srv, url } = await serve(); const br = await launch(); const { page, errors } = await openGame(br, url, { dbg: true }); const R = {};
-  await page.click('#bStart'); await page.waitForFunction(() => __dbg.state === 'play', null, { timeout: 120000 }); await page.waitForTimeout(1500);
+  await page.evaluate(() => document.getElementById('bStart').click()); await page.waitForFunction(() => __dbg.state === 'play', null, { timeout: 120000 }); await page.waitForTimeout(1500);
   R.ext = await page.evaluate(() => __ng.levels.ladderExtend(-1));
   const g = R.ext.gates[0]; R.hasGate = !!g && g.dormant === false;
   const start = await page.evaluate(() => ({ ...__ng.me() }));
