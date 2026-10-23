@@ -117,6 +117,8 @@
   #hud .rt-bar.glide{--c1:#4ff0ff;--c2:#1a6aff}
   #hud .rt-bar.grip{--c1:#ffb347;--c2:#e0560a}
   #hud .rt-bar.nrg{--c1:#5aff8a;--c2:#0a9a64}
+  #hud .rt-bar.rent{--c1:#ffc23a;--c2:#c01a10}
+  #hud .rt-bar.wave7 i{color:#ff3152;text-shadow:2px 2px 0 #000}
   #hud .rt-bar.locked{--c1:#ff4a4a;--c2:#8a0a0a}
   #hud .rt-bar.low .rt-fill{animation:barBlink .35s steps(2) infinite}
   @keyframes barBlink{from{filter:brightness(1)}to{filter:brightness(.35)}}
@@ -1685,9 +1687,27 @@ function clearSkyProps() {
 }
 function buildSky() {
   clearSkyProps();
-  const th = theme();
+  // Per-level sky identity: the DEFAULT descent keeps its night-city theme; Rent's Due gets an amber smog sunset and
+  // Nostalgia Overdose a giant striped vaporwave sun. Themed skies have NO stars (per user: space belongs to the default level).
+  const th = themeZones() ? Object.assign({}, theme(), { stars: false,
+    orb: rentOn() ? 0xff8a3c : nosOn() ? 0xff2bd6 : 0xb0612f,
+    cloud: rentOn() ? 0x4a2610 : nosOn() ? 0x7a1f5c : 0x3a1c0c }) : theme();
+  const recolour = c => c;   // (th is fully materialised above)
   const orb = new THREE.Mesh(new THREE.SphereGeometry(45, 8, 4), new THREE.MeshBasicMaterial({ color: th.orb, fog: false }));
   orb.position.copy(sun.position).normalize().multiplyScalar(1800); scene.add(orb); skyProps.push(orb);
+  if (rentOn()) { const a = rand() * 6.283; orb.position.set(Math.cos(a) * 1700, 210, Math.sin(a) * 1700); }   // the smog sun sits LOW on the tenement horizon
+  if (nosOn()) {                                                              // NOSTALGIA OVERDOSE: giant striped RETRO SUN low on the horizon
+    orb.visible = false;
+    let tex = null; { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+      g.fillStyle = '#ffffff'; g.beginPath(); g.arc(128, 128, 127, 0, 6.283); g.fill();
+      g.fillStyle = '#000000'; let w = 3; for (let i = 0; i < 9; i++) { g.fillRect(0, 110 + i * 10, 256, w); w += 2.2; }
+      tex = new THREE.CanvasTexture(c); }
+    const aR = rand() * 6.283;
+    const nosSun = new THREE.Mesh(new THREE.CircleGeometry(110, 40), new THREE.MeshBasicMaterial({ map: tex, transparent: true, fog: false, toneMapped: false, color: 0xff4bd8 }));
+    nosSun.position.set(Math.cos(aR) * 1750, 150, Math.sin(aR) * 1750);
+    nosSun.renderOrder = -1;
+    nosSun.lookAt(0, 150, 0); scene.add(nosSun); skyProps.push(nosSun);
+  }
   // city light-haze: soft additive glows sitting out past the far skyline so Night City reads like a lit metropolis in fog
   const hazeCols = [th.orb, 0x36f6ff, 0xff3fc8];
   for (let i = 0; i < 12; i++) {
@@ -1786,6 +1806,29 @@ function evolveTick(dt) {
   if (evolveT > 0) return;
   evolveT = 16 + Math.random() * 12;
   spawnEvolutionPack(activeZ);                                              // steady pressure on the new biome
+}
+
+// RENT'S DUE — THE RENT CLOCK: a due-date meter that runs all level. Coins you grab are rent paid and push the
+// date back; as the meter empties the block gets twitchier, and at zero A.W. COLLECTIONS posts a bailiff wave on you.
+// Escalates with level, and every extra due date is shorter — you can never pay it off, you just keep staying housed.
+let rentDueT = 0, rentWave = 0;
+function rentPeriod() { return Math.max(22, 42 - level * 3 - rentWave * 2); }
+function rentClockTick(dt) {
+  if (state !== 'play') return;
+  rentDueT += dt;
+  if (rentDueT < rentPeriod()) return;
+  rentDueT = 0; rentWave++;
+  toast('RENT DUE — A.W. COLLECTIONS POSTED A WAVE', 2200);
+  sfx.boss && sfx.boss();
+  const nWave = 2 + Math.min(4, rentWave);
+  for (let k = 0; k < nWave; k++) {
+    const a = rand() * 6.283, r = 7 + rand() * 9;
+    makeWalker(pos.x + Math.cos(a) * r, pos.y + 0.5, pos.z + Math.sin(a) * r,
+      { minx: pos.x - 45, maxx: pos.x + 45, minz: pos.z - 45, maxz: pos.z + 45 }, 1, false, k % 3 === 2 ? 'collector' : 'bailiff');
+  }
+  // foreclosure pressure: one safe spot in the wave zone turns crumbly
+  const near = solids.filter(s => s.cx !== undefined && !s.sp && !s.bounce && !s.rail && !s.awakened && Math.abs(s.top - pos.y) < 8 && Math.hypot(s.cx - pos.x, s.cz - pos.z) < 26);
+  if (near.length) makeSpecial(near[(rand() * near.length) | 0], 'crumble', {});   // one nearby ledge is condemned: eviction by structural failure
 }
 
 // Zone crossings: land in a new biome -> local wildlife morphs into it right away
@@ -2421,10 +2464,15 @@ function buildSkyway(hubs) {
     }
   }
   const ux = Math.cos(ma), uz = Math.sin(ma), px = -uz, pz = ux;
+  const moonless = !!themeZones();               // themed levels (Rent's Due / Nostalgia Overdose / The Gut): NO moon, no space column —
+  // they still get the endless void-fall + platform-counter ladder below, themed by their own zone ladder.
   const colR = 210, moonR = 520, baseY = TOP - 12, topY = TOP + 800;
   const keepOut = [{ x: ux * colR, z: uz * colR, r: 50 }, ...homes.map(h => ({ x: h.x, z: h.z, r: 40 }))];
-  for (let r = colR + 60; r <= moonR; r += 60) keepOut.push({ x: ux * r, z: uz * r, r: 36 });
-  keepOut.push({ x: ux * moonR, z: uz * moonR, r: 240 });
+  if (!moonless) {
+    for (let r = colR + 60; r <= moonR; r += 60) keepOut.push({ x: ux * r, z: uz * r, r: 36 });
+    keepOut.push({ x: ux * moonR, z: uz * moonR, r: 240 });
+  }
+  if (!moonless) {                                // DEFAULT LEVEL ONLY: launch pad + moon column + flat moon bridge
   // launch platform near the column; the roof reaches it by an ordinary platform chain
   addSlab(ux * colR, baseY, uz * colR, 9, 9, 3, null, true);
   hubs.push({ kind: 'launch', x: ux * colR, z: uz * colR, top: baseY, hw: 9, hd: 9, zone: null, r: 16 });
@@ -2450,7 +2498,9 @@ function buildSkyway(hubs) {
     const r = colR + k * 12 + (px * 0), bx = ux * r + px * Math.sin(k * 0.8) * 4, bz = uz * r + pz * Math.sin(k * 0.8) * 4;
     addPlatform(bx, topY + k * 0.12, bz, 4.5, false, 0, MOON_ZONE, true, true); if (k % 3 === 0) coin(bx, topY + 1.4, bz, MOON_ZONE);
   }
+  }
   for (let i = skyTag0; i < lvl.children.length; i++) lvl.children[i].userData.noCull = true;      // the stairway + bridge are the landmark you navigate by: never distance-cull them
+  if (!moonless) {                                // DEFAULT LEVEL ONLY: the moon sphere + its colosseum arena
   // the moon itself: a huge cratered sphere with an arena on top; landing reaches the moon route
   const mx = ux * moonR, mz = uz * moonR, moonTop = topY + 3, rad = 230;
   const moon = new THREE.Mesh(new THREE.SphereGeometry(rad, 28, 18), new THREE.MeshBasicMaterial({ map: moonTexture(), color: 0xd4dbec, fog: false }));          // self-lit so the moon glows even in the dark of space
@@ -2461,6 +2511,7 @@ function buildSkyway(hubs) {
   for (const sl of solids) if (sl.arena === A) sl.moon = true;
   const flag = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 9, 8), lam(0xffffff)); flag.position.set(mx, moonTop + 7, mz); scene.add(flag);
   const cloth = new THREE.Mesh(new THREE.PlaneGeometry(4, 2.4), new THREE.MeshBasicMaterial({ color: 0xff3fc8, side: THREE.DoubleSide })); cloth.position.set(mx + 2.2, moonTop + 10, mz); scene.add(cloth);
+  }
   // THE FALL: the void loop drops you down a corridor off to one side of the skyway. Fill it (and the space under the city) with
   // floating platforms you can catch, so the endless fall is full of things to grab, dodge and splat on.
   VOID_Y = -160; ladder.length = 0; ladderTop = null; ladderBot = null; curPN = null;
@@ -2500,7 +2551,10 @@ function buildSkyway(hubs) {
   ladder.sort((a, b) => a.top - b.top); ladder.forEach((sl, i) => { sl.pn = i + 1; });      // PLATFORM COUNTER: lowest = #1, highest = biggest number
   ladderBot = { n: 1, y: ladder[0].top }; ladderTop = { n: ladder.length, y: ladder[ladder.length - 1].top }; ladderLoop = loop;
   marsBuilt = false; warp.dest.length = 0; warp.idx = -1; warp.sel = 0; marsInfo = null; planetInfo.length = 0; planetLegBuilt = {}; WORLD_R = UNIVERSE_R + 420; camera.far = 2500; camera.updateProjectionMatrix();
-  moonInfo = { ux, uz, x: mx, y: moonTop, z: mz, col: [ux * colR, baseY, uz * colR], top: topY, loop };
+  // Themed worlds: moonInfo is a STUB (loop handle + voidLoop restart math) — voidLoop restarts at TOP+180, exactly like the default.
+  // Note mx/mz/moonTop above only exist in the !moonless branch, hence the rebuild of values here.
+  moonInfo = moonless ? { ux, uz, x: ux * moonR, y: topY + 700, z: uz * moonR, col: [ux * moonR, 0, uz * moonR], top: topY, loop, moonless: true }
+                      : { ux, uz, x: ux * moonR, y: topY + 3, z: uz * moonR, col: [ux * colR, baseY, uz * colR], top: topY, loop };   // mirrors the old mx/y pairs without depending on the block-scoped consts
   return keepOut;
 }
 // A chain of floating platforms from hub A to hub B. Heights wander (level runs, climbs, drops) so the player goes UP as well as down,
@@ -2938,47 +2992,43 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
   // The further down, the more collapsed/condemned; bottom is Collections hellscape.
   function buildRentNetwork(exitAngle) {
     const hubs = activeStartHubs().map(home => ({ ...home }));
-    const keepOut = buildSkyway(hubs);
+    const keepOut = buildSkyway(hubs);                       // themed: void-fall corridor + platform ladder, NO moon column
     hubs.push(buildRidePark());
-
-    // Rent's Due: fewer but taller, denser hubs — verticality over breadth
-    const nB = Math.min(6 + level, 14), nA = Math.min(5 + level, 12);
-    const types = ['tenement', 'courtyard', 'fire_escape', 'laundry', 'scaffold', 'eviction', 'penthouse', 'collections'];
-    for (let i = types.length - 1; i > 0; i--) { const j = (rand() * (i + 1)) | 0; [types[i], types[j]] = [types[j], types[i]]; }
-
+    // KOWLOON BLOCK: each universe is one packed, irregular grid of tenements around its home tower. Roads? No —
+    // roofs staggered so every neighbour is a hop, narrow alleys between the towers (fall there = the endless drop),
+    // fire escapes zigzagging on walls, laundry lines strung roof-to-roof, and arenas on the big corner lots.
+    const arenaTypes = ARENA_TYPES.slice(); for (let i = arenaTypes.length - 1; i > 0; i--) { const j = (rand() * (i + 1)) | 0; [arenaTypes[i], arenaTypes[j]] = [arenaTypes[j], arenaTypes[i]]; }
     for (let slot = 0; slot < HOME_SLOT_COUNT; slot++) {
-      const centre = universeCentre(slot);
-      for (let i = 0; i < nA; i++) {
-        const severity = Math.min(3, 1 + Math.floor(i / 4)); // 1=Foreclosure, 2=Condemned, 3=Collections
-        const zone = RENT_ZONES[severity - 1];
-        for (let tries = 0; tries < 200; tries++) {
-          const ang = rand() * 6.283, dist = 45 + rand() * (120 + level * 8);
-          const x = centre.x + Math.cos(ang) * dist, z = centre.z + Math.sin(ang) * dist;
-          if (hubs.some(h => Math.hypot(h.x - x, h.z - z) < (h.r || 10) + 28)) continue;
-          if (Math.hypot(x - groundPad.x, z - groundPad.z) < 40 || Math.hypot(x - boss.x, z - boss.z) < 36) continue;
-          if (keepOut.some(kk => Math.hypot(kk.x - x, kk.z - z) < kk.r + 28)) continue;
-          const top = TOP - 15 - rand() * (TOP - 60);
-          const hub = buildRentHub(types[i % types.length], x, top, z, zone, severity);
-          hub.region = i; hub.universe = slot; hub.severity = severity;
-          hubs.push(hub);
-          break;
-        }
+      const centre = universeCentre(slot), homes = activeStartHubs();
+      const N = 5, spread = (N - 1) / 2, cell = 36 + rand() * 6, cells = [];
+      for (let gy = 0; gy < N; gy++) for (let gx = 0; gx < N; gx++) {
+        if (rand() < 0.24) continue;                         // some lots are rubble pits / open air: the alleys
+        const x = centre.x + (gx - spread) * cell + (rand() - 0.5) * 9, z = centre.z + (gy - spread) * cell + (rand() - 0.5) * 9;
+        if (homes.some(h => Math.hypot(x - h.x, z - h.z) < (h.r || 30) + 30)) continue;      // keep the home tower's block clear
+        if (Math.hypot(x - groundPad.x, z - groundPad.z) < 44 || Math.hypot(x - boss.x, z - boss.z) < 40) continue;
+        if (keepOut.some(kk => Math.hypot(kk.x - x, kk.z - z) < kk.r + 24)) continue;
+        let clash = false; for (const c of cells) if (Math.hypot(c.x - x, c.z - z) < 30) clash = true; if (clash) continue;
+        const rad = Math.hypot(gx - spread, gy - spread) / spread;      // the block CLIMBS away from the home at its centre
+        const top = clamp(TOP * (0.26 + 0.40 * rad) + (rand() - 0.3) * TOP * 0.16, 30, TOP * 0.9);
+        const zone = rentZoneForHub(cells.length);                     // severity deepens across the block like a crawl
+        let hub;
+        if (rand() < 0.18) hub = buildArena(arenaTypes[cells.length % arenaTypes.length], x, top, z, zone);
+        else hub = buildBuildingHub(x, z, 16 + rand() * 8, 16 + rand() * 8, top, zone);
+        hub.region = cells.length; hub.universe = slot;
+        cells.push(hub); hubs.push(hub);
       }
-      for (let i = 0; i < nB; i++) {
-        const severity = Math.min(3, 1 + Math.floor((nA + i) / 5));
-        const zone = RENT_ZONES[severity - 1];
-        for (let tries = 0; tries < 200; tries++) {
-          const ang = rand() * 6.283, dist = 50 + rand() * (140 + level * 10);
-          const x = centre.x + Math.cos(ang) * dist, z = centre.z + Math.sin(ang) * dist;
-          if (hubs.some(h => Math.hypot(h.x - x, h.z - z) < (h.r || 10) + 20)) continue;
-          if (Math.hypot(x - groundPad.x, z - groundPad.z) < 34 || Math.hypot(x - boss.x, z - boss.z) < 30) continue;
-          if (keepOut.some(kk => Math.hypot(kk.x - x, kk.z - z) < kk.r + 20)) continue;
-          const top = TOP - 20 - rand() * (TOP - 70);
-          const hub = buildRentBuilding(x, z, top, zone, severity);
-          hub.region = nA + i; hub.universe = slot; hub.severity = severity;
-          hubs.push(hub);
-          break;
+      // Roof-level Kowloon flavour between near neighbours: laundry lines (same height), fire escapes (one climbs to the next)
+      for (const h of cells) {
+        const near = cells.filter(o => o !== h && Math.hypot(o.x - h.x, o.z - h.z) < cell * 1.65)
+          .sort((a, b) => Math.hypot(a.x - h.x, a.z - h.z) - Math.hypot(b.x - h.x, b.z - h.z));
+        if (!near.length) continue;
+        for (let k = 0; k < Math.min(2, near.length); k++) {
+          const o = near[k];
+          if (Math.abs(o.top - h.top) < 9 && rand() < 0.6) laundryLine(h, o);
         }
+        const up = near.find(o => o.top >= h.top + 12 && Math.hypot(o.x - h.x, o.z - h.z) < cell * 1.45);
+        if (up) rentFireEscape(h, up, h.zone);
+        rentRoofClutter(h);
       }
     }
 
@@ -2994,15 +3044,42 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
       loreTerminal(h.x + (h.kind === 'start' ? 6 : Math.min(h.hw || 8, 8) - 2), h.top, h.z + (h.kind === 'start' ? -6 : 2));
     }
 
-    // Props on hubs
-    for (const h of hubs) if ((h.kind === 'building' || h.kind === 'arena' || h.kind === 'tenement' || h.kind === 'courtyard' || h.kind === 'penthouse') && h.top !== undefined) {
-      addProp(Math.random() < 0.5 ? 'bike' : 'buggy', h.x + Math.min(h.hw || 8, 8) - 3, h.top, h.z - 3);
+    // Props on hub roofs (rides to run the alleys and drop gaps)
+    for (const h of hubs) if ((h.kind === 'building' || h.kind === 'arena') && h.top !== undefined) {
+      addProp((hubs.indexOf(h) % 2) ? 'bike' : 'buggy', h.x + (h.hw || 8) - 3, h.top, h.z - 3);
     }
 
-    // Connect: vertical chains (fire escapes, elevator shafts, laundry lines)
-    connectRentVertical(hubs);
-    // Horizontal: skybridges, clotheslines, scaffold walks
-    connectRentHorizontal(hubs);
+    // Connectivity: home fans out to its nearest roofs; every roof chains to its nearest earlier sibling; arenas stay gated.
+    roadBudget = 12; roadSerial = 0; startRoads = 0;
+    const spawnHubs = hubs.filter(h => h.kind === 'start'), restHubs = hubs.filter(h => h.kind !== 'start');
+    spawnHubs.forEach((home, slot) => {
+      const local = restHubs.filter(h => Math.hypot(h.x - home.x, h.z - home.z) < 300)
+        .sort((a, b) => Math.hypot(a.x - home.x, a.z - home.z) - Math.hypot(b.x - home.x, b.z - home.z));
+      if (!local.length) return;
+      connect(home, local[0]);
+      for (let k = 1; k < 3 && k < local.length; k++) connect(home, local[k]);
+    });
+    for (let i = 0; i < hubs.length; i++) {
+      if (hubs[i].kind === 'start') continue;
+      const near = hubs.slice(0, i).sort((a, b) => Math.hypot(a.x - hubs[i].x, a.z - hubs[i].z) - Math.hypot(b.x - hubs[i].x, b.z - hubs[i].z));
+      if (near.length && Math.hypot(near[0].x - hubs[i].x, near[0].z - hubs[i].z) < 240) connect(near[0], hubs[i]);
+      if (near.length > 1 && Math.hypot(near[1].x - hubs[i].x, near[1].z - hubs[i].z) < 240 && rand() < 0.8) connect(near[1], hubs[i]);
+    }
+    const byDist = h => (a, b) => Math.hypot(a.x - h.x, a.z - h.z) - Math.hypot(b.x - h.x, b.z - h.z);
+    for (const h of hubs) if (h.kind === 'arena' && !h.gated) {     // way up onto every arena (locked until its Guardian dies)
+      const lower = hubs.filter(o => o !== h && o.top < h.top - 8).sort(byDist(h))[0];
+      if (lower && Math.hypot(lower.x - h.x, lower.z - h.z) < 260) connect(h, lower);
+    }
+    for (let tries = 0, ups = 0; tries < 80 && ups < 8; tries++) {  // staircases that climb back up inside the block
+      const lo = hubs[(rand() * hubs.length) | 0], hi = hubs[(rand() * hubs.length) | 0];
+      if (!lo || !hi || lo === hi || hi.top - lo.top < 10 || hi.top - lo.top > 110 || Math.hypot(lo.x - hi.x, lo.z - hi.z) > 180) continue;
+      const before = solids.length + reserved.length; connect(lo, hi); if (solids.length + reserved.length > before) ups++;
+    }
+    for (let i = 0, made = 0; i < 60 && made < 16; i++) {           // extra links: a packed block, not a tree
+      const a = hubs[(rand() * hubs.length) | 0], b = hubs[(rand() * hubs.length) | 0];
+      if (a === b || Math.hypot(a.x - b.x, a.z - b.z) > 160) continue;
+      const before = solids.length + reserved.length; connect(a, b); if (solids.length + reserved.length > before) made++;
+    }
     buildUniverseLinks(hubs);
     buildBranches(hubs);
     buildHubPortalLoop(hubs);
@@ -3010,81 +3087,166 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     return hubs;
   }
 
-  // NOSTALGIA OVERDOSE: Synthwave cassette future — neon grid highways, CRT towers,
-  // arcade cabinet arcologies, tape reel platforms, tracking-error glitch zones.
-  // Three acts: Sunset Strip (cassette), Tracking Error (glitch), Arcade Overdrive (cabinets).
+  // ===== RENT'S DUE: Kowloon dressing helpers =====
+  function laundryLine(a, b) {
+    const y = Math.min(a.top, b.top) + 1.1;
+    addRail(a.x, a.z, y, b.x, b.z, 0xd8d2c2);                      // the rope itself: grindable, and a real crossing
+    const n = 2 + ((rand() * 3) | 0), cols = [0xcfc9b8, 0xb8c4cf, 0xcfb8b8];
+    for (let k = 0; k < n; k++) {                                  // hanging sheets (visual)
+      const t = 0.2 + 0.6 * (n === 1 ? rand() : k / (n - 1)), px = a.x + (b.x - a.x) * t, pz = a.z + (b.z - a.z) * t;
+      const c = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.9), new THREE.MeshLambertMaterial({ color: cols[(rand() * cols.length) | 0], side: THREE.DoubleSide, transparent: true, opacity: 0.94 }));
+      c.position.set(px, y - 1.35, pz); c.rotation.y = Math.atan2(b.x - a.x, b.z - a.z) + Math.PI / 2; scene.add(c);
+    }
+    return true;
+  }
+  function rentFireEscape(lo, hi, zone) {
+    // a zigzag of small slabs climbing the shared wall face from one roof's height up to the neighbour's — real footing, real coins
+    const fx = hi.x - lo.x, fz = hi.z - lo.z, F = Math.hypot(fx, fz) || 1, ux = fx / F, uz = fz / F;
+    const sx = lo.x + ux * ((lo.hw || 8) + 1.8), sz = lo.z + uz * ((lo.hd || 8) + 1.8);
+    const y0 = lo.top - 5, y1 = hi.top - 4, steps = clamp(Math.round(Math.abs(y1 - y0) / 5), 3, 12);
+    for (let k = 0; k <= steps; k++) {
+      const t = k / steps, y = y0 + (y1 - y0) * t, off = (k % 2 ? 1 : -1) * 2.6;
+      const x = sx + fx * 0.55 * t - uz * off, z = sz + fz * 0.55 * t + ux * off;
+      if (blocked(x, y, z, 1.7)) continue;
+      const pl = addPlatform(x, y, z, 1.6, false, 0, zone, true, false);
+      if (k % 2 === 0) coin(x, y + 1.2, z, zone);
+      if (k === ((steps / 2) | 0) && rand() < 0.5) spawnBiomeEnemy(x, y, z, pl, zone, 0.55);   // bill collectors hold the fire stairs
+    }
+  }
+  function rentRoofClutter(h) {                                   // AC units, water tanks, shanty lean-tos: real footing on every roof
+    const n = 1 + ((rand() * 3) | 0);
+    for (let k = 0; k < n; k++) {
+      const ox = (rand() - 0.5) * (h.hw - 2) * 1.6, oz = (rand() - 0.5) * (h.hd - 2) * 1.6;
+      if (h.hw < 7 || h.hd < 7) continue;
+      if (rand() < 0.55) addBlock(h.x + ox, h.top, h.z + oz, 1.2 + rand() * 0.9, 1.2 + rand() * 0.9, 1.8 + rand() * 1.6, h.zone, 0x54462f);
+      else {
+        addBlock(h.x + ox, h.top, h.z + oz, 2.2, 2.2, 2.6, h.zone, 0x4a4438);   // the tank's stand (solid)
+        const tank = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 2.6, 10), retroMaterial(new THREE.MeshLambertMaterial({ color: 0x6e5a40 })));
+        tank.position.set(h.x + ox, h.top + 3.9, h.z + oz); scene.add(tank);
+      }
+    }
+  }
+
+  // NOSTALGIA OVERDOSE: THE PURE LINEAR HIGHWAY — no radial scatter at all. One outrun road leaves each home tower and
+  // runs out into the horizon in BIG chunks separated by real jump gaps (dash pad -> kicker lip -> air -> lower deck).
+  // The road only ever descends, so the three acts play in order via the height bands (nosZoneForY): Sunset Strip up top,
+  // Tracking Error mid-air, Arcade Overdrive at the floor. Service decks = hubs (bosses, guns, checkpoints, portals);
+  // rival rider packs chase you down the tarmac. Write it all with the seeded rand() so co-op clients build the same road.
   function buildNosNetwork(exitAngle) {
     const hubs = activeStartHubs().map(home => ({ ...home }));
     const keepOut = buildSkyway(hubs);
     hubs.push(buildRidePark());
-
-    const nB = Math.min(8 + level * 2, 20), nA = Math.min(7 + level * 2, 16);
-    const types = ['cassette_deck', 'crt_tower', 'arcade_row', 'synth_highway', 'neon_grid', 'vhs_stack', 'pixel_plaza', 'glitch_zone'];
-    for (let i = types.length - 1; i > 0; i--) { const j = (rand() * (i + 1)) | 0; [types[i], types[j]] = [types[j], types[i]]; }
-
+    const arenaTypes = ['ring', 'cross', 'colosseum', 'runway'];
     for (let slot = 0; slot < HOME_SLOT_COUNT; slot++) {
-      const centre = universeCentre(slot);
-      // Three vertical bands = three acts
-      const bandHeight = TOP / 3;
-      for (let i = 0; i < nA; i++) {
-        const band = Math.min(2, Math.floor(i / (nA / 3))); // 0=Sunset, 1=Tracking, 2=Arcade
-        const zone = NOS_ZONES[band];
-        for (let tries = 0; tries < 200; tries++) {
-          const ang = rand() * 6.283, dist = 40 + rand() * (100 + level * 8);
-          const x = centre.x + Math.cos(ang) * dist, z = centre.z + Math.sin(ang) * dist;
-          const top = band * bandHeight + 10 + rand() * (bandHeight - 20);
-          if (hubs.some(h => Math.hypot(h.x - x, h.z - z) < (h.r || 10) + 24 && Math.abs(h.top - top) < 40)) continue;
-          if (Math.hypot(x - groundPad.x, z - groundPad.z) < 38 || Math.hypot(x - boss.x, z - boss.z) < 34) continue;
-          if (keepOut.some(kk => Math.hypot(kk.x - x, kk.z - z) < kk.r + 24)) continue;
-          const hub = buildNosHub(types[i % types.length], x, top, z, zone, band);
-          hub.region = i; hub.universe = slot; hub.nosBand = band;
-          hubs.push(hub);
-          break;
+      const homeHubs = activeStartHubs(), home = homeHubs[slot];
+      let ang = rand() * 6.283;
+      const u0x = Math.cos(ang), u0z = Math.sin(ang);
+      // roof-edge LAUNCH: dash pad + kicker aimed along the road bearing, then the first deck just off the tower
+      addRampDir(home.x + u0x * (TH - 9), home.z + u0z * (TH - 9), TOP, u0x, u0z, 4, 8, 30);
+      addDashPad(home.x + u0x * (TH - 6), TOP, home.z + u0z * (TH - 6), u0x, u0z);
+      let x = home.x + u0x * (TH + 8), z = home.z + u0z * (TH + 8), y = TOP - 3;
+      const deck0 = { kind: 'building', x, z, top: y, hw: 9, hd: 9, w: 18, d: 18, zone: NOS_ZONES[0], r: 11, nosBand: 0, deck: true };
+      deck0.slab = addSlab(x, y, z, 9, 9, 2.5, NOS_ZONES[0], true);
+      hubs.push(deck0);
+      loreTerminal(x + 5, y, z - 4);
+      weaponPickup(2 + ((rand() * (WEAPONS.length - 2)) | 0), x - 5, y + 1.2, z + 4);
+      addProp('bike', x + 5, y, z + 4); addProp('buggy', x - 5, y, z - 4);
+      connect(home, deck0);                                      // on-foot chain, since the kicker is an all-out commitment
+      let lastDeckHub = deck0;
+      const chunks = 10 + level * 2;
+      for (let c = 1; c <= chunks; c++) {
+        ang += (rand() - 0.5) * 0.44;                            // the highway curls, gently, forever
+        const ux = Math.cos(ang), uz = Math.sin(ang), nxx = -uz, nzz = ux;
+        const seg = 22 + rand() * 20, w = 3.7 + rand() * 1.6;
+        const gap = c <= 1 ? 2 + rand() * 4 : 6 + rand() * 7 + Math.min(8, c * 0.7);   // the jumps GROW as you go
+        y = Math.max(16, y - (7 + rand() * 7));
+        const band = y > TOP * 0.55 ? 0 : y > TOP * 0.22 ? 1 : 2, zone = NOS_ZONES[band];
+        const leadX = x + ux * gap, leadZ = z + uz * gap, nSeg = Math.ceil(seg / 6.5);
+        let built = 0, endX = x, endZ = z, endY = y, endSlab = null, midPl = null;
+        for (let k = 0; k < nSeg; k++) {
+          const t = nSeg > 1 ? k / (nSeg - 1) : 0.5, sx = leadX + ux * seg * t, sz = leadZ + uz * seg * t;
+          if (blocked(sx, y, sz, w * 1.05)) continue;
+          const sl = addSlab(sx, y, sz, w, w, 2, zone, false);
+          built++; endX = sx; endZ = sz; endY = y; endSlab = sl;
+          // neon lane edges + centre dashes, chunk-scale (tryRoad look, but wider for the outrun fantasy)
+          for (const side of [-1, 1]) {
+            const e = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.16, 6.6), new THREE.MeshBasicMaterial({ color: zone.plate }));
+            e.position.set(sx - nxx * side * (w - 0.5), y + 0.02, sz - nzz * side * (w - 0.5)); e.rotation.y = Math.atan2(ux, uz); scene.add(e);
+          }
+          const dash = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.14, 3), new THREE.MeshBasicMaterial({ color: 0xffd23a }));
+          dash.position.set(sx, y + 0.02, sz); dash.rotation.y = Math.atan2(ux, uz); scene.add(dash);
+          if (k % 2 === 0) coin(sx, y + 1.2, sz, zone);
+          if (k === ((nSeg / 2) | 0)) { addCheckpoint(sx, y, sz, zone); midPl = sl; }
+          if (k % 3 === 1) spawnBiomeEnemy(sx, y, sz, sl, zone, 1 - y / TOP);
+          if (k % 5 === 3 && rand() < 0.6) addBlock(sx + nxx * (rand() - 0.5) * 3, y, sz + nzz * (rand() - 0.5) * 3, 1.5, 1.5, 2.4, zone, 0x241a3a);   // CRT stack to hop
+          if (k % 6 === 2) ammoBox(sx + nxx * (w - 1), y + 0.8, sz + nzz * (w - 1));
         }
+        if (built > 1) {
+          addRampDir(endX - ux * 10, endZ - uz * 10, endY, ux, uz, 4, w * 2, 26 + gap * 0.9);   // kicker lip at the gap
+          addDashPad(endX - ux * 15, endY, endZ - uz * 15, ux, uz);                             // speed before every jump
+          const chunkHub = { kind: 'road', x: leadX + ux * seg * 0.5, z: leadZ + uz * seg * 0.5, top: y, hw: Math.min(w, seg / 2), hd: Math.min(w, seg / 2), zone, r: 8, nosBand: band, chunk: true };
+          if (midPl) coin(chunkHub.x, y + 1.2, chunkHub.z, zone);
+          if (c % 4 === 2) {                                 // SERVICE DECK: cassette plaza off the shoulder — a real hub
+            const dx = endX + nxx * (w + 12), dz = endZ + nzz * (w + 12);
+            if (!blocked(dx, y, dz, 9)) {
+              const dsl = addSlab(dx, y, dz, 9, 8, 2.5, zone, true);
+              const dh = { kind: 'building', x: dx, z: dz, top: y, hw: 9, hd: 8, w: 18, d: 16, zone, r: 11, nosBand: band, deck: true, slab: dsl };
+              hubs.push(dh);
+              loreTerminal(dx + 5, y, dz - 3);
+              if (rand() < 0.7) weaponPickup(2 + ((rand() * (WEAPONS.length - 2)) | 0), dx - 4, y + 1.2, dz + 3);
+              addProp(rand() < 0.5 ? 'bike' : 'buggy', dx + 5, y, dz + 3);
+              spawnRiderGroup(dx, y, dz, dsl, Math.min(3, 1 + level), 5);
+              connect(lastDeckHub, dh);                      // decks chain onto each other: the walk-back way home
+              lastDeckHub = dh;
+            }
+          }
+          if (c % 6 === 3 && rand() < 0.8) {                 // a real (gated) arena every so often for the boss roster
+            const ax2 = endX + nxx * (w + 34), az2 = endZ + nzz * (w + 34);
+            if (!hubs.some(hh => Math.hypot(hh.x - ax2, hh.z - az2) < 46)) {
+              const A = buildArena(arenaTypes[c % arenaTypes.length], ax2, y, az2, zone);
+              A.region = c; A.universe = slot; A.nosBand = band; hubs.push(A);
+              connect(A, { kind: 'road', x: endX, z: endZ, top: endY, hw: w, hd: w, zone, r: 8 });
+            }
+          }
+          if (c % 3 === 0) spawnRiderGroup(leadX + ux * seg * 0.4, y, leadZ + uz * seg * 0.4, endSlab, Math.min(3, 1 + level), Math.max(3, w - 1));   // rivals on the tarmac
+        }
+        x = endX; z = endZ;                                  // the next chunk's gap starts where this one ended
       }
-      for (let i = 0; i < nB; i++) {
-        const band = Math.min(2, Math.floor((nA + i) / (nB / 3)));
-        const zone = NOS_ZONES[band];
-        for (let tries = 0; tries < 200; tries++) {
-          const ang = rand() * 6.283, dist = 45 + rand() * (120 + level * 10);
-          const x = centre.x + Math.cos(ang) * dist, z = centre.z + Math.sin(ang) * dist;
-          const top = band * bandHeight + 15 + rand() * (bandHeight - 25);
-          if (hubs.some(h => Math.hypot(h.x - x, h.z - z) < (h.r || 10) + 18 && Math.abs(h.top - top) < 35)) continue;
-          if (Math.hypot(x - groundPad.x, z - groundPad.z) < 32 || Math.hypot(x - boss.x, z - boss.z) < 28) continue;
-          if (keepOut.some(kk => Math.hypot(kk.x - x, kk.z - z) < kk.r + 18)) continue;
-          const hub = buildNosPlatform(x, z, top, zone, band);
-          hub.region = nA + i; hub.universe = slot; hub.nosBand = band;
-          hubs.push(hub);
-          break;
+      // FINAL RUN-IN: the road splashes down toward the level's exit pad near the original hub, one last kicker, done.
+      const exx = Math.cos(exitAngle) * 34, exz = Math.sin(exitAngle) * 34;
+      const fx = exx - x, fz = exz - z, F = Math.hypot(fx, fz) || 1;
+      if (F > 30 && F < 320) {
+        const fux = fx / F, fuz = fz / F, nEnd = Math.min(18, Math.ceil(F / 9));
+        addRampDir(x, z, y, fux, fuz, 4, 8, 26);
+        for (let k = 1; k <= nEnd; k++) {
+          const t = k / nEnd, sy = y + (13 - y) * t, sx = x + fux * F * 0.85 * t, sz = z + fuz * F * 0.85 * t;
+          if (blocked(sx, sy, sz, 4.2)) continue;
+          const sl = addSlab(sx, sy, sz, 4.2, 4.2, 2, NOS_ZONES[2], false);
+          coin(sx, sy + 1.2, sz, NOS_ZONES[2]);
         }
       }
     }
-
+    connectDecksFar(hubs);                                     // cross-universe portal/chain help for co-op roads
     // Exit platform
     const exitPos = { x: Math.cos(exitAngle) * 34, z: Math.sin(exitAngle) * 34 };
     const ex = addSlab(exitPos.x, 12, exitPos.z, 8, 8, 2, NOS_ZONES[2], true);
     Object.assign(ex, { targetR: 2.2 }); addBullseye(exitPos.x, 12, exitPos.z, 2.2);
-    const exitHub = { kind: 'exit', x: exitPos.x, z: exitPos.z, top: 12, hw: 8, hd: 8, zone: NOS_ZONES[2], r: 10, nosBand: 2 };
-    hubs.push(exitHub);
-
-    // Lore terminals
-    for (const h of hubs) if ((h.kind === 'building' || h.kind === 'arena' || h.kind === 'start' || h.kind === 'cassette_deck' || h.kind === 'crt_tower' || h.kind === 'arcade_row') && h.top !== undefined) {
-      loreTerminal(h.x + (h.kind === 'start' ? 6 : Math.min(h.hw || 8, 8) - 2), h.top, h.z + (h.kind === 'start' ? -6 : 2));
-    }
-
-    // Props
-    for (const h of hubs) if ((h.kind === 'building' || h.kind === 'arena' || h.kind === 'cassette_deck' || h.kind === 'crt_tower' || h.kind === 'arcade_row') && h.top !== undefined) {
-      addProp(Math.random() < 0.5 ? 'bike' : 'buggy', h.x + Math.min(h.hw || 8, 8) - 3, h.top, h.z - 3);
-    }
-
-    // Connections: neon highways (straight, fast), cassette ribbons (curved), glitch teleporters
-    connectNosHighways(hubs);
-    connectNosGlitch(hubs);
+    hubs.push({ kind: 'exit', x: exitPos.x, z: exitPos.z, top: 12, hw: 8, hd: 8, zone: NOS_ZONES[2], r: 10, nosBand: 2 });
     buildUniverseLinks(hubs);
     buildBranches(hubs);
     buildHubPortalLoop(hubs);
     spawnStreetRiders(hubs);
     return hubs;
+  }
+  function connectDecksFar(hubs) {                             // deck-to-deck across the void when two roads cross paths
+    for (let i = 0; i < hubs.length; i++) {
+      const a = hubs[i]; if (a.kind !== 'building' || !a.deck) continue;
+      for (let j = i + 1; j < hubs.length; j++) {
+        const b = hubs[j]; if (b.kind !== 'building' || !b.deck) continue;
+        if (Math.hypot(a.x - b.x, a.z - b.z) > 200 || Math.abs(a.top - b.top) > 160) continue;
+        if (rand() < 0.35) connect(a, b);
+      }
+    }
   }
 
   // THE GUT: Biological descent — pulsating flesh platforms, vein bridges, organ chambers,
@@ -3162,93 +3324,6 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     buildHubPortalLoop(hubs);
     spawnStreetRiders(hubs);
     return hubs;
-  }
-
-  // ===== RENT'S DUE HUB BUILDERS =====
-  function buildRentHub(type, x, top, z, zone, severity) {
-    const hw = 14 + Math.random() * 8, hd = 14 + Math.random() * 8;
-    const slab = addSlab(x, top, z, hw, hd, 2, zone, false);
-    slab.kind = type; slab.severity = severity; slab.r = Math.max(hw, hd) + 2;
-    // Add vertical fire escape / elevator shaft visual
-    const shaft = new THREE.Mesh(new THREE.BoxGeometry(2, top, 2), MM('rentShaft', () => lamC(0x1a1210)));
-    shaft.position.set(x + hw - 2, top / 2, z + hd - 2); scene.add(shaft);
-    return { kind: type, x, z, top, hw, hd, zone, r: Math.max(hw, hd) + 2, severity };
-  }
-  function buildRentBuilding(x, z, top, zone, severity) {
-    const hw = 8 + Math.random() * 6, hd = 8 + Math.random() * 6, ht = 25 + Math.random() * 30;
-    const b = boxMesh(x, z, hw * 2, hd * 2, ht, bldMats[severity % bldMats.length]);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 1, 0.2, hd * 2 + 1), MM('rentRoof', () => lamC(severity === 3 ? 0x0a0202 : 0x2a1a12)));
-    roof.position.set(x, top + 0.1, z); scene.add(roof);
-    return { kind: 'building', x, z, top: top + ht, hw, hd, zone, r: Math.max(hw, hd) + 2, severity };
-  }
-  function connectRentVertical(hubs) {
-    // Fire escapes, elevator shafts, laundry lines connecting vertically
-    const bySlot = {};
-    for (const h of hubs) {
-      if (h.universe === undefined) continue;
-      if (!bySlot[h.universe]) bySlot[h.universe] = [];
-      bySlot[h.universe].push(h);
-    }
-    for (const slot in bySlot) {
-      const arr = bySlot[slot].filter(h => h.top !== undefined).sort((a, b) => a.top - b.top);
-      for (let i = 0; i < arr.length - 1; i++) {
-        if (Math.random() < 0.7 && Math.abs(arr[i].top - arr[i + 1].top) < 80) {
-          connect(arr[i], arr[i + 1]); // vertical chain
-        }
-      }
-    }
-  }
-  function connectRentHorizontal(hubs) {
-    // Skybridges, clotheslines, scaffold walks
-    for (let i = 0; i < hubs.length; i++) {
-      const near = hubs.filter((h, j) => j !== i && h.top !== undefined && Math.abs(h.top - hubs[i].top) < 25)
-        .sort((a, b) => Math.hypot(a.x - hubs[i].x, a.z - hubs[i].z) - Math.hypot(b.x - hubs[i].x, b.z - hubs[i].z));
-      for (let k = 0; k < Math.min(3, near.length); k++) {
-        if (Math.random() < 0.6) connect(hubs[i], near[k]);
-      }
-    }
-  }
-
-  // ===== NOSTALGIA OVERDOSE HUB BUILDERS =====
-  function buildNosHub(type, x, top, z, zone, band) {
-    const hw = 12 + Math.random() * 6, hd = 12 + Math.random() * 6;
-    const slab = addSlab(x, top, z, hw, hd, 2, zone, false);
-    slab.kind = type; slab.nosBand = band; slab.r = Math.max(hw, hd) + 2;
-    // Neon edge strips
-    const edgeC = [0x36f6ff, 0xdfe8ff, 0xff2bd6][band];
-    const stripM = MM('nosEdge' + band, () => basicC(edgeC));
-    for (const sd of [-1, 1]) {
-      add(new THREE.Mesh(new THREE.BoxGeometry(hw * 2, 0.1, 0.15), stripM), x, top + 0.1, z + sd * hd);
-      add(new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.1, hd * 2), stripM), x + sd * hw, top + 0.1, z);
-    }
-    return { kind: type, x, z, top, hw, hd, zone, r: Math.max(hw, hd) + 2, nosBand: band };
-  }
-  function buildNosPlatform(x, z, top, zone, band) {
-    const hw = 6 + Math.random() * 5, hd = 6 + Math.random() * 5;
-    const slab = addSlab(x, top, z, hw, hd, 2, zone, false);
-    slab.kind = 'platform'; slab.nosBand = band; slab.r = Math.max(hw, hd) + 1;
-    return { kind: 'platform', x, z, top, hw, hd, zone, r: Math.max(hw, hd) + 1, nosBand: band };
-  }
-  function connectNosHighways(hubs) {
-    // Neon highways: straight, fast connections along same band
-    const byBand = { 0: [], 1: [], 2: [] };
-    for (const h of hubs) if (h.nosBand !== undefined && h.top !== undefined) byBand[h.nosBand].push(h);
-    for (const band in byBand) {
-      const arr = byBand[band].sort((a, b) => Math.atan2(a.z, a.x) - Math.atan2(b.z, b.x));
-      for (let i = 0; i < arr.length; i++) {
-        const next = arr[(i + 1) % arr.length];
-        if (Math.random() < 0.8) connect(arr[i], next); // ring highway
-        if (Math.random() < 0.4) connect(arr[i], arr[(i + 2) % arr.length]); // cross chord
-      }
-    }
-  }
-  function connectNosGlitch(hubs) {
-    // Glitch teleporters: random cross-band links (Tracking Error only)
-    const tracking = hubs.filter(h => h.nosBand === 1 && h.top !== undefined);
-    for (const h of tracking) {
-      const targets = hubs.filter(o => o !== h && o.top !== undefined && Math.random() < 0.15);
-      for (const t of targets) connect(h, t);
-    }
   }
 
   // ===== THE GUT HUB BUILDERS =====
@@ -4252,6 +4327,7 @@ function buildLevel() {
   TOP = Math.min(480 + level * 100, 1200);       // MUCH taller towers
   syncStartLayout(sixTowerLayout); checkpoint = { ...start };
   seed = 11 + level * 97 + (rentOn() ? 5003 : nosOn() ? 8009 : gutOn() ? 11003 : 0); gutVeins = 0; levelSeed = seed;      // Rent's Due gets its own layout; the default level's seed is unchanged
+  rentDueT = rentPeriod() * 0.55; rentWave = 0;                          // the clock starts half-run: you have no grace period
   const sceneAdd = scene.add;
   scene.add = o => lvl.add(o);           // route this function's scene.add calls into the level group
   levelHubs = []; missions.length = 0; activeMission = null;
@@ -6885,7 +6961,7 @@ function updateItems(dt) {
         continue;
       }
       it.taken = true; it.mesh.removeFromParent();
-      if (it.type === 'coin') {        score += 10; sfx.coin(); if (base) { if (it.banana) base.bananas += 1; else base.credits += 1; saveBase(); } }
+      if (it.type === 'coin') {        score += 10; sfx.coin(); if (rentOn()) rentDueT = Math.max(0, rentDueT - 3.5); if (base) { if (it.banana) base.bananas += 1; else base.credits += 1; saveBase(); } }
       else if (it.type === 'weapon') {
         const i = it.weaponIndex, w = WEAPONS[i];
         if (unlockWeapon(i)) { toast(`ARSENAL FOUND: ${w.name}`, 1800); sfx.coin(); selectWeapon(i); }
@@ -7961,6 +8037,7 @@ function updateVisuals(dt) {
   const hudHtml = `<div class="rt-top"><span class="chip">LV <b>${level}</b></span><span class="chip">ALT <b>${pos.y | 0}</b>M</span>${combo > 0 ? `<span class="chip" style="border-color:#ffd23a;color:#ffd23a">x<b>${combo}</b></span>` : ''}</div>` +
     `<div class="rt-score"><span>SCORE</span><b>${String(Math.max(0, score | 0)).padStart(7, '0')}</b></div>` +
     bar('glide', glide, 'GLIDE') + bar('grip', climbStam, 'GRIP') + bar('nrg', cont.energy, 'ENERGY', cont.locked ? ' locked' : '') +
+    (rentOn() ? bar('rent', 1 - rentDueT / rentPeriod(), 'RENT', rentWave > 0 ? ' wave7' : '') : '') +
     `<div class="rt-line">COINS <b>${base.credits}</b> &nbsp; BANANAS <b>${base.bananas}</b></div>` +
     `<div class="rt-line">BEST <b>${Math.max(best.score, score)}</b> (L${best.level})</div>` +
     (curPN !== null && ladderTop ? `<div class="rt-line" style="color:${curPN < 0 ? '#ff5a7a' : '#ffd23a'}">PLATFORM <b>#${curPN}</b></div>` : '') +
@@ -9826,7 +9903,7 @@ renderer.setAnimationLoop(now => {
   else if (state === 'play') { playerUpdate(dt); if (P) PERF.lap('player'); updateEnemies(dt); if (P) PERF.lap('enemies'); updateShots(dt); if (P) PERF.lap('shots'); }
   else if (state === 'dead') { deadT -= dt; if (deadT <= 0) respawn(); if (net.on) { updateEnemies(dt); updateShots(dt); } }
   else if (state === 'clear') { updateEnemies(dt); clearT -= dt; if (clearT <= 0) nextLevel(); }
-  updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); evolveTick(dt); updateGrowers(dt); updateRoofArenas(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); goreFadeTick(dt); updateClouds(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
+  updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); if (rentOn()) rentClockTick(dt); evolveTick(dt); updateGrowers(dt); updateRoofArenas(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); goreFadeTick(dt); updateClouds(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
   updateVisuals(dt); setHint(); if (P) PERF.lap('visuals+hud');
   if (guideDialogOpen && state !== 'play') closeGuideDialog(false);
   netTick(dt); updatePeers(dt); debugTick(dt); if (P) PERF.lap('net+peers+debug');
