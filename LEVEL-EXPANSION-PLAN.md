@@ -359,7 +359,22 @@ If a gate can't be finished in one run: leave a working tested increment + concr
 - Later gates as in the brief; this plan will be amended in place at each gate.
 
 ## 13. Handoff log (append-only, filled as gates complete)
-_(empty — Phase 0)_
+
+### Gate 1 (foundation + Nostalgia Overdose GREYBOX) — status 2026-10-24
+Built on `origin/live` (see section 0.5). Commits on `claude/festive-volta-coj7vi`: foundation (`2e60d27`), OD greybox + bot (`7644c1f`), merge with live (`ca41b90`), evidence + later work after it. **Nothing is deployed** (sandbox cannot reach Cloudflare); **no human approval of Gate 1 has been given yet — Gates 2+ have NOT been started.**
+
+| Gate-1 requirement | Result | Evidence |
+|---|---|---|
+| Foundation: registry + kit + hooks, sky-city unchanged | **PASS** | `tests/t-selftest.cjs` (load x3, deterministic hash, fall -> checkpoint respawn, complete, exit, static sky-city hash identical before/after) |
+| OD playable spawn -> exit, collision correct on required routes | **PASS (one route)** | `tests/t-route.cjs`: bot with REAL key events, 83 waypoints, 0 deaths, level clear, returned to sky-city, 0 console errors — `docs/evidence/gate1/route-result.json`. Shortcut routes (vent, balcony+stairs, pad shortcuts, route B plates, rewind loop) are lint-checked (`tests/static.mjs`: 0 reach violations, 0 overlaps, 0 headroom violations, 1 component) but **NOT walked** by the bot. |
+| Overhead + angled screenshots with start/checkpoints/objective | **PASS** | `docs/evidence/gate1/view-{overhead,angled,west,stack}.png` |
+| Structural signature vs sky-city | **PASS (with caveat)** | `docs/evidence/gate1/signature.json`: 230 platforms / 81k m2 footprint vs 6,847 / 6.78M m2; 7 of 7 axes differ. Caveat: the sky-city has no declared graph, so its branch/loop/gap/objective axes are approximations; footprint/elevation/platform axes are measured. |
+| One continuous browser capture of the route | **PASS** | `docs/evidence/gate1/route-run.webm` (software GL, ~3 min including load; low frame rate) + checkpoint screenshots `cp-0*.png`, `final-clear.png` |
+| Perf vs baseline | **PARTIAL** | Greybox build 23-58 ms (budget 400); 230 solids; merged to a handful of draw calls. A before/after `renderer.info` + heap leak table (T-LEAK) was NOT produced for OD (selftest only covers the kit round trip). |
+
+Open decisions are listed in section 0.5. Awaiting your approval before decoration, enemies, audio or the other five levels.
+
+
 
 ---------------------------------------------------------------------
 

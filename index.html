@@ -6007,7 +6007,10 @@ function die(title, why) {
   runDeaths++; runPayout('RUN PAYOUT');
   state = 'dead'; deadT = 2.6; vel.set(0, 0, 0); pounding = false; combo = 0; saveBest();
   goreDeath(title === 'SPLAT!');
-  netSend({ t: 'died', x: +pos.x.toFixed(1), y: +pos.y.toFixed(1), z: +pos.z.toFixed(1), big: title === 'SPLAT!' });
+  const killer = lastAttacker && performance.now() - lastAttacker.t < 4000 ? lastAttacker.id : 0; lastAttacker = null;      // ARENA-MATCH
+  const suicide = /^(KNOCKED OUT|OUT OF THE ARENA|SPLAT!|YOU FELL)$/.test(title);      // falls / pits cost a frag; dying to a bot or boss does not
+  netSend({ t: 'died', x: +pos.x.toFixed(1), y: +pos.y.toFixed(1), z: +pos.z.toFixed(1), big: title === 'SPLAT!', k: killer, s: suicide ? 1 : 0 });
+  matchFrag(killer, net.id, suicide);      // ARENA-MATCH
   showMsg(title, why, activeSpec ? 'Back to your last checkpoint…' : 'Back to your home tower… (checkpoints you found are on the WARP PAD)');      // LEVELKIT:RESPAWN
   const h1 = $('msg').querySelector('h1'); if (h1) h1.style.color = '#d6121f';
 }
@@ -6680,8 +6683,41 @@ function pvpReceive(d, from) {
   if (state !== 'play' || invuln > 0) return;
   if (activeStartHubs().some(h => Math.abs(pos.x - h.x) < h.hw + 10 && Math.abs(pos.z - h.z) < h.hd + 10 && pos.y > TOP - 4)) return;      // home towers are safe from other players
   pvpAcc += d; if (pvpAcc < 1) return; pvpAcc = 0;
+  lastAttacker = { id: from | 0, t: performance.now() };      // ARENA-MATCH
   const p = net.peers.get(from); hurt(1, p ? p.pos.x : pos.x, p ? p.pos.z : pos.z);
 }
+// >>> ARENA-MATCH BEGIN
+// THE ARENAS deathmatch score: every client counts the same `died{k}` events (own death counted locally), so scores agree without a server. First to FRAG_LIMIT wins;
+// the HOST announces `matchend`, everyone shows the winner, and a new round starts after 7 s. Self-kills (falls) cost a frag. Only active in the arena level, in a room.
+let lastAttacker = null;
+const FRAG_LIMIT = 10, match = { limit: FRAG_LIMIT, frags: new Map(), deaths: new Map(), over: false, overT: 0, winner: 0, rounds: 0, hudKey: '' };
+function matchOn() { return arenaOn() && net.on; }
+function matchName(id) { return id === net.id ? 'YOU' : ((net.peers.get(id) || {}).name || 'P' + id); }
+function matchFrag(killer, victim, suicide = false) {
+  if (!matchOn() || match.over || !victim) return;
+  match.deaths.set(victim, (match.deaths.get(victim) || 0) + 1);
+  const kill = killer && killer !== victim, who = kill ? killer : victim, delta = kill ? 1 : suicide ? -1 : 0;
+  if (delta) match.frags.set(who, Math.max(-9, (match.frags.get(who) || 0) + delta));
+  if (kill) toast(`${matchName(killer)} fragged ${matchName(victim)}`, 1600); else if (suicide) toast(`${matchName(victim)} fell (-1)`, 1400); else toast(`${matchName(victim)} was killed`, 1200);
+  matchHud();
+  if (net.host && delta > 0 && match.frags.get(who) >= match.limit) { netSend({ t: 'matchend', winner: who }); matchEnd(who); }
+}
+function matchEnd(winner) {
+  if (match.over) return; match.over = true; match.overT = 7; match.winner = winner; match.rounds++;
+  showMsg(`${matchName(winner)} WIN${winner === net.id ? '' : 'S'}!`, [...match.frags].sort((a, b) => b[1] - a[1]).map(([id, f]) => `${matchName(id)} ${f}`).join(' · '), 'New round in 7 s'); matchHud();
+}
+function matchTick(dt) {
+  if (!matchOn()) { if (match.hudKey) matchHud(); return; }
+  if (match.over) { match.overT -= dt; if (match.overT <= 0) { match.over = false; match.frags.clear(); match.deaths.clear(); showMsg(''); matchHud(); toast('NEW ROUND — FIRST TO ' + match.limit, 2200); } }
+}
+function matchHud() {
+  let el = $('matchHud'); if (!el) { el = document.createElement('div'); el.id = 'matchHud'; el.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:20;font:700 14px Consolas,monospace;color:#e9fbff;text-shadow:0 0 6px #000;letter-spacing:.06em;pointer-events:none;text-align:center'; document.body.appendChild(el); }
+  if (!matchOn()) { el.style.display = 'none'; match.hudKey = ''; return; }
+  const ids = [net.id, ...net.peers.keys()]; const rows = ids.map(id => [id, match.frags.get(id) || 0]).sort((a, b) => b[1] - a[1]);
+  const html = `FIRST TO ${match.limit}<br>` + rows.map(([id, f]) => `<span style="color:${id === net.id ? '#36f6ff' : '#ff9ad7'}">${esc(matchName(id))} ${f}</span>`).join(' &nbsp;·&nbsp; ');
+  if (html !== match.hudKey) { match.hudKey = html; el.innerHTML = html; } el.style.display = 'block';
+}
+// <<< ARENA-MATCH END
 // the dark figure / watchers used to be scenery. Now they can be shot: they scream, vanish, and pay out.
 let phantomKills = 0;
 function eachPhantom(fn) {
@@ -9277,7 +9313,7 @@ function netMessage(m) {
     case 'full': toast('That room is full — six players maximum', 3600); break;
     case 'join':
       addPeer(m.id); toast(`Player ${m.id | 0} joined`, 1500);
-      if (net.host) netSend({ t: 'state', to: m.id | 0, level, lvl: levelDef.id, salt: gameSalt, snap: netSnapshot(true) });
+      if (net.host) netSend({ t: 'state', to: m.id | 0, level, lvl: levelDef.id, salt: gameSalt, mf: [...match.frags], md: [...match.deaths], snap: netSnapshot(true) });
       break;
     case 'leave': { const p = net.peers.get(m.id | 0); toast(`${p ? p.name : 'A player'} left`, 1500); net.missions.delete(m.id | 0); removePeer(m.id | 0); break; }
     case 'host': net.hostId = m.id | 0; net.host = net.hostId === net.id; if (net.host) toast('You are now the host', 2200); break;
@@ -9286,7 +9322,9 @@ function netMessage(m) {
       { const want = LEVEL_DEFS[m.lvl] ? m.lvl : 'descent', defChanged = want !== levelDef.id; if (defChanged) setLevelDefById(want);
         const saltChanged = Number.isFinite(m.salt) && (m.salt >>> 0) !== gameSalt; if (saltChanged) gameSalt = m.salt >>> 0;      // GAMESALT: adopt the host's roof
       if (((m.level | 0) !== level && (m.level | 0) > 0) || defChanged || saltChanged) { if ((m.level | 0) > 0) level = clamp(m.level | 0, 1, 99); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); } }
+      if (Array.isArray(m.mf)) { match.frags = new Map(m.mf.map(([a, b]) => [a | 0, b | 0])); match.deaths = new Map((m.md || []).map(([a, b]) => [a | 0, b | 0])); matchHud(); }      // ARENA-MATCH: joiners start from the room's score
       netApplySnap(m.snap); break;
+    case 'matchend': if (from === net.hostId && matchOn()) matchEnd(m.winner | 0); break;      // ARENA-MATCH
     case 'p': netPeerUpdate(from, m); break;
     case 'mission':
       if (from === net.id) break;
@@ -9312,7 +9350,7 @@ function netMessage(m) {
     case 'died': {
       const p = net.peers.get(from);
       goreDeath(!!m.big, vec3([m.x, m.y, m.z]), true);
-      toast(`${p ? p.name : 'A player'} ${m.big ? 'was splattered' : 'was knocked out'}`, 1800);
+      if (matchOn()) matchFrag(m.k | 0, from, !!m.s); else toast(`${p ? p.name : 'A player'} ${m.big ? 'was splattered' : 'was knocked out'}`, 1800);      // ARENA-MATCH
       if (p) p.alive = false; break;
     }
   }
@@ -11020,6 +11058,9 @@ window.__ng.levels = {
   spec: () => activeSpec,
   salt: () => gameSalt,
   def: () => levelDef.id,
+  match: () => ({ on: matchOn(), over: match.over, winner: match.winner, rounds: match.rounds, frags: [...match.frags], deaths: [...match.deaths], limit: match.limit }),
+  setFragLimit: n => { match.limit = n | 0; },
+  matchFrag: (k, v) => matchFrag(k, v),
   startDef: id => { startLevelDef(id); },
   ladderExtend: d => { ladderExtend(d); return { bot: ladderBot, gates: portals.filter(p => p.label === 'HOME PORTAL').map(p => ({ x: p.x, y: p.y, z: p.z, dormant: p.dormant, dest: p.dest && [p.dest.x, p.dest.y, p.dest.z] })) }; },
   setSalt: v => { gameSalt = v >>> 0; buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); return gameSalt; },
@@ -11062,7 +11103,7 @@ renderer.setAnimationLoop(now => {
   updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); if (rentOn()) rentClockTick(dt); if (nosOn()) { nosPipeTick(dt); nosEggTick(dt); } evolveTick(dt); updateGrowers(dt); updateRoofArenas(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); goreFadeTick(dt); updateClouds(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
   updateVisuals(dt); setHint(); if (P) PERF.lap('visuals+hud');
   if (guideDialogOpen && state !== 'play') closeGuideDialog(false);
-  netTick(dt); updatePeers(dt); debugTick(dt); if (P) PERF.lap('net+peers+debug');
+  netTick(dt); updatePeers(dt); matchTick(dt); debugTick(dt); if (P) PERF.lap('net+peers+debug');
   upscaleMaterial.uniforms.uTime.value = performance.now() / 1000;
   const _r0 = P ? performance.now() : 0;
   if (!contextLost) {
