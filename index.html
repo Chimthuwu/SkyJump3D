@@ -86,6 +86,7 @@
   body.gut-world #hint{border-color:rgba(255,60,100,.8);color:#ffd8e2;box-shadow:0 0 18px rgba(190,10,50,.3)}
   @media (prefers-reduced-motion:reduce){body.gut-world::before,body.gut-world::after{animation:none}}
   @keyframes gutBreath{from{filter:brightness(.78) saturate(1.1);transform:scale(1)}to{filter:brightness(1.08) saturate(1.35);transform:scale(1.025)}}
+  @keyframes pulse{from{opacity:1}to{opacity:.55}}
   @keyframes nosRoll{from{transform:translateY(-20vh)}to{transform:translateY(120vh)}}
   @keyframes nosTear{0%{transform:translateX(0)}14%{transform:translateX(-14px) skewX(2deg)}28%{transform:translateX(9px)}43%{transform:translateX(-22px) skewX(-3deg)}57%{transform:translateX(6px)}71%{transform:translateX(-10px) skewX(1.5deg)}100%{transform:translateX(0)}}
   @keyframes horrorBreath{from{filter:brightness(.86) contrast(1.07);transform:scale(1)}to{filter:brightness(.62) contrast(1.25);transform:scale(1.018)}}
@@ -174,6 +175,7 @@
   #menu label{display:block;margin:10px auto;font-size:15px;opacity:.9}
   #menu input{margin-left:10px;padding:8px 10px;width:min(240px,50vw);font:600 16px Consolas,monospace;color:#e9fbff;background:#0a1226;border:1px solid #ff3fc8;border-radius:4px;outline:none}
   #menu input:focus{box-shadow:0 0 10px #ff3fc8}
+  #menu.main{justify-content:space-between;padding:7vh 0 13vh}
   #menu .hint{margin-top:22px;font-size:13px;opacity:.6;letter-spacing:.1em}
   #menuMulti,#menuHost,#menuJoin,#menuBye,#menuLevels{display:none}
   #menuLevels button{text-align:left;padding:12px 18px}
@@ -238,7 +240,7 @@
 <div id="menu">
   <h1>SkyJump3D</h1>
   <div class="sub" id="menuSub">You're on the roof of a towering neon city. The only way is down &mdash; hop between floating platforms, stomp or blast the bots, beat each arena's Guardian, and reach the street.</div>
-  <div id="menuMain"><button id="bStart">START</button><button id="bMulti">MULTIPLAYER</button><button id="bExit">EXIT</button></div>
+  <div id="menuMain"><button id="bStart" class="sel" style="animation:pulse 1.2s ease-in-out infinite alternate">CLICK TO START</button><button id="bMulti" style="font-size:12px;opacity:.7">MULTIPLAYER (P)</button><button id="bExit" style="display:none">EXIT</button></div>
   <div id="menuLevels">
     <div class="sub">Choose a level.</div>
     <div id="lvlList"></div>
@@ -255,6 +257,7 @@
       <li id="stSrv" class="bad"><b id="stSrvChk">&#10007;</b><span><b>2.</b> Run the game server. <span class="dim" id="srvHint">Double-click <b>server\start-server.bat</b>, then open <b>http://localhost:8080</b> in your browser and come back here.</span></span></li>
       <li><b>&rarr;</b><span><b>3.</b> Send your friends this link (they need Tailscale too, on your Tailscale network):<br><b id="inviteAddr" class="addr">...</b></span></li>
     </ol>
+    <div class="sub" style="margin:10px 0 4px">Level</div><div id="mpLevels"></div>
     <label>Room code <input id="inRoom" value="lobby" maxlength="24" autocomplete="off"></label>
     <button id="bCopyInv">COPY INVITE LINK</button><button id="bGo">START HOSTING</button><button id="bBack2">BACK</button>
     <div class="dim small">Add friends in Tailscale: admin console &rarr; Users &rarr; Invite, or share this PC with them (Machines &rarr; ... &rarr; Share).</div>
@@ -340,7 +343,43 @@ let level = 1;
 const LEVEL_DEFS = { descent: { id: 'descent' }, rent: { id: 'rent' }, nos: { id: 'nos' }, gut: { id: 'gut' }, arena: { id: 'arena' } };
 let levelDef = LEVEL_DEFS.descent;
 const rentOn = () => levelDef.id === 'rent';
-const nosOn = () => levelDef.id === 'nos';                       // Nostalgia Overdose (VHS / retro-future)
+let nosPipes = [], pipeCd = 0, pipeHeld = true;                                  // Nostalgia Overdose warp pipes (rebuilt with the level)
+function nosPipeTick(dt) {
+  pipeCd -= dt; const held = !!(keys.KeyC || keys.ControlLeft), fresh = held && !pipeHeld; pipeHeld = held;      // warp needs a fresh press: holding crouch must not chain through the pipes
+  if (!fresh || pipeCd > 0 || !onGround || !standOn || !standOn.pipe) return;
+  const p = nosPipes.find(q => q.sol === standOn); if (!p || !p.to) return;
+  pos.set(p.to.x, p.to.y + 0.05, p.to.z); vel.set(0, 0, 0); pipeCd = 1.2;
+  shockRing(pos, 6, 0x3be05a); try { sfx.clear && sfx.clear(); } catch (_) {} toast('WARP!', 900);
+}
+// OLD-SCHOOL EASTER EGGS (Nostalgia Overdose): ? blocks, Pac-Man dots, Zelda old man, Mega Man E-tank, animated Invaders/Pong billboards, Konami code
+let nosEggs = [], nosKonamiI = 0, nosKonamiDone = false;
+const NOS_KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'KeyB', 'KeyA'];
+function nosEggTick(dt) {
+  if (!nosEggs.length) return;
+  const t = performance.now() / 1000;
+  for (const e of nosEggs) {
+    const dx = pos.x - e.x, dz = pos.z - e.z, d2 = dx * dx + dz * dz;
+    if (e.k === 'invaders') { if (d2 < 22500) { e.mesh.position.x = e.x + Math.sin(t * 0.9) * 1.2 * e.ax; e.mesh.position.z = e.z + Math.sin(t * 0.9) * 1.2 * e.az; } continue; }
+    if (e.k === 'pong') { if (d2 < 22500) { const u = Math.abs(((t * 0.55) % 2) - 1); e.ball.position.x = (u * 2 - 1) * e.hw; e.ball.position.y = Math.sin(t * 2.3) * 0.7; e.padA.position.y = e.ball.position.y * 0.8; e.padB.position.y = Math.sin(t * 2.3 + 1.3) * 0.7; } continue; }
+    if (e.used) { if (e.mesh && e.k !== 'q') e.mesh.visible = false; continue; }
+    if (e.k === 'zelda' || e.k === 'etank') e.mesh.rotation.y += dt * (e.k === 'etank' ? 2 : 0.4);
+    if (d2 > (e.r || 2.4) * (e.r || 2.4) || Math.abs(pos.y - e.y) > (e.dy || 3.2) || (e.yMin !== undefined && pos.y < e.yMin)) continue;
+    e.used = true; sfx.coin();
+    if (e.k === 'q') { e.mesh.material = e.dead; score += 20; if (base) { base.credits += e.coins; saveBase(); } if (e.heart && health < MAXHP) health++; toast(e.heart ? '? BLOCK: +1 HEART' : `? BLOCK: +${e.coins} COINS`, 1100); shockRing(e.mesh.position, 3, 0xffd23a); }
+    else if (e.k === 'dot') { score += 10; if (e.last) { if (base) { base.credits += 6; saveBase(); } toast('WAKA WAKA! +6 COINS', 1200); shockRing(e.mesh.position, 4, 0xffe84a); } }
+    else if (e.k === 'zelda') { grantAvailableAmmo(); toast("IT'S DANGEROUS TO GO ALONE!  TAKE THIS.  (AMMO)", 2600); shockRing(e.mesh.position, 5, 0xff3a3a); }
+    else if (e.k === 'etank') { health = MAXHP; toast('E-TANK! HEALTH FILLED', 1600); shockRing(e.mesh.position, 5, 0x4aa8ff); }
+  }
+}
+addEventListener('keydown', e => {
+  if (!nosOn() || state !== 'play' || e.repeat) return;
+  nosKonamiI = e.code === NOS_KONAMI[nosKonamiI] ? nosKonamiI + 1 : (e.code === NOS_KONAMI[0] ? 1 : 0);
+  if (nosKonamiI < NOS_KONAMI.length) return;
+  nosKonamiI = 0; if (nosKonamiDone) { toast('KONAMI CODE: ALREADY USED', 1200); return; }
+  nosKonamiDone = true; health = MAXHP; try { grantAvailableAmmo(); } catch (_) {} if (base) { base.credits += 30; saveBase(); } score += 300;
+  shockRing(pos, 10, 0xffd23a); sfx.coin(); toast('KONAMI CODE!  +30 LIVES... ER, COINS, FULL HEALTH + AMMO', 3200);
+});
+const nosOn = () => levelDef.id === 'nos';                     // Nostalgia Overdose (VHS / retro-future)
 const gutOn = () => levelDef.id === 'gut';                       // The Gut (body-horror descent through something alive)
 const arenaOn = () => levelDef.id === 'arena';                   // THE ARENAS: closed deathmatch chambers (UT99/Q3 layouts, rebuilt)
 const themeZones = () => rentOn() ? RENT_ZONES : nosOn() ? NOS_ZONES : gutOn() ? GUT_ZONES : null;      // a themed level's own 3-zone ladder (null = the default descent)
@@ -819,6 +858,7 @@ function addPlatform(cx, y, cz, half, big, idx, zoneOv, floating = false, noTarg
   if (nosOn() && zone && zone.nos) slab.material.color.setHex([0x2a1448, 0x141c34, 0x0c0a26][zone.nos - 1]);      // Nostalgia Overdose: dark tape-plastic bodies under the neon plates
   if (gutOn() && zone && zone.gut) slab.material.color.setHex([0x5a1a2c, 0x3a3a10, 0x26040e][zone.gut - 1]);      // The Gut: raw flesh -> bile-stained -> dark arterial
   if (rentOn() && zone && zone.rent) slab.material.color.setHex([0x34291f, 0x1a201c, 0x130707][zone.rent - 1]);      // Rent's Due: the slab rots darker with depth
+  if (zone && zone.slabCol !== undefined) slab.material.color.setHex(zone.slabCol);      // depth zones: cave rock / bruised flesh under the plate
   if (floating) underside(cx, y - 2, cz, Math.min(hw, hd), 2);
   const plate = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.3, 0.25, hd * 2 + 0.3),
     lam(zone ? zone.plate : big ? 0xff3fc8 : 0x36f6ff, { emissive: zone ? zone.plate : big ? 0xff3fc8 : 0x36f6ff, emissiveIntensity: 0.8, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
@@ -1865,6 +1905,35 @@ function addSlab(cx, top, cz, hw, hd, thick, zone, floating = true) {
   decorSites.push({ x: cx, z: cz, y: top, hw, hd, grp: null });
   return s;
 }
+// KNEE WALLS: a 0.6 m lip (solid + glowing mesh) so you cannot slip off an edge by walking; you can still jump it on purpose.
+const kneeMats = new Map();
+function kneeBox(x0, x1, z0, z1, y, zone, parent, h = 0.6) {
+  const s = addSolid(x0, x1, y, y + h, z0, z1); Object.assign(s, { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, top: y + h, hw: (x1 - x0) / 2, hd: (z1 - z0) / 2, zone, wall: true });
+  const c = zone ? zone.plate : 0x36f6ff; let mat = kneeMats.get(c); if (!mat) { mat = lam(c, { emissive: c, emissiveIntensity: 0.55 }); kneeMats.set(c, mat); }
+  const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, h, z1 - z0), mat); m.position.set(s.cx, y + h / 2, s.cz); (parent || scene).add(m); return s;
+}
+function kneeRim(b, y, zone, parent, sides = 'all') {      // b = {minx,maxx,minz,maxz}; sides 'long' = only the two long edges (ends stay open)
+  const t = 0.4, x0 = b.minx, x1 = b.maxx, z0 = b.minz, z1 = b.maxz, longX = (x1 - x0) >= (z1 - z0);
+  if (sides === 'all' || !longX) { kneeBox(x0, x1, z0, z0 + t, y, zone, parent); kneeBox(x0, x1, z1 - t, z1, y, zone, parent); }
+  if (sides === 'all' || longX) { kneeBox(x0, x0 + t, z0 + t, z1 - t, y, zone, parent); kneeBox(x1 - t, x1, z0 + t, z1 - t, y, zone, parent); }
+}
+// SWIRL: a snaking ribbon of overlapping tiles (axis-aligned, like every other solid) with a knee wall along both edges; the ends stay open.
+function addSwirl(p, ux, uz, zone, phase) {
+  const y = p.top, span = 6.5, step = 1.3, ht = 1.4, nx = -uz, nz = ux, par = p.grp || scene;
+  const col = zone ? zone.plate : 0x36f6ff, body = lam(0x1b2340), plateMat = lam(col, { emissive: col, emissiveIntensity: 0.8 });
+  const pt = u => { const al = u * span, la = 2.8 * Math.sin(u * Math.PI * 1.6 + phase); return [p.cx + ux * al + nx * la, p.cz + uz * al + nz * la]; };
+  const n = Math.ceil(2 * span / step);
+  for (let i = 0; i <= n; i++) {
+    const u = -1 + 2 * i / n, [qx, qz] = pt(u), [rx, rz] = pt(Math.min(1, u + 0.02)), tl = Math.hypot(rx - qx, rz - qz) || 1, tx = (rx - qx) / tl, tz = (rz - qz) / tl;
+    const sl = addSolid(qx - ht, qx + ht, y - 2, y, qz - ht, qz + ht); Object.assign(sl, { cx: qx, cz: qz, top: y, hw: ht, hd: ht, zone });
+    const b = new THREE.Mesh(new THREE.BoxGeometry(ht * 2, 2, ht * 2), body); b.position.set(qx, y - 1, qz); par.add(b);
+    const pl = new THREE.Mesh(new THREE.BoxGeometry(ht * 2 + 0.2, 0.25, ht * 2 + 0.2), plateMat); pl.position.set(qx, y - 0.05, qz); par.add(pl);
+    for (const side of [-1, 1]) {
+      const wx = qx - tz * side * (ht - 0.2), wz = qz + tx * side * (ht - 0.2), hx = 0.3 + 0.75 * Math.abs(tx), hz = 0.3 + 0.75 * Math.abs(tz);
+      kneeBox(wx - hx, wx + hx, wz - hz, wz + hz, y, zone, par);
+    }
+  }
+}
 function addBlock(cx, base, cz, hw, hd, h, zone, col = 0x6b7586) {      // pillar / cover block standing on a surface
   const s = addSolid(cx - hw, cx + hw, base, base + h, cz - hd, cz + hd);
   Object.assign(s, { cx, cz, top: base + h, hw, hd, zone });
@@ -1961,6 +2030,8 @@ function buildArena(type, cx, top, cz, zone) {
     A.z = cz + 15; sp(cx + 14, cz, main); sp(cx - 14, cz, main); sp(cx + 14, cz + 30, south); sp(cx - 14, cz + 30, south);
     A.bull = [cx, cz + 1]; A.cp = [cx - 19, cz]; A.hd = 22; A.r = 26;
   }
+  if (type === 'colosseum' || type === 'reactor') kneeRim(main, top, zone, null, 'all');       // SOME arenas get a knee-high rim (the others stay open-edged on purpose)
+  else if (type === 'gauntlet') kneeRim(main, top, zone, null, 'long');
   addCheckpoint(A.cp ? A.cp[0] : cx, top, A.cp ? A.cp[1] : cz, zone);
   main.cx = A.bull[0]; main.cz = A.bull[1]; main.targetR = 2.2; addBullseye(A.bull[0], top, A.bull[1], 2.2);
   A.beacon = beacon(cx, top, A.z, 0xff3a3a);               // red while the Guardian lives; turns green when the way on opens
@@ -2680,8 +2751,13 @@ function connect(A, B) {
     if (form < 0.08) fp = { hw: 1.9 + rand() * 0.7, hd: 5.6 + rand() * 2.2, shape: 'beam' };
     else if (form < 0.19) { const r = 2.7 + rand() * 1.7; fp = { hw: r, hd: r, shape: 'disc' }; }
     else if (form < 0.31) fp = { hw: (k % 2 ? 5.6 : 2.3) + rand() * 0.6, hd: (k % 2 ? 2.3 : 5.6) + rand() * 0.6 };
+    else if (form < 0.375 || form < 0.415) {       // LONG walkways (knee-walled) and SWIRL ribbons; sizes come from a hash, NOT rand(), so the rest of the layout's random stream is unchanged
+      const hsh = Math.abs(Math.sin(k * 12.9898 + ph * 78.233) * 43758.5453) % 1;
+      if (form < 0.375) { const L = 8 + hsh * 4, alongX = Math.abs(ux) > Math.abs(uz); fp = alongX ? { hw: L, hd: 2.6, shape: 'long' } : { hw: 2.6, hd: L, shape: 'long' }; }
+      else fp = { hw: 1.5, hd: 1.5, shape: 'swirl', span: 7 };
+    }
     const canMorph = !fp || fp.shape === 'beam';
-    const half = fp ? Math.max(fp.hw, fp.hd) : k % 7 === 4 ? 5 + rand() * 0.8 : k % 5 === 2 ? 2.8 + rand() * 0.7 : 3.4 + rand() * 1.4;
+    const half = fp ? (fp.span || Math.max(fp.hw, fp.hd)) : k % 7 === 4 ? 5 + rand() * 0.8 : k % 5 === 2 ? 2.8 + rand() * 0.7 : 3.4 + rand() * 1.4;
     const wob = tight ? (k % 2 ? 1 : -1) * 5 * Math.min(1, k, n - 1 - k) : Math.sin(t * Math.PI) * Math.sin(k * 1.4 + ph) * 3.5;
     let x = A.x + ux * s - uz * wob, z = A.z + uz * s + ux * wob;
     let tries = 0;
@@ -2699,6 +2775,8 @@ function connect(A, B) {
       A.gates.push(spec); prevSpec = spec; continue;
     }
     const p = addPlatform(x, y, z, half, false, 0, zone, true, k % 2 === 1, fp);
+    if (fp && fp.shape === 'long') kneeRim(p, y, zone, p.grp, 'long');
+    else if (fp && fp.shape === 'swirl') addSwirl(p, ux, uz, zone, ph);
     if (!clusterAnchor && t >= 0.38 && t <= 0.62 && p.hw <= 4.8) { clusterAnchor = p; clusterZone = zone; }
     coin(x, y + 1.2, z, zone);
     if (prev && k % 2 === 0) for (let u = 0.33; u < 0.9; u += 0.33) coin(prev.cx + (x - prev.cx) * u, prev.top + (y - prev.top) * u + 1.5 + 3 * Math.sin(Math.PI * u), prev.cz + (z - prev.cz) * u, zone);
@@ -3248,6 +3326,56 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     }
     return _nosDress;
   }
+  // RETRO PASS (8/16-bit look): chunky checker tarmac, brick + ?-block roadside walls, SMB pixel clouds / hills / bushes. Everything is queued as box instances
+  // [x,y,z, sx,sy,sz, yaw, hexColour, pitch] and flushed as TWO InstancedMeshes per road (lit bricks, unlit pixel art). Shared unit box, no textures, no rand() (nosHash) so layout is unchanged.
+  let nosRQ = null;
+  const nosHash = n => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+  const nosRetroQ = () => ({ lit: [], px: [] });
+  function nosChecker(q, cx, cy, cz, yaw, pitch, w, l, tile, base) {      // local x = across, local z = along; tiles lie 0.07 above (cx,cy,cz)
+    const nC = Math.max(1, Math.round(w / tile)), nR = Math.max(1, Math.round(l / tile)), tw = w / nC, tl = l / nR;
+    const c2 = new THREE.Color(base).offsetHSL(0, 0, 0.035).getHex(), sp = Math.sin(pitch), cp = Math.cos(pitch), sY = Math.sin(yaw), cY = Math.cos(yaw);
+    for (let a = 0; a < nR; a++) for (let b = 0; b < nC; b++) {
+      const lx = (b + 0.5) * tw - w / 2, lz = (a + 0.5) * tl - l / 2, y1 = -lz * sp, z1 = lz * cp;
+      q.px.push([cx + lx * cY + z1 * sY, cy + y1 + 0.07, cz - lx * sY + z1 * cY, tw, 0.04, tl, yaw, (a + b) & 1 ? c2 : base, pitch]);
+    }
+  }
+  function nosRetroFlush(q) {
+    const d = nosDress();
+    if (!d.rbox) { d.rbox = new THREE.BoxGeometry(1, 1, 1); d.rLit = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xffffff })); d.rPx = retroMaterial(new THREE.MeshBasicMaterial({ color: 0xffffff })); }
+    const o = new THREE.Object3D(), c = new THREE.Color(); o.rotation.order = 'YXZ';
+    for (const [list, mat] of [[q.lit, d.rLit], [q.px, d.rPx]]) {
+      if (!list.length) continue;
+      const im = new THREE.InstancedMesh(d.rbox, mat, list.length);
+      for (let k = 0; k < list.length; k++) {
+        const e = list[k]; o.position.set(e[0], e[1], e[2]); o.rotation.set(e[8] || 0, e[6], 0); o.scale.set(e[3], e[4], e[5]); o.updateMatrix();
+        im.setMatrixAt(k, o.matrix); im.setColorAt(k, c.setHex(e[7]));
+      }
+      im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; im.frustumCulled = false; im.userData.noCull = true; scene.add(im);
+    }
+  }
+  // brick wall (2 rows, a gold ?-block every 6th brick on the top row) + a green SMB bush on top, along one side of a flat segment
+  function nosBrickWall(q, cx, y, cz, bearing, halfL, lat, side, idx) {
+    const ux = Math.cos(bearing), uz = Math.sin(bearing), nx = nxOf(bearing), nz = nzOf(bearing), yaw = Math.PI / 2 - bearing;
+    for (let r = 0; r < 2; r++) for (let d = -halfL + 1.3 + (r ? 1.2 : 0), k = 0; d < halfL - 1.3; d += 2.4, k++) {
+      const col = r && k % 6 === 3 ? 0xffb62a : (k + r) & 1 ? 0xb84a1e : 0x8f3515;
+      q.lit.push([cx + nx * side * lat + ux * d, y + 0.4 + r * 0.8, cz + nz * side * lat + uz * d, 0.9, 0.78, 2.3, yaw, col, 0]);
+    }
+    const bd = (nosHash(idx * 3.1 + side) * 2 - 1) * (halfL - 6), bx = cx + nx * side * lat + ux * bd, bz = cz + nz * side * lat + uz * bd;      // SMB bush: low wide block + a taller lump
+    q.px.push([bx, y + 1.6 + 0.6, bz, 1.2, 1.2, 5, yaw, 0x2fc43a, 0], [bx, y + 1.6 + 1.5, bz, 1.0, 1.0, 2.8, yaw, 0x55e65a, 0]);
+  }
+  // SMB backdrop for one segment: a flat pixel cloud high up, a stepped hill with its two dark "eyes" far out
+  function nosBackdrop(q, i, slot, cur, bearing, len) {
+    const nx = nxOf(bearing), nz = nzOf(bearing), ux = Math.cos(bearing), uz = Math.sin(bearing), yaw = Math.PI / 2 - bearing, hs = slot * 977 + i * 13;
+    const s = nosHash(hs) > 0.5 ? 1 : -1, put = (lat, al, y, sx, sy, sz, col) => q.px.push([cur.x + nx * s * lat + ux * al, y, cur.z + nz * s * lat + uz * al, sx, sy, sz, yaw, col, 0]);
+    const cl = 55 + nosHash(hs + 1) * 55, ca = len * nosHash(hs + 2), cy = cur.y + 26 + nosHash(hs + 3) * 34;      // cloud
+    put(cl, ca, cy, 3, 4, 14, 0xf4f8ff); put(cl, ca + 1, cy + 3.4, 3, 3, 8, 0xf4f8ff); put(cl, ca - 2, cy + 5.4, 3, 2, 4, 0xf4f8ff); put(cl, ca, cy - 1.9, 3.1, 0.7, 14, 0xa8d4ff);
+    if (i % 2 === 0) {                                                                        // hill (every other segment, opposite side to the cloud)
+      const hl = 85 + nosHash(hs + 4) * 45, ha = len * nosHash(hs + 5), hy = cur.y - 34;
+      const hp = (lat, al, y, sx, sy, sz, col) => q.px.push([cur.x - nx * s * lat + ux * al, y, cur.z - nz * s * lat + uz * al, sx, sy, sz, yaw, col, 0]);
+      hp(hl, ha, hy + 6, 10, 12, 46, 0x2fa63a); hp(hl, ha, hy + 17, 10, 10, 32, 0x2fa63a); hp(hl, ha, hy + 26, 10, 8, 18, 0x2fa63a);
+      for (const o of [-3, 3]) hp(hl - 5.2, ha + o, hy + 16, 0.6, 3.4, 1.4, 0x0f5a1c);
+    }
+  }
   function nosPalm(x, y, z, lean = 0) {
     const d = nosDress(), g = new THREE.Group();
     const t = new THREE.Mesh(d.trunk, d.trunkMat);
@@ -3261,7 +3389,60 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     }
     g.position.set(x, y, z); scene.add(g);
   }
-  function nosBillboard(x, y, z, head, col) {          // neon panel on stalks beside the road
+  // MARIO-STYLE WARP PIPE: stand on top and crouch (C / Ctrl) to pop out of the pipe two ahead along the road. Shared geometry/materials, no textures.
+  function nosPipe(x, y, z, list) {
+    const d = nosDress(); if (!d.pipe) { d.pipe = new THREE.CylinderGeometry(1.35, 1.35, 3.2, 12); d.lip = new THREE.CylinderGeometry(1.7, 1.7, 0.8, 12); d.pipeMat = new THREE.MeshLambertMaterial({ color: 0x1fb53a, emissive: 0x063a10 }); d.lipMat = new THREE.MeshLambertMaterial({ color: 0x3be05a, emissive: 0x0a5a1c }); }
+    const g = new THREE.Group(), body = new THREE.Mesh(d.pipe, d.pipeMat), lip = new THREE.Mesh(d.lip, d.lipMat);
+    body.position.y = 1.6; lip.position.y = 2.8; g.add(body, lip); g.position.set(x, y, z); scene.add(g);
+    const sol = addSolid(x - 1.7, x + 1.7, y, y + 3.2, z - 1.7, z + 1.7); Object.assign(sol, { cx: x, cz: z, top: y + 3.2, pipe: true });
+    const p = { x, y: y + 3.2, z, sol, to: null }; list.push(p); nosPipes.push(p); return p;
+  }
+  // ---- easter-egg builders (shared geometry/materials, no textures; ticked by nosEggTick) ----
+  function nosEggRes() {
+    const d = nosDress(); if (d.egg) return d.egg;
+    const mb = c => new THREE.MeshBasicMaterial({ color: c, toneMapped: false });
+    return d.egg = { box: new THREE.BoxGeometry(1.6, 1.6, 1.6), dot: new THREE.SphereGeometry(0.3, 6, 5), pellet: new THREE.SphereGeometry(0.75, 8, 6), inv: new THREE.BoxGeometry(0.7, 0.55, 0.3), pad: new THREE.BoxGeometry(0.4, 2.2, 0.4), ball: new THREE.BoxGeometry(0.5, 0.5, 0.4), robe: new THREE.CylinderGeometry(0.5, 0.9, 2.2, 6), tank: new THREE.BoxGeometry(0.9, 1.3, 0.9),
+      qOn: mb(0xffc21a), qOff: mb(0x7a4a1e), dotM: mb(0xffe84a), invM: mb(0x4dff6a), white: mb(0xffffff), robeM: mb(0xd23a2a), tankM: mb(0x2f8cff), tankCap: mb(0xffffff), lamp: new THREE.MeshLambertMaterial({ color: 0x1a1030 }) };
+  }
+  function nosEggBlocks(x, y, z, head, heartMid) {             // Mario "?" row hanging over the road: walk/jump under for coins (middle one = heart)
+    const r = nosEggRes();
+    for (let k = -1; k <= 1; k++) {
+      const m = new THREE.Mesh(r.box, r.qOn), bx = x + Math.cos(head) * k * 2.2, bz = z + Math.sin(head) * k * 2.2;
+      m.position.set(bx, y + 3.4, bz); scene.add(m);
+      nosEggs.push({ k: 'q', x: bx, y: y + 2.2, z: bz, r: 1.5, dy: 3.2, yMin: y + 0.6, mesh: m, dead: r.qOff, coins: 3, heart: heartMid && k === 0 });
+    }
+  }
+  function nosEggPac(x, y, z, head, n) {                         // Pac-Man dot trail down the centre line, power pellet at the end
+    const r = nosEggRes();
+    for (let k = 0; k < n; k++) {
+      const last = k === n - 1, m = new THREE.Mesh(last ? r.pellet : r.dot, r.dotM), px = x + Math.cos(head) * k * 3, pz = z + Math.sin(head) * k * 3;
+      m.position.set(px, y + 1.2, pz); scene.add(m);
+      nosEggs.push({ k: 'dot', x: px, y: y + 1.2, z: pz, r: last ? 2.2 : 1.6, dy: 2.6, mesh: m, last });
+    }
+  }
+  function nosEggInvaders(x, y, z, faceX, faceZ, alongX, alongZ) {       // 5x3 formation that sways side to side
+    const r = nosEggRes(), g = new THREE.Group();
+    for (let a = 0; a < 3; a++) for (let b = 0; b < 5; b++) { const m = new THREE.Mesh(r.inv, r.invM); m.position.set((b - 2) * 1.1, a * 0.9, 0); g.add(m); }
+    g.position.set(x, y, z); g.rotation.y = Math.atan2(faceX, faceZ); scene.add(g);
+    nosEggs.push({ k: 'invaders', x, y, z, mesh: g, ax: alongX, az: alongZ });
+  }
+  function nosEggPong(x, y, z, faceX, faceZ) {                    // two paddles and a bouncing ball
+    const r = nosEggRes(), g = new THREE.Group(), hw = 3, a = new THREE.Mesh(r.pad, r.white), b = new THREE.Mesh(r.pad, r.white), ball = new THREE.Mesh(r.ball, r.white);
+    a.position.x = -hw - 0.8; b.position.x = hw + 0.8; g.add(a, b, ball);
+    g.position.set(x, y, z); g.rotation.y = Math.atan2(faceX, faceZ); scene.add(g);
+    nosEggs.push({ k: 'pong', x, y, z, mesh: g, ball, padA: a, padB: b, hw });
+  }
+  function nosEggZelda(x, y, z) {                                 // red-robed old man by a torch: "It's dangerous to go alone!" -> ammo
+    const r = nosEggRes(), g = new THREE.Group(), body = new THREE.Mesh(r.robe, r.robeM), head = new THREE.Mesh(r.dot, r.white);
+    body.position.y = 1.1; head.position.y = 2.4; head.scale.setScalar(1.4); g.add(body, head); g.position.set(x, y, z); scene.add(g);
+    nosEggs.push({ k: 'zelda', x, y: y + 1, z, r: 3.2, dy: 3.5, mesh: g });
+  }
+  function nosEggETank(x, y, z) {                                 // Mega Man E-tank: full heal
+    const r = nosEggRes(), g = new THREE.Group(), body = new THREE.Mesh(r.tank, r.tankM), cap = new THREE.Mesh(r.tank, r.tankCap);
+    cap.scale.set(1.05, 0.22, 1.05); cap.position.y = 0.75; g.add(body, cap); g.position.set(x, y + 1.3, z); scene.add(g);
+    nosEggs.push({ k: 'etank', x, y: y + 1.3, z, r: 2.2, dy: 3, mesh: g });
+  }
+  function nosBillboard(x, y, z, head, col) {         // neon panel on stalks beside the road
     const d = nosDress(), w = 8, h = 4.4, hgt = 6.5 + rand() * 2.5, g = new THREE.Group();
     for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.5, hgt, 0.5), d.postMat); p.position.set(nxOf(head) * s * w * 0.42, hgt * 0.5, nzOf(head) * s * w * 0.42); g.add(p); }
     const frame = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, 0.5), d.postMat); frame.position.set(0, hgt, 0); g.add(frame);
@@ -3307,30 +3488,45 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     glow.position.set(cx, y + 0.12, cz); scene.add(glow); glow.userData.noCull = true;
   }
   // EVERY road segment: one tarmac strip, lane paint, neon edges, shoulder posts. Flush ends guaranteed by the caller.
-  function nosSegment(x0, z0, y, bearing, length, width, prog, run, idx) {
+  function nosSegment(x0, z0, y, bearing, length, width, prog, run, idx, drop = 0, skipSide = 0) {      // drop < 0 = a real downhill: fine 0.35 m treads under a pitched tarmac (cars and runners just roll down it)
     const ux = Math.cos(bearing), uz = Math.sin(bearing), nx = -uz, nz = ux;
     const halfL = length * 0.5, hx = Math.abs(ux) * halfL + Math.abs(nx) * width * 0.5, hz = Math.abs(uz) * halfL + Math.abs(nz) * width * 0.5;
     const cx = x0 + ux * halfL, cz = z0 + uz * halfL, zone = nosRoadZone(prog), style = NOS_ROAD_STYLES[zone.nos - 1];
-    const road = addSolid(cx - hx, cx + hx, y - 2.4, y, cz - hz, cz + hz);
-    Object.assign(road, { cx, cz, top: y, hw: (uz ? width : length) * 0.5, hd: (ux ? width : length) * 0.5, zone, road: true, nosRoadChunk: true, prog, nosSeg: true, nosRun: run, nosIdx: idx });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(width, 2.4, length), lam(style.tarmac));
-    body.position.set(cx, y - 1.2, cz); body.rotation.y = Math.PI / 2 - bearing; scene.add(body); body.userData.noCull = true;
+    const slope = drop / length, pitch = drop ? -Math.atan2(drop, length) : 0, yAt = d => y + drop * 0.5 + slope * d;      // tarmac height at distance d from the segment centre
+    let road;
+    if (!drop) {
+      road = addSolid(cx - hx, cx + hx, y - 2.4, y, cz - hz, cz + hz);
+      Object.assign(road, { cx, cz, top: y, hw: (uz ? width : length) * 0.5, hd: (ux ? width : length) * 0.5, zone, road: true, nosRoadChunk: true, prog, nosSeg: true, nosRun: run, nosIdx: idx });
+    } else {
+      const nT = Math.max(2, Math.ceil(Math.abs(drop) / 0.35)), tl = length / nT;
+      for (let k = 0; k < nT; k++) {
+        const tcx = x0 + ux * tl * (k + 0.5), tcz = z0 + uz * tl * (k + 0.5), top = y + drop * (k + 0.5) / nT, thx = Math.abs(ux) * tl * 0.5 + Math.abs(nx) * width * 0.5, thz = Math.abs(uz) * tl * 0.5 + Math.abs(nz) * width * 0.5;
+        const t = addSolid(tcx - thx, tcx + thx, top - 2.4, top, tcz - thz, tcz + thz);
+        Object.assign(t, { cx: tcx, cz: tcz, top, hw: (uz ? width : tl) * 0.5, hd: (ux ? width : tl) * 0.5, zone, road: true, nosRoadChunk: true, prog, nosSeg: true, nosRun: run, nosIdx: idx });
+        if (k === nT >> 1) road = t;
+      }
+    }
+    const body = new THREE.Mesh(new THREE.BoxGeometry(width, 2.4, Math.hypot(length, drop)), lam(style.tarmac));
+    body.position.set(cx, yAt(0) - 1.2, cz); body.rotation.order = 'YXZ'; body.rotation.set(pitch, Math.PI / 2 - bearing, 0); scene.add(body); body.userData.noCull = true;
     const paint = (w, h, l, lateral, fwd, color) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, l), new THREE.MeshBasicMaterial({ color, toneMapped: false }));
-      m.position.set(cx + nx * lateral + ux * fwd, y + h * 0.5 + 0.05, cz + nz * lateral + uz * fwd);
-      m.rotation.y = Math.PI / 2 - bearing; scene.add(m);
+      m.position.set(cx + nx * lateral + ux * fwd, yAt(fwd) + h * 0.5 + 0.05, cz + nz * lateral + uz * fwd);
+      m.rotation.order = 'YXZ'; m.rotation.set(pitch, Math.PI / 2 - bearing, 0); scene.add(m);
     };
-    paint(width - 0.4, 0.08, length - 0.2, 0, 0, style.tarmac === 0x0a0a12 ? 0x11111c : 0x1b1233);
+    const tBase = style.tarmac === 0x0a0a12 ? 0x11111c : 0x1b1233;
+    if (nosRQ) nosChecker(nosRQ, cx, yAt(0), cz, Math.PI / 2 - bearing, pitch, width - 0.4, length - 0.2, 4.4, tBase);      // chunky 2-tone checker tarmac (replaces the flat paint; sits below the lane dashes)
+    else paint(width - 0.4, 0.08, length - 0.2, 0, 0, tBase);
+    if (nosRQ && !drop) for (const sd of [-1, 1]) if (sd !== skipSide && skipSide !== 2) nosBrickWall(nosRQ, cx, y, cz, bearing, halfL, width * 0.5 + 1.2, sd, idx);
     for (const side of [-1, 1]) paint(0.34, 0.1, length - 0.3, side * (width * 0.5 - 0.3), 0, style.edge);
     for (const lane of [-1, 1]) for (let d = -halfL + 2; d < halfL - 1; d += 9) paint(0.13, 0.07, 4.2, lane * width / 6, d, style.dash);
     for (let d = -halfL + 2; d < halfL - 1; d += 11) paint(0.26, 0.08, 4.4, 0, d, style.dash);
     const d0 = nosDress();                              // shoulder posts mark the edge (visual only)
     for (const side of [-1, 1]) for (let d = -halfL + 5; d < halfL; d += 12) {
       const p = new THREE.Mesh(new THREE.BoxGeometry(0.26, 1.5 + (((d / 12) | 0) % 2) * 0.5, 0.26), d0.postMat);
-      p.position.set(cx + nx * side * (width * 0.5 + 0.15) + ux * d, y + 0.75, cz + nz * side * (width * 0.5 + 0.15) + uz * d); scene.add(p);
+      p.position.set(cx + nx * side * (width * 0.5 + 0.15) + ux * d, yAt(d) + 0.75, cz + nz * side * (width * 0.5 + 0.15) + uz * d); scene.add(p);
     }
     nosRoadAudit.chunks++; nosRoadAudit.totalLength += length;
-    return { a: { x: x0, y, z: z0 }, b: { x: x0 + ux * length, y, z: z0 + uz * length }, solid: road, cx, cz, len: length, prog, zone };
+    return { a: { x: x0, y, z: z0 }, b: { x: x0 + ux * length, y: y + drop, z: z0 + uz * length }, solid: road, cx, cz, len: length, prog, zone };
   }
   const nosSegHead = seg => Math.atan2(seg.b.z - seg.a.z, seg.b.x - seg.a.x);
   const nosSegPoint = (seg, t) => ({ x: seg.a.x + (seg.b.x - seg.a.x) * t, y: seg.a.y, z: seg.a.z + (seg.b.z - seg.a.z) * t });
@@ -3346,6 +3542,7 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     Object.assign(pad, { cx, cz, top: y, hw: hx2, hd: hd2, zone, road: true, nosRoadChunk: true });
     const body = new THREE.Mesh(new THREE.BoxGeometry(alongX ? L : W, 2.4, alongX ? W : L), lam(style.tarmac));
     body.position.set(cx, y - 1.2, cz); scene.add(body); body.userData.noCull = true;
+    if (nosRQ) nosChecker(nosRQ, cx, y, cz, 0, 0, alongX ? L : W, alongX ? W : L, 3.7, style.tarmac === 0x0a0a12 ? 0x11111c : 0x1b1233);
     const hub = { kind: 'building', x: cx, z: cz, top: y, hw: hx2, hd: hd2, w: L, d: L, zone, r: 10, deck: true, layby: true, universe: slot, slab: pad };
     hubs.push(hub);
     weaponPickup([3, 4, 3, 4, 2][Math.floor(seg.prog * 5)], cx + outX * side * 2, y + 1.4, cz + outZ * side * 2);
@@ -3356,6 +3553,9 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     spawnRiderGroup(cx, y, cz, pad, 2, 6); nosRoadAudit.services++;
     nosBillboard(cx + outX * side * 8, y, cz + outZ * side * 8, head + Math.PI / 2, style.edge);
     if (zone.nos === 1) nosPalm(cx - outX * side * 6.5, y, cz - outZ * side * 6.5, side);
+    const nLay = hubs.filter(h => h.layby && h.universe === slot).length;      // 1st layby = Zelda old man, 2nd = Mega Man E-tank, later ones = E-tank too
+    const egx = cx + Math.cos(head) * 6 - outX * side * 1.5, egz = cz + Math.sin(head) * 6 - outZ * side * 1.5;
+    if (nLay === 1) nosEggZelda(egx, y, egz); else nosEggETank(egx, y, egz);
     return hub;
   }
   // THE HIGHWAY — one continuous drive per slot; one seeded bend; ramps and arches instead of holes
@@ -3375,6 +3575,8 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     const rampLen = drop => Math.min(200, Math.max(95, drop * 3.2));
     const bendAt = Math.floor(segCount * 0.5), bendDir = rand() < 0.5 ? 1 : -1;
     let cursor = { x: startX, y: yStart, z: startZ }, bearing = bearing0;
+    nosRQ = nosRetroQ();                                // retro pass queue for this road (flushed before the finish plaza)
+    const pipeList = [];                                // warp pipes along this road; each one leads to the pipe two ahead
     const startHub = { kind: 'building', x: startX, z: startZ, top: yStart, hw: 9, hd: 9, w: 18, d: 18, zone: NOS_ZONES[0], r: 10, roadStart: true, universe: slot };
     hubs.push(startHub);
     Object.assign(starts[slot], { x: startX, y: yStart + 0.25, z: startZ, onRoad: true });
@@ -3384,6 +3586,9 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     nosBillboard(startX + nxOf(bearing0) * 13.5, startY, startZ + nzOf(bearing0) * 13.5, bearing0, 0xffd23a);
     weaponPickup(2, startX - ux0 * 4 + nxOf(bearing0) * 5, startY + 1.5, startZ - uz0 * 4 + nzOf(bearing0) * 5);
     addDashPad(startX + ux0 * 14, startY, startZ + uz0 * 14, ux0, uz0);
+    // the player spawns here, not on the tower roof, so the rides must be parked ON the road (on the tarmac, clear of the dash pad)
+    addProp('buggy', startX + ux0 * 5 + nxOf(bearing0) * 4, startY, startZ + uz0 * 5 + nzOf(bearing0) * 4);
+    addProp('bike', startX + ux0 * 5 - nxOf(bearing0) * 4, startY, startZ + uz0 * 5 - nzOf(bearing0) * 4);
     const titleArch = new THREE.Mesh(new THREE.BoxGeometry(uz0 ? 22 : 0.9, 0.9, ux0 ? 22 : 0.9), new THREE.MeshBasicMaterial({ color: 0xff35bd, toneMapped: false }));
     titleArch.position.set(startX + ux0 * 9, startY + 9.5, startZ + uz0 * 9); scene.add(titleArch); titleArch.userData.noCull = true;
     for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.9, 9.5, 0.9), lam(0x271046)); p.position.set(startX + ux0 * 9 + nxOf(bearing0) * s * 11.5, startY + 4.75, startZ + uz0 * 9 + nzOf(bearing0) * s * 11.5); scene.add(p); }
@@ -3394,7 +3599,8 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
       const at = snippet => ({ x: cursor.x + Math.cos(bearing) * snippet, y: cursor.y, z: cursor.z + Math.sin(bearing) * snippet });
       if (i === bendAt) {                               // THE TURN: normal tarmac first, then a fat plaza swallows the corner
         const len = 72 + rand() * 30;
-        const seg = nosSegment(cursor.x, cursor.z, cursor.y, bearing, len, width, prog, slot, i);
+        const seg = nosSegment(cursor.x, cursor.z, cursor.y, bearing, len, width, prog, slot, i, 0, 2);
+        nosBackdrop(nosRQ, i, slot, cursor, bearing, len);
         const nu = Math.cos(bearing + bendDir * Math.PI / 2), nv = Math.sin(bearing + bendDir * Math.PI / 2);
         const c1 = { x: seg.b.x + Math.cos(bearing) * 3, z: seg.b.z + Math.sin(bearing) * 3 }, c2 = { x: seg.b.x + nu * 15, z: seg.b.z + nv * 15 };
         const cX = (c1.x + c2.x) / 2, cZ = (c1.z + c2.z) / 2;
@@ -3415,27 +3621,37 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
         continue;
       }
       const dy = dropByIndex[i] ? -dropByIndex[i] : 0, len = dy ? rampLen(-dy) : 74 + rand() * 36;
-      const seg = nosSegment(cursor.x, cursor.z, cursor.y, bearing, len, width, prog, slot, i);
-      if (dy) {                                           // downhill ramp = steep stair treads the runner auto-eats
-        nosRamp({ x: cursor.x, y: cursor.y, z: cursor.z }, bearing, width, len - 2, dy);
+      const hasLay = !dy && i % 5 === 3 && zone.nos !== 2;                      // layby side is left open (no roadside wall through the pit stop)
+      const seg = nosSegment(cursor.x, cursor.z, cursor.y, bearing, len, width, prog, slot, i, dy, hasLay ? (Math.floor(prog * 10) % 2 ? 1 : -1) : 0);
+      nosBackdrop(nosRQ, i, slot, cursor, bearing, len);
+      const segY = cursor.y + dy / 2, yOn = k => cursor.y + dy * (k / len);
+      if (dy) {                                           // downhill = a genuinely sloped road now (see nosSegment drop), plus a dash pad to launch you down it
+        addDashPad(cursor.x + Math.round(Math.cos(bearing)) * 6, cursor.y, cursor.z + Math.round(Math.sin(bearing)) * 6, Math.round(Math.cos(bearing)), Math.round(Math.sin(bearing)));
         nosRoadAudit.gaps.push(len);
       } else {                                            // flat segment = jump country
         if (i % 3 === 1 || rand() < 0.4) { const p = at(0.62); nosRamp(p, bearing, width, 18 + rand() * 5, 2.2, 26 + prog * 9); nosRoadAudit.gaps.push(18 + rand() * 5 + 42); }
-        if (rand() < 0.5) { const p = at(0.24); addRampDir(p.x, p.z, cursor.y, Math.cos(bearing), Math.sin(bearing), 4, 7, 24 + prog * 8); nosRoadAudit.gaps.push(56); }
+        if (rand() < 0.5) { const p = at(0.24); nosRamp(p, bearing, width, 14, 1.6, 24 + prog * 8); nosRoadAudit.gaps.push(56); }      // smooth kicker (hidden fine treads under a sloped wedge), not the old visible 0.5 m staircase
         if (rand() < 0.34 && zone.nos !== 3) { const p = at(0.5); addRail(p.x - Math.cos(bearing) * 6, p.z - Math.sin(bearing) * 6, cursor.y + 1.5, p.x + Math.cos(bearing) * 13, p.z + Math.sin(bearing) * 13, [0xff3fc8, 0x36f6ff, 0xffd23a][i % 3]); }
       }
-      if (i % 4 === 2) { const p = at(0.44); nosBoostArch(p.x, cursor.y, p.z, bearing, width, style.edge); }
-      for (let k = 2; k < len - 4; k += 13) coin(cursor.x + Math.cos(bearing) * k + nxOf(bearing) * (k % 26 < 13 ? -3 : 3), cursor.y + 1.2, cursor.z + Math.sin(bearing) * k + nzOf(bearing) * (k % 26 < 13 ? -3 : 3), zone);
-      if (i % 2 === 1) { spawnRiderGroup(seg.cx, cursor.y, seg.cz, seg.solid, Math.min(4, 2 + level), 8); nosRoadAudit.traffic += 2; }
-      if (i % 3 === 2) { const p = at(0.82); spawnBiomeEnemy(p.x, cursor.y, p.z, seg.solid, zone, prog); }
-      if (i % 5 === 3 && zone.nos !== 2) nosLayby(seg, slot, hubs);
+      if (!dy && i % 3 === 0 && i > 0) { const p = at(0.05), s = i % 2 ? 1 : -1; nosPipe(p.x + nxOf(bearing) * s * 6, cursor.y, p.z + nzOf(bearing) * s * 6, pipeList); }
+      if (!dy && i % 5 === 1) { const p = at(0.36); nosEggBlocks(p.x, cursor.y, p.z, bearing + Math.PI / 2, i % 10 === 1); }     // ? blocks (bearing + 90deg = across the road)
+      if (!dy && i % 7 === 5) { const p = at(0.1); nosEggPac(p.x, cursor.y, p.z, bearing, 12); }
+      if (!dy && i % 6 === 4) { const p = at(0.5), s = i % 2 ? 1 : -1, lx = nxOf(bearing) * s, lz = nzOf(bearing) * s; nosEggInvaders(p.x + lx * (width * 0.5 + 16), cursor.y + 10, p.z + lz * (width * 0.5 + 16), -lx, -lz, Math.cos(bearing), Math.sin(bearing)); }
+      if (!dy && i % 6 === 2) { const p = at(0.5), s = i % 2 ? -1 : 1, lx = nxOf(bearing) * s, lz = nzOf(bearing) * s; nosEggPong(p.x + lx * (width * 0.5 + 16), cursor.y + 9, p.z + lz * (width * 0.5 + 16), -lx, -lz); }
+      if (!dy && i % 4 === 2) { const p = at(0.44); nosBoostArch(p.x, cursor.y, p.z, bearing, width, style.edge); }
+      for (let k = 2; k < len - 4; k += 13) coin(cursor.x + Math.cos(bearing) * k + nxOf(bearing) * (k % 26 < 13 ? -3 : 3), yOn(k) + 1.2, cursor.z + Math.sin(bearing) * k + nzOf(bearing) * (k % 26 < 13 ? -3 : 3), zone);
+      if (i % 2 === 1) { spawnRiderGroup(seg.cx, segY, seg.cz, seg.solid, Math.min(4, 2 + level), 8); nosRoadAudit.traffic += 2; }
+      if (i % 3 === 2) { const p = at(0.82); spawnBiomeEnemy(p.x, cursor.y + dy * 0.82, p.z, seg.solid, zone, prog); }
+      if (!dy && i % 5 === 3 && zone.nos !== 2) nosLayby(seg, slot, hubs);
       if (style.palmEvery && i % style.palmEvery === 0) {
         const nx = nxOf(bearing), nz = nzOf(bearing);
         nosPalm(cursor.x + nx * (width * 0.5 + 4), cursor.y, cursor.z + nz * (width * 0.5 + 4), 1.5);
         nosPalm(cursor.x - nx * (width * 0.5 + 4), cursor.y, cursor.z - nz * (width * 0.5 + 4), -1.5);
       }
-      cursor = { x: seg.b.x, y: seg.b.y + dy, z: seg.b.z };      // a ramp segment carries its drop into the next segment's height
+      cursor = { x: seg.b.x, y: seg.b.y, z: seg.b.z };      // seg.b.y already includes this segment's drop
     }
+    pipeList.forEach((p, k) => { p.to = pipeList[Math.min(k + 2, pipeList.length - 1)]; if (p.to === p) p.to = null; });
+    nosRetroFlush(nosRQ); nosRQ = null;
     return nosFinishPlaza(cursor, bearing, slot, hubs);   // FINISH plaza is the level-clear target
   }
   // the FINISH plaza: checkered strip, HORIZON arch, bullseye + sealing ring — LEVEL CLEAR lands here
@@ -3470,7 +3686,8 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
   }
   function buildNosNetwork(exitAngle) {
     const hubs = activeStartHubs().map(home => ({ ...home }));
-    nosRoadAudit.chunks = nosRoadAudit.totalLength = nosRoadAudit.arenas = nosRoadAudit.services = nosRoadAudit.traffic = 0; nosRoadAudit.gaps.length = 0; nosRoadAudit.hubs.length = 0;
+    nosPipes = []; nosEggs = []; nosKonamiI = 0; nosKonamiDone = false;
+    nosRoadAudit.chunks = nosRoadAudit.totalLength =nosRoadAudit.arenas = nosRoadAudit.services = nosRoadAudit.traffic = 0; nosRoadAudit.gaps.length = 0; nosRoadAudit.hubs.length = 0;
     const active = activeStartHubs();
     let myFinish = null;
     for (let slot = 0; slot < active.length; slot++) {
@@ -5248,7 +5465,7 @@ function shockRing(p, radius, color = 0xffffff) {
   m.material.color.setHex(color);
   m.visible = true;
   scene.add(m);
-  fx.push({ mesh: m, life: 0.4, ring: radius });
+  fx.push({ mesh: m, life: 0.4, ring: radius || 1 });      // a falsy radius used to fall through to the particle branch and crash on a missing vel
 }
 function updateFx(dt) {
   for (let i = fx.length - 1; i >= 0; i--) {
@@ -5265,7 +5482,7 @@ function updateFx(dt) {
     } else if (f.vehicleFlame) {
       const k = clamp(f.life / f.fadeT, 0, 1); f.mesh.position.addScaledVector(f.vel, dt); f.mesh.scale.setScalar(0.45 + (1 - k) * 0.8); f.mesh.material.opacity = k;
     } else if (f.ring) { const k = 1 - f.life / 0.4; f.mesh.scale.setScalar(Math.max(0.1, f.ring * k)); f.mesh.material.opacity = 1 - k; }
-    else { f.vel.y -= 25 * dt; f.mesh.position.addScaledVector(f.vel, dt); f.mesh.material.opacity = clamp(f.life * 2, 0, 1); }
+    else { if (!f.vel) f.vel = new THREE.Vector3(); f.vel.y -= 25 * dt; f.mesh.position.addScaledVector(f.vel, dt); f.mesh.material.opacity = clamp(f.life * 2, 0, 1); }      // a flagless fx entry used to throw here and kill the whole frame loop
     if (f.life <= 0) {
           if (f.blood && Math.random() < 0.4) { const q = f.mesh.position; splatter(q.x, q.y + 0.5, q.z, 1, 0, 0.35); }
           if (f.ring) returnPooledMesh('shockRing', f.mesh);
@@ -5729,7 +5946,7 @@ addEventListener('keydown', e => {
   if (paused) return;
   if (guideDialogOpen) { guideDialogKey(e); keys[e.code] = false; return; }
   if (state === 'title') return menuKey(e);
-  if (e.code === 'Space') jumpPress = true;
+  if (e.code === 'Space') { jumpPress = true; if (grapple.on) grapple.cutReq = true; }
   if (e.code === 'KeyZ') tryTrick('KICKFLIP', 150, 'x', 1);
   if (e.code === 'KeyX') tryTrick('HEELFLIP', 150, 'x', -1);
   if (e.code === 'KeyT') tryTrick('SHOVE-IT', 200, 'y', 1);
@@ -5737,6 +5954,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyF' || e.code === 'KeyJ') atkPress = true;
   eUsedProp = false;
   if (e.code === 'KeyQ' && state === 'play' && warp.near) { warpCycle(); return; }
+  if (e.code === 'KeyQ' && state === 'play' && fresh) { grappleFire(); return; }
   if (e.code === 'KeyE' && state === 'play' && warp.near) { eUsedProp = true; warpGo(); return; }
   if (e.code === 'KeyE' && state === 'play' && hintNpc && !hintProp && !onVehicle) { eUsedProp = true; openGuideDialog(); return; }
   if ((e.code === 'Enter' || (e.code === 'KeyE' && (hintProp || onVehicle))) && state === 'play') { eUsedProp = e.code === 'KeyE'; useProp(); }
@@ -5746,8 +5964,8 @@ addEventListener('keydown', e => {
   if (e.code === 'Tab') cycleWeapon(1);
   if (e.code === 'KeyL') { voiceLines = !voiceLines; toast(voiceLines ? 'Enemy voice lines on' : 'Enemy voice lines off', 1200); if (!voiceLines) { try { window.speechSynthesis.cancel(); } catch (_) {} $('subs').textContent = ''; } }
   if (e.code === 'KeyH') { hintT = hintT > 0 ? 0 : 10; hintOn = true; }
-  if (e.code === 'KeyN') { musicOn = !musicOn; toast(musicOn ? 'Music on' : 'Music off', 900); }
-  if (e.code === 'KeyM') { muted = !muted; toast(muted ? 'Sound off' : 'Sound on', 900); }
+  if (e.code === 'KeyN') { scMusic.toggle(); toast(scMusic.on ? 'Music on' : 'Music off', 900); }
+  if (e.code === 'KeyM') { muted = !muted; scMusic.vol(); toast(muted ? 'Sound off' : 'Sound on', 900); }
   if (e.code === 'KeyP' && state !== 'title') cycleRetroPreset();
   if (e.code === 'KeyB' && state !== 'title') toggleCrazy();
   if (e.code === 'KeyG') { goreOn = !goreOn; decalMesh.visible = goreOn; toast(goreOn ? 'Gore on' : 'Gore off', 900); }
@@ -5804,6 +6022,7 @@ addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('wheel', e => { if (state === 'play') { if (hotbarSel === 1) { hotbarSel = 0; updateHotbar(); } cycleWeapon(e.deltaY > 0 ? 1 : -1); } });
 addEventListener('keydown', e => { if (e.code === 'KeyE' && state === 'play' && hotbarSel === 1 && !eUsedProp && !hintProp && !hintNpc && !onVehicle) placeBlock(); });
 function begin() {
+  scMusic.start();
   wipeGore();
   $('menu').style.display = 'none';
   if (nosOn()) { camYaw = -universeCentre(mySlot).angle - Math.PI / 2; fpPitch = 0; }  // face outward along this home tower's highway
@@ -6697,6 +6916,19 @@ function updateShots(dt) {
 }
 
 // ---------- first-person camera ----------
+// MAIN MENU backdrop: a slow fly-over at about moon height, camera pitched down at the level
+let titleCamT = 0, titleFog = null;
+const titleLook = new THREE.Vector3();
+function titleCam(dt) {
+  titleCamT += dt;
+  if (!titleFog && scene.fog) titleFog = { n: scene.fog.near, f: scene.fog.far };
+  if (scene.fog) { scene.fog.near = 120; scene.fog.far = 700; }
+  const a = titleCamT * 0.06, R = 80, cx = start.x, cz = start.z, y = TOP * 0.55 + 12 * Math.sin(titleCamT * 0.2);      // down among the platforms, not above them
+  camPos.set(cx + Math.cos(a) * R, y, cz + Math.sin(a) * R); camInit = true;
+  camera.position.copy(camPos);
+  titleLook.set(cx + Math.cos(a + 0.7) * 30, y - 38, cz + Math.sin(a + 0.7) * 30);
+  camera.lookAt(titleLook);
+}
 function fpCamera(dt) {
   const dirv = new THREE.Vector3(-Math.sin(camYaw) * Math.cos(fpPitch), Math.sin(fpPitch), -Math.cos(camYaw) * Math.cos(fpPitch));
   camPos.set(pos.x, pos.y + 1.65, pos.z).addScaledVector(dirv, 0.12); camInit = true;
@@ -6744,8 +6976,23 @@ const RENT_ZONES = [
   { name: 'Condemned',   rent: 2, desc: 'boarded, flooded and rotting - the building is no longer safe to occupy', top: '#050808', mid: '#16241e', bot: '#4a5a36', fog: 0x16221c, hemi: 0.36, hemiCol: 0x7a9882, sun: 0.28, sunCol: 0xb0c880, cloud: 0x121a16, plate: 0x9ab07a, weather: 'soot', sky: 0.8 },
   { name: 'Collections', rent: 3, desc: 'the debt has been sold on - everything that is owed gets collected', top: '#0c0000', mid: '#3a0606', bot: '#b01818', fog: 0x3a0808, hemi: 0.6, hemiCol: 0xff3a2a, sun: 0.65, sunCol: 0xff5a1a, cloud: 0x300404, plate: 0xff2a3a, weather: 'ash', outline: true, sky: 0.8 },
 ];
-const zoneByName = nm => ZONES.find(z => z.name === nm) || RENT_ZONES.find(z => z.name === nm) || NOS_ZONES.find(z => z.name === nm) || ARENA_ZONE_LIST.find(z => z.name === nm) || null;      // ARENA_ZONE_LIST is a const declared later in module scope - fine, lookups only run at runtime
+// THE DEPTH: everything below platform #-1 (platform-counter negatives and negative route indices). Kept OUTSIDE ZONES (same reason as RENT_ZONES: ZONES is name-filtered
+// in several places, appending would change the surface world). Caverns (the first stretch) -> strictly Hellscape / Horror (from ZONES) -> Psychosis (glitch-hell-horror mutation).
+const DEPTH_ZONES = {
+  caverns:   { name: 'Caverns',   depth: 1, slabCol: 0x2a241e, desc: 'the city ends. rock, drip, and something breathing in the dark', top: '#030203', mid: '#0c0a08', bot: '#2a2218', fog: 0x0e0b09, hemi: 0.34, hemiCol: 0x8a7a68, sun: 0.12, sunCol: 0x6a8aa0, cloud: 0x0a0807, plate: 0x6a5c4c, weather: 'soot', sky: 0.7 },
+  psychosis: { name: 'Psychosis', depth: 2, slabCol: 0x14040a, desc: 'hell remembers being a place. now it only remembers you.', top: '#0a0010', mid: '#3a0018', bot: '#ff0066', fog: 0x2a0016, hemi: 0.8, hemiCol: 0xff3a6a, sun: 0.8, sunCol: 0xff00aa, cloud: 0x3a0020, plate: 0xff0a50, weather: 'glitch', outline: true, sky: 0.8 },
+};
+const _dHash = k => (Math.imul(k, 2654435761) >>> 0) / 4294967296;
+// k = depth (1 = platform #-1). 1..14 Caverns; then Hellscape / Horror in alternating 10-platform stretches; a growing share mutate into Psychosis (from #-40, total by #-160).
+function depthZoneFor(k) {
+  if (k <= 14) return DEPTH_ZONES.caverns;
+  if (_dHash(k) < Math.min(1, Math.max(0, (k - 40) / 120))) return DEPTH_ZONES.psychosis;
+  return ZONES.find(z => z.name === (Math.floor((k - 15) / 10) % 2 ? 'Horror' : 'Hellscape'));
+}
+const zoneByName = nm => ZONES.find(z => z.name === nm) || DEPTH_ZONES[nm.toLowerCase()] || RENT_ZONES.find(z => z.name === nm) || NOS_ZONES.find(z => z.name === nm) || ARENA_ZONE_LIST.find(z => z.name === nm) || null;      // ARENA_ZONE_LIST is a const declared later in module scope - fine, lookups only run at runtime
 Object.assign(BIOME_ENEMIES, {
+  Caverns: ['spider', 'spider', 'roach', 'roach', 'skeleton', 'stalker', 'charger'],
+  Psychosis: ['demon', 'glitchling', 'glitchling', 'stalker', 'skeleton', 'spider', 'roach', 'infernal'],
   Foreclosure: ['notice', 'notice', 'notice', 'bailiff', 'collector', 'walker', 'drone'],
   Condemned: ['notice', 'bailiff', 'bailiff', 'collector', 'roach', 'roach', 'skeleton', 'landlord'],
   Collections: ['collector', 'collector', 'loanshark', 'loanshark', 'landlord', 'bailiff', 'demon', 'bomber'],
@@ -6844,8 +7091,7 @@ function biomeForRegion(levelNumber, regionIndex) {
 }
 const zoneFor = idx => {
   if (themeZones()) { const Z = themeZones(); return idx <= -72 ? Z[2] : idx <= -24 ? Z[1] : idx < 3 ? (idx <= -3 ? Z[0] : null) : Z[0]; }      // Rent's Due: the further down the ladder, the worse it gets
-  if (idx <= -72) return ZONES.find(z => z.name === 'Hellscape');           // far enough down, there is only hell
-  if (idx <= -3) { const weird = ['Kaomoji', 'Glitch', 'Hellscape', 'Horror']; return ZONES.find(z => z.name === weird[Math.floor((-idx - 3) / 18) % 4]); }
+  if (idx <= -1) return depthZoneFor(-idx);                                  // below platform 0: caves -> strictly hell / horror -> psychosis (never the surface biomes, never Kaomoji)
   if (idx < 3) return null;
   const standardBiomes = ZONES.filter(zone => zone.name !== 'Psychedelic');
   return standardBiomes[Math.floor((idx - 3) / 24) % standardBiomes.length];
@@ -7236,7 +7482,7 @@ function ladderExtend(dir) {        // dir +1 = upward, -1 = downward
     for (let k = 0; k < 14; k++) {
       n += dir; if (n === 0) n = dir;                                                            // there is no #0: ... 2, 1, -1, -2 ...
       y += dir * (15 + R() * 8);
-      const a = R() * 6.283, r = Math.sqrt(R()) * 55, zone = R() < 0.4 ? (themeZones() ? themeZones()[Math.floor(R() * 3)] : ZONES[Math.floor(R() * ZONES.length)]) : (themeZones() ? themeZones()[2] : null);
+      const a = R() * 6.283, r = Math.sqrt(R()) * 55, zone = (dir < 0 && n < 0 && !themeZones()) ? depthZoneFor(-n) : R() < 0.4 ? (themeZones() ? themeZones()[Math.floor(R() * 3)] : ZONES[Math.floor(R() * ZONES.length)]) : (themeZones() ? themeZones()[2] : null);
       const sl = addSlab(ladderLoop.x + Math.cos(a) * r, y, ladderLoop.z + Math.sin(a) * r, 2.5 + R() * 4, 2.5 + R() * 4, 1.5, zone, true);
       sl.pn = n; ladder.push(sl); if (R() < 0.4) coin(sl.cx, y + 1.2, sl.cz, zone);
       if (dir > 0) ladderTop = { n, y }; else { ladderBot = { n, y }; VOID_Y = Math.min(VOID_Y, y - 60); }
@@ -7294,7 +7540,7 @@ function playerUpdate(dt) {
 
   // camera-relative movement
   const fwdX = -Math.sin(camYaw), fwdZ = -Math.cos(camYaw), rX = Math.cos(camYaw), rZ = -Math.sin(camYaw);
-  if (keys.KeyQ) camYaw += 1.9 * dt; if (keys.KeyE && !hintProp && !hintNpc && !onVehicle) camYaw -= 1.9 * dt;
+  if (keys.KeyE && !hintProp && !hintNpc && !onVehicle) camYaw -= 1.9 * dt;
   const ix = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
   const iz = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
   let dx = fwdX * iz + rX * ix, dz = fwdZ * iz + rZ * ix;
@@ -7348,7 +7594,7 @@ function playerUpdate(dt) {
   boosting = false;
   if (!pounding && invuln < 1.0 && !climbing && lockT <= 0) {
     const gearMul = gear === 'board' ? 1.42 : 1;
-    let rideMul = onVehicle ? (onVehicle.kind === 'buggy' ? 1.8 : 2.1) : 1;
+    let rideMul = onVehicle ? (onVehicle.kind === 'buggy' ? 1.8 : 2.1) : 1;      // the DeLorean was slower (1.8) than the bike: now the fastest ride
     boosting = !!onVehicle && !!(keys.ShiftLeft || keys.ShiftRight) && boostE > 0.02 && state === 'play';
       if (boosting) { boostE = Math.max(0, boostE - dt / (2.5 * (base && base.upgrades.vehicleNitro ? 1.35 : 1))); rideMul *= 1.75; }
     else boostE = Math.min(1, boostE + dt / 6);
@@ -7369,6 +7615,7 @@ function playerUpdate(dt) {
     pos.x += dx * sp * dt; pos.z += dz * sp * dt; pos.y += up * 18 * dt; vel.set(0, 0, 0); onGround = false; invuln = 1; return;
   }
 
+  grappleTick(dt);
   // physics in small substeps so fast falls can't tunnel through platforms
   const n = Math.max(1, Math.ceil(dt * 120)), h = dt / n;
   for (let i = 0; i < n && state === 'play'; i++) physicsStep(h);
@@ -7390,6 +7637,21 @@ function playerUpdate(dt) {
 // ---------- THE FUNK: a procedural live-band (drums, slap bass, chord stabs, licks) that changes key/tempo per zone ----------
 // Scheduler with look-ahead on the WebAudio clock. Intensity rises near enemies and in free-fall; space strips it down to a pad + arp.
 let musicOn = false, musicBus = null, musicNext = 0, musicStep = 0;
+// SOUNDTRACK: the author's own tracks, loudness-normalized (EBU R128, -16 LUFS) mp3s in music/track01..19.mp3. Shuffled, loops forever.
+// N = pause/resume, M = mute. Starts on the first Enter/click (browsers block audio before a gesture).
+const MUSIC_COUNT = 19, MUSIC_VOL = 0.55;
+const scMusic = {
+  a: null, order: [], i: -1, on: true, started: false,
+  start() {
+    if (this.started) return; this.started = true;
+    this.order = Array.from({ length: MUSIC_COUNT }, (_, k) => k + 1).sort(() => Math.random() - 0.5);
+    this.a = new Audio(); this.a.preload = 'auto'; this.a.addEventListener('ended', () => this.next()); this.a.addEventListener('error', () => setTimeout(() => this.next(), 500));
+    this.next();
+  },
+  next() { if (!this.a) return; this.i = (this.i + 1) % this.order.length; this.a.src = 'music/track' + String(this.order[this.i]).padStart(2, '0') + '.mp3'; this.vol(); if (this.on) this.a.play().catch(() => {}); },
+  vol() { if (this.a) this.a.volume = muted ? 0 : MUSIC_VOL; },
+  toggle() { this.on = !this.on; if (!this.a) return; if (this.on) this.a.play().catch(() => {}); else this.a.pause(); },
+};
 let ravePulse = 0;                       // 1 on each kick, decaying: drives the Rave biome's lights
 const beatQ = [];                        // scheduled beat start times [audioTime, duration] (filled by musicTick)
 function raveBeat() {
@@ -8470,7 +8732,7 @@ function cullTick(dt) {
   }
   frozenSample();
   if (firstBatch && !window.__NOMERGE) jobs.push({ gen: mergePlatformsGen(lvl) });
-  const cp = camera.position; let hidden = 0;
+  const cp = state === 'title' ? titleLook : camera.position; let hidden = 0;      // menu fly-over culls around what it is looking at, not the high camera
   for (const e of cull.list) {
     const far = e.b.distanceToPoint(cp) > (e.r || (e.big ? CULL_BIG_R : CULL_R));
     if (far && !e.off && e.o.visible) { e.o.visible = false; e.off = true; }
@@ -8676,7 +8938,7 @@ function updateVisuals(dt) {
   aimK += ((adsOn ? 1 : 0) - aimK) * Math.min(1, dt * 10);
   sprintK += ((sprintNow ? 1 : 0) - sprintK) * Math.min(1, dt * 8);
   camDistCur += ((aimK > 0.5 ? 3.8 : 9.5) - camDistCur) * Math.min(1, dt * 9);
-  vm.visible = fpv && state !== 'dead';
+  vm.visible = fpv && state !== 'dead' && state !== 'title';
   vm.position.set(0.3 * (1 - aimK), -0.3 + 0.12 * aimK, -0.55 + recoil * 0.1 + 0.12 * aimK);      // sights: gun slides to the centre
   $('scope').style.display = state === 'play' && aimK > 0.7 && weapon === 4 ? 'block' : 'none';  // railgun gets a scope
   $('cross').style.transform = `scale(${1 - 0.45 * aimK})`;
@@ -8708,7 +8970,7 @@ function updateVisuals(dt) {
   blob.position.set(pos.x, gb.ground + 0.06, pos.z);
   blob.scale.setScalar(clamp(1.3 - gb.h / 60, 0.4, 1.2));
 
-  if (fpv) fpCamera(dt); else {
+  if (state === 'title') titleCam(dt); else if (fpv) fpCamera(dt); else {
   // third-person camera
   const dist = camDistCur;                                  // pulls in over the shoulder when aiming down sights
   const sh = aimK * 0.9, rx = Math.cos(camYaw) * sh, rz = -Math.sin(camYaw) * sh;
@@ -8717,7 +8979,7 @@ function updateVisuals(dt) {
     pos.x + Math.sin(camYaw) * cp * dist + rx,
     pos.y + 1.7 + sp2 * dist,
     pos.z + Math.cos(camYaw) * cp * dist + rz);
-  if (want.y < 0.6) want.y = 0.6;
+  if (want.y < 0.6 && pos.y > 1.5) want.y = 0.6;      // keep the camera off the street, but only when the player is above it: below y=0 (caves, hell, underworld) the clamp pinned the camera at 0.6 while the player fell away
   const k = camInit ? 1 - Math.pow(0.0005, dt) : 1;
   camPos.lerp(want, k); camInit = true;
   camera.position.copy(camPos);
@@ -8730,7 +8992,9 @@ function updateVisuals(dt) {
   if (psy.t > 0 && psy.kind === 'trip') camera.rotateZ(Math.sin(performance.now() / 330) * 0.08);      // woozy camera while tripping
   updateEnv(dt, camera.position);
 
-  // HUD (hidden behind the main menu)  $('hud').style.display = state === 'title' ? 'none' : '';
+  // HUD (hidden behind the main menu)
+  $('hud').style.display = state === 'title' ? 'none' : '';
+  if (state !== 'title' && titleFog) { scene.fog.near = titleFog.n; scene.fog.far = titleFog.f; titleFog = null; }
   $('hotbar').style.display = state === 'title' ? 'none' : '';
   const hp = clamp(health, 0, MAXHP);
   const heart = e => `<svg class="hh${e ? ' e' : ''}" viewBox="0 0 7 6" shape-rendering="crispEdges"><path d="M1 0h2v1H1zM4 0h2v1H4zM0 1h7v2H0zM1 3h5v1H1zM2 4h3v1H2zM3 5h1v1H3z" fill="${e ? '#1b0a26' : 'url(#hpg)'}"/>${e ? '' : '<path d="M1 1h1v1H1zM4 1h1v1H4z" fill="#fff" opacity=".9"/>'}</svg>`;
@@ -9394,7 +9658,22 @@ function dressSite(site, zone) {
   const inX = Math.max(0.5, site.hw - 1.2), inZ = Math.max(0.5, site.hd - 1.2), big = site.hw > 12 || site.hd > 12;
   const spot = () => [(r() * 2 - 1) * inX, (r() * 2 - 1) * inZ], n = (a, b) => Math.round(a + r() * (b - a));
   const add = (m, x, y, z) => { m.position.set(x, y, z); g.add(m); return m; };
-  if (zone.name === 'Jungle') {
+  if (zone.name === 'Psychosis') {          // mutation: a hell or horror ledge with the Glitch dressing laid over it
+    const baseName = r() < 0.5 ? 'Hellscape' : 'Horror';      // (decided once: r() inside the find predicate re-rolled per element and found nothing)
+    for (const sz of [ZONES.find(z => z.name === baseName), ZONES.find(z => z.name === 'Glitch')]) {
+      const d = dressSite(site, sz); d.g.position.set(0, 0, 0); g.add(d.g); anims.push(...d.anims); rods.push(...d.rods);
+    }
+    return { g, anims, rods };
+  }
+  if (zone.name === 'Caverns') {
+    const rockM = MM('cvRock', () => lamC(0x4a4136)), darkM = MM('cvDark', () => lamC(0x2a241e)), crysM = MM('cvCrys', () => addC(0x59c8ff, 0.8)), mushM = MM('cvMush', () => addC(0x9aff7a, 0.85));
+    const coneG = GG('cone5', () => new THREE.ConeGeometry(0.6, 1, 5));
+    for (let i = 0, c = n(3, big ? 12 : 6); i < c; i++) { const [x, z] = spot(), h = 0.8 + r() * 2.6; add(new THREE.Mesh(coneG, i % 3 ? rockM : darkM), x, h / 2, z).scale.set(0.5 + r() * 0.6, h, 0.5 + r() * 0.6); }          // stalagmites
+    for (let i = 0, c = n(2, big ? 8 : 4); i < c; i++) { const [x, z] = spot(), h = 1.5 + r() * 4, m = add(new THREE.Mesh(coneG, darkM), x, 9 - h / 2, z); m.scale.set(0.5 + r() * 0.5, h, 0.5 + r() * 0.5); m.rotation.x = Math.PI; }   // stalactites hanging from the dark
+    for (let i = 0, c = n(1, big ? 5 : 2); i < c; i++) { const [x, z] = spot(), b = add(new THREE.Mesh(GG('cvBoulder', () => new THREE.IcosahedronGeometry(1, 0)), rockM), x, 0.3, z); b.scale.set(0.6 + r() * 1.1, 0.4 + r() * 0.7, 0.6 + r() * 1.1); b.rotation.y = r() * 6; }
+    for (let i = 0, c = n(0, big ? 4 : 2); i < c; i++) { const [x, z] = spot(); for (let k = 0; k < 3; k++) { const cr = add(new THREE.Mesh(GG('cvCone4', () => new THREE.ConeGeometry(0.22, 1, 4)), crysM), x + (r() - 0.5) * 0.7, 0.5, z + (r() - 0.5) * 0.7); cr.scale.y = 0.8 + r() * 1.4; cr.rotation.z = (r() - 0.5) * 0.5; anims.push({ k: 'flower', m: cr, ph: r() * 6 }); } }      // glowing crystals
+    for (let i = 0, c = n(1, big ? 5 : 3); i < c; i++) { const [x, z] = spot(), m = add(new THREE.Mesh(GG('cvMush', () => new THREE.SphereGeometry(0.28, 6, 5)), mushM), x, 0.2, z); m.scale.set(1, 0.6, 1); anims.push({ k: 'flower', m, ph: r() * 6 }); }
+  } else if (zone.name === 'Jungle') {
     const trunkG = GG('trunk', () => new THREE.CylinderGeometry(0.28, 0.42, 1, 6)), leafG = GG('leaf', () => new THREE.IcosahedronGeometry(1, 0));
     const trunkM = MM('trunk', () => lamC(0x7a5433)), leafM = [MM('lf1', () => lamC(0x38c85a)), MM('lf2', () => lamC(0x7ae85e)), MM('lf3', () => lamC(0x2a9e4a))];
     for (let i = 0, c = n(1, big ? 6 : 2); i < c; i++) {                      // trees
@@ -9969,7 +10248,7 @@ function zoneFxTick(dt) {
   const nm = live ? activeZ.name : '';
   // GLITCH: the picture tears, colours invert, the platforms under you shudder and recolour
   for (let i = zoneFx.glRestore.length - 1; i >= 0; i--) { const g = zoneFx.glRestore[i]; g.t -= dt; if (g.t <= 0) { g.m.position.copy(g.p); g.m.material.color.setHex(g.c); g.m.material.emissive.setHex(g.e); zoneFx.glRestore.splice(i, 1); } }
-  if (nm === 'Glitch') {
+  if (nm === 'Glitch' || nm === 'Psychosis') {
     zoneFx.glT -= dt;
     if (zoneFx.glT <= 0) {
       zoneFx.glT = 0.15 + Math.random() * 1.1;
@@ -9982,7 +10261,7 @@ function zoneFxTick(dt) {
       }
       tone(200 + Math.random() * 1800, 80 + Math.random() * 900, 0.07, 'square', 0.07); if (Math.random() < 0.4) noise(0.06, 0.14, 800 + Math.random() * 3000);
       flash = Math.max(flash, Math.random() < 0.3 ? 0.45 : 0);
-      let n = 0; for (const pl of platforms) { if (n > 10) break; if (!pl.plate || !pl.zone || pl.zone.name !== 'Glitch' || Math.hypot(pl.cx - pos.x, pl.cz - pos.z) > 70 || Math.abs(pl.top - pos.y) > 40) continue; if (Math.random() > 0.2) continue; n++;
+      let n = 0; for (const pl of platforms) { if (n > 10) break; if (!pl.plate || !pl.zone || (pl.zone.name !== 'Glitch' && pl.zone.name !== 'Psychosis') || Math.hypot(pl.cx - pos.x, pl.cz - pos.z) > 70 || Math.abs(pl.top - pos.y) > 40) continue; if (Math.random() > 0.2) continue; n++;
         zoneFx.glRestore.push({ m: pl.plate, p: pl.plate.position.clone(), c: pl.plate.material.color.getHex(), e: pl.plate.material.emissive.getHex(), t: 0.12 + Math.random() * 0.25 });
         pl.plate.position.x += (Math.random() - 0.5) * 1.2; pl.plate.position.y += (Math.random() - 0.5) * 0.6; const col = Math.random() < 0.5 ? 0xff2bd6 : 0xffffff; pl.plate.material.color.setHex(col); pl.plate.material.emissive.setHex(col); }
     }
@@ -9994,7 +10273,7 @@ function zoneFxTick(dt) {
     zoneFx.kaoSprites.forEach((sp, i) => { sp.visible = true; const a = t * 0.05 + i * 0.52, rr = 24 + (i * 7) % 16; sp.position.set(camera.position.x + Math.cos(a) * rr, camera.position.y + 2 + (i * 5) % 10 + Math.sin(t * 1.3 + i) * 1.2, camera.position.z + Math.sin(a) * rr); });
   } else if (zoneFx.kaoSprites) for (const sp of zoneFx.kaoSprites) sp.visible = false;
   // HORROR: scheduled jump scares (a face in your eyes, things dropping in behind you)
-  if (nm === 'Horror') {
+  if (nm === 'Horror' || nm === 'Psychosis') {
     zoneFx.scareCd -= dt;
     if (zoneFx.scareCd <= 0) {
       zoneFx.scareCd = 22 + Math.random() * 30;
@@ -10003,6 +10282,41 @@ function zoneFxTick(dt) {
       try { $('subs').textContent = '[IT] ' + SCARE_LINES[(Math.random() * SCARE_LINES.length) | 0]; setTimeout(() => { $('subs').textContent = ''; }, 2600); } catch (_) {}
     }
   } else zoneFx.scareCd = Math.max(zoneFx.scareCd, 8);
+}
+// ---------- GRAPPLING HOOK: tap Q to fire at the crosshair, HOLD Q to reel in, release to let go (keep your speed), Space also cuts the rope ----------
+const grapple = { cutReq: false, on: false, ax: 0, ay: 0, az: 0, cd: 0, rope: null, told: false };
+function grappleRelease(boost) {
+  if (!grapple.on) return;
+  grapple.on = false; grapple.cd = 0.25; if (grapple.rope) grapple.rope.visible = false;
+  if (boost && !onGround) { vel.y += 4; glide = Math.min(1, glide + 0.15); }
+}
+function grappleFire() {
+  if (state !== 'play' || grapple.on || grapple.cd > 0 || grinding || climbing || inInterior || noclip) return;
+  const cd = camera.getWorldDirection(new THREE.Vector3());
+  const start = fpv ? camera.position.clone() : camera.position.clone().addScaledVector(cd, camDistCur + 0.6);
+  const h = castRay(start, cd, 110, true);
+  if (!h.hit || h.t >= 110) { grapple.cd = 0.35; toast('NOTHING TO HOOK', 700); sfx.click && sfx.click(); return; }
+  const a = start.addScaledVector(cd, h.t);
+  grapple.on = true; grapple.ax = a.x; grapple.ay = a.y; grapple.az = a.z;
+  if (onVehicle) dismount();
+  shockRing(a, 1.6, 0x58e5ff); burst(a, 0x58e5ff, 8); sfx.jump && sfx.jump(true);
+  if (!grapple.told) { grapple.told = true; toast('HOLD Q TO REEL IN · RELEASE TO FLY · SPACE TO CUT', 2600); }
+}
+function grappleTick(dt) {
+  grapple.cd = Math.max(0, grapple.cd - dt);
+  if (!grapple.on) return;
+  if (state !== 'play' || grinding || climbing || inInterior || !keys.KeyQ) { grappleRelease(state === 'play'); return; }
+  if (grapple.cutReq) { grapple.cutReq = false; grappleRelease(true); return; }
+  const hx = pos.x, hy = pos.y + 1.2, hz = pos.z, dx = grapple.ax - hx, dy = grapple.ay - hy, dz = grapple.az - hz, dist = Math.hypot(dx, dy, dz);
+  if (dist < 2.6) { grappleRelease(true); return; }
+  const pull = 85 * dt;
+  vel.x += dx / dist * pull; vel.y += dy / dist * pull + GRAV * dt * 0.85; vel.z += dz / dist * pull;       // the rope also cancels most of gravity while it is taut
+  const sp = Math.hypot(vel.x, vel.y, vel.z), cap = 46; if (sp > cap) vel.multiplyScalar(cap / sp);
+  onGround = false; pounding = false;
+  if (!grapple.rope) { grapple.rope = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: 0x9ff4ff, transparent: true, opacity: 0.9, toneMapped: false })); grapple.rope.frustumCulled = false; scene.add(grapple.rope); }
+  const a = new THREE.Vector3(hx, hy + 0.1, hz), b = new THREE.Vector3(grapple.ax, grapple.ay, grapple.az);
+  grapple.rope.visible = true; grapple.rope.position.copy(a).add(b).multiplyScalar(0.5);
+  grapple.rope.quaternion.setFromUnitVectors(Y_AXIS, b.clone().sub(a).normalize()); grapple.rope.scale.set(0.035, a.distanceTo(b), 0.035);
 }
 // ---------- SKATE TRICKS: flip the deck in mid-air (Z kickflip · X heelflip · T shove-it), chain them, and land clean to bank the points ----------
 const trick = { t: 0, dur: 0.6, name: '', axis: 'x', spin: 1, chain: 0, bank: 0, best: 0 };
@@ -10284,13 +10598,15 @@ const menuBtns = ['bStart', 'bMulti', 'bExit'];
 let menuSel = 0, menuMode = 'main';
 // LEVEL SELECT: pure data so a second real level is a data-only addition later (no UI rewrite).
 // Each entry: id, display name/subtitle (player-facing copy only), unlocked, startFn (what actually begins play).
-const LEVELS = [
+const SP_ONLY_DESCENT = true;   // TEMP: single-player menu shows only Lil Spasticism while the other levels are built; multiplayer joins via LEVEL_DEFS so it still reaches them
+const LEVELS_ALL = [
   { id: 'descent', name: 'Lil Spasticism', subtitle: "The one endless procedural descent — floating platforms all the way down.", unlocked: true, startFn: () => startLevelDef('descent') },
   { id: 'rent', name: "Rent's Due", subtitle: 'Urban decay all the way down - eviction notices, loan sharks, and the rent is overdue.', unlocked: true, startFn: () => startLevelDef('rent') },
   { id: 'nos', name: 'Nostalgia Overdose', subtitle: 'VHS fog, CRT scanlines, cassette platforms and 80s synth bosses - be kind, rewind.', unlocked: true, startFn: () => startLevelDef('nos') },
   { id: 'arena', name: 'THE ARENAS', subtitle: 'Four closed deathmatch chambers - Longest Yard, Deck, Camping Grounds, Facing Worlds - rocket, rail and quad, 2-8 players.', unlocked: true, startFn: () => startLevelDef('arena') },
   { id: 'locked3', name: '???', subtitle: 'LOCKED — COMING SOON', unlocked: false },
 ];
+const LEVELS = SP_ONLY_DESCENT ? LEVELS_ALL.filter(lv => lv.id === 'descent') : LEVELS_ALL;
 let levelSel = 0;
 // Switch the live level definition, rebuild the world for it if it differs from what is already built, then run the usual preload -> begin.
 // (The world is built once at boot for the default descent, so choosing 'descent' while it is already live is exactly the old path.)
@@ -10310,7 +10626,8 @@ function buildLevelButtons() {
 }
 function menuLevelsRender() { LEVELS.forEach((lv, i) => { const b = $('lvlBtn' + i); if (b) b.className = (i === levelSel && lv.unlocked) ? 'sel' : ''; }); }
 function menuRender() {
-  $('menuSub').style.display = menuMode === 'main' ? 'block' : 'none';
+  $('menuSub').style.display = 'none';
+  $('menu').classList.toggle('main', menuMode === 'main'); const hn = document.querySelector('#menu .hint'); if (hn) hn.style.display = menuMode === 'main' ? 'none' : '';
   menuBtns.forEach((id, i) => { $(id).className = i === menuSel ? 'sel' : ''; });
   $('menuMain').style.display = menuMode === 'main' ? 'block' : 'none';
   $('menuLevels').style.display = menuMode === 'levels' ? 'block' : 'none';
@@ -10321,7 +10638,7 @@ function menuRender() {
   if (menuMode === 'levels') menuLevelsRender();
 }
 function showMenu(v) { $('menu').style.display = v ? 'flex' : 'none'; if (v) menuRender(); }
-function menuStart() { menuMode = 'levels'; levelSel = 0; menuRender(); }      // START now opens level select; the actual descent begins from LEVELS[i].startFn()
+function menuStart() { LEVELS[0].startFn(); }      // ENTER drops straight into the first level (level select is hidden for now; LEVELS_ALL keeps the rest for when it returns)
 // PRELOAD: show a loading screen, finish the platform merge, then compile EVERY shader variant that exists anywhere in the level (hidden objects included),
 // so nothing hitches the first time a new enemy, biome or effect comes into view.
 function preloadThen(go, pre) {      // pre: optional heavy work (e.g. a level rebuild) run AFTER the overlay has painted
@@ -10366,8 +10683,14 @@ const servedByServer = () => /^https?:$/.test(location.protocol || '');
 // If this page was opened as a plain file (double-clicked index.html) the server is still reachable at localhost:8080, so look for it there.
 const serverOrigin = () => (servedByServer() ? '' : 'http://localhost:8080');
 function setStep(id, ok) { $(id).className = ok ? 'ok' : 'bad'; $(id + 'Chk').textContent = ok ? '✓' : '✗'; }
+let mpLevel = 'descent';        // multiplayer: the level the HOST picked; joiners adopt it from the host
+function mpLevelsRender() {
+  const box = $('mpLevels'); if (!box) return;
+  box.innerHTML = LEVELS_ALL.filter(lv => lv.unlocked).map(lv => `<button data-lv="${lv.id}" class="${lv.id === mpLevel ? 'sel' : ''}" style="font-size:13px;padding:8px 14px">${lv.name}</button>`).join('');
+  box.querySelectorAll('button').forEach(b => { b.onclick = () => { mpLevel = b.dataset.lv; mpLevelsRender(); }; });
+}
 function menuHostOpen() {
-  menuMode = 'host'; menuRender();
+  menuMode = 'host'; menuRender(); mpLevelsRender();
   const q = new URLSearchParams(location.search || '').get('room'); if (q) $('inRoom').value = q.slice(0, 24);
   hostRefresh();
   fetch(serverOrigin() + '/net-info').then(r => r.json()).then(j => { netInfo = j; hostRefresh(); }).catch(() => { netInfo = { port: 443, addresses: [], cloud: true }; hostRefresh(); });      // no local relay (e.g. the Pages site): use the online one
@@ -10390,8 +10713,8 @@ async function copyText(t) {
 }
 function hostGo() {
   if (!netInfo) return;
-  if (netInfo.cloud) { netConnect(RELAY_HOST, roomVal()); begin(); }
-  else if (servedByServer()) { netConnect(location.host, roomVal()); begin(); }
+  if (netInfo.cloud) { netConnect(RELAY_HOST, roomVal()); startLevelDef(mpLevel); }
+  else if (servedByServer()) { netConnect(location.host, roomVal()); startLevelDef(mpLevel); }
   else location.href = `http://localhost:8080/?room=${roomVal()}`;       // from a plain file: hop onto the server's copy of the game, which joins the room by itself
 }
 function menuJoinOpen() { menuMode = 'join'; $('joinMsg').textContent = ''; menuRender(); setTimeout(() => { try { $('inInvite').focus(); } catch (_) {} }, 0); }
@@ -10418,9 +10741,7 @@ function menuExit() {
 }
 function menuKey(e) {
   if (menuMode === 'main') {
-    if (e.code === 'ArrowUp' || e.code === 'KeyW') menuSel = (menuSel + 2) % 3;
-    else if (e.code === 'ArrowDown' || e.code === 'KeyS') menuSel = (menuSel + 1) % 3;
-    else if (e.code === 'Enter' || e.code === 'Space') [menuStart, menuMulti, menuExit][menuSel]();
+    if (e.code === 'Enter' || e.code === 'Space') menuStart();
     else if (e.code === 'KeyP') menuMulti();
     menuRender();
   } else if (menuMode === 'levels') {
@@ -10608,7 +10929,7 @@ renderer.setAnimationLoop(now => {
   else if (state === 'play') { playerUpdate(dt); if (P) PERF.lap('player'); updateEnemies(dt); if (P) PERF.lap('enemies'); updateShots(dt); if (P) PERF.lap('shots'); }
   else if (state === 'dead') { deadT -= dt; if (deadT <= 0) respawn(); if (net.on) { updateEnemies(dt); updateShots(dt); } }
   else if (state === 'clear') { updateEnemies(dt); clearT -= dt; if (clearT <= 0) nextLevel(); }
-  updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); if (rentOn()) rentClockTick(dt); evolveTick(dt); updateGrowers(dt); updateRoofArenas(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); goreFadeTick(dt); updateClouds(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
+  updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); if (rentOn()) rentClockTick(dt); if (nosOn()) { nosPipeTick(dt); nosEggTick(dt); } evolveTick(dt); updateGrowers(dt); updateRoofArenas(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); goreFadeTick(dt); updateClouds(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
   updateVisuals(dt); setHint(); if (P) PERF.lap('visuals+hud');
   if (guideDialogOpen && state !== 'play') closeGuideDialog(false);
   netTick(dt); updatePeers(dt); debugTick(dt); if (P) PERF.lap('net+peers+debug');
