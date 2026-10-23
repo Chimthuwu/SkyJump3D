@@ -1,6 +1,11 @@
 - 2026-10-21 [CLAUDE] Renamed the game to **SkyJump3D** (titles, README, server strings). Superseded: the remote is now `Chimthuwu/SkyJump3D` and the old logo files are no longer in the tree.
 # SkyJump3D — Work Log
 
+## HANDOFF (2026-10-23, for the next agent/session)
+- Read AUDIT.md (full audit + roadmap) and the 'Done' list below. All work this session is headless-verified only; nothing eyeballed on a real GPU.
+- NOT DONE: lazy enemy spawning (far enemies are only frozen/hidden); gore 5-min fade is untested by eye (headless spill made 0 decals - test on a surface); biome ideas in the Idea pool are NOT to be implemented unless asked; weapon hotkey bug (key 2 is hijacked by the builder hand, see AUDIT.md section 7 #1) is unfixed.
+- Dev hooks: __ng.flushJobs(), freezeCheck(), roofArena(i), arenaState(), awaken(), gore(), goreAge(ms), adapt(); F2 = perf HUD. Tests used puppeteer + Edge with SwiftShader (see perf/harness.cjs).
+
 ## Current focus
 Spawn-region cleanliness (no portals/gore/duplicate rides), six-player spawn towers, deploy handoff.
 
