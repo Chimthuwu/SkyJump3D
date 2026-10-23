@@ -11,6 +11,11 @@ Spawn-region cleanliness (no portals/gore/duplicate rides), six-player spawn tow
 - Auto-deploy on push requires connecting `sky-jump` Pages to GitHub in the Cloudflare dashboard (project is direct-upload, `Git Provider: No`).
 - Real-GPU performance measurement requires a hardware-GPU browser; tests here use headless software GL.
 
+## Idea pool (user ideas, NOT scheduled - do not implement unless asked)
+- **Terminal biome**: enemies are literally code (text/glyph/ASCII bodies, console look, commands, stack traces). Must feel very different from Glitch.
+- **Glitch biome retune**: lean into a "signal lost" broken-television style (static, scanlines, tracking errors, channel flips), distinct from Terminal.
+- **Late-game biome mixing / mutating**: biomes blend or mutate over time/progress in later stages (see AUDIT.md section 3.4 for a hybrid-biome design sketch).
+
 ## Backlog (ordered, top = highest priority)
 - [x] Voices (2026-10-22): schizo whispers now work on the hosted site: 74 pre-rendered clips in `voices/` (+ `manifest.json`), copied into `cf-public/voices` by `cf:prep`; client falls back to them when `/tts-status` is absent. New `schizo` (16 whispers) and `schizoyell` (4x TRAMPOLINE!?!!!!) categories in `server/voice-lines.json`; whispers fire every ~28-68 s. NOT YET DEPLOYED. To add lines: edit voice-lines.json, run the local server, request `/tts?kind=inner&cat=<cat>&n=<i>`, save as `voices/inner-<cat>-<i>.mp3`, regenerate manifest.
 - [ ] Multiplayer spawn towers: six home towers already exist and the relay assigns one slot per player (code reviewed, not reproduced). If two players still share a roof online, check the deployed Worker/Pages version is current.
