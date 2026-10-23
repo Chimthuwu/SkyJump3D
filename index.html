@@ -59,26 +59,25 @@
   /* ===== RETRO ARCADE HUD: chunky pixel panels, hard drop shadows, segmented bars ===== */
   :root{--px:'Press Start 2P',ui-monospace,Consolas,monospace}
   #hud,#players,#hp{position:fixed;pointer-events:none;z-index:2;font-family:var(--px);text-transform:uppercase;letter-spacing:.04em;color:#fff;text-shadow:2px 2px 0 #000}
-  #hud{left:12px;top:12px;width:min(292px,44vw);padding:9px 10px 10px;background:linear-gradient(180deg,#14083a,#0a0522);border:3px solid #36f6ff;box-shadow:4px 4px 0 #000,inset 0 0 0 2px #000,inset 0 0 22px rgba(54,246,255,.22);font-size:9px;line-height:1.5;opacity:1}
-  #hp{right:12px;top:12px;padding:8px 11px 9px;background:linear-gradient(180deg,#2a0630,#12041c);border:3px solid #ff4f86;box-shadow:4px 4px 0 #000,inset 0 0 0 2px #000,inset 0 0 22px rgba(255,60,120,.32);text-align:center}
+  #hud{left:12px;top:12px;width:min(330px,48vw);padding:11px 13px 12px;background:linear-gradient(180deg,#14083a,#0a0522);border:3px solid #36f6ff;box-shadow:4px 4px 0 #000,inset 0 0 0 2px #000,inset 0 0 22px rgba(54,246,255,.22);font-size:9px;line-height:1.5;opacity:1}
+  #hp{right:14px;top:12px;padding:0;background:none;border:none;box-shadow:none}
   #hp .hp-top{display:flex;justify-content:space-between;align-items:baseline;gap:14px;font-size:9px;color:#ffb3cd;margin-bottom:6px}
   #hp .hp-top b{font-size:15px;color:#fff;text-shadow:2px 2px 0 #b3002d,3px 3px 0 #000}
-  #hp .hp-row{display:flex;gap:5px;justify-content:center}
-  #hp .hh{width:34px;height:30px;filter:drop-shadow(1px 0 0 #000) drop-shadow(-1px 0 0 #000) drop-shadow(0 1px 0 #000) drop-shadow(0 -1px 0 #000) drop-shadow(0 0 7px rgba(255,40,90,.75))}
+  #hp .hp-row{display:flex;gap:6px;justify-content:flex-end}
+  #hp .hh{width:38px;height:34px;filter:drop-shadow(1px 0 0 #000) drop-shadow(-1px 0 0 #000) drop-shadow(0 1px 0 #000) drop-shadow(0 -1px 0 #000) drop-shadow(0 0 7px rgba(255,40,90,.75))}
   #hp .hh.e{filter:drop-shadow(1px 0 0 #ff7a9a) drop-shadow(-1px 0 0 #ff7a9a) drop-shadow(0 1px 0 #ff7a9a) drop-shadow(0 -1px 0 #ff7a9a);opacity:.6}
-  #hp.low{animation:hpLow .5s steps(2) infinite}
   #hp.low .hh:not(.e){animation:hpBeat .5s steps(2) infinite}
   @keyframes hpLow{from{border-color:#ff4f86;box-shadow:4px 4px 0 #000,inset 0 0 0 2px #000,inset 0 0 22px rgba(255,60,120,.32)}to{border-color:#fff;box-shadow:4px 4px 0 #000,0 0 22px #ff1744,inset 0 0 0 2px #000,inset 0 0 30px rgba(255,20,60,.7)}}
   @keyframes hpBeat{from{transform:scale(1)}to{transform:scale(1.14)}}
   #hud .rt-top{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:7px}
   #hud .chip{display:inline-block;padding:3px 5px 2px;background:#000;border:2px solid #36f6ff;color:#36f6ff;font-size:8px;text-shadow:none}
   #hud .chip b{color:#fff;font-size:10px;text-shadow:2px 2px 0 #000}
-  #hud .rt-score{display:flex;justify-content:space-between;align-items:center;margin:2px 0 8px;padding:5px 6px 4px;background:#000;border:2px solid #ffd23a}
+  #hud .rt-score{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:4px 0 11px;padding:5px 6px 4px;background:#000;border:2px solid #ffd23a}
   #hud .rt-score span{color:#ffd23a;font-size:8px;text-shadow:none}
   #hud .rt-score b{font-size:14px;color:#fff;letter-spacing:.08em;text-shadow:2px 2px 0 #b36b00}
-  #hud .rt-bar{display:flex;align-items:center;gap:7px;margin:0 0 5px}
-  #hud .rt-bar i{font-style:normal;width:62px;font-size:8px;color:var(--c1,#36f6ff);text-shadow:2px 2px 0 #000}
-  #hud .rt-track{position:relative;flex:1;height:14px;background:#06030f;border:2px solid #000;box-shadow:0 0 0 2px var(--c1,#36f6ff)}
+  #hud .rt-bar{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+  #hud .rt-bar i{font-style:normal;flex:0 0 74px;white-space:nowrap;font-size:8px;color:var(--c1,#36f6ff);text-shadow:2px 2px 0 #000}
+  #hud .rt-track{position:relative;flex:1 1 0;min-width:0;height:14px;background:#06030f;border:2px solid #000;box-shadow:0 0 0 2px var(--c1,#36f6ff)}
   #hud .rt-fill{height:100%;background:linear-gradient(180deg,#fff 0 2px,var(--c1,#36f6ff) 2px 55%,var(--c2,#0a8aff) 55%);box-shadow:0 0 8px var(--c1,#36f6ff)}
   #hud .rt-track::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 9px,rgba(0,0,0,.7) 9px 11px);pointer-events:none}
   #hud .rt-bar.glide{--c1:#4ff0ff;--c2:#1a6aff}
@@ -87,17 +86,15 @@
   #hud .rt-bar.locked{--c1:#ff4a4a;--c2:#8a0a0a}
   #hud .rt-bar.low .rt-fill{animation:barBlink .35s steps(2) infinite}
   @keyframes barBlink{from{filter:brightness(1)}to{filter:brightness(.35)}}
-  #hud .rt-line{margin-top:6px;font-size:8px;color:#bfe9ff;text-shadow:2px 2px 0 #000}
+  #hud .rt-line{margin-top:9px;white-space:nowrap;font-size:8px;line-height:1.6;color:#bfe9ff;text-shadow:2px 2px 0 #000}
   #hud .rt-line b{color:#fff;font-size:9px}
-  #hud .rt-wpn{margin-top:7px;display:flex;flex-wrap:wrap;gap:4px}
+  #hud .rt-wpn{margin-top:10px;display:flex;flex-wrap:wrap;gap:4px}
   #hud .rt-wpn span{padding:3px 4px 2px;background:#000;border:2px solid #2a3350;color:#6b7699;font-size:7px;text-shadow:none}
   #hud .rt-wpn span.on{border-color:var(--wc,#fff);color:#fff;background:#10162e;box-shadow:0 0 8px var(--wc,#fff)}
   #hud .rt-wpn span.lock{opacity:.45}
-  #radarWrap{position:fixed;right:12px;top:104px;width:168px;padding:6px 6px 5px;background:linear-gradient(180deg,#0a1a3a,#050a1e);border:3px solid #36f6ff;box-shadow:4px 4px 0 #000,inset 0 0 0 2px #000,inset 0 0 18px rgba(54,246,255,.25);pointer-events:none;z-index:2;font-family:var(--px);text-transform:uppercase;text-shadow:2px 2px 0 #000}
-  #radarWrap canvas{display:block;position:static;inset:auto;z-index:auto;width:150px;height:150px;margin:0 auto}
-  #radarWrap .rcap{display:flex;justify-content:space-between;font-size:7px;color:#8fe8ff;margin-top:4px;letter-spacing:.06em}
-  #radarWrap .rcap b{color:#fff}
-  #players{right:12px;top:312px;padding:7px 9px;font-size:8px;line-height:1.7;text-align:right;background:linear-gradient(180deg,#14083a,#0a0522);border:3px solid #ff3fc8;box-shadow:4px 4px 0 #000,inset 0 0 0 2px #000}
+  #radarWrap{position:fixed;right:14px;top:62px;pointer-events:none;z-index:2}
+  #radarWrap canvas{display:block;position:static;inset:auto;z-index:auto;width:156px;height:156px;filter:drop-shadow(3px 3px 0 #000)}
+  #players{right:12px;top:230px;padding:7px 9px;font-size:8px;line-height:1.7;text-align:right;background:linear-gradient(180deg,#14083a,#0a0522);border:3px solid #ff3fc8;box-shadow:4px 4px 0 #000,inset 0 0 0 2px #000}
   #players:empty{display:none}
   #players span{text-shadow:none}
   .bar{width:170px;height:10px;background:#06030f;border:2px solid #000;box-shadow:0 0 0 2px #486078;overflow:hidden;margin-top:3px}
@@ -244,7 +241,7 @@
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="hpg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9ab8"/><stop offset=".45" stop-color="#ff2d55"/><stop offset="1" stop-color="#a00026"/></linearGradient></defs></svg>
 <div id="hud"></div>
 <div id="hp"></div>
-<div id="radarWrap"><canvas id="radar" width="300" height="300"></canvas><div class="rcap"><span>RADAR</span><b id="radarObj"></b></div></div>
+<div id="radarWrap"><canvas id="radar" width="312" height="312"></canvas></div>
 <div id="hotbar"></div>
 <div id="bossbar"></div>
 <div id="toast"></div>
@@ -364,7 +361,7 @@ THREE.Object3D.prototype.add = function (...objects) {
   return originalObjectAdd.apply(this, objects);
 };
 const renderer = (() => {
-  try { return new THREE.WebGLRenderer({ antialias: retroPreset === 'MODERN' }); }
+  try { return new THREE.WebGLRenderer({ antialias: retroPreset === 'MODERN', powerPreference: 'high-performance', stencil: false }); }
   catch (err) {            // Chrome blocks WebGL for a page after repeated context loss (or the GPU is disabled): say so instead of a blank screen
     const d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#05060f;color:#ff8a7a;font:16px monospace;text-align:center;padding:24px';
     d.textContent = 'WebGL could not start (' + (err && err.message || err) + '). Fully close and reopen the browser (check chrome://gpu shows WebGL: Hardware accelerated), then reload.';
@@ -4710,13 +4707,14 @@ function radarTick(now) {
   const show = state !== 'title';
   if (wrap.style.display !== (show ? '' : 'none')) wrap.style.display = show ? '' : 'none';
   if (!show || now - radarT < 50) return; radarT = now;
-  const c = radarCtx, W = 300, cx = 150, cy = 150, R = 140, fw = camera.getWorldDirection(new THREE.Vector3()), hl = Math.hypot(fw.x, fw.z) || 1, fx = fw.x / hl, fz = fw.z / hl, rx = -fz, rz = fx;
+  const c = radarCtx, W = 312, cx = 156, cy = 156, R = 146, fw = camera.getWorldDirection(new THREE.Vector3()), hl = Math.hypot(fw.x, fw.z) || 1, fx = fw.x / hl, fz = fw.z / hl, rx = -fz, rz = fx;
   const proj = (x, z) => { const dx = x - pos.x, dz = z - pos.z; return [dx * rx + dz * rz, -(dx * fx + dz * fz)]; };       // [right, up] in metres
   c.clearRect(0, 0, W, W);
   const g = c.createRadialGradient(cx, cy, 8, cx, cy, R); g.addColorStop(0, '#0d2a4a'); g.addColorStop(1, '#04101f');
   c.fillStyle = g; c.beginPath(); c.arc(cx, cy, R, 0, 6.2832); c.fill();
+  c.strokeStyle = '#36f6ff'; c.lineWidth = 5; c.beginPath(); c.arc(cx, cy, R, 0, 6.2832); c.stroke();
   c.strokeStyle = 'rgba(54,246,255,.35)'; c.lineWidth = 2;
-  for (const k of [1 / 3, 2 / 3, 1]) { c.beginPath(); c.arc(cx, cy, R * k, 0, 6.2832); c.stroke(); }
+  for (const k of [1 / 3, 2 / 3]) { c.beginPath(); c.arc(cx, cy, R * k, 0, 6.2832); c.stroke(); }
   c.beginPath(); c.moveTo(cx - R, cy); c.lineTo(cx + R, cy); c.moveTo(cx, cy - R); c.lineTo(cx, cy + R); c.stroke();
   const sweep = (now / 1000 * 2) % 6.2832; c.save(); c.translate(cx, cy);                                           // scanning wedge
   const wg = c.createConicGradient ? c.createConicGradient(sweep - 1.2, 0, 0) : null;
@@ -4750,7 +4748,11 @@ function radarTick(now) {
     c.globalAlpha = 1;
   }
   c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 3; c.beginPath(); c.moveTo(cx, cy - 11); c.lineTo(cx + 8, cy + 8); c.lineTo(cx, cy + 4); c.lineTo(cx - 8, cy + 8); c.closePath(); c.stroke(); c.fill();     // you
-  const objs = radarObjectives(), lab = $('radarObj'); if (lab) { const t = objs.length ? `${objs[0].label} ${Math.round(Math.hypot(objs[0].x - pos.x, objs[0].z - pos.z))}M` : (net.on ? `${net.peers.size + 1} PLAYERS` : ''); if (lab.textContent !== t) lab.textContent = t; }
+  const objs = radarObjectives();
+  if (objs.length || net.on) {
+    const t = objs.length ? `${objs[0].label} ${Math.round(Math.hypot(objs[0].x - pos.x, objs[0].z - pos.z))}M` : `${net.peers.size + 1} PLAYERS`;
+    c.font = '13px "Press Start 2P", monospace'; c.textAlign = 'center'; c.lineWidth = 5; c.strokeStyle = '#000'; c.strokeText(t, cx, cy + R - 22); c.fillStyle = '#fff'; c.fillText(t, cx, cy + R - 22);
+  }
 }
 let eggBottom = false;
 function onLand(speed, sol) {
@@ -6938,13 +6940,13 @@ function cullTick(dt) {
     const o = lvl.children[cull.n]; if (!cullable(o)) continue;
     o.updateWorldMatrix(true, true); const b = new THREE.Box3().setFromObject(o);
     if (b.isEmpty()) continue; b.getSize(_cullSize); b.expandByScalar(6); cull.list.push({ o, b, big: Math.max(_cullSize.x, _cullSize.y, _cullSize.z) >= CULL_BIG_SIZE, off: false });
-    if (firstBatch && !dyn.has(o)) freezeRoot(o);
+    if (firstBatch && !dyn.has(o)) freezeRoot(o); else if (firstBatch) cull.list[cull.list.length - 1].r = 260;      // animated platforms / props are still drawn one by one: keep them to ~260 m (fog hides them past that anyway)
   }
   frozenSample();
   if (firstBatch && !window.__NOMERGE) jobs.push({ gen: mergePlatformsGen(lvl) });
   const cp = camera.position; let hidden = 0;
   for (const e of cull.list) {
-    const far = e.b.distanceToPoint(cp) > (e.big ? CULL_BIG_R : CULL_R);
+    const far = e.b.distanceToPoint(cp) > (e.r || (e.big ? CULL_BIG_R : CULL_R));
     if (far && !e.off && e.o.visible) { e.o.visible = false; e.off = true; }
     else if (!far && e.off) { e.o.visible = true; e.off = false; }
     if (e.off) hidden++;
@@ -6952,7 +6954,7 @@ function cullTick(dt) {
   for (const en of enemies) {                          // far enemies: drop the body meshes, keep aura + beacon + aggro arrow
     if (en.dead || !en.mesh) continue;
     const dFar = Math.hypot(en.x - cp.x, en.z - cp.z);
-    if ((dFar > 460 || Math.abs(en.y - cp.y) > 500) !== !!en._gone) { en._gone = !en._gone; en.mesh.visible = !en._gone; }      // beyond the horizon even the beacon is dropped
+    if ((dFar > 320 || Math.abs(en.y - cp.y) > 400) !== !!en._gone) { en._gone = !en._gone; en.mesh.visible = !en._gone; }      // beyond the horizon even the beacon is dropped
     const far = dFar > 170 || Math.abs(en.y - cp.y) > 200;
     if (far && !en._gone && en._bodyOff) {                  // frozen far enemy: its marker (aura/beacon/arrow) follows at the cull tick rate instead of a full subtree matrix update every frame
       const m = en.mesh; m.updateMatrix(); m.matrixWorld.multiplyMatrices(m.parent.matrixWorld, m.matrix);
@@ -6965,9 +6967,9 @@ function cullTick(dt) {
   }
   for (const it of items) {                            // far pickups
     if (it.taken || !it.mesh || it.type === 'dataCore') continue;
-    setFar(it.mesh, Math.hypot(it.mesh.position.x - cp.x, it.mesh.position.z - cp.z) > 380);
+    setFar(it.mesh, Math.hypot(it.mesh.position.x - cp.x, it.mesh.position.z - cp.z) > 260);
   }
-  for (const p of props) if (p.mesh && !p.taken && p !== onVehicle) setFar(p.mesh, Math.hypot(p.mesh.position.x - cp.x, p.mesh.position.z - cp.z) > 380);
+  for (const p of props) if (p.mesh && !p.taken && p !== onVehicle) setFar(p.mesh, Math.hypot(p.mesh.position.x - cp.x, p.mesh.position.z - cp.z) > 300);
   cull.hidden = hidden;
 }
 function playerShadowTick() {
@@ -7206,7 +7208,7 @@ function updateVisuals(dt) {
   $('hotbar').style.display = state === 'title' ? 'none' : '';
   const hp = clamp(health, 0, MAXHP);
   const heart = e => `<svg class="hh${e ? ' e' : ''}" viewBox="0 0 7 6" shape-rendering="crispEdges"><path d="M1 0h2v1H1zM4 0h2v1H4zM0 1h7v2H0zM1 3h5v1H1zM2 4h3v1H2zM3 5h1v1H3z" fill="${e ? '#1b0a26' : 'url(#hpg)'}"/>${e ? '' : '<path d="M1 1h1v1H1zM4 1h1v1H4z" fill="#fff" opacity=".9"/>'}</svg>`;
-  const hpHtml = `<div class="hp-top"><span>HEALTH</span><b>${hp}/${MAXHP}</b></div><div class="hp-row">${Array.from({ length: MAXHP }, (_, i) => heart(i >= hp)).join('')}</div>`;
+  const hpHtml = `<div class="hp-row">${Array.from({ length: MAXHP }, (_, i) => heart(i >= hp)).join('')}</div>`;
   radarTick(performance.now());
   const hpEl = $('hp'); if (hpEl) { const lowCls = hp <= 2 ? 'low' : ''; if (hpHtml !== updateVisuals._hp) { updateVisuals._hp = hpHtml; hpEl.innerHTML = hpHtml; } if (hpEl.className !== lowCls) hpEl.className = lowCls; hpEl.style.display = state === 'title' ? 'none' : ''; }
   const bar = (cls, v, label, extra = '') => `<div class="rt-bar ${cls}${v < 0.25 ? ' low' : ''}${extra}"><i>${label}</i><div class="rt-track"><div class="rt-fill" style="width:${clamp(v * 100, 0, 100) | 0}%"></div></div></div>`;
@@ -8625,7 +8627,28 @@ function menuRender() {
   $('menuBye').style.display = menuMode === 'bye' ? 'block' : 'none';
 }
 function showMenu(v) { $('menu').style.display = v ? 'flex' : 'none'; if (v) menuRender(); }
-function menuStart() { begin(); }
+function menuStart() { preloadThen(begin); }
+// PRELOAD: show a loading screen, finish the platform merge, then compile EVERY shader variant that exists anywhere in the level (hidden objects included),
+// so nothing hitches the first time a new enemy, biome or effect comes into view.
+function preloadThen(go) {
+  if (preloadThen.done) { go(); return; }
+  let el = $('loading'); if (!el) { el = document.createElement('div'); el.id = 'loading'; el.style.cssText = 'position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#050817;color:#fff;font:14px "Press Start 2P",monospace;text-shadow:2px 2px 0 #000'; el.innerHTML = '<div>LOADING WORLD</div><div style="width:260px;height:14px;border:3px solid #36f6ff;box-shadow:4px 4px 0 #000"><div id="loadBar" style="height:100%;width:8%;background:linear-gradient(180deg,#fff 0 2px,#36f6ff 2px 60%,#0a8aff 60%)"></div></div><div id="loadTxt" style="font-size:9px;color:#8fe8ff">MERGING PLATFORMS</div>'; document.body.appendChild(el); }
+  el.style.display = 'flex';
+  const step = (pct, txt) => { $('loadBar').style.width = pct + '%'; $('loadTxt').textContent = txt; return new Promise(r => requestAnimationFrame(() => setTimeout(r, 0))); };
+  (async () => {
+    try {
+      await step(15, 'MERGING PLATFORMS'); flushJobs();
+      await step(45, 'COMPILING SHADERS');
+      const hidden = []; scene.traverse(o => { if (!o.visible) { hidden.push(o); o.visible = true; } });
+      try { renderer.compile(scene, camera); } catch (err) { console.warn('[preload] compile failed', err); }
+      for (const o of hidden) o.visible = false;
+      await step(80, 'WARMING UP');
+      renderer.render(scene, camera);
+      await step(100, 'READY');
+    } catch (err) { console.warn('[preload] skipped', err); }
+    preloadThen.done = true; el.style.display = 'none'; go();
+  })();
+}
 function menuMulti() { menuMode = 'multi'; menuRender(); }
 // ----- guided multiplayer setup: the player is walked through installing Tailscale, running the server and sharing an invite link -----
 const roomVal = () => (($('inRoom').value || '').trim().replace(/[^\w-]/g, '').slice(0, 24) || 'lobby');
