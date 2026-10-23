@@ -746,6 +746,11 @@ let lvl = new THREE.Group(); lvl.matrixAutoUpdate = false;  // everything belong
 scene.add(lvl);
 let staticBuilt = false;
 const HOME_SLOT_COUNT = 6, UNIVERSE_R = 600, SPAWN_RING_R = UNIVERSE_R;     // six spawn universes on a ~600 m ring, always built (solo and co-op alike)
+let belowZeroBuilt = false, thresholdTouched = false, belowZeroHubs = [], belowZeroEntry = null;
+const SKY_PROFILES = {
+  rent: { skyTop: '#32120a', skyMid: '#a74f22', skyBottom: '#f18a45', fogColor: 0x9a4a2d, fogDensity: 0.0018, sunVisible: false, sunColor: 0xff9b4a, stars: false, groundRing: false },
+  nos: { skyTop: '#260044', skyMid: '#a32283', skyBottom: '#ff7b63', fogColor: 0x8d276c, fogDensity: 0.0014, sunVisible: true, sunColor: 0xffd23a, stars: false, groundRing: false },
+};
 const starts = Array.from({ length: HOME_SLOT_COUNT }, () => ({ x: 10, y: TOP, z: 0 }));
 const startHubs = Array.from({ length: HOME_SLOT_COUNT }, (_, slot) => ({ kind: 'start', slot, universe: slot, x: 0, z: 0, top: TOP, hw: TH, hd: TH, zone: null, r: 20, active: true }));
 let mySlot = 0, sixTowerLayout = true, start = starts[0];
@@ -1687,15 +1692,21 @@ function clearSkyProps() {
 }
 function buildSky() {
   clearSkyProps();
+  const profile = SKY_PROFILES[levelDef.id] || null;
   // Per-level sky identity: the DEFAULT descent keeps its night-city theme; Rent's Due gets an amber smog sunset and
   // Nostalgia Overdose a giant striped vaporwave sun. Themed skies have NO stars (per user: space belongs to the default level).
-  const th = themeZones() ? Object.assign({}, theme(), { stars: false,
-    orb: rentOn() ? 0xff8a3c : nosOn() ? 0xff2bd6 : 0xb0612f,
-    cloud: rentOn() ? 0x4a2610 : nosOn() ? 0x7a1f5c : 0x3a1c0c }) : theme();
+  const th = profile ? Object.assign({}, theme(), {
+    top: profile.skyTop, mid: profile.skyMid, bot: profile.skyBottom,
+    fog: profile.fogColor, orb: profile.sunColor, stars: profile.stars,
+    cloud: rentOn() ? 0x4a2610 : 0x7a1f5c,
+  }) : theme();
+  if (profile && scene.fog) { scene.fog.color.setHex(profile.fogColor); scene.fog.near = 30; scene.fog.far = 1 / profile.fogDensity; }
+  else if (!profile && scene.fog) scene.fog.color.setHex(theme().fog);
   const recolour = c => c;   // (th is fully materialised above)
   const orb = new THREE.Mesh(new THREE.SphereGeometry(45, 8, 4), new THREE.MeshBasicMaterial({ color: th.orb, fog: false }));
-  orb.position.copy(sun.position).normalize().multiplyScalar(1800); scene.add(orb); skyProps.push(orb);
-  if (rentOn()) { const a = rand() * 6.283; orb.position.set(Math.cos(a) * 1700, 210, Math.sin(a) * 1700); }   // the smog sun sits LOW on the tenement horizon
+  orb.position.copy(sun.position).normalize().multiplyScalar(1800); scene.add(orb); skyProps.push(orb);    if (profile && !profile.sunVisible) orb.visible = false;
+    if (profile && profile.sunVisible && nosOn()) { orb.visible = false; }
+    if (rentOn()) { const a = rand() * 6.283; orb.position.set(Math.cos(a) * 1700, 210, Math.sin(a) * 1700); }   // the smog skyline glow sits LOW on the tenement horizon
   if (nosOn()) {                                                              // NOSTALGIA OVERDOSE: giant striped RETRO SUN low on the horizon
     orb.visible = false;
     let tex = null; { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
@@ -1704,6 +1715,8 @@ function buildSky() {
       tex = new THREE.CanvasTexture(c); }
     const aR = rand() * 6.283;
     const nosSun = new THREE.Mesh(new THREE.CircleGeometry(110, 40), new THREE.MeshBasicMaterial({ map: tex, transparent: true, fog: false, toneMapped: false, color: 0xff4bd8 }));
+    nosSun.material.color.setHex(profile ? profile.sunColor : 0xff4bd8);
+    nosSun.scale.setScalar(1.8);
     nosSun.position.set(Math.cos(aR) * 1750, 150, Math.sin(aR) * 1750);
     nosSun.renderOrder = -1;
     nosSun.lookAt(0, 150, 0); scene.add(nosSun); skyProps.push(nosSun);
@@ -1812,7 +1825,7 @@ function evolveTick(dt) {
 // date back; as the meter empties the block gets twitchier, and at zero A.W. COLLECTIONS posts a bailiff wave on you.
 // Escalates with level, and every extra due date is shorter — you can never pay it off, you just keep staying housed.
 let rentDueT = 0, rentWave = 0;
-function rentPeriod() { return Math.max(22, 42 - level * 3 - rentWave * 2); }
+function rentPeriod() { return Math.max(24, 56 - level * 4 - rentWave * 3); }
 function rentClockTick(dt) {
   if (state !== 'play') return;
   rentDueT += dt;
@@ -2992,78 +3005,137 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
   // The further down, the more collapsed/condemned; bottom is Collections hellscape.
   function buildRentNetwork(exitAngle) {
     const hubs = activeStartHubs().map(home => ({ ...home }));
-    const keepOut = buildSkyway(hubs);                       // themed: void-fall corridor + platform ladder, NO moon column
-    hubs.push(buildRidePark());
+    const keepOut = [];                                     // the Kowloon grid is the entire themed traversal surface
     // KOWLOON BLOCK: each universe is one packed, irregular grid of tenements around its home tower. Roads? No —
     // roofs staggered so every neighbour is a hop, narrow alleys between the towers (fall there = the endless drop),
     // fire escapes zigzagging on walls, laundry lines strung roof-to-roof, and arenas on the big corner lots.
     const arenaTypes = ARENA_TYPES.slice(); for (let i = arenaTypes.length - 1; i > 0; i--) { const j = (rand() * (i + 1)) | 0; [arenaTypes[i], arenaTypes[j]] = [arenaTypes[j], arenaTypes[i]]; }
+    const rentGrids = [];
     for (let slot = 0; slot < HOME_SLOT_COUNT; slot++) {
       const centre = universeCentre(slot), homes = activeStartHubs();
-      const N = 5, spread = (N - 1) / 2, cell = 36 + rand() * 6, cells = [];
+      const N = 6, spread = (N - 1) / 2, cell = 24, cells = [], byCell = Array.from({ length: N }, () => Array(N).fill(null));
+      const gridHubs = [];
       for (let gy = 0; gy < N; gy++) for (let gx = 0; gx < N; gx++) {
-        if (rand() < 0.24) continue;                         // some lots are rubble pits / open air: the alleys
-        const x = centre.x + (gx - spread) * cell + (rand() - 0.5) * 9, z = centre.z + (gy - spread) * cell + (rand() - 0.5) * 9;
-        if (homes.some(h => Math.hypot(x - h.x, z - h.z) < (h.r || 30) + 30)) continue;      // keep the home tower's block clear
-        if (Math.hypot(x - groundPad.x, z - groundPad.z) < 44 || Math.hypot(x - boss.x, z - boss.z) < 40) continue;
-        if (keepOut.some(kk => Math.hypot(kk.x - x, kk.z - z) < kk.r + 24)) continue;
-        let clash = false; for (const c of cells) if (Math.hypot(c.x - x, c.z - z) < 30) clash = true; if (clash) continue;
-        const rad = Math.hypot(gx - spread, gy - spread) / spread;      // the block CLIMBS away from the home at its centre
-        const top = clamp(TOP * (0.26 + 0.40 * rad) + (rand() - 0.3) * TOP * 0.16, 30, TOP * 0.9);
-        const zone = rentZoneForHub(cells.length);                     // severity deepens across the block like a crawl
+        const lot = rand();
+        if (lot < 0.15) continue;                         // empty lots are alleys
+        const x = centre.x + (gx - spread) * cell + (rand() - 0.5) * 3, z = centre.z + (gy - spread) * cell + (rand() - 0.5) * 3;
+        if (Math.hypot(x - groundPad.x, z - groundPad.z) < 34 || Math.hypot(x - boss.x, z - boss.z) < 34) { byCell[gy][gx] = null; continue; }
+        if (Math.hypot(x - centre.x, z - centre.z) < 30) continue;    // the home tower keeps a little plaza: no tenement is glued to its walls
+        if (keepOut.some(kk => Math.hypot(kk.x - x, kk.z - z) < kk.r + 12)) { byCell[gy][gx] = null; continue; }
+        const rad = Math.hypot(gx - spread, gy - spread) / (Math.SQRT2 * spread);
+        // The block rises gently toward the perimeter, giving the low central kiosk a climbable roof-hop funnel.
+        const top = clamp(TOP - (Math.abs(gx - spread) + Math.abs(gy - spread)) * 4.4 + (rand() - 0.5) * 1.4, TOP - 48, TOP - 1);
+        const zone = rentZoneForHub(gy * N + gx);
+        const kindRoll = lot < 0.30 ? 'courtyard' : lot < 0.90 ? 'tenement' : 'extension';
         let hub;
-        if (rand() < 0.18) hub = buildArena(arenaTypes[cells.length % arenaTypes.length], x, top, z, zone);
-        else hub = buildBuildingHub(x, z, 16 + rand() * 8, 16 + rand() * 8, top, zone);
-        hub.region = cells.length; hub.universe = slot;
-        cells.push(hub); hubs.push(hub);
-      }
-      // Roof-level Kowloon flavour between near neighbours: laundry lines (same height), fire escapes (one climbs to the next)
-      for (const h of cells) {
-        const near = cells.filter(o => o !== h && Math.hypot(o.x - h.x, o.z - h.z) < cell * 1.65)
-          .sort((a, b) => Math.hypot(a.x - h.x, a.z - h.z) - Math.hypot(b.x - h.x, b.z - h.z));
-        if (!near.length) continue;
-        for (let k = 0; k < Math.min(2, near.length); k++) {
-          const o = near[k];
-          if (Math.abs(o.top - h.top) < 9 && rand() < 0.6) laundryLine(h, o);
+        if (kindRoll === 'courtyard') {
+          const slab = addSlab(x, top, z, 3, 3, 2, zone, false);
+          hub = { kind: 'courtyard', x, z, top, hw: 3, hd: 3, zone, r: 5, slab, universe: slot };
+          if (rand() < 0.2) makeSpecial(slab, 'crumble', {});
+        } else if (kindRoll === 'extension') {
+          const base = cells.filter(o => o.kind === 'building' && !o.extension)
+            .sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
+          if (base) {
+            const extW = 2.4 + rand() * 0.8, extH = 3.5 + rand() * 1.5;
+            const ext = addBlock(base.x, base.top, base.z, extW, extW, extH, zone, 0x55483b);
+            hub = { kind: 'building', x: base.x, z: base.z, top: base.top + extH, hw: extW, hd: extW, zone, r: extW + 1, roofSolid: ext, slab: ext, universe: slot, extension: true, baseTower: base };
+            cells.push(hub); hubs.push(hub);
+          }
         }
-        const up = near.find(o => o.top >= h.top + 12 && Math.hypot(o.x - h.x, o.z - h.z) < cell * 1.45);
-        if (up) rentFireEscape(h, up, h.zone);
-        rentRoofClutter(h);
+        if (!hub) {
+          const w = 14 + rand() * 4, d = 14 + rand() * 4;
+          hub = buildBuildingHub(x, z, w, d, top, zone);
+          if (rand() < 0.32) makeSpecial(hub.roofSolid, 'crumble', {});
+        }
+        hub.region = gy * N + gx; hub.universe = slot; hub.severity = zone.rent; hub.gridX = gx; hub.gridY = gy;
+        cells.push(hub); gridHubs.push(hub); hubs.push(hub);
+        byCell[gy][gx] = hub;
       }
+      const rentConnect = (a, b) => {
+        if (!a || !b || a === b) return;
+        const dy = Math.abs(a.top - b.top);
+        if (dy <= 3) { laundryLine(a, b); connect(a, b); }
+        else rentFireEscape(a.top < b.top ? a : b, a.top < b.top ? b : a, a.zone);
+      };
+      // Build a seeded spanning tree across occupied grid cells; empty lots remain real alleys, not route dead ends.
+      for (const h of gridHubs) {
+        rentRoofClutter(h);
+        const prior = gridHubs.filter(o => o !== h && (o.gridY < h.gridY || (o.gridY === h.gridY && o.gridX < h.gridX))
+          && Math.hypot(o.x - h.x, o.z - h.z) <= cell * 1.8).sort((a, b) => Math.hypot(a.x - h.x, a.z - h.z) - Math.hypot(b.x - h.x, b.z - h.z));
+        if (prior.length) rentConnect(h, prior[0]);
+      }
+      // Extra orthogonal links and rare diagonal scaffolds make alleys a choice, not a single-file ladder.
+      for (let gy = 0; gy < N; gy++) for (let gx = 0; gx < N; gx++) {
+        const a = byCell[gy][gx]; if (!a) continue;
+        for (const [dx, dz] of [[1, 0], [0, 1]]) {
+          const b = byCell[gy + dz] && byCell[gy + dz][gx + dx]; if (b) rentConnect(a, b);
+        }
+        for (const [dx, dz] of [[1, 1], [1, -1]]) {
+          const b = byCell[gy + dz] && byCell[gy + dz][gx + dx];
+          if (b && rand() < 0.08) {
+            const scaffold = addSlab((a.x + b.x) / 2, Math.min(a.top, b.top) + 1.2, (a.z + b.z) / 2, 2, 2, 1, a.zone, false);
+            scaffold.diagonalScaffold = true; rentConnect(a, b);
+          }
+        }
+      }
+      rentGrids.push({ slot, N, cells, byCell, gridHubs });
     }
 
-    // Exit platform
-    const exitPos = { x: Math.cos(exitAngle) * 34, z: Math.sin(exitAngle) * 34 };
-    const ex = addSlab(exitPos.x, 12, exitPos.z, 8, 8, 2, RENT_ZONES[2], true);
-    Object.assign(ex, { targetR: 2.2 }); addBullseye(exitPos.x, 12, exitPos.z, 2.2);
-    const exitHub = { kind: 'exit', x: exitPos.x, z: exitPos.z, top: 12, hw: 8, hd: 8, zone: RENT_ZONES[2], r: 10, severity: 3 };
-    hubs.push(exitHub);
+    // Exit is the roof of the collections tower: one severity-3 tower, not an extra floating platform.
+    const myGrid = rentGrids.find(g => g.slot === mySlot) || rentGrids[0];
+    const collectionTower = myGrid && myGrid.cells.filter(h => h.kind === 'building' && !h.extension).sort((a, b) => b.top - a.top)[0];
+    const exitPos = { x: collectionTower ? collectionTower.x : Math.cos(exitAngle) * 34, z: collectionTower ? collectionTower.z : Math.sin(exitAngle) * 34 };
+    const fallbackCollection = !collectionTower ? buildBuildingHub(exitPos.x, exitPos.z, 16, 16, Math.max(30, TOP * 0.5), RENT_ZONES[2]) : null;
+    const actualCollectionTower = collectionTower || fallbackCollection;
+    if (actualCollectionTower) { actualCollectionTower.zone = RENT_ZONES[2]; actualCollectionTower.severity = 3; actualCollectionTower.roofSolid.zone = RENT_ZONES[2]; }
+    const collectionRoof = actualCollectionTower && actualCollectionTower.roofSolid;
+    if (collectionRoof) { collectionRoof.targetR = 2.2; collectionRoof.severity = 3; addBullseye(actualCollectionTower.x, actualCollectionTower.top + 0.2, actualCollectionTower.z, 2.2); }
+    const collectionTowerForExit = actualCollectionTower;
+    const targetX = collectionTowerForExit.x, targetZ = collectionTowerForExit.z, targetY = collectionTowerForExit.top;
+    const exitPortal = addPortal(targetX + 3, targetY + 0.2, targetZ, 0xff3030, 'COLLECTIONS EXIT'); if (exitPortal) { exitPortal.dormant = false; exitPortal.group.visible = true; }
+    const exitHub = { kind: 'exit', x: targetX, z: targetZ, top: targetY, hw: collectionTowerForExit.hw, hd: collectionTowerForExit.hd, zone: RENT_ZONES[2], r: collectionTowerForExit.r, severity: 3, universe: mySlot };
+    hubs.push(exitHub); connect(collectionTowerForExit, exitHub);
+
+    // RENT'S THRESHOLD: the eviction-notice street terminal at y=0, beside the home tower. This is the ONLY
+    // y=0 surface in the block: landing on it arms the level's underworld once; every other fall below y=0
+    // is still a respawn until then, and the ladder back up keeps a threshold-touch fair, recovery side.
+    {
+      const kioskHome = activeStartHubs()[mySlot];
+      const kioskPos = { x: kioskHome.x + Math.cos(exitAngle) * 27, z: kioskHome.z + Math.sin(exitAngle) * 27 };
+      const kiosk = addSlab(kioskPos.x, 0, kioskPos.z, 5, 3.5, 2.6, RENT_ZONES[0], false);
+      kiosk.isThreshold = true; kiosk.severity = 1;
+      const booth = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.4, 2.2), lam(0x6a4a28)); booth.position.set(kioskPos.x - 1.6, 2.6 + 1.2, kioskPos.z); scene.add(booth); booth.userData.noCull = true;
+      const notice = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 2.2), new THREE.MeshBasicMaterial({ color: 0xf0ead2, toneMapped: false })); notice.position.set(kioskPos.x + 0.2, 4.2, kioskPos.z - 1.15); notice.rotation.y = Math.PI; scene.add(notice); notice.userData.noCull = true;
+      const kioskRing = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.14, 6, 24), new THREE.MeshBasicMaterial({ color: 0xff7b32, toneMapped: false })); kioskRing.rotation.x = Math.PI / 2; kioskRing.position.set(kioskPos.x, 0.18, kioskPos.z); scene.add(kioskRing); kioskRing.userData.noCull = true;
+      const kioskLabel = makeLabel('★ THRESHOLD · STREET TERMINAL'); kioskLabel.position.set(kioskPos.x, 6.4, kioskPos.z); scene.add(kioskLabel); kioskLabel.userData.noCull = true;
+      const kGrid = rentGrids.find(g => g.slot === mySlot) || rentGrids[0];
+      const kTower = kGrid && kGrid.gridHubs.slice().sort((a, b) => Math.hypot(a.x - kioskPos.x, a.z - kioskPos.z) - Math.hypot(b.x - kioskPos.x, b.z - kioskPos.z))[0];
+      if (kTower) rentFireEscape({ x: kioskPos.x, z: kioskPos.z, top: 2.6, hw: 5, hd: 3.5 }, kTower, RENT_ZONES[0]);   // fair climb back onto the roofs
+    }
 
     // Lore terminals on rent hubs
     for (const h of hubs) if ((h.kind === 'building' || h.kind === 'arena' || h.kind === 'start') && h.top !== undefined) {
       loreTerminal(h.x + (h.kind === 'start' ? 6 : Math.min(h.hw || 8, 8) - 2), h.top, h.z + (h.kind === 'start' ? -6 : 2));
     }
 
-    // Props on hub roofs (rides to run the alleys and drop gaps)
-    for (const h of hubs) if ((h.kind === 'building' || h.kind === 'arena') && h.top !== undefined) {
-      addProp((hubs.indexOf(h) % 2) ? 'bike' : 'buggy', h.x + (h.hw || 8) - 3, h.top, h.z - 3);
+    // The first packed roof joins each home by a short fire-escape stair; all remaining travel stays inside the grid.
+    roadBudget = 0; roadSerial = 0; startRoads = 0;
+    for (const grid of rentGrids) {
+      const home = activeStartHubs()[grid.slot];
+      const first = grid.gridHubs.slice().sort((a, b) => Math.hypot(a.x - home.x, a.z - home.z) - Math.hypot(b.x - home.x, b.z - home.z))[0];
+      if (first) rentFireEscape(home, first, first.zone);
     }
-
-    // Connectivity: home fans out to its nearest roofs; every roof chains to its nearest earlier sibling; arenas stay gated.
-    roadBudget = 12; roadSerial = 0; startRoads = 0;
-    const spawnHubs = hubs.filter(h => h.kind === 'start'), restHubs = hubs.filter(h => h.kind !== 'start');
-    spawnHubs.forEach((home, slot) => {
-      const local = restHubs.filter(h => Math.hypot(h.x - home.x, h.z - home.z) < 300)
-        .sort((a, b) => Math.hypot(a.x - home.x, a.z - home.z) - Math.hypot(b.x - home.x, b.z - home.z));
-      if (!local.length) return;
-      connect(home, local[0]);
-      for (let k = 1; k < 3 && k < local.length; k++) connect(home, local[k]);
-    });
-    for (let i = 0; i < hubs.length; i++) {
-      if (hubs[i].kind === 'start') continue;
-      const near = hubs.slice(0, i).sort((a, b) => Math.hypot(a.x - hubs[i].x, a.z - hubs[i].z) - Math.hypot(b.x - hubs[i].x, b.z - hubs[i].z));
-      if (near.length && Math.hypot(near[0].x - hubs[i].x, near[0].z - hubs[i].z) < 240) connect(near[0], hubs[i]);
-      if (near.length > 1 && Math.hypot(near[1].x - hubs[i].x, near[1].z - hubs[i].z) < 240 && rand() < 0.8) connect(near[1], hubs[i]);
+    // One gated roof arena in each block, on its highest severity-3 tenement; the collection tower remains the exit roof.
+    for (const grid of rentGrids) {
+      const roof = grid.gridHubs.filter(h => h.kind === 'building' && !h.extension && h.severity === 3).sort((a, b) => b.top - a.top)[0];
+      if (!roof) continue;
+      const arena = buildArena('cross', roof.x, roof.top + 0.35, roof.z, RENT_ZONES[2]);
+      arena.universe = grid.slot; arena.gated = true; arena.rentArena = true; hubs.push(arena);
+      connect(roof, arena);
+    }
+    for (const h of hubs) if (h.kind === 'building' && h.top !== undefined) {
+      loreTerminal(h.x + Math.min(h.hw || 8, 8) - 2, h.top, h.z + 2);
+      if (!h.extension && rand() < 0.12) makeSpecial(h.roofSolid, 'crumble', {});
     }
     const byDist = h => (a, b) => Math.hypot(a.x - h.x, a.z - h.z) - Math.hypot(b.x - h.x, b.z - h.z);
     for (const h of hubs) if (h.kind === 'arena' && !h.gated) {     // way up onto every arena (locked until its Guardian dies)
@@ -3080,8 +3152,6 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
       if (a === b || Math.hypot(a.x - b.x, a.z - b.z) > 160) continue;
       const before = solids.length + reserved.length; connect(a, b); if (solids.length + reserved.length > before) made++;
     }
-    buildUniverseLinks(hubs);
-    buildBranches(hubs);
     buildHubPortalLoop(hubs);
     spawnStreetRiders(hubs);
     return hubs;
@@ -3100,17 +3170,17 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     return true;
   }
   function rentFireEscape(lo, hi, zone) {
-    // a zigzag of small slabs climbing the shared wall face from one roof's height up to the neighbour's — real footing, real coins
+    // Zig-zag real footing over the shared wall: short steps stay climbable even when roofs differ by an act-height.
     const fx = hi.x - lo.x, fz = hi.z - lo.z, F = Math.hypot(fx, fz) || 1, ux = fx / F, uz = fz / F;
-    const sx = lo.x + ux * ((lo.hw || 8) + 1.8), sz = lo.z + uz * ((lo.hd || 8) + 1.8);
-    const y0 = lo.top - 5, y1 = hi.top - 4, steps = clamp(Math.round(Math.abs(y1 - y0) / 5), 3, 12);
+    const sx = lo.x + ux * Math.max(2, (lo.hw || 8) * 0.72), sz = lo.z + uz * Math.max(2, (lo.hd || 8) * 0.72);
+    const y0 = lo.top - 1.5, y1 = hi.top - 1.2, steps = clamp(Math.ceil(Math.abs(y1 - y0) / 1.8), 3, 32);
     for (let k = 0; k <= steps; k++) {
-      const t = k / steps, y = y0 + (y1 - y0) * t, off = (k % 2 ? 1 : -1) * 2.6;
-      const x = sx + fx * 0.55 * t - uz * off, z = sz + fz * 0.55 * t + ux * off;
-      if (blocked(x, y, z, 1.7)) continue;
-      const pl = addPlatform(x, y, z, 1.6, false, 0, zone, true, false);
-      if (k % 2 === 0) coin(x, y + 1.2, z, zone);
-      if (k === ((steps / 2) | 0) && rand() < 0.5) spawnBiomeEnemy(x, y, z, pl, zone, 0.55);   // bill collectors hold the fire stairs
+      const t = k / steps, y = y0 + (y1 - y0) * t, off = (k % 2 ? 1 : -1) * 2.2;
+      const x = sx + fx * 0.72 * t - uz * off, z = sz + fz * 0.72 * t + ux * off;
+      const pl = addPlatform(x, y, z, 1.8, false, 0, zone, true, false);
+      pl.rentFireEscape = true;
+      if (k % 3 === 0) coin(x, y + 1.2, z, zone);
+      if (k === ((steps / 2) | 0) && rand() < 0.5) spawnBiomeEnemy(x, y, z, pl, zone, 0.55);
     }
   }
   function rentRoofClutter(h) {                                   // AC units, water tanks, shanty lean-tos: real footing on every roof
@@ -3132,110 +3202,142 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
   // The road only ever descends, so the three acts play in order via the height bands (nosZoneForY): Sunset Strip up top,
   // Tracking Error mid-air, Arcade Overdrive at the floor. Service decks = hubs (bosses, guns, checkpoints, portals);
   // rival rider packs chase you down the tarmac. Write it all with the seeded rand() so co-op clients build the same road.
-  function buildNosNetwork(exitAngle) {
-    const hubs = activeStartHubs().map(home => ({ ...home }));
-    const keepOut = buildSkyway(hubs);
-    hubs.push(buildRidePark());
-    const arenaTypes = ['ring', 'cross', 'colosseum', 'runway'];
-    for (let slot = 0; slot < HOME_SLOT_COUNT; slot++) {
-      const homeHubs = activeStartHubs(), home = homeHubs[slot];
-      let ang = rand() * 6.283;
-      const u0x = Math.cos(ang), u0z = Math.sin(ang);
-      // roof-edge LAUNCH: dash pad + kicker aimed along the road bearing, then the first deck just off the tower
-      addRampDir(home.x + u0x * (TH - 9), home.z + u0z * (TH - 9), TOP, u0x, u0z, 4, 8, 30);
-      addDashPad(home.x + u0x * (TH - 6), TOP, home.z + u0z * (TH - 6), u0x, u0z);
-      let x = home.x + u0x * (TH + 8), z = home.z + u0z * (TH + 8), y = TOP - 3;
-      const deck0 = { kind: 'building', x, z, top: y, hw: 9, hd: 9, w: 18, d: 18, zone: NOS_ZONES[0], r: 11, nosBand: 0, deck: true };
-      deck0.slab = addSlab(x, y, z, 9, 9, 2.5, NOS_ZONES[0], true);
-      hubs.push(deck0);
-      loreTerminal(x + 5, y, z - 4);
-      weaponPickup(2 + ((rand() * (WEAPONS.length - 2)) | 0), x - 5, y + 1.2, z + 4);
-      addProp('bike', x + 5, y, z + 4); addProp('buggy', x - 5, y, z - 4);
-      connect(home, deck0);                                      // on-foot chain, since the kicker is an all-out commitment
-      let lastDeckHub = deck0;
-      const chunks = 10 + level * 2;
-      for (let c = 1; c <= chunks; c++) {
-        ang += (rand() - 0.5) * 0.44;                            // the highway curls, gently, forever
-        const ux = Math.cos(ang), uz = Math.sin(ang), nxx = -uz, nzz = ux;
-        const seg = 22 + rand() * 20, w = 3.7 + rand() * 1.6;
-        const gap = c <= 1 ? 2 + rand() * 4 : 6 + rand() * 7 + Math.min(8, c * 0.7);   // the jumps GROW as you go
-        y = Math.max(16, y - (7 + rand() * 7));
-        const band = y > TOP * 0.55 ? 0 : y > TOP * 0.22 ? 1 : 2, zone = NOS_ZONES[band];
-        const leadX = x + ux * gap, leadZ = z + uz * gap, nSeg = Math.ceil(seg / 6.5);
-        let built = 0, endX = x, endZ = z, endY = y, endSlab = null, midPl = null;
-        for (let k = 0; k < nSeg; k++) {
-          const t = nSeg > 1 ? k / (nSeg - 1) : 0.5, sx = leadX + ux * seg * t, sz = leadZ + uz * seg * t;
-          if (blocked(sx, y, sz, w * 1.05)) continue;
-          const sl = addSlab(sx, y, sz, w, w, 2, zone, false);
-          built++; endX = sx; endZ = sz; endY = y; endSlab = sl;
-          // neon lane edges + centre dashes, chunk-scale (tryRoad look, but wider for the outrun fantasy)
-          for (const side of [-1, 1]) {
-            const e = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.16, 6.6), new THREE.MeshBasicMaterial({ color: zone.plate }));
-            e.position.set(sx - nxx * side * (w - 0.5), y + 0.02, sz - nzz * side * (w - 0.5)); e.rotation.y = Math.atan2(ux, uz); scene.add(e);
-          }
-          const dash = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.14, 3), new THREE.MeshBasicMaterial({ color: 0xffd23a }));
-          dash.position.set(sx, y + 0.02, sz); dash.rotation.y = Math.atan2(ux, uz); scene.add(dash);
-          if (k % 2 === 0) coin(sx, y + 1.2, sz, zone);
-          if (k === ((nSeg / 2) | 0)) { addCheckpoint(sx, y, sz, zone); midPl = sl; }
-          if (k % 3 === 1) spawnBiomeEnemy(sx, y, sz, sl, zone, 1 - y / TOP);
-          if (k % 5 === 3 && rand() < 0.6) addBlock(sx + nxx * (rand() - 0.5) * 3, y, sz + nzz * (rand() - 0.5) * 3, 1.5, 1.5, 2.4, zone, 0x241a3a);   // CRT stack to hop
-          if (k % 6 === 2) ammoBox(sx + nxx * (w - 1), y + 0.8, sz + nzz * (w - 1));
-        }
-        if (built > 1) {
-          addRampDir(endX - ux * 10, endZ - uz * 10, endY, ux, uz, 4, w * 2, 26 + gap * 0.9);   // kicker lip at the gap
-          addDashPad(endX - ux * 15, endY, endZ - uz * 15, ux, uz);                             // speed before every jump
-          const chunkHub = { kind: 'road', x: leadX + ux * seg * 0.5, z: leadZ + uz * seg * 0.5, top: y, hw: Math.min(w, seg / 2), hd: Math.min(w, seg / 2), zone, r: 8, nosBand: band, chunk: true };
-          if (midPl) coin(chunkHub.x, y + 1.2, chunkHub.z, zone);
-          if (c % 4 === 2) {                                 // SERVICE DECK: cassette plaza off the shoulder — a real hub
-            const dx = endX + nxx * (w + 12), dz = endZ + nzz * (w + 12);
-            if (!blocked(dx, y, dz, 9)) {
-              const dsl = addSlab(dx, y, dz, 9, 8, 2.5, zone, true);
-              const dh = { kind: 'building', x: dx, z: dz, top: y, hw: 9, hd: 8, w: 18, d: 16, zone, r: 11, nosBand: band, deck: true, slab: dsl };
-              hubs.push(dh);
-              loreTerminal(dx + 5, y, dz - 3);
-              if (rand() < 0.7) weaponPickup(2 + ((rand() * (WEAPONS.length - 2)) | 0), dx - 4, y + 1.2, dz + 3);
-              addProp(rand() < 0.5 ? 'bike' : 'buggy', dx + 5, y, dz + 3);
-              spawnRiderGroup(dx, y, dz, dsl, Math.min(3, 1 + level), 5);
-              connect(lastDeckHub, dh);                      // decks chain onto each other: the walk-back way home
-              lastDeckHub = dh;
-            }
-          }
-          if (c % 6 === 3 && rand() < 0.8) {                 // a real (gated) arena every so often for the boss roster
-            const ax2 = endX + nxx * (w + 34), az2 = endZ + nzz * (w + 34);
-            if (!hubs.some(hh => Math.hypot(hh.x - ax2, hh.z - az2) < 46)) {
-              const A = buildArena(arenaTypes[c % arenaTypes.length], ax2, y, az2, zone);
-              A.region = c; A.universe = slot; A.nosBand = band; hubs.push(A);
-              connect(A, { kind: 'road', x: endX, z: endZ, top: endY, hw: w, hd: w, zone, r: 8 });
-            }
-          }
-          if (c % 3 === 0) spawnRiderGroup(leadX + ux * seg * 0.4, y, leadZ + uz * seg * 0.4, endSlab, Math.min(3, 1 + level), Math.max(3, w - 1));   // rivals on the tarmac
-        }
-        x = endX; z = endZ;                                  // the next chunk's gap starts where this one ended
-      }
-      // FINAL RUN-IN: the road splashes down toward the level's exit pad near the original hub, one last kicker, done.
-      const exx = Math.cos(exitAngle) * 34, exz = Math.sin(exitAngle) * 34;
-      const fx = exx - x, fz = exz - z, F = Math.hypot(fx, fz) || 1;
-      if (F > 30 && F < 320) {
-        const fux = fx / F, fuz = fz / F, nEnd = Math.min(18, Math.ceil(F / 9));
-        addRampDir(x, z, y, fux, fuz, 4, 8, 26);
-        for (let k = 1; k <= nEnd; k++) {
-          const t = k / nEnd, sy = y + (13 - y) * t, sx = x + fux * F * 0.85 * t, sz = z + fuz * F * 0.85 * t;
-          if (blocked(sx, sy, sz, 4.2)) continue;
-          const sl = addSlab(sx, sy, sz, 4.2, 4.2, 2, NOS_ZONES[2], false);
-          coin(sx, sy + 1.2, sz, NOS_ZONES[2]);
-        }
+  const nosRoadAudit = { chunks: 0, totalLength: 0, gaps: [], arenas: 0, services: 0, traffic: 0, hubs: [] };
+  function buildRoadChunk(template, cx, cy, cz, bearing, length, width, prog, zone = NOS_ZONES[0]) {
+    const ux = Math.cos(bearing), uz = Math.sin(bearing), nx = -uz, nz = ux;
+    const halfL = length * 0.5, hx = Math.abs(ux) * halfL + Math.abs(nx) * width * 0.5, hz = Math.abs(uz) * halfL + Math.abs(nz) * width * 0.5;
+    const road = addSolid(cx - hx, cx + hx, cy - 1.5, cy, cz - hz, cz + hz);
+    Object.assign(road, { cx, cz, top: cy, hw: hx, hd: hz, zone, road: true, nosRoadChunk: true, template, prog });
+    const roadMark = (w, h, l, lateral, forward, color, material = null) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, l), material || new THREE.MeshBasicMaterial({ color, toneMapped: false }));
+      m.position.set(cx + nx * lateral + ux * forward, cy + h * 0.5 + 0.04, cz + nz * lateral + uz * forward); m.rotation.y = Math.PI / 2 - bearing; scene.add(m); m.userData.noCull = true; return m;
+    };
+    const body = new THREE.Mesh(new THREE.BoxGeometry(width, 1.5, length), lam(0x20162b)); body.position.set(cx, cy - 0.75, cz); body.rotation.y = Math.PI / 2 - bearing; scene.add(body); body.userData.noCull = true;
+    roadMark(width - 0.3, 0.09, length - 0.2, 0, 0, 0x171421);
+    for (const side of [-1, 1]) roadMark(0.32, 0.12, length - 0.35, side * (width * 0.5 - 0.22), 0, zone.plate);
+    // three visible lanes: paired dashed dividers plus a dashed centre stripe
+    for (const lane of [-1, 1]) for (let d = -halfL + 2; d < halfL - 1; d += 8) roadMark(0.12, 0.08, 4.1, lane * width / 6, d, 0xf4e8c8);
+    for (let d = -halfL + 2; d < halfL - 1; d += 8) roadMark(0.28, 0.09, 4.2, 0, d, 0xffd23a);
+    if (template === 'billboard-arch') {
+      const arch = lam(0xff35bd); for (const side of [-1, 1]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.65, 7, 0.65), arch); post.position.set(cx + nx * side * (width * 0.5 + 0.5), cy + 3.5, cz + nz * side * (width * 0.5 + 0.5)); scene.add(post); }
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(width + 1.3, 0.8, 0.8), arch); beam.position.set(cx, cy + 7, cz); beam.rotation.y = Math.PI / 2 - bearing; scene.add(beam);
+      const boost = addSolid(cx - hx, cx + hx, cy, cy + 0.35, cz - hz, cz + hz); Object.assign(boost, { cx, cz, top: cy + 0.35, hw: hx, hd: hz, bounce: true, boost: 34, road: true });
+    }
+      if (template === 'oncoming') {
+      const lanes = [-width / 3, width / 3];
+      for (let i = 0; i < lanes.length; i++) {
+        const vehicle = makeWalker(cx + nx * lanes[i], cy, cz + uz * (i ? -length * 0.22 : length * 0.22), road, 0.9, false, 'rider');
+        vehicle.roadTraffic = true; vehicle.trafficBearing = bearing + (i ? Math.PI : 0); vehicle.speed *= 1.6; vehicle.variant = 'rider'; nosRoadAudit.traffic++;
       }
     }
-    connectDecksFar(hubs);                                     // cross-universe portal/chain help for co-op roads
-    // Exit platform
-    const exitPos = { x: Math.cos(exitAngle) * 34, z: Math.sin(exitAngle) * 34 };
-    const ex = addSlab(exitPos.x, 12, exitPos.z, 8, 8, 2, NOS_ZONES[2], true);
-    Object.assign(ex, { targetR: 2.2 }); addBullseye(exitPos.x, 12, exitPos.z, 2.2);
-    hubs.push({ kind: 'exit', x: exitPos.x, z: exitPos.z, top: 12, hw: 8, hd: 8, zone: NOS_ZONES[2], r: 10, nosBand: 2 });
-    buildUniverseLinks(hubs);
-    buildBranches(hubs);
+  const start = { x: cx - ux * halfL, y: cy, z: cz - uz * halfL }, end = { x: cx + ux * halfL, y: cy, z: cz + uz * halfL };
+  return { a: start, b: end, template, prog, solid: road };
+  }
+  function buildRoadGapRamp(anchor, bearing, width, boost = 30) {
+    const ux = Math.cos(bearing), uz = Math.sin(bearing);
+    addDashPad(anchor.x - ux * 9, anchor.y, anchor.z - uz * 9, ux, uz);
+    addRampDir(anchor.x - ux * 5, anchor.z - uz * 5, anchor.y, ux, uz, 4, width - 0.6, boost);
+  }
+  function buildRoadServiceDeck(anchor, bearing, zone, slot, chunk) {
+    const ux = Math.cos(bearing), uz = Math.sin(bearing), nx = -uz, nz = ux;
+    const x = anchor.x + nx * 14, z = anchor.z + nz * 14, y = anchor.y;
+    if (blocked(x, y, z, 8)) return null;
+    const slab = addSlab(x, y, z, 8, 8, 2.5, zone, true);
+    const hub = { kind: 'building', x, z, top: y, hw: 8, hd: 8, w: 16, d: 16, zone, r: 10, deck: true, nosBand: zone.nos - 1, universe: slot, roadChunk: chunk, slab };
+    loreTerminal(x, y, z); addCheckpoint(x, y, z + 2, zone); weaponPickup(2 + ((rand() * (WEAPONS.length - 2)) | 0), x - 3, y + 1.2, z - 3);
+    spawnRiderGroup(x, y, z, slab, Math.min(3, 1 + level), 4); nosRoadAudit.services++;
+    return hub;
+  }
+  function pickNosTemplate(prog, index) {
+    const cycle = ['straight', 'curve-left', 'overpass', 'oncoming', 'billboard-arch', 'ramp-down', 'mall', 'curve-right', 'straight', 'ramp-up', 'straight', 'oncoming'];
+    return cycle[index % cycle.length];
+  }
+  function splineChunks(origin, bearing, count, roadLevel, slot, hubs, home = null) {
+    let cursor = { ...origin }, angle = bearing, priorBearing = bearing, lastTurn = 0, prior = null, totalGap = 0;
+    const roads = [], templates = [];
+    for (let i = 0; i < count; i++) {
+      const prog = count <= 1 ? 1 : i / (count - 1), template = pickNosTemplate(prog, i), zone = NOS_ZONES[prog < 0.34 ? 0 : prog < 0.69 ? 1 : 2];
+      const length = 34 + rand() * 10, width = 7, gap = 6 + prog * 14 + (rand() - 0.5) * 2.2;
+      if (prior) {
+        buildRoadGapRamp(cursor, angle, width, 32 + prog * 10);
+        const turn = angle - priorBearing;
+        cursor = { x: cursor.x + Math.cos(angle) * gap, y: Math.max(18, cursor.y - (3.2 + prog * 4.8)), z: cursor.z + Math.sin(angle) * gap };
+        totalGap += gap; nosRoadAudit.gaps.push(gap); lastTurn = turn;
+      }
+      const nextY = Math.max(18, cursor.y - (prior ? 0 : 3.2 + prog * 4.8));
+      const chunkBearing = angle;
+      const centre = { x: cursor.x + Math.cos(chunkBearing) * length * 0.5, y: nextY, z: cursor.z + Math.sin(chunkBearing) * length * 0.5 };
+      const chunk = buildRoadChunk(template, centre.x, centre.y, centre.z, chunkBearing, length, width, prog, zone);
+      priorBearing = chunkBearing;
+      if (template === 'curve-left') angle = chunkBearing - (10 + rand() * 15) * Math.PI / 180;
+      else if (template === 'curve-right') angle = chunkBearing + (10 + rand() * 15) * Math.PI / 180;
+      else angle = chunkBearing;
+      if (template === 'ramp-up' || template === 'ramp-down') {
+        chunk.solid.ramp = template;
+      }
+      if (template === 'overpass') { const crossY = nextY - 9, cross = buildRoadChunk('overpass-cross', centre.x + Math.cos(angle + Math.PI / 2) * 20, crossY, centre.z + Math.sin(angle + Math.PI / 2) * 20, angle + Math.PI / 2, 30, 7, prog, NOS_ZONES[2]); roads.push(cross); }
+      if (template === 'mall') { const arena = buildArena('runway', centre.x, nextY + 0.3, centre.z, zone); arena.gated = true; arena.universe = slot; arena.region = i; hubs.push(arena); nosRoadAudit.arenas++; chunk.template = 'mall'; }
+      // The shared y=0 checkered START LINE, rather than the home-roof launch chunk, is the lazy underworld trigger.
+      if (i % 4 === 3) { const service = buildRoadServiceDeck(chunk.b, angle, zone, slot, i); if (service) hubs.push(service); }
+      if (template === 'mall') { chunk.solid.targetR = 2.2; addBullseye(centre.x, nextY, centre.z, 2.2); }
+      chunk.solid.entry = chunk.a; chunk.solid.exit = chunk.b; chunk.solid.pathHub = { kind: 'road', x: centre.x, z: centre.z, top: nextY, hw: width / 2, hd: length / 2, zone, slot, chunkIndex: i };
+      roads.push(chunk); templates.push(template); nosRoadAudit.chunks++; nosRoadAudit.totalLength += length;
+      prior = chunk;      cursor = { ...chunk.b };
+      if (i % 3 === 2) spawnRiderGroup(centre.x, nextY, centre.z, chunk.solid, Math.min(3, 1 + roadLevel), 2.4);
+    }
+    if (home) {
+      const hub = { kind: 'road', x: origin.x, z: origin.z, top: origin.y, hw: 9, hd: 9, zone: NOS_ZONES[0], r: 10, universe: slot, roadStart: true };
+      connect(home, hub); hubs.push(hub);
+    }
+    return { roads, templates, end: cursor, bearing: angle, gapMean: totalGap / Math.max(1, count - 1) };
+  }
+  function buildNosNetwork(exitAngle) {
+    const hubs = activeStartHubs().map(home => ({ ...home }));
+    const active = activeStartHubs(), roadPerSlot = Math.min(22, 14 + level * 2);
+    nosRoadAudit.chunks = nosRoadAudit.totalLength = nosRoadAudit.arenas = nosRoadAudit.services = nosRoadAudit.traffic = 0; nosRoadAudit.gaps.length = 0; nosRoadAudit.hubs.length = 0;
+    const thresholdHome = active[mySlot] || active[0];
+    const startLinePos = { x: thresholdHome.x + Math.cos(exitAngle) * 44, z: thresholdHome.z + Math.sin(exitAngle) * 44 };
+    const startLine = addSlab(startLinePos.x, 0, startLinePos.z, 12, 4, 2.2, NOS_ZONES[0], false); startLine.road = true;
+    const checker = new THREE.Mesh(new THREE.BoxGeometry(20, 0.12, 1.2), lam(0xffffff)); checker.position.set(startLinePos.x, 0.1, startLinePos.z); scene.add(checker); checker.userData.noCull = true;
+    const label = makeLabel('★ START LINE · THRESHOLD'); label.position.set(startLinePos.x, 3.2, startLinePos.z); scene.add(label); label.userData.noCull = true;
+    const startHub = { kind: 'building', x: startLinePos.x, z: startLinePos.z, top: 0, hw: 12, hd: 4, zone: NOS_ZONES[0], r: 12, universe: mySlot };
+    hubs.push(startHub);
+    connect(active[mySlot] || active[0], startHub);
+    startLine.isThreshold = true; startLine.template = 'START LINE';
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(4, 0.16, 6, 24), new THREE.MeshBasicMaterial({ color: 0xffd23a, toneMapped: false })); ring.rotation.x = Math.PI / 2; ring.position.set(startLinePos.x, 0.18, startLinePos.z); scene.add(ring);
+    groundPad = { x: startLinePos.x, z: startLinePos.z, solid: startLine };
+    const allRoadEnds = [];
+    for (let slot = 0; slot < active.length; slot++) {
+      const home = active[slot], centre = universeCentre(slot), bearing = centre.angle;
+      const launch = { x: home.x + Math.cos(bearing) * (TH + 3), y: TOP, z: home.z + Math.sin(bearing) * (TH + 3) };
+      const startPlatform = addSlab(launch.x, TOP, launch.z, 5, 5, 1.6, NOS_ZONES[0], false);
+      addRampDir(home.x + Math.cos(bearing) * (TH - 9), home.z + Math.sin(bearing) * (TH - 9), TOP, Math.cos(bearing), Math.sin(bearing), 4, 8, 32);
+      addDashPad(home.x + Math.cos(bearing) * (TH - 6), TOP, home.z + Math.sin(bearing) * (TH - 6), Math.cos(bearing), Math.sin(bearing));
+      const path = splineChunks(launch, bearing, roadPerSlot, level, slot, hubs, home);
+      allRoadEnds.push(path);
+    }
+    const finalPath = allRoadEnds[mySlot], exit = addSlab(finalPath.end.x, finalPath.end.y, finalPath.end.z, 9, 9, 2, NOS_ZONES[2], false);
+    exit.targetR = 2.2; exit.severity = 3; addBullseye(exit.cx, exit.top, exit.cz, 2.2);
+    const exitHub = { kind: 'exit', x: exit.cx, z: exit.cz, top: exit.top, hw: 9, hd: 9, zone: NOS_ZONES[2], r: 12, severity: 3, universe: mySlot }; hubs.push(exitHub);
+    for (const road of finalPath.roads) if (road.template === 'mall') road.solid.targetR = 2.2;
+    let mall = null; for (const road of finalPath.roads) if (road.template === 'mall') mall = road;
+    if (mall) {
+      const mallExit = addSlab(mall.solid.cx, mall.solid.top + 1.4, mall.solid.cz, 10, 10, 2, NOS_ZONES[2], false);
+      mallExit.targetR = 2.2; mallExit.severity = 3; addBullseye(mallExit.cx, mallExit.top, mallExit.cz, 2.2);
+    }
+    connect({ kind: 'road', x: finalPath.end.x, z: finalPath.end.z, top: finalPath.end.y, hw: 9, hd: 9, zone: NOS_ZONES[2] }, exitHub);
+    for (let slot = 1; slot < allRoadEnds.length; slot++) {
+      const a = allRoadEnds[slot - 1].roads.at(-1), b = allRoadEnds[slot].roads[0];
+      connect({ kind: 'road', x: a.b.x, z: a.b.z, top: a.b.y, hw: 8, hd: 8, zone: NOS_ZONES[2], universe: slot - 1 }, { kind: 'road', x: b.a.x, z: b.a.z, top: b.a.y, hw: 8, hd: 8, zone: NOS_ZONES[0], universe: slot });
+    }
     buildHubPortalLoop(hubs);
-    spawnStreetRiders(hubs);
+    connectDecksFar(hubs);
+    nosRoadAudit.hubs = hubs;
+    if (finalPath) {
+      const farthest = finalPath.roads.reduce((r, q) => Math.max(r, Math.hypot(q.solid.cx, q.solid.cz)), 0);
+      WORLD_R = Math.max(WORLD_R, farthest + 180);
+      camera.far = Math.max(camera.far, WORLD_R * 1.6); camera.updateProjectionMatrix();
+    }
     return hubs;
   }
   function connectDecksFar(hubs) {                             // deck-to-deck across the void when two roads cross paths
@@ -4321,7 +4423,7 @@ function buildLevel() {
   streetReset();
   activePortalPreview = activePortalDestination = null; $('portalPreview').classList.remove('visible');
   decorSites.length = 0; dressings.clear(); growers.length = 0; growCd = 0;
-  specials.length = reserved.length = 0; psySpecialCount = 0; popArenaCount = 0; portalCooldown = 0; portalExit = null; psy.t = 0; psy.kind = ''; try { renderer.domElement.style.filter = ''; } catch (_) {}
+  specials.length = reserved.length = 0; psySpecialCount = 0; popArenaCount = 0; portalCooldown = 0; portalExit = null; psy.t = 0; psy.kind = ''; belowZeroBuilt = false; thresholdTouched = false; belowZeroHubs = []; belowZeroEntry = null; try { renderer.domElement.style.filter = ''; } catch (_) {}
   decalMesh.count = 0; decalNext = 0;
   applyTheme();
   TOP = Math.min(480 + level * 100, 1200);       // MUCH taller towers
@@ -4337,6 +4439,50 @@ function buildLevel() {
   if (towersOfTheWild.on) { trunkify(false); trunkify(true); }   // rebuilt levels in an active jungle keep their trunks
 }
 
+function buildBelowZeroForLevel() {
+  if (belowZeroBuilt || !themeZones()) return;
+  belowZeroBuilt = true;
+  belowZeroHubs = rentOn() ? buildCollectionsHell() : buildVcrMachine();
+}
+function buildCollectionsHell() {
+  const hubs = [], centre = universeCentre(mySlot), levels = 9;
+  for (let i = 0; i < levels; i++) {
+    const y = -8 - i * 13, a = i * 2.399963229728653, x = centre.x + Math.cos(a) * (10 + i % 3 * 4), z = centre.z + Math.sin(a) * (10 + i % 3 * 4);
+    const slab = addSlab(x, y, z, i === levels - 1 ? 12 : 4.5, i === levels - 1 ? 12 : 4.5, 1.8, RENT_ZONES[2], false);
+    const hub = { kind: i === levels - 1 ? 'arena' : 'building', x, z, top: y, hw: i === levels - 1 ? 12 : 4.5, hd: i === levels - 1 ? 12 : 4.5, zone: RENT_ZONES[2], universe: mySlot, slab, belowZero: true };
+    hubs.push(hub); if (i) connect(hubs[i - 1], hub);
+    if (i % 2 === 0) addRail(x, z, y - 2, x + 3, z + 1, 0x9a3131);
+    if (i === levels - 1) { const landlord = makeWalker(x, y, z, slab, 2, true, 'landlord'); landlord.name = 'THE LANDLORD'; landlord.boss = true; }
+  }
+  belowZeroEntry = hubs[0];
+  connect(hubs[0], belowZeroThresholdHub());
+  addSlab(centre.x + 9, -18, centre.z, 1.6, 1.6, 1, RENT_ZONES[2], false).ladderStep = true;
+  return hubs;
+}
+function buildVcrMachine() {
+  const hubs = [], centre = universeCentre(mySlot), count = 10;
+  for (let i = 0; i < count; i++) {
+    const a = i * 2.399963229728653, y = -8 - i * 12, r = i % 2 ? 12 : 5, x = centre.x + Math.cos(a) * r, z = centre.z + Math.sin(a) * r;
+    const slab = addSlab(x, y, z, 4.5, 3.5, 1.5, NOS_ZONES[2], false);
+    slab.vcrReel = true;
+    const hub = { kind: 'building', x, z, top: y, hw: 4.5, hd: 3.5, zone: NOS_ZONES[2], universe: mySlot, slab, belowZero: true };
+    hubs.push(hub); if (i) connect(hubs[i - 1], hub);
+    if (i % 2) addRail(x, z, y - 2, x + 3, z + 1, 0xff35bd);
+    if (i === count - 1) { const rewinder = makeWalker(x, y, z, slab, 2, true, 'popstar'); rewinder.name = 'THE REWINDER'; rewinder.boss = true; }
+  }
+  belowZeroEntry = hubs[0];
+  connect(hubs[0], belowZeroThresholdHub());
+  return hubs;
+}
+function belowZeroThresholdHub() {
+  const s = solids.find(s => s.isThreshold);
+  return s ? { kind: 'building', x: s.cx, z: s.cz, top: s.top, hw: s.hw || 8, hd: s.hd || 8, zone: s.zone, universe: mySlot } : belowZeroEntry;
+}
+function belowZeroLoop() {
+  const y = belowZeroEntry && belowZeroEntry.top;
+  if (state !== 'play' || y === undefined) { respawn(); return; }
+  pos.set(belowZeroEntry.x, y + 3, belowZeroEntry.z); vel.set(0, -4, 0); onGround = false; toast(rentOn() ? 'COLLECTIONS HELL' : 'THE VCR', 1800);
+}
 function buildLevelBody() {
   // Home towers: one at the origin in single player, six on a ring in co-op.
   const roofTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
@@ -4401,7 +4547,7 @@ function buildLevelBody() {
   boss = endBosses[0];
   // street-level terminal opens only after every boss falls
   groundPad = { x: Math.cos(padA) * 48, z: Math.sin(padA) * 48 };
-  const streetPad = addSlab(groundPad.x, 0, groundPad.z, 9, 9, 3, null, true); streetPad.ground = true; streetPad.targetR = 1.8;      // the only 'street' left: a floating island
+  const streetPad = addSlab(groundPad.x, 0, groundPad.z, 9, 9, 3, null, true); streetPad.ground = true; streetPad.targetR = 1.8;
   addBullseye(groundPad.x, 0, groundPad.z, 1.8);
   const seal = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.18, 5, 18), new THREE.MeshBasicMaterial({ color: 0xff174c, transparent: true, opacity: 0.9 }));
   seal.rotation.x = Math.PI / 2; seal.position.set(groundPad.x, 0.25, groundPad.z); scene.add(seal);
@@ -4417,8 +4563,8 @@ function buildLevelBody() {
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, TOP + 120, 8), new THREE.MeshBasicMaterial({ color: 0x55e6ff, transparent: true, opacity: 0.3 }));
     beam.position.set(groundPad.x, (TOP + 120) / 2, groundPad.z); scene.add(beam);
     // the sky network: floating platforms from the roof to rooftops and themed arenas
-    if (rentOn()) levelHubs = buildRentNetwork(padA);
-    else if (nosOn()) levelHubs = buildNosNetwork(padA);
+  if (rentOn()) levelHubs = buildRentNetwork(padA);
+  else if (nosOn()) levelHubs = buildNosNetwork(padA);
     else if (gutOn()) levelHubs = buildGutNetwork(padA);
     else levelHubs = buildNetwork(padA);
     scatterBosses();
@@ -5173,6 +5319,7 @@ addEventListener('keydown', e => { if (e.code === 'KeyE' && state === 'play' && 
 function begin() {
   wipeGore();
   $('menu').style.display = 'none';
+  if (nosOn()) { camYaw = -universeCentre(mySlot).angle - Math.PI / 2; fpPitch = 0; }  // face outward along this home tower's highway
   initAudio();
   state = 'play'; showMsg('');
   if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
@@ -5454,6 +5601,13 @@ function radarTick(now) {
 let eggBottom = false;
 function onLand(speed, sol) {
   trickLand();
+  if (!thresholdTouched && sol.isThreshold && themeZones()) {
+    thresholdTouched = true;
+    buildBelowZeroForLevel(); belowZeroBuilt = true;
+    shockRing(pos, 14, rentOn() ? 0xff7b32 : 0xff35bd);
+    try { sfx.clear && sfx.clear(); } catch (_) {}
+    toast("YOU CAN'T GO BACK UP — YET", 3000);
+  }
   if (sol.egg === 'bottom' && state === 'play') {          // EASTER EGG: you fell all the way to the lowest platform there is
     invuln = Math.max(invuln, 2); pounding = false;
     if (!eggBottom) {
@@ -6292,6 +6446,8 @@ function setZone(z, snap = false, quiet = false) {
   document.body.classList.toggle('schizo', schizoOn);      // game-wide horror dread, independent of whatever zone is live
   const horror = true;
   if (scene.fog) { scene.fog.near = 30; scene.fog.far = 270; }
+  const skyProfile = SKY_PROFILES[levelDef.id];
+  if (skyProfile) { goal.top.set(skyProfile.skyTop); goal.mid.set(skyProfile.skyMid); goal.bot.set(skyProfile.skyBottom); goal.fog.set(skyProfile.fogColor); if (scene.fog) scene.fog.color.setHex(skyProfile.fogColor); }
   // biome evolution: entering a new biome flips the local wildlife over to its species
   if (!interior && !snap && state === 'play' && z && BIOME_ENEMIES[z.name] && lastEvolveZone !== z) {
     lastEvolveZone = z;
@@ -6299,10 +6455,16 @@ function setZone(z, snap = false, quiet = false) {
   }
   const src = z || (rentOn() ? RENT_ZONES[0] : nosOn() ? NOS_ZONES[0] : theme());      // Rent's Due: the open sky is the sodium-lit Foreclosure dusk, never the default night city
   goal.top.set(src.top); goal.mid.set(src.mid); goal.bot.set(src.bot); goal.fog.set(src.fog);
+  if (SKY_PROFILES[levelDef.id]) {
+    const sky = SKY_PROFILES[levelDef.id]; goal.top.set(sky.skyTop); goal.mid.set(sky.skyMid); goal.bot.set(sky.skyBottom); goal.fog.set(sky.fogColor);
+  }
+  if (!z && SKY_PROFILES[levelDef.id]) {
+    const sky = SKY_PROFILES[levelDef.id]; goal.top.set(sky.skyTop); goal.mid.set(sky.skyMid); goal.bot.set(sky.skyBottom); goal.fog.set(sky.fogColor);
+  }
   goal.hemiCol.set(src.hemiCol); goal.sunCol.set(src.sunCol); goal.cloud.set(src.cloud); goal.hemi = src.hemi; goal.sun = src.sun;
   if (snap) { for (const k of ENV_COLS) env[k].copy(goal[k]); env.hemi = goal.hemi; env.sun = goal.sun; flash = 0; wOp = 0; }
   if (!interior) trunkify(!!(z && z.name === 'Jungle'));   // jungle takes over: every building becomes a giant tree trunk
-  const w = interior ? WEATHER.none : z ? WEATHER[z.weather] : nosOn() ? WEATHER.dust : WEATHER.rain;
+  const w = interior ? WEATHER.none : z ? WEATHER[z.weather] : nosOn() ? WEATHER.dust : rentOn() ? WEATHER.paper : WEATHER.rain;
   wOn = !!w.op; if (w.op) { wCfg = w; wMat.color.setHex(w.color); wMat.size = w.size; }
   else if (!z) { wCfg = WEATHER.rain; wMat.color.setHex(wCfg.color); wMat.size = wCfg.size; wOp = wCfg.op; wMat.opacity = wOp; }
   if (!snap && !quiet && state === 'play') {
@@ -6316,8 +6478,18 @@ function drawSky() {
   const css = c => '#' + tmpC.copy(c).lerp(white, flash * 0.6).lerp(SPACE_BLACK, spaceNow).getHexString();
   g.addColorStop(0, css(env.top)); g.addColorStop(0.6, css(env.mid)); g.addColorStop(1, css(env.bot));
   x.fillStyle = g; x.fillRect(0, 0, 2, 256);
-  x.fillStyle = 'rgba(120,210,255,.22)';
-  for (let y = 168; y < 256; y += 10) { const w = 0.15 + ((y * 17) % 7) / 10; x.fillRect(0, y, 2, w); }
+  if (!themeZones()) {
+    x.fillStyle = 'rgba(120,210,255,.22)';
+    for (let y = 168; y < 256; y += 10) { const w = 0.15 + ((y * 17) % 7) / 10; x.fillRect(0, y, 2, w); }
+  }
+  if (rentOn()) {
+    x.fillStyle = 'rgba(35,12,5,.92)';
+    for (let i = 0; i < 34; i++) { const bw = 18 + i % 5 * 7, bh = 16 + (i * 17 % 55), bx = (i * 71) % 1024; x.fillRect(bx, 256 - bh, bw, bh); }
+  } else if (nosOn()) {
+    x.strokeStyle = 'rgba(255,92,216,.28)'; x.lineWidth = 1;
+    for (let i = 0; i < 9; i++) { const t = i / 8; x.beginPath(); x.moveTo(1024 * (0.5 - t * 0.5), 255); x.lineTo(512, 190); x.lineTo(1024 * (0.5 + t * 0.5), 255); x.stroke(); }
+    for (let y = 198; y < 256; y += 9) { x.beginPath(); x.moveTo(0, y); x.lineTo(1024, y); x.stroke(); }
+  }
   skyTex.needsUpdate = true;
 }
 function updateEnv(dt, cp) {
@@ -6687,7 +6859,11 @@ function playerUpdate(dt) {
   // keep inside the play area
   const rr = Math.hypot(pos.x, pos.z);
   if (rr > WORLD_R) { pos.x *= WORLD_R / rr; pos.z *= WORLD_R / rr; dbgClamp.t = performance.now(); dbgClamp.at = [pos.x, pos.y, pos.z]; }
-  if (pos.y < VOID_Y) voidLoop();
+  if (themeZones() && pos.y < 0 && !thresholdTouched) { respawn(); return; }   // themed levels only: before the threshold is touched, a fall below y=0 is still a normal respawn; the default level's void loop is untouched
+  if (pos.y < VOID_Y) {
+    if (themeZones()) { if (belowZeroBuilt) belowZeroLoop(); else respawn(); }
+    else voidLoop();
+  }
 }
 
 
@@ -8037,7 +8213,7 @@ function updateVisuals(dt) {
   const hudHtml = `<div class="rt-top"><span class="chip">LV <b>${level}</b></span><span class="chip">ALT <b>${pos.y | 0}</b>M</span>${combo > 0 ? `<span class="chip" style="border-color:#ffd23a;color:#ffd23a">x<b>${combo}</b></span>` : ''}</div>` +
     `<div class="rt-score"><span>SCORE</span><b>${String(Math.max(0, score | 0)).padStart(7, '0')}</b></div>` +
     bar('glide', glide, 'GLIDE') + bar('grip', climbStam, 'GRIP') + bar('nrg', cont.energy, 'ENERGY', cont.locked ? ' locked' : '') +
-    (rentOn() ? bar('rent', 1 - rentDueT / rentPeriod(), 'RENT', rentWave > 0 ? ' wave7' : '') : '') +
+    (rentOn() ? bar('rent', 1 - rentDueT / rentPeriod(), `DUE ${rentWave + 1}`, rentWave > 0 ? ' wave7' : '') : '') +
     `<div class="rt-line">COINS <b>${base.credits}</b> &nbsp; BANANAS <b>${base.bananas}</b></div>` +
     `<div class="rt-line">BEST <b>${Math.max(best.score, score)}</b> (L${best.level})</div>` +
     (curPN !== null && ladderTop ? `<div class="rt-line" style="color:${curPN < 0 ? '#ff5a7a' : '#ffd23a'}">PLATFORM <b>#${curPN}</b></div>` : '') +
@@ -9789,8 +9965,7 @@ document.addEventListener('pointerlockchange', () => { if (!document.pointerLock
 // ---------- boot ----------
 buildLevel();
 pos.set(start.x, start.y, start.z);
-showMenu(true);
-window.__ng = { ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toFixed(1), z: +q.z.toFixed(1), label: q.label })), mv: () => ({ vy: +vel.y.toFixed(2), onG: onGround, jumps, gliding, glide: +glide.toFixed(2), climbing: !!climbing, pounding, stam: +climbStam.toFixed(2), hp: health, st: state, paused }), bounces: () => solids.filter(s => s.bounce).map(s => ({ x: +(s.cx !== undefined ? s.cx : (s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +(s.cz !== undefined ? s.cz : (s.minz + s.maxz) / 2).toFixed(1), b: +(s.boost || 0).toFixed(1) })), spKinds: () => specials.reduce((a, s) => { const k = (s.sp && s.sp.kind) || s.kind || '?'; a[k] = (a[k] || 0) + 1; return a; }, {}), ladder: () => ({ cur: curPN, top: ladderTop && ladderTop.n, bot: ladderBot && ladderBot.n, len: ladder.length, voidY: VOID_Y }), falls: () => solids.filter(s => s.pn !== undefined).slice(0, 5).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), n: s.pn })), foes: () => enemies.filter(e => !e.dead).map(e => ({ id: e.mesh.id, v: e.variant, hp: +e.hp.toFixed(1), mh: e.maxhp, boss: !!e.boss, d: Math.round(Math.hypot(e.x - pos.x, e.y - pos.y, e.z - pos.z)) })), kit: () => ({ w: weapon, name: WEAPONS[weapon].name, owned: weaponOwned.slice(), ammo: { ...ammo } }), clearFoes: (keepBoss = true) => { let n = 0; for (const e of enemies) if (!e.dead && !(keepBoss && e.boss)) { damageEnemy(e, 99999, 'pound'); n++; } return n; }, setZone: (n, snap = false, quiet = true) => { const z = ZONES.concat(RENT_ZONES).find(x => x.name.toLowerCase() === String(n).toLowerCase()) || null; setZone(z, snap, quiet); return z ? z.name : null; }, get schizo() { return schizoOn; }, set schizo(v) { schizoOn = !!v; document.body.classList.toggle('schizo', schizoOn); }, giveWeapon: n => { const i = WEAPONS.findIndex(w => w.name.toLowerCase() === String(n).toLowerCase()); if (i < 0) return false; unlockWeapon(i); selectWeapon(i); return !!weaponOwned[i]; }, get killStreak() { return killStreak; }, set killStreak(v) { killStreak = v | 0; killStreakT = killStreak > 0 ? 4 : 0; }, get level() { return level; }, set level(v) { level = Math.max(1, v | 0); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; showMsg(''); toast('LEVEL ' + level + ' — ' + theme().name, 1600); }, rails: () => solids.filter(q => q.rail).map(q => { const a = q.rail.pts[0], b = q.rail.pts[q.rail.pts.length - 1]; return [a.x, a.y, a.z, b.x, b.y, b.z, q.rail.len]; }), grinding: () => !!grinding, dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), duel: (v = 'walker', dist = 4, boss = false) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, boss, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (k !== 'board') return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(zoneByName(n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; },  info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length, propList: props.map(p => ({ k: p.kind, at: p.mesh.position.toArray().map(v => Math.round(v * 10) / 10), taken: p.taken, vis: p.mesh.visible, inLvl: !!(p.mesh.parent && p.mesh.parent !== scene) })) }), missions: () => missionsSnapshot(), acceptMission, completeMission, turnIn, abandonMission, craftList, craft, guideTips, guideGreeting, base: () => ({ ...base, upgrades: { ...base.upgrades }, resources: { ...hotbarRes } }), homeBase: () => ({ guide: !!homeGuide, hintNpc, dialog: guideDialogOpen, slot: mySlot, tower: { x: myStartHub().x, z: myStartHub().z, top: myStartHub().top }, homes: activeStartHubs().map(h => ({ slot: h.slot, x: h.x, z: h.z })), enemiesNearSpawn: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).length, nearSpawns: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).map(e => ({ v: e.variant, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), boss: !!e.boss, mini: !!e.mini, zone: e.zone && e.zone.name })), guides: homeGuides.map(g => ({ slot: g.slot, x: +(g.group.position.x).toFixed(1), z: +(g.group.position.z).toFixed(1) })), parts: homeGuide && homeGuide.group.children.length }), applyNetSlot, missionsSnapshot, monkeys: () => [...dressings.values()].flatMap(d => d.anims.filter(a => a.k === 'monkey' && !a.dead).map(a => ({ x: +(d.site.x + a.mk.g.position.x).toFixed(2), y: +(d.site.y + a.mk.g.position.y).toFixed(2), z: +(d.site.z + a.mk.g.position.z).toFixed(2) }))), coins: () => ({ total: items.filter(i => i.type === 'coin' && !i.taken).length, bananas: items.filter(i => i.type === 'coin' && i.banana).length }), gore: () => ({ decals: decals.length, gibs: gibsList.filter(g => !g.dead).length, nearSpawn: decals.filter(r => spawnGoreBlocked(r[0], r[1], r[2])).length + gibsList.filter(g => !g.dead && spawnGoreBlocked(g.mesh.position.x, g.mesh.position.y, g.mesh.position.z)).length }), towers: () => buildingHubs.map((h, i) => ({ i, x: +h.x.toFixed(1), z: +h.z.toFixed(1), top: +h.top.toFixed(1), hw: +h.hw.toFixed(1), hd: +h.hd.toFixed(1), theme: towerThemeFor(h, i), opened: !!h.opened, alive: h.interior ? h.interior.enemies.filter(e => !e.dead).length : 0 })), openTower: (i = 0, themeKey = null) => { const hub = buildingHubs[i]; if (!hub) return null; const r = openTower(hub, themeKey); return r ? { theme: r.theme.name, floors: r.floors.length, enemies: r.enemies.length, loot: r.loot.length, targets: hub.interiorTargets.length } : null; }, interiors: () => ({ inside: inInterior, theme: activeTowerInterior ? activeTowerInterior.theme.name : null, opened: openedTowers.length, targets: interiorTargets.length }) };   // dev hook (console / test tools)
+showMenu(true);  window.__ng = { ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toFixed(1), z: +q.z.toFixed(1), label: q.label })), mv: () => ({ vy: +vel.y.toFixed(2), onG: onGround, jumps, gliding, glide: +glide.toFixed(2), climbing: !!climbing, pounding, stam: +climbStam.toFixed(2), hp: health, st: state, paused }), bounces: () => solids.filter(s => s.bounce).map(s => ({ x: +(s.cx !== undefined ? s.cx : (s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +(s.cz !== undefined ? s.cz : (s.minz + s.maxz) / 2).toFixed(1), b: +(s.boost || 0).toFixed(1) })), spKinds: () => specials.reduce((a, s) => { const k = (s.sp && s.sp.kind) || s.kind || '?'; a[k] = (a[k] || 0) + 1; return a; }, {}), ladder: () => ({ cur: curPN, top: ladderTop && ladderTop.n, bot: ladderBot && ladderBot.n, len: ladder.length, voidY: VOID_Y }), falls: () => solids.filter(s => s.pn !== undefined).slice(0, 5).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), n: s.pn })), foes: () => enemies.filter(e => !e.dead).map(e => ({ id: e.mesh.id, v: e.variant, hp: +e.hp.toFixed(1), mh: e.maxhp, boss: !!e.boss, d: Math.round(Math.hypot(e.x - pos.x, e.y - pos.y, e.z - pos.z)) })), kit: () => ({ w: weapon, name: WEAPONS[weapon].name, owned: weaponOwned.slice(), ammo: { ...ammo } }), clearFoes: (keepBoss = true) => { let n = 0; for (const e of enemies) if (!e.dead && !(keepBoss && e.boss)) { damageEnemy(e, 99999, 'pound'); n++; } return n; }, setZone: (n, snap = false, quiet = true) => { const z = ZONES.concat(RENT_ZONES).find(x => x.name.toLowerCase() === String(n).toLowerCase()) || null; setZone(z, snap, quiet); return z ? z.name : null; }, get schizo() { return schizoOn; }, set schizo(v) { schizoOn = !!v; document.body.classList.toggle('schizo', schizoOn); }, giveWeapon: n => { const i = WEAPONS.findIndex(w => w.name.toLowerCase() === String(n).toLowerCase()); if (i < 0) return false; unlockWeapon(i); selectWeapon(i); return !!weaponOwned[i]; }, get killStreak() { return killStreak; }, set killStreak(v) { killStreak = v | 0; killStreakT = killStreak > 0 ? 4 : 0; }, get level() { return level; }, set level(v) { level = Math.max(1, v | 0); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; showMsg(''); toast('LEVEL ' + level + ' — ' + theme().name, 1600); }, rails: () => solids.filter(q => q.rail).map(q => { const a = q.rail.pts[0], b = q.rail.pts[q.rail.pts.length - 1]; return [a.x, a.y, a.z, b.x, b.y, b.z, q.rail.len]; }), grinding: () => !!grinding, dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), duel: (v = 'walker', dist = 4, boss = false) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, boss, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (k !== 'board') return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(zoneByName(n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; },  info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length, propList: props.map(p => ({ k: p.kind, at: p.mesh.position.toArray().map(v => Math.round(v * 10) / 10), taken: p.taken, vis: p.mesh.visible, inLvl: !!(p.mesh.parent && p.mesh.parent !== scene) })) }), missions: () => missionsSnapshot(), acceptMission, completeMission, turnIn, abandonMission, craftList, craft, guideTips, guideGreeting, base: () => ({ ...base, upgrades: { ...base.upgrades }, resources: { ...hotbarRes } }), homeBase: () => ({ guide: !!homeGuide, hintNpc, dialog: guideDialogOpen, slot: mySlot, tower: { x: myStartHub().x, z: myStartHub().z, top: myStartHub().top }, homes: activeStartHubs().map(h => ({ slot: h.slot, x: h.x, z: h.z })), enemiesNearSpawn: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).length, nearSpawns: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).map(e => ({ v: e.variant, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), boss: !!e.boss, mini: !!e.mini, zone: e.zone && e.zone.name })), guides: homeGuides.map(g => ({ slot: g.slot, x: +(g.group.position.x).toFixed(1), z: +(g.group.position.z).toFixed(1) })), parts: homeGuide && homeGuide.group.children.length }), applyNetSlot, missionsSnapshot, monkeys: () => [...dressings.values()].flatMap(d => d.anims.filter(a => a.k === 'monkey' && !a.dead).map(a => ({ x: +(d.site.x + a.mk.g.position.x).toFixed(2), y: +(d.site.y + a.mk.g.position.y).toFixed(2), z: +(d.site.z + a.mk.g.position.z).toFixed(2) }))), coins: () => ({ total: items.filter(i => i.type === 'coin' && !i.taken).length, bananas: items.filter(i => i.type === 'coin' && i.banana).length }), gore: () => ({ decals: decals.length, gibs: gibsList.filter(g => !g.dead).length, nearSpawn: decals.filter(r => spawnGoreBlocked(r[0], r[1], r[2])).length + gibsList.filter(g => !g.dead && spawnGoreBlocked(g.mesh.position.x, g.mesh.position.y, g.mesh.position.z)).length }), towers: () => buildingHubs.map((h, i) => ({ i, x: +h.x.toFixed(1), z: +h.z.toFixed(1), top: +h.top.toFixed(1), hw: +h.hw.toFixed(1), hd: +h.hd.toFixed(1), theme: towerThemeFor(h, i), opened: !!h.opened, alive: h.interior ? h.interior.enemies.filter(e => !e.dead).length : 0 })), openTower: (i = 0, themeKey = null) => { const hub = buildingHubs[i]; if (!hub) return null; const r = openTower(hub, themeKey); return r ? { theme: r.theme.name, floors: r.floors.length, enemies: r.enemies.length, loot: r.loot.length, targets: hub.interiorTargets.length } : null; }, interiors: () => ({ inside: inInterior, theme: activeTowerInterior ? activeTowerInterior.theme.name : null, opened: openedTowers.length, targets: interiorTargets.length }) };   // dev hook (console / test tools)
 
 {   // opened from the relay server with ?room=... -> connect right away
   const qp = new URLSearchParams(location.search || '');
