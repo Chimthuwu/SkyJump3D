@@ -6,12 +6,11 @@ const id = process.argv.find((a, i) => i > 1 && !a.startsWith('--')) || 'nostalg
 const out = path.join(__dirname, 'out', id); fs.mkdirSync(out, { recursive: true });
 (async () => {
   const { srv, url } = await serve(); const br = await launch();
-  const { ctx, page, errors } = await openGame(br, url, { dbg: true, video: wantVideo ? out : undefined });
+  const { ctx, page, errors } = await openGame(br, url, { dbg: true, video: wantVideo ? out : undefined, query: '?spec=' + id });
   const ev = (f, a) => page.evaluate(f, a); const R = { id, steps: [] };
   await page.addScriptTag({ path: path.join(__dirname, 'bot.js') });
-  await page.click('#bLevels'); await page.waitForSelector(`#levelsList button[data-level="${id}"]`);
   const t0 = Date.now();
-  await page.click(`#levelsList button[data-level="${id}"]`);
+  await page.click('#bStart');
   await page.waitForFunction(() => __ng.levels.state().active && __dbg.state === 'play', null, { timeout: 120000 });
   R.menuToPlayMs = Date.now() - t0;
   await page.waitForTimeout(1500);

@@ -6,8 +6,8 @@ const id = process.argv[2] || 'nostalgia-overdose';
 const out = path.join(__dirname, 'out', id); fs.mkdirSync(out, { recursive: true });
 (async () => {
   const { srv, url } = await serve(); const br = await launch();
-  const { page, errors } = await openGame(br, url, { dbg: true, viewport: { width: 1600, height: 900 } });
-  await page.click('#bLevels'); await page.waitForSelector(`#levelsList button[data-level="${id}"]`); await page.click(`#levelsList button[data-level="${id}"]`);
+  const { page, errors } = await openGame(br, url, { dbg: true, viewport: { width: 1600, height: 900 }, query: '?spec=' + id });
+  await page.click('#bStart');
   await page.waitForFunction(() => __ng.levels.state().active && __dbg.state === 'play', null, { timeout: 120000 }); await page.waitForTimeout(2000);
   const shots = await page.evaluate(async () => {
     const { THREE, scene, renderer, solids } = __dbg; const spec = __ng.levels.spec(), g = __ng.levels.graph();
