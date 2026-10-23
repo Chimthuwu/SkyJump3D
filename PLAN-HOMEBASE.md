@@ -135,13 +135,15 @@ B6. **Persistence + reset:** `saveBase()/loadBase()`; missions regenerate on `bu
 
 ## Definition of done
 
-- [ ] Spawn roof is peaceful; NPC + bench + board look good and fit the neon retro style.
-- [ ] `[E] TALK` opens the Guide's HELP / RECIPES / TASKS / LEAVE menu; tips react to game state; accept/abandon works; only one active mission.
-- [ ] The Guide wanders the base, is invulnerable and never in `enemies`.
-- [ ] All 4 mission types appear across levels, objectives are reachable, markers + HUD tracker show distance.
-- [ ] Return-to-base turn-in pays out; credits/upgrades persist across reloads.
-- [ ] At least 4 craft recipes work and persistent upgrades actually change gameplay.
-- [ ] `TODO.md` updated with handoff notes; multiplayer limitation documented.
+Verified 2026-10-24 on the `live` build by `tests/t-homebase.cjs` + `tests/t-plans.cjs` (headless Chromium, software GL). `[x]` = automated evidence; `[~]` = partly evidenced; `[ ]` = needs a human.
+
+- [~] Spawn roof is peaceful (0 enemies within the roof zone: evidence) — NPC + bench + board *look good / fit the style* is a human call.
+- [~] `[E] TALK` opens the Guide dialog (evidence); HELP / RECIPES / TASKS / LEAVE tab contents, tips reacting to game state: not automated. Accept works (evidence: goto mission accepted, one active mission).
+- [~] The Guide is not in `enemies` (evidence); wandering/invulnerability are by construction, not tested.
+- [~] All 4 mission types are generated (bossKill, goto, collect, kill — evidence); reachability of every objective and marker/HUD distance: only `goto` was walked (teleported to target -> state `ready`).
+- [x] Return-to-base turn-in pays out (+164 credits) and credits persist across a page reload (evidence).
+- [~] 5 craft recipes exist (evidence); recipe effects / upgrades changing gameplay: not tested.
+- [x] `TODO.md` updated; multiplayer behaviour documented (`PLAN-INTERIORS-MP.md` Part 2, verified with two clients via `tests/t-net2.cjs`).
 
 ## Later / open questions
 

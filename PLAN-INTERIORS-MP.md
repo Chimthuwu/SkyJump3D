@@ -112,12 +112,13 @@ skyway/moon→Mars route, arenas and street target are shared and sit between/ar
 - Reconnect: same name → same slot if still free (stretch).
 
 ### Agent B checklist
-- [ ] `starts[]` / `mySlot` refactor done; single player behaves exactly as before.
-- [ ] 6 evenly spaced towers, all reachable, no overlap with arenas/skyway/ride park; each fully dressed (base + Guide + bench + board).
-- [ ] Server slot assignment (max 6, clear "lobby full"), join/leave/reuse tested with 2–6 browser tabs.
-- [ ] Per-slot mission lists deterministic; progress private; shared world targets consistent.
-- [ ] `node --check` on extracted script and `node server/server.js` boots; no console errors with 6 clients.
-- [ ] `TODO.md` handoff notes.
+Verified 2026-10-24 on `live` (`tests/t-plans.cjs`, `tests/t-net2.cjs`; local Node relay, NOT the deployed Worker; 2 clients, not 6).
+- [x] `starts[]` / `mySlot` refactor done (code present; `__ng.homeBase()` reports slot + 6 homes). "Single player behaves exactly as before": the plan's single-tower SP layout was superseded by PLAN-UNIVERSES (six towers always built).
+- [~] 6 evenly spaced towers (evidence: all on a 600 m ring, min pair distance 600 m, 0 unreachable universes in the link graph); each fully dressed with a Guide (6 guides, evidence). No-overlap-with-arenas/skyway/ride-park and per-tower bench/board: not independently measured.
+- [~] Server slot assignment: 2 clients get slots 0 and 1, each stands on its own tower, slots free/reuse + host migration on leave (evidence). The 7th-player "lobby full" path and 3-6 tab tests: NOT TESTED.
+- [~] Per-slot missions: lists generated per slot (4 types, evidence); private progress / shared world targets with a second player: NOT TESTED.
+- [x] `node --check` on the extracted script (clean); `node server/server.js` boots and relays; 0 console errors with 2 clients.
+- [x] `TODO.md` handoff notes (this session's section).
 
 ---
 

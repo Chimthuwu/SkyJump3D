@@ -10715,6 +10715,7 @@ let levelSel = 0;
 // Switch the live level definition, rebuild the world for it if it differs from what is already built, then run the usual preload -> begin.
 // (The world is built once at boot for the default descent, so choosing 'descent' while it is already live is exactly the old path.)
 function startLevelDef(id) {
+  if (net.on && !net.host) id = levelDef.id;      // NETFIX: a guest in a room always plays the HOST's level (menu START used to force 'descent' over the level adopted from the host)
   if (levelDef.id !== id) {
     levelDef = LEVEL_DEFS[id] || LEVEL_DEFS.descent; level = 1;
     preloadThen.done = false;           // new world = new materials/shaders: run the compile+warm pass again under the loading screen
@@ -11018,6 +11019,8 @@ window.__ng.levels = {
   graph: () => specKit ? specKit.graph(specInfo.result.start, specInfo.result.exit) : null,
   spec: () => activeSpec,
   salt: () => gameSalt,
+  def: () => levelDef.id,
+  startDef: id => { startLevelDef(id); },
   ladderExtend: d => { ladderExtend(d); return { bot: ladderBot, gates: portals.filter(p => p.label === 'HOME PORTAL').map(p => ({ x: p.x, y: p.y, z: p.z, dormant: p.dormant, dest: p.dest && [p.dest.x, p.dest.y, p.dest.z] })) }; },
   setSalt: v => { gameSalt = v >>> 0; buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); return gameSalt; },
   kit: () => specKit,
