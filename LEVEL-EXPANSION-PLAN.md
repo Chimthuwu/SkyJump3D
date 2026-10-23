@@ -19,6 +19,31 @@ Everything below marked **[measured]** was observed in a real headless-Chromium 
 
 ---------------------------------------------------------------------
 
+---------------------------------------------------------------------
+
+## 0.5 RECONCILIATION WITH THE `live` BRANCH (added during Gate 1 — read before anything else)
+
+Phase 0 was audited on `main` (`6a9f902`). While working I found a second remote branch, **`origin/live`** (9 commits ahead of `main`, 29 files), and the TODO.md you uploaded is identical to `live`'s TODO. **`live` is the line you actually work on and deploy from; `main` is stale.** Several things the brief (and my Phase 0 audit) described as "does not exist yet" **already exist on `live`**, built with a different architecture:
+
+| Brief/plan item | State on `live` |
+|---|---|
+| "Nostalgia Overdose does NOT exist" | **Exists** as `LEVEL_DEFS.nos`: a linear outrun-highway level (VHS/CRT theme, warp pipes, easter eggs, retro checker road). |
+| Level select / registration | **Exists**: data-driven `LEVELS[]` + `LEVEL_DEFS` (+ `SP_ONLY_DESCENT` flag that currently hides everything but Lil Spasticism). Levels are `levelDef.id`-gated branches *inside* the one generator, not separate modules. |
+| UT/Quake MP arenas | **Exists** as `LEVEL_DEFS.arena` (`THE ARENAS`): four closed chambers — Longest Yard, Deck, Camping Grounds, Facing Worlds — with spawn pads, rocket/rail/quad, documented fall behaviour, route-graph verifier (`perf/_smoke_arena.cjs`). |
+| Rent's Due level | Exists (`LEVEL_DEFS.rent`). |
+| Six universes (PLAN-UNIVERSES) | **Implemented** in `buildNetwork` (per-slot mini-cities) + `buildUniverseLinks`/`connectFar` bridges (TODO.md still says "not started" — stale). |
+| 19-track soundtrack | Exists (`music/track01..19.mp3`, `scMusic`). |
+
+**What I did about it:** merged `origin/live` into the working branch (`claude/festive-volta-coj7vi`), re-pointed my menu integration at `live`'s level-select (spec levels enter via `?spec=<id>` or a `LEVELS_ALL` entry that `SP_ONLY_DESCENT` currently hides), renamed nothing of yours, and re-ran every test on the merged tree.
+
+**Consequences / open decisions for you (I did not guess):**
+1. **Two different "Nostalgia Overdose"s now exist.** Yours (`nos`, highway) is untouched. My greybox is registered as *"Nostalgia Overdose — Compound (greybox)"* (`levels/od.js`, id `nostalgia-overdose`). Keep both, rename mine, or drop mine?
+2. **Arenas (Gates 4–5):** `live` already ships four arena chambers inside the main generator. Building my separate `arenas/*.js` + `match.js` set would duplicate them. Recommendation: do **not** build parallel arenas; instead (a) QA the existing ones with the two-client test, (b) add match state (frags/timer/scoreboard) only if you want it, (c) add the two *original* arenas as new `archetype`s there if wanted.
+3. **Other five SP levels (Void Tower, Neon Foundry, Starfall, Citadel, Chaos Engine):** still blocked on the Gate 1 approval, and on decision 1 (spec-module architecture vs. your `LEVEL_DEFS` branches).
+4. **Deploy:** `live` is what Pages deploys. `main` should be fast-forwarded/merged from `live` only by you.
+
+---------------------------------------------------------------------
+
 ## 1. Architecture as it actually exists [read + measured]
 
 **One file.** `index.html` = 8,926 lines / 708 KB, one inline `<script type="module">` (line 267), Three.js r160 via importmap. ~434 top-level functions. Everything (state, physics, enemies, weapons, net, UI) is **module-scope** inside that one script — nothing is reachable from outside except `window.__ng` (a 100+ method dev hook).

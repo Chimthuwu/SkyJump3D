@@ -14,7 +14,7 @@ function serve(root = ROOT, port = 0) {
 }
 async function launch(opts = {}) {
   const { chromium } = require(PW);
-  const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox', '--mute-audio', '--ignore-gpu-blocklist'] });
+  const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox', '--mute-audio', '--ignore-gpu-blocklist', '--disable-features=LocalNetworkAccessChecks,PrivateNetworkAccessSendPreflights,BlockInsecurePrivateNetworkRequests'] });
   return browser;
 }
 // open a page on the game. opts.dbg injects a harness-only __dbg object (solids/enemies/scene/...) without editing the product.
@@ -24,7 +24,8 @@ async function openGame(browser, url, opts = {}) {
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { const t = m.text(); if (m.type() === 'error' && !/Failed to load resource/.test(t)) errors.push('CONSOLE: ' + t.slice(0, 300)); if (opts.log) console.log('[page]', t.slice(0, 200)); });
   await page.route('**/three.module.js', r => r.fulfill({ contentType: 'text/javascript', body: fs.readFileSync(THREE_FILE) }));
-  await page.route(/voice-lines|tts-status|net-info|\/voices\//, r => r.abort());
+  await page.route(opts.allowNet ? /voice-lines|tts-status|\/voices\// : /voice-lines|tts-status|net-info|\/voices\//, r => r.abort());      // net-info aborted => the game would fall back to the PRODUCTION relay, so non-net tests never allow it (and only the local-relay test sets allowNet)
+  if (opts.allowNet) await page.routeWebSocket(/^wss?:\/\/(?!127\.0\.0\.1)/, ws => ws.close());      // safety: never let a QA client reach the deployed relay
   if (opts.dbg) await page.route(/\/(index\.html)?(\?.*)?$/, async r => {
     const resp = await r.fetch(); let body = await resp.text();
     body = body.replace('window.__ng = {', 'window.__dbg = { get solids() { return solids; }, get enemies() { return enemies; }, get items() { return items; }, get lvl() { return lvl; }, get pos() { return pos; }, get vel() { return vel; }, get keys() { return keys; }, THREE, scene, camera, renderer, get camYaw() { return camYaw; }, set camYaw(v) { camYaw = v; }, get state() { return state; }, get net() { return net; } }; window.__ng = {');

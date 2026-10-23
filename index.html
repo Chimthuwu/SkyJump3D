@@ -6054,8 +6054,8 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyE' && state === 'play' && hintNpc && !hintProp && !onVehicle) { eUsedProp = true; openGuideDialog(); return; }
   if ((e.code === 'Enter' || (e.code === 'KeyE' && (hintProp || onVehicle))) && state === 'play') { eUsedProp = e.code === 'KeyE'; useProp(); }
   if (e.code === 'CapsLock' || e.code === 'KeyV') { fpv = !fpv; toast(fpv ? 'First-person view' : 'Third-person view', 900); }
-  if (/^Digit[1-7]$/.test(e.code)) { const i = +e.code[5] - 1; if (i === 1 && state !== 'title') { hotbarSel = 1; updateHotbar(); toast('BUILDER HAND — walk into ore to mine, KeyE to place a block', 1600); }
-    else { hotbarSel = 0; updateHotbar(); selectWeapon(i); } }
+  if (e.code === 'Digit8' && state !== 'title') { hotbarSel = 1; updateHotbar(); toast('BUILDER HAND — walk into ore to mine, KeyE to place a block', 1600); }      // key 2 used to be hijacked by the builder hand (AUDIT 7 #1): the hand lives on 8, key 2 is the Rifle again
+  else if (/^Digit[1-7]$/.test(e.code)) { const i = +e.code[5] - 1; hotbarSel = 0; selectWeapon(i); updateHotbar(); }
   if (e.code === 'Tab') cycleWeapon(1);
   if (e.code === 'KeyL') { voiceLines = !voiceLines; toast(voiceLines ? 'Enemy voice lines on' : 'Enemy voice lines off', 1200); if (!voiceLines) { try { window.speechSynthesis.cancel(); } catch (_) {} $('subs').textContent = ''; } }
   if (e.code === 'KeyH') { hintT = hintT > 0 ? 0 : 10; hintOn = true; }
@@ -6592,14 +6592,15 @@ function updateHotbar() {                                        // rebuild only
 }
 function hotbarHtml() {
   const slot = (inner, cls = '', n = null) => `<div class="slot ${cls}">${inner}${n !== null ? `<span class="cnt">${n}</span>` : ''}</div>`;
-  let out = slot('🗡', hotbarSel === 0 ? 'sel' : '');                                  // [1] blade
-  for (let i = 1; i < 9; i++) out += slot(i === 1 ? '▣' : '', i === hotbarSel ? 'sel' : '', i === 1 ? hotbarRes[biomeResource(activeZ)] : null);   // [2] builder, rest reserved
+  let out = slot('🗡', hotbarSel === 0 && weapon === 0 ? 'sel' : '');                  // [1] blade
+  out += slot('R', hotbarSel === 0 && weapon === 1 ? 'sel' : '');                       // [2] rifle
+  for (let i = 2; i < 9; i++) out += slot(i === 7 ? '▣' : '', i === 7 && hotbarSel === 1 ? 'sel' : '', i === 7 ? hotbarRes[biomeResource(activeZ)] : null);   // [8] builder hand, rest reserved
   return out;
 }
 function selectWeapon(i) {
   if (!Number.isInteger(i) || i < 0 || i >= WEAPONS.length) return;
   if (!weaponOwned[i]) { toast(`${WEAPONS[i].name} — FIND IT IN THE WORLD`, 1100); sfx.click(); return; }
-  weapon = i; atkCd = Math.max(atkCd, 0.1); toast(WEAPONS[i].name, 700); sfx.click();
+  weapon = i; atkCd = Math.max(atkCd, 0.1); toast(WEAPONS[i].name, 700); sfx.click(); updateHotbar();
 }
 function unlockWeapon(i) {
   if (!Number.isInteger(i) || i < 2 || i >= WEAPONS.length) return false;
