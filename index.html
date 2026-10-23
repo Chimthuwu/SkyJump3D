@@ -337,11 +337,12 @@ let TOP = 190;            // roof height of the tower (grows each level)
 let level = 1;
 // LEVEL DEFINITION: which selectable level is live. 'descent' (Lil Spasticism) is the original game and every gate below is a no-op for it.
 // Set by LEVELS[i].startFn before buildLevel(); everything level-specific is gated on rentOn() / levelDef.id so the default level is unchanged.
-const LEVEL_DEFS = { descent: { id: 'descent' }, rent: { id: 'rent' }, nos: { id: 'nos' }, gut: { id: 'gut' } };
+const LEVEL_DEFS = { descent: { id: 'descent' }, rent: { id: 'rent' }, nos: { id: 'nos' }, gut: { id: 'gut' }, arena: { id: 'arena' } };
 let levelDef = LEVEL_DEFS.descent;
 const rentOn = () => levelDef.id === 'rent';
 const nosOn = () => levelDef.id === 'nos';                       // Nostalgia Overdose (VHS / retro-future)
 const gutOn = () => levelDef.id === 'gut';                       // The Gut (body-horror descent through something alive)
+const arenaOn = () => levelDef.id === 'arena';                   // THE ARENAS: closed deathmatch chambers (UT99/Q3 layouts, rebuilt)
 const themeZones = () => rentOn() ? RENT_ZONES : nosOn() ? NOS_ZONES : gutOn() ? GUT_ZONES : null;      // a themed level's own 3-zone ladder (null = the default descent)
 const setLevelDefById = id => { levelDef = LEVEL_DEFS[id] || LEVEL_DEFS.descent; };      // net: adopt the host's selected level definition
 const TH = 16;           // tower half-width
@@ -748,6 +749,7 @@ let staticBuilt = false;
 const HOME_SLOT_COUNT = 6, UNIVERSE_R = 600, SPAWN_RING_R = UNIVERSE_R;     // six spawn universes on a ~600 m ring, always built (solo and co-op alike)
 let belowZeroBuilt = false, thresholdTouched = false, belowZeroHubs = [], belowZeroEntry = null;
 const SKY_PROFILES = {
+  arena: { skyTop: '#02030c', skyMid: '#0b1030', skyBottom: '#231a4a', fogColor: 0x0b1030, fogDensity: 0.0015, sunVisible: false, sunColor: 0x8a9aff, stars: true, groundRing: false },      // deep starfield void over every duel chamber
   rent: { skyTop: '#32120a', skyMid: '#a74f22', skyBottom: '#f18a45', fogColor: 0x9a4a2d, fogDensity: 0.0018, sunVisible: false, sunColor: 0xff9b4a, stars: false, groundRing: false },
   nos: { skyTop: '#260044', skyMid: '#a32283', skyBottom: '#ff7b63', fogColor: 0x8d276c, fogDensity: 0.0014, sunVisible: true, sunColor: 0xffd23a, stars: false, groundRing: false },
 };
@@ -3233,14 +3235,26 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
   const start = { x: cx - ux * halfL, y: cy, z: cz - uz * halfL }, end = { x: cx + ux * halfL, y: cy, z: cz + uz * halfL };
   return { a: start, b: end, template, prog, solid: road };
   }
-  function buildRoadGapRamp(anchor, bearing, width, boost = 30) {
-    const ux = Math.cos(bearing), uz = Math.sin(bearing);
+  // Smooth kicker: ONE full-width solid per step, 0.25 rise each (the player auto-steps it, so it reads as a slope), a single tilted wedge for
+  // the visual, and a bounce lip on the top. Axis-aligned only (the NOS road bearing is snapped to 90 degrees).
+  function buildRoadGapRamp(anchor, bearing, width, boost = 30, run = 20, rise = 2) {
+    const ux = Math.round(Math.cos(bearing)), uz = Math.round(Math.sin(bearing)), n = 8, sw = run / n, sh = rise / n;
     addDashPad(anchor.x - ux * 9, anchor.y, anchor.z - uz * 9, ux, uz);
-    addRampDir(anchor.x - ux * 5, anchor.z - uz * 5, anchor.y, ux, uz, 4, width - 0.6, boost);
+    const hwid = (width - 1) / 2, box = (f0, f1, y0, y1) => {
+      const xa = anchor.x + ux * f0 - (uz ? hwid : 0), xb = anchor.x + ux * f1 + (uz ? hwid : 0), za = anchor.z + uz * f0 - (ux ? hwid : 0), zb = anchor.z + uz * f1 + (ux ? hwid : 0);
+      return addSolid(Math.min(xa, xb), Math.max(xa, xb), y0, y1, Math.min(za, zb), Math.max(za, zb));
+    };
+    for (let i = 0; i < n; i++) box(i * sw, (i + 1) * sw, anchor.y, anchor.y + sh * (i + 1));
+    const pad = box(run, run + 1.6, anchor.y + rise - 0.2, anchor.y + rise + 0.25); Object.assign(pad, { bounce: true, boost });
+    const len = Math.hypot(run, rise), wedge = new THREE.Mesh(new THREE.BoxGeometry(width - 1, 0.3, len), lam(0x2a3350));
+    wedge.position.set(anchor.x + ux * run * 0.5, anchor.y + rise * 0.5 - 0.1, anchor.z + uz * run * 0.5); wedge.rotation.order = 'YXZ'; wedge.rotation.y = Math.PI / 2 - Math.atan2(uz, ux); wedge.rotation.x = -Math.atan2(rise, run);
+    scene.add(wedge); wedge.userData.noCull = true;
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(uz ? width - 1 : 1.6, 0.12, ux ? width - 1 : 1.6), new THREE.MeshBasicMaterial({ color: 0x36f6ff, toneMapped: false }));
+    lip.position.set(anchor.x + ux * (run + 0.8), anchor.y + rise + 0.2, anchor.z + uz * (run + 0.8)); scene.add(lip); lip.userData.noCull = true;
   }
   function buildRoadServiceDeck(anchor, bearing, zone, slot, chunk) {
     const ux = Math.cos(bearing), uz = Math.sin(bearing), nx = -uz, nz = ux;
-    const x = anchor.x + nx * 14, z = anchor.z + nz * 14, y = anchor.y;
+    const x = anchor.x + nx * 25, z = anchor.z + nz * 25, y = anchor.y;
     if (blocked(x, y, z, 8)) return null;
     const slab = addSlab(x, y, z, 8, 8, 2.5, zone, true);
     const hub = { kind: 'building', x, z, top: y, hw: 8, hd: 8, w: 16, d: 16, zone, r: 10, deck: true, nosBand: zone.nos - 1, universe: slot, roadChunk: chunk, slab };
@@ -3249,7 +3263,7 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     return hub;
   }
   function pickNosTemplate(prog, index) {
-    const cycle = ['straight', 'curve-left', 'overpass', 'oncoming', 'billboard-arch', 'ramp-down', 'mall', 'curve-right', 'straight', 'ramp-up', 'straight', 'oncoming'];
+    const cycle = ['straight', 'oncoming', 'overpass', 'straight', 'billboard-arch', 'straight', 'mall', 'oncoming', 'straight', 'billboard-arch', 'straight', 'oncoming'];
     return cycle[index % cycle.length];
   }
   function splineChunks(origin, bearing, count, roadLevel, slot, hubs, home = null) {
@@ -3257,33 +3271,35 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     const roads = [], templates = [];
     for (let i = 0; i < count; i++) {
       const prog = count <= 1 ? 1 : i / (count - 1), template = pickNosTemplate(prog, i), zone = NOS_ZONES[prog < 0.34 ? 0 : prog < 0.69 ? 1 : 2];
-      const length = 34 + rand() * 10, width = 7, gap = 6 + prog * 14 + (rand() - 0.5) * 2.2;
+      // long contiguous road chunks; a REAL gap only every third chunk (growing with progress), a kicker ramp once per chunk, a small drop only at gaps
+      const length = 100 + rand() * 30, width = 18, gapAfter = i % 3 === 2 && i < count - 1, gap = 10 + prog * 14 + (rand() - 0.5) * 3;
       if (prior) {
-        buildRoadGapRamp(cursor, angle, width, 32 + prog * 10);
-        const turn = angle - priorBearing;
-        cursor = { x: cursor.x + Math.cos(angle) * gap, y: Math.max(18, cursor.y - (3.2 + prog * 4.8)), z: cursor.z + Math.sin(angle) * gap };
-        totalGap += gap; nosRoadAudit.gaps.push(gap); lastTurn = turn;
+        const dropY = prior.gapAfter ? 2 + prog * 3 : 0;
+        cursor = { x: cursor.x + (prior.gapAfter ? Math.cos(angle) * gap : 0), y: cursor.y - dropY, z: cursor.z + (prior.gapAfter ? Math.sin(angle) * gap : 0) };
+        if (prior.gapAfter) { totalGap += gap; nosRoadAudit.gaps.push(gap); }
+        lastTurn = angle - priorBearing;
       }
-      const nextY = Math.max(18, cursor.y - (prior ? 0 : 3.2 + prog * 4.8));
+      const nextY = cursor.y;
       const chunkBearing = angle;
       const centre = { x: cursor.x + Math.cos(chunkBearing) * length * 0.5, y: nextY, z: cursor.z + Math.sin(chunkBearing) * length * 0.5 };
       const chunk = buildRoadChunk(template, centre.x, centre.y, centre.z, chunkBearing, length, width, prog, zone);
+      chunk.gapAfter = gapAfter;
+      { const f = gapAfter ? length - 24 : length * 0.5 + 8, ux = Math.cos(chunkBearing), uz = Math.sin(chunkBearing);
+        buildRoadGapRamp({ x: cursor.x + ux * f, y: nextY, z: cursor.z + uz * f }, chunkBearing, width, gapAfter ? 32 + prog * 10 : 22); }
       priorBearing = chunkBearing;
-      if (template === 'curve-left') angle = chunkBearing - (10 + rand() * 15) * Math.PI / 180;
-      else if (template === 'curve-right') angle = chunkBearing + (10 + rand() * 15) * Math.PI / 180;
-      else angle = chunkBearing;
+      angle = chunkBearing;
       if (template === 'ramp-up' || template === 'ramp-down') {
         chunk.solid.ramp = template;
       }
-      if (template === 'overpass') { const crossY = nextY - 9, cross = buildRoadChunk('overpass-cross', centre.x + Math.cos(angle + Math.PI / 2) * 20, crossY, centre.z + Math.sin(angle + Math.PI / 2) * 20, angle + Math.PI / 2, 30, 7, prog, NOS_ZONES[2]); roads.push(cross); }
+      if (template === 'overpass') { const crossY = nextY - 9, cross = buildRoadChunk('overpass-cross', centre.x + Math.cos(angle + Math.PI / 2) * 30, crossY, centre.z + Math.sin(angle + Math.PI / 2) * 30, angle + Math.PI / 2, 60, 14, prog, NOS_ZONES[2]); roads.push(cross); }
       if (template === 'mall') { const arena = buildArena('runway', centre.x, nextY + 0.3, centre.z, zone); arena.gated = true; arena.universe = slot; arena.region = i; hubs.push(arena); nosRoadAudit.arenas++; chunk.template = 'mall'; }
       // The shared y=0 checkered START LINE, rather than the home-roof launch chunk, is the lazy underworld trigger.
-      if (i % 4 === 3) { const service = buildRoadServiceDeck(chunk.b, angle, zone, slot, i); if (service) hubs.push(service); }
+      if (i % 3 === 1) { const service = buildRoadServiceDeck(chunk.b, angle, zone, slot, i); if (service) hubs.push(service); }
       if (template === 'mall') { chunk.solid.targetR = 2.2; addBullseye(centre.x, nextY, centre.z, 2.2); }
       chunk.solid.entry = chunk.a; chunk.solid.exit = chunk.b; chunk.solid.pathHub = { kind: 'road', x: centre.x, z: centre.z, top: nextY, hw: width / 2, hd: length / 2, zone, slot, chunkIndex: i };
       roads.push(chunk); templates.push(template); nosRoadAudit.chunks++; nosRoadAudit.totalLength += length;
       prior = chunk;      cursor = { ...chunk.b };
-      if (i % 3 === 2) spawnRiderGroup(centre.x, nextY, centre.z, chunk.solid, Math.min(3, 1 + roadLevel), 2.4);
+      spawnRiderGroup(centre.x, nextY, centre.z, chunk.solid, Math.min(4, 2 + roadLevel), 7);
     }
     if (home) {
       const hub = { kind: 'road', x: origin.x, z: origin.z, top: origin.y, hw: 9, hd: 9, zone: NOS_ZONES[0], r: 10, universe: slot, roadStart: true };
@@ -3293,7 +3309,7 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
   }
   function buildNosNetwork(exitAngle) {
     const hubs = activeStartHubs().map(home => ({ ...home }));
-    const active = activeStartHubs(), roadPerSlot = Math.min(22, 14 + level * 2);
+    const active = activeStartHubs(), roadPerSlot = Math.min(12, 8 + level);
     nosRoadAudit.chunks = nosRoadAudit.totalLength = nosRoadAudit.arenas = nosRoadAudit.services = nosRoadAudit.traffic = 0; nosRoadAudit.gaps.length = 0; nosRoadAudit.hubs.length = 0;
     const thresholdHome = active[mySlot] || active[0];
     const startLinePos = { x: thresholdHome.x + Math.cos(exitAngle) * 44, z: thresholdHome.z + Math.sin(exitAngle) * 44 };
@@ -3308,7 +3324,7 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     groundPad = { x: startLinePos.x, z: startLinePos.z, solid: startLine };
     const allRoadEnds = [];
     for (let slot = 0; slot < active.length; slot++) {
-      const home = active[slot], centre = universeCentre(slot), bearing = centre.angle;
+      const home = active[slot], centre = universeCentre(slot), bearing = Math.round(centre.angle / (Math.PI / 2)) * (Math.PI / 2);
       const launch = { x: home.x + Math.cos(bearing) * (TH + 3), y: TOP, z: home.z + Math.sin(bearing) * (TH + 3) };
       const startPlatform = addSlab(launch.x, TOP, launch.z, 5, 5, 1.6, NOS_ZONES[0], false);
       addRampDir(home.x + Math.cos(bearing) * (TH - 9), home.z + Math.sin(bearing) * (TH - 9), TOP, Math.cos(bearing), Math.sin(bearing), 4, 8, 32);
@@ -3350,6 +3366,339 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
       }
     }
   }
+
+  // ================================================================
+  // THE ARENAS — closed deathmatch chambers built for brutal 2-8 player duels.
+  // Layout ARCHETYPES honour the classics (NOT 1:1 copies — rebuilt with slab/solid/pad primitives):
+  //
+  //  slot  archetype       inspired by          symmetry            fall behaviour            palette
+  //  0     longestYard     Q3DM17 'Longest Yard' MIRROR (x=0)       VOID (fall = death)    space/void (Void Yard)
+  //  1     deck            UT99 'Deck'           MIRROR (x=0)       KILL PIT under deck    industrial (Sunken Deck)
+  //  2     campingGrounds  Q3DM6 'Camping Grounds' MIRROR (x=0)     KILL PIT (lava moat)   gothic/lava (Magma Grounds)
+  //  3     facingWorlds    UT99 'Facing Worlds'  POINT-SYM (180° — geometry only; item spawns are MARKED asymmetric: rocket low on Tower A, rail high on Tower B — the deliberate mismatch makes the middle worth owning) VOID space/void (Twin Spires)
+  //
+  //  Rules honoured by every chamber: footprint ≤ 120×120 m, ≥ 3 height bands, bounce/jump pads as the primary
+  //  vertical connector, 1 rocket + 1 rail + 1 quad (60-90 s respawn) + 2-3 armour/health clusters + 4-8 spawn pads,
+  //  no item in an unexposed dead end (quad is always on the most contested centre sightline).
+  //  Fully deterministic: no rand() — layouts are rebuilt identically every build/match.
+  //  Route graph: arenaNode()/arenaEdge() record every spawn→item route as edges from the placement itself,
+  //  so headless verify can BFS every spawn → rocket/rail/quad without simulating physics.
+  // ================================================================
+  const AR_ARCHETYPES = ['longestYard', 'deck', 'campingGrounds', 'facingWorlds'];
+  const AR_MAX_HW = 60;                 // half-footprint cap: chambers never exceed 120x120
+  const AR_PUSH = 132;                  // chamber-centre offset from its home tower (see buildArenaNetwork)
+  let arenaChambers = [], arenaMatch = null, arenaFall = null, arenaSpawnIdx = 0, quadT = 0;   // quad: seconds left of quad damage
+  function arenaResetBuild() { arenaChambers = []; arenaMatch = null; arenaFall = null; arenaSpawnIdx = 0; quadT = 0; }
+  let ARG = null;                        // route graph under construction (one chamber at a time)
+  function arenaNode(px, top, pz, kind) { ARG.nodes.push({ x: px, y: top, z: pz, kind, cx: ARG.cx + px, cz: ARG.cz + pz }); return ARG.nodes.length - 1; }
+  function arenaEdge(a, b, kind = 'walk') { ARG.edges.push({ a, b, kind }); }
+  // nearest walkable surface node just under a point (item / spawn / pad target grounded on a platform)
+  // excludeNode: never match the caller's own node (a spawn pad's own top would shadow the platform it stands on).
+  // px/pz are chamber-LOCAL; plates store GLOBAL bounds, so convert before testing.
+  function arenaPlateUnder(px, py, pz, excludeNode) {
+    const gx = ARG.cx + px, gz = ARG.cz + pz;
+    let best = null, bd = 1e9;
+    for (const p of ARG.plates) {
+      if (excludeNode !== undefined && p.node === excludeNode) continue;
+      if (gx < p.minx - 0.6 || gx > p.maxx + 0.6 || gz < p.minz - 0.6 || gz > p.maxz + 0.6) continue;
+      if (p.top > py + 0.7 || p.top < py - 4) continue;
+      const d = py - p.top;
+      if (d >= 0 && d < bd) { bd = d; best = p; }
+    }
+    return best;
+  }
+  // slab-like solid with the arena family's own body + plate colours; returns the solid with .node already registered
+  function arenaSlab(px, top, pz, hw, hd, thick, opts = {}) {
+    const s = addSolid(ARG.cx + px - hw, ARG.cx + px + hw, top - thick, top, ARG.cz + pz - hd, ARG.cz + pz + hd);
+    Object.assign(s, { cx: ARG.cx + px, cz: ARG.cz + pz, top, hw, hd, zone: ARG.zone, arena: { slot: ARG.slot } });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(hw * 2, thick, hd * 2), lam(opts.body || ARG.zone.body));
+    body.position.set(ARG.cx + px, top - thick / 2, ARG.cz + pz); scene.add(body);
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.3, 0.25, hd * 2 + 0.3), lam(ARG.zone.plate, { emissive: ARG.zone.plate, emissiveIntensity: opts.kill ? 1.3 : 0.85 }));
+    plate.position.set(ARG.cx + px, top - 0.1, ARG.cz + pz); scene.add(plate);
+    if (opts.kill) { s.arenaKill = true; plate.material.color.setHex(0xff1414); plate.material.emissive.setHex(0x330400); }   // kill pit / moat: hostile floor reads red
+    ARG.extents(px - hw, px + hw, pz - hd, pz + hd);
+    s.node = arenaNode(px, top, pz, opts.kill ? 'killPit' : (opts.kind || 'plat'));
+    if (!opts.kill && !opts.noPlate) ARG.trackPlate(s);          // kill floors and spawn pads never serve as route plates
+    return s;
+  }
+  // near-round pad platform (deliberate visual variety) — collision slot-shrunk by 8% so the visual edge overhangs safely
+  function arenaDisc(px, top, pz, r, thick = 1.8) {
+    const s = addSolid(ARG.cx + px - r * 0.92, ARG.cx + px + r * 0.92, top - thick, top, ARG.cz + pz - r * 0.92, ARG.cz + pz + r * 0.92);
+    Object.assign(s, { cx: ARG.cx + px, cz: ARG.cz + pz, top, hw: r * 0.92, hd: r * 0.92, zone: ARG.zone, arena: { slot: ARG.slot } });
+    const body = new THREE.Mesh(unitDiscGeo, lam(ARG.zone.body)); body.scale.set(r, 0.5, r); // unitDiscGeo is 2 tall: identity scale = 2 thick
+    body.position.set(ARG.cx + px, top - 1, ARG.cz + pz); scene.add(body);
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(r * 1.6, 0.22, r * 1.6), lam(ARG.zone.plate, { emissive: ARG.zone.plate, emissiveIntensity: 0.85 }));
+    plate.position.set(ARG.cx + px, top - 0.11, ARG.cz + pz); plate.rotation.y = Math.PI / 4; scene.add(plate);
+    ARG.extents(px - r, px + r, pz - r, pz + r);
+    s.node = arenaNode(px, top, pz, 'plat');
+    ARG.trackPlate(s);
+    return s;
+  }
+  // bounce pad on any platform top: tuned vertical launch from physics (gravity at chamber height is plain GRAV)
+  function arenaPad(fpx, fpy, fpz, tpx, tpy, tpz, opts = {}) {
+    const padTop = fpy + 0.4, rise = Math.max(tpy - fpy, 0) + (opts.rise || 5);
+    const g = GRAV * (1 - 0.65 * spaceK(fpy + rise / 2));
+    const boost = clamp(Math.sqrt(2 * g * rise), 16, TERM - 4);
+    const s = addSolid(ARG.cx + fpx - 1.7, ARG.cx + fpx + 1.7, fpy, padTop, ARG.cz + fpz - 1.7, ARG.cz + fpz + 1.7);
+    Object.assign(s, { cx: ARG.cx + fpx, cz: ARG.cz + fpz, top: padTop, hw: 1.7, hd: 1.7, bounce: true, boost, zone: ARG.zone, arena: { slot: ARG.slot } });
+    const pm = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.4, 3.5), lam(ARG.zone.plate, { emissive: ARG.zone.plate, emissiveIntensity: 1.1 }));
+    pm.position.set(ARG.cx + fpx, fpy + 0.2, ARG.cz + fpz); pm.rotation.y = Math.PI / 4; scene.add(pm);
+    ARG.extents(fpx - 1.7, fpx + 1.7, fpz - 1.7, fpz + 1.7);
+    const a = arenaNode(fpx, padTop, fpz, 'pad');
+    const from = arenaPlateUnder(fpx, fpy, fpz);          // the pad stands ON a platform: the route must step onto it first
+    if (from) arenaEdge(from.node, a, 'walk');
+    // the pad edge lands on the target platform's own node when the target point IS a registered platform top
+    const hit = ARG.nodes.findIndex(n => (n.kind === 'plat' || n.kind === 'spawn') && Math.abs(n.x - tpx) < 0.4 && Math.abs(n.y - tpy) < 0.6 && Math.abs(n.z - tpz) < 0.4);
+    const b = hit >= 0 ? hit : arenaNode(tpx, tpy, tpz, 'land');
+    arenaEdge(a, b, 'launch');
+    const land = hit >= 0 ? null : arenaPlateUnder(tpx, tpy, tpz);
+    if (land && land.node !== b) arenaEdge(b, land.node, 'walk');    // secondary grounding when the land point is an edge
+    ARG.extents(tpx - 2, tpx + 2, tpz - 2, tpz + 2);
+    return s;
+  }
+  function arenaSpawnPad(px, py, pz) {
+    const s = arenaSlab(px, py, pz, 1.5, 1.5, 0.7, { noPlate: true, kind: 'spawn' });   // one node, kind 'spawn'; own top is NOT a tracked plate
+    ARG.spawns.push({ x: ARG.cx + px, y: py, z: ARG.cz + pz });
+    const under = arenaPlateUnder(px, py, pz, s.node);  // the pad stands on a platform: wire both directions
+    if (under) { arenaEdge(under.node, s.node, 'item'); arenaEdge(s.node, under.node, 'walk'); }
+    else console.info('[arena] spawn pad with no platform beneath at', s.cx, s.cz);   // should never happen: pads are placed on platforms
+    const mark = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.12, 2.6), lam(0xffffff, { emissive: 0x8888ff, emissiveIntensity: 0.5 }));
+    mark.position.set(ARG.cx + px, py + 0.06, ARG.cz + pz); scene.add(mark); mark.userData.noCull = true;
+    return s;
+  }
+  function arenaItem(kind, px, py, pz, respawn = 30) {
+    const before = items.length;
+    if (kind === 'quad') {
+      const q = new THREE.Group();
+      const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.62, 0), new THREE.MeshBasicMaterial({ color: 0xb46aff, toneMapped: false }));
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.1, 5, 14), new THREE.MeshBasicMaterial({ color: 0xe6d2ff, toneMapped: false })); ring.rotation.x = Math.PI / 2;
+      const label = makeLabel('QUAD DAMAGE'); label.position.y = 1.75; label.scale.set(4.4, 1.1, 1);
+      q.add(core, ring, label); q.position.set(ARG.cx + px, py, ARG.cz + pz); scene.add(q); q.userData.noCull = true;
+      items.push({ mesh: q, type: 'quad', taken: false });
+      beacon(ARG.cx + px, py, ARG.cz + pz, 0xb46aff);
+    } else if (kind === 'rocket') weaponPickup(3, ARG.cx + px, py, ARG.cz + pz);        // WEAPONS[3] = Plasma (rockets)
+    else if (kind === 'rail')   weaponPickup(4, ARG.cx + px, py, ARG.cz + pz);        // WEAPONS[4] = Railgun
+    else if (kind === 'cluster') { heart(ARG.cx + px - 1.4, py, ARG.cz + pz - 1.4); heart(ARG.cx + px + 1.4, py, ARG.cz + pz - 1.4); ammoBox(ARG.cx + px, py, ARG.cz + pz + 1.7); }
+    else if (kind === 'health') heart(ARG.cx + px, py, ARG.cz + pz);
+    else if (kind === 'ammo') ammoBox(ARG.cx + px, py, ARG.cz + pz);
+    for (let i = before; i < items.length; i++) { items[i].respawnSec = respawn; items[i].respawnAt = 0; }   // arena pickups re-arm a timer after they are picked up (see updateItems)
+    ARG.itemTable.push({ kind, x: ARG.cx + px, y: py, z: ARG.cz + pz, respawn });
+    ARG.extents(px - 2, px + 2, pz - 2, pz + 2);
+    const n = arenaNode(px, py, pz, 'item:' + kind);
+    const under = arenaPlateUnder(px, py, pz);          // every item grounds on the platform it sits on
+    if (under) arenaEdge(under.node, n, 'item');
+    return n;
+  }
+  function buildArenaLayout(archetype, cx, cz, slot) {
+    const zone = ARENA_ZONES[archetype] || ARENA_ZONES.deck;
+    ARG = { cx, cz, slot, zone, nodes: [], edges: [], spawns: [], itemTable: [], plates: [], eminx: 0, emaxx: 0, eminz: 0, emaxz: 0 };
+    ARG.extents = (x0, x1, z0, z1) => { ARG.eminx = Math.min(ARG.eminx, x0); ARG.emaxx = Math.max(ARG.emaxx, x1); ARG.eminz = Math.min(ARG.eminz, z0); ARG.emaxz = Math.max(ARG.emaxz, z1); };
+    ARG.trackPlate = s => { if (s.node !== undefined) ARG.plates.push({ node: s.node, top: s.top, minx: s.cx - s.hw, maxx: s.cx + s.hw, minz: s.cz - s.hd, maxz: s.cz + s.hd }); };
+    const chamber = { archetype, slot, zone, cx, cz, graph: { nodes: [], edges: [] }, spawns: [], itemTable: [], symmetry: '', fall: 'void', fallY: -40, fallWhy: 'the void below takes everyone', killPit: null };
+    ({ longestYard: buildArenaLongestYard, deck: buildArenaDeck, campingGrounds: buildArenaCampingGrounds, facingWorlds: buildArenaFacingWorlds }[archetype])(chamber);
+    chamber.graph.nodes = ARG.nodes; chamber.graph.edges = ARG.edges; chamber.spawns = ARG.spawns; chamber.itemTable = ARG.itemTable;
+    chamber.span = { w: ARG.emaxx - ARG.eminx, d: ARG.emaxz - ARG.eminz };
+    return chamber;
+  }
+
+  // ---- 1) LONGEST YARD (Q3DM17): floating cluster in the void — travel ONLY by bounce pads, no walls.
+  // MIRROR symmetry about x=0. Fall = out of the arena (arenaFall backstop). Rail lives on a detached far porch;
+  // quad on a dedicated high pillar only reachable by two mirrored launch pads.
+  function buildArenaLongestYard(chamber) {
+    chamber.symmetry = 'mirror (x=0)';
+    const deck = arenaSlab(0, 14, 0, 12, 12, 2);            // main deck 24x24
+    const dor = arenaItem('rocket', 0, 15.2, 0, 25);
+    const porchCap = arenaSlab(0, 32, -40, 5, 4, 2);         // detached sniper porch, far from the cluster
+    const prN = arenaItem('rail', 0, 33.2, -40, 30);
+    const pillar = arenaSlab(0, 46, 0, 4, 4, 2);            // QUAD pillar high over the deck
+    const pq = arenaItem('quad', 0, 47.2, 0, 80);
+    const aL = arenaDisc(-24, 8, 0, 8), aR = arenaDisc(24, 8, 0, 8);                 // lower corner discs
+    const dN = arenaDisc(0, 8, 26, 8), dS = arenaDisc(0, 8, -26, 8);                 // lower north/south discs
+    const pL = arenaSlab(-30, 22, 18, 3, 3, 1.4), pR = arenaSlab(30, 22, 18, 3, 3, 1.4);   // mirrored vantage perches
+    const stone = arenaSlab(0, 22, -22, 2.5, 2, 1);         // mid-flight stepping stone toward the porch
+    arenaEdge(deck.node, aL.node, 'drop'); arenaEdge(deck.node, aR.node, 'drop');  // controlled drop-offs, allowed by design
+    arenaEdge(deck.node, dN.node, 'drop'); arenaEdge(deck.node, dS.node, 'drop');
+    arenaEdge(aL.node, aR.node, 'jump');                    // low arc across the void is a real (risky) option
+    arenaPad(-24, 8, -2, -8, 14, -3);                       // disc -> deck (mirror pairs)
+    arenaPad(24, 8, 2, 8, 14, 3);
+    arenaPad(0, 8, 20, 0, 14, 9);                           // north disc -> deck
+    arenaPad(0, 8, -20, 0, 14, -9);                         // south disc -> deck
+    arenaPad(-10, 14, 0, -24, 8, 0);                        // deck -> discs (lunge pads over the rim)
+    arenaPad(10, 14, 0, 24, 8, 0);
+    arenaPad(0, 14, 10, 0, 8, 26);                          // deck -> north disc
+    arenaPad(0, 14, -10, 0, 8, -26);                        // deck -> south disc
+    arenaPad(0, 14, -9, 0, 22, -22, { rise: 6 });            // deck -> stepping stone
+    arenaPad(0, 22, -24, 0, 32, -40, { rise: 4 });           // stone -> sniper porch
+    arenaPad(-3.5, 32, -43, -2, 22, -22);                   // porch return accelerator (west half)
+    arenaPad(3.5, 32, -43, 2, 22, -22);                     // porch return accelerator (east half)
+    arenaEdge(porchCap.node, stone.node, 'drop');           // stone falls you straight back to the deck
+    arenaPad(-9, 14, -7, 0, 46, 0, { rise: 8 });            // DEDICATED LAUNCHER west -> quad pillar
+    arenaPad(9, 14, -7, 0, 46, 0, { rise: 8 });             // DEDICATED LAUNCHER east -> quad pillar
+    arenaEdge(pillar.node, deck.node, 'drop');              // leaving the quad = drop back to the main fight
+    arenaEdge(pL.node, deck.node, 'drop'); arenaEdge(pR.node, deck.node, 'drop');    arenaPad(-30, 22, 15, -12, 14, 6);                       // perch -> deck hops
+    arenaPad(30, 22, 15, 12, 14, 6);
+    arenaPad(-11, 14, 14, -30, 22, 18, { rise: 5 });         // deck -> perch west (the mirror pair keeps the route fair)
+    arenaPad(11, 14, 14, 30, 22, 18, { rise: 5 });           // deck -> perch east
+    arenaSpawnPad(-19.5, 8.7, 0); arenaSpawnPad(-28.5, 8.7, 0);
+    arenaSpawnPad(19.5, 8.7, 0);  arenaSpawnPad(28.5, 8.7, 0);
+    arenaSpawnPad(-4.5, 8.7, 26); arenaSpawnPad(4.5, 8.7, 26);
+    arenaSpawnPad(-4.5, 8.7, -26); arenaSpawnPad(4.5, 8.7, -26);
+    arenaItem('cluster', -24, 9.2, 0, 22);                  // armour/health clusters on the wide lower discs
+    arenaItem('cluster', 24, 9.2, 0, 22);
+  }
+
+  // ---- 2) DECK (UT99): compact loop around a central pit. MIRROR symmetry about x=0.
+  // Fall = kill pit: a red kill floor 2 m below deck catches any miss. 4 height bands: pit -6, main 12, wings 20, bridge 30.
+  function buildArenaDeck(chamber) {
+    chamber.symmetry = 'mirror (x=0)'; chamber.fall = 'pit'; chamber.fallY = -35; chamber.fallWhy = 'the kill pit eats whatever falls';
+    const pit = arenaSlab(0, -6, 0, 8, 9, 2, { kill: true, body: 0x14080a });         // central pit floor (the hole is 12x14)
+    chamber.killPit = { concept: 'whole under-deck at y=-6', floorTop: -6 };
+    const under = arenaSlab(0, -6.5, 0, 46, 46, 2, { kill: true, body: 0x0d0808 });   // the whole pit spans everything: any missed jump dies in the pit
+    const nF = arenaSlab(0, 12, -14, 17, 7, 2);   // main floor north
+    const sF = arenaSlab(0, 12, 14, 17, 7, 2);    // main floor south
+    const wF = arenaSlab(-13, 12, 0, 7, 7, 2);    // main floor west
+    const eF = arenaSlab(13, 12, 0, 7, 7, 2);     // main floor east
+    const dor = arenaItem('rocket', 0, 13.2, 15, 25);
+    const wL = arenaSlab(-26, 20, -2, 7, 8, 2);   // upper side arm west
+    const wR = arenaSlab(26, 20, -2, 7, 8, 2);    // upper side arm east
+    const bridge = arenaSlab(0, 30, 0, 2, 17, 1.6);   // high bridge crossing the whole span
+    const pr = arenaItem('rail', 0, 31.2, -14, 30);
+    const pq = arenaItem('quad', 0, 31.2, 0, 80);
+    const stN = arenaSlab(0, 20, -22, 2.5, 2, 1.4);   // north stepping stone for the main->bridge loop
+    const stS = arenaSlab(0, 20, 22, 2.5, 2, 1.4);    // south stepping stone
+    arenaEdge(nF.node, wF.node, 'walk'); arenaEdge(nF.node, eF.node, 'walk');
+    arenaEdge(sF.node, wF.node, 'walk'); arenaEdge(sF.node, eF.node, 'walk');
+    arenaEdge(wF.node, eF.node, 'jump');              // risky cross-deck jump over the pit
+    arenaPad(-14, 12, -2, -26, 20, -2);               // main -> west wing
+    arenaPad(14, 12, -2, 26, 20, -2);                 // main -> east wing
+    arenaPad(-26, 20, -6, -2, 30, -8, { rise: 7 });   // west wing -> bridge (lands near the rail)
+    arenaPad(26, 20, -6, 2, 30, -8, { rise: 7 });     // east wing -> bridge
+    arenaEdge(wL.node, nF.node, 'drop'); arenaEdge(wR.node, nF.node, 'drop');   // wings overlook, drop back in
+    arenaEdge(wL.node, sF.node, 'drop'); arenaEdge(wR.node, sF.node, 'drop');
+    arenaPad(-4, 12, 8, 0, 30, 8, { rise: 6 });       // main -> bridge via short launch
+    arenaPad(4, 12, 8, 0, 30, 8, { rise: 6 });
+    arenaPad(0, 12, -12, 0, 20, -22);                 // main -> north stone
+    arenaPad(0, 12, 12, 0, 20, 22);                   // main -> south stone
+    arenaPad(0, 20, -20, 0, 30, -13, { rise: 6 });    // north stone -> bridge (contested loop)
+    arenaPad(0, 20, 20, 0, 30, 13, { rise: 6 });      // south stone -> bridge
+    arenaEdge(bridge.node, stN.node, 'drop'); arenaEdge(bridge.node, stS.node, 'drop');
+    arenaEdge(stN.node, nF.node, 'drop'); arenaEdge(stS.node, sF.node, 'drop');
+    arenaEdge(nF.node, pit.node, 'drop'); arenaEdge(sF.node, pit.node, 'drop');  // the pit is a deliberate dive
+    arenaEdge(wF.node, pit.node, 'drop'); arenaEdge(eF.node, pit.node, 'drop');
+    arenaSpawnPad(-12, 12.7, -17); arenaSpawnPad(12, 12.7, -17);
+    arenaSpawnPad(-12, 12.7, 17);  arenaSpawnPad(12, 12.7, 17);
+    arenaSpawnPad(-30, 20.7, 0);   arenaSpawnPad(30, 20.7, 0);
+    arenaSpawnPad(0, 30.7, -12);   arenaSpawnPad(0, 30.7, 12);
+    arenaItem('cluster', -8, 13.2, -17, 20);          // cluster pair near the north corners
+    arenaItem('cluster', 8, 13.2, -17, 20);
+  }
+
+  // ---- 3) CAMPING GROUNDS (Q3DM6): two mirrored wings around a central bounce hub, gothic court over a lava moat.
+  // MIRROR symmetry about x=0. Fall = lava moat: the entire under-floor at y=-4 burns. 4 bands: -4 / court 10 / wings 16 / porch 26.
+  function buildArenaCampingGrounds(chamber) {
+    chamber.symmetry = 'mirror (x=0)'; chamber.fall = 'pit'; chamber.fallY = -30; chamber.fallWhy = 'the lava moat below has no other story';
+    const moat = arenaSlab(0, -4, 0, 48, 48, 2, { kill: true, body: 0x1a0603 });
+    chamber.killPit = { concept: 'lava moat under the whole court at y=-4', floorTop: -4 };
+    const court = arenaSlab(0, 10, 0, 11, 9, 2);       // central open courtyard (22x18)
+    const pillar = arenaSlab(0, 20, 0, 3.5, 3.5, 2);   // quad pedestal in the open centre
+    const pq = arenaItem('quad', 0, 21.2, 0, 80);
+    const dor = arenaItem('rocket', 0, 11.2, -7, 25);  // rocket rim: on the mirror axis under the pillar's north face
+    const bridgeL = arenaSlab(-15, 13, 0, 4, 2, 1.2);  // narrow choke bridges (3 m wide feet)
+    const bridgeR = arenaSlab(15, 13, 0, 4, 2, 1.2);
+    const wL = arenaSlab(-26, 16, 0, 7, 8, 2);         // wing west
+    const wR = arenaSlab(26, 16, 0, 7, 8, 2);          // wing east
+    const porch = arenaSlab(0, 26, -30, 5, 4, 2);      // THE elevated sniper porch (single, spans the mirror axis)
+    const pr = arenaItem('rail', 0, 27.2, -30, 30);
+    const stone = arenaSlab(0, 18, -19, 2.5, 2, 1);    // stepping stone for the court->porch chain
+    arenaEdge(court.node, pillar.node, 'jump');        // hop onto the pedestal itself
+    arenaPad(0, 10, 6, 0, 20, 0, { rise: 7 });         // HUB pad: court -> quad pedestal
+    arenaPad(-5, 10, 6, -15, 13, 0, { rise: 5 });      // court west rim -> bridge
+    arenaPad(5, 10, 6, 15, 13, 0, { rise: 5 });        // court east rim -> bridge
+    arenaPad(-19, 13, 0, -26, 16, 0, { rise: 5 });     // bridge -> wing west
+    arenaPad(19, 13, 0, 26, 16, 0, { rise: 5 });       // bridge -> wing east
+    arenaEdge(bridgeL.node, court.node, 'drop'); arenaEdge(bridgeR.node, court.node, 'drop');    arenaEdge(wL.node, bridgeL.node, 'drop'); arenaEdge(wR.node, bridgeR.node, 'drop');
+    arenaEdge(wL.node, court.node, 'drop'); arenaEdge(wR.node, court.node, 'drop');      // wings overlook straight into the court
+    arenaEdge(wL.node, wR.node, 'jump');               // long wing-to-wing arc over the open court (risky)
+    arenaPad(0, 10, -9.5, 0, 18, -19, { rise: 6 });    // court rim -> stone
+    arenaPad(0, 18, -21, 0, 26, -30, { rise: 5 });     // stone -> sniper porch
+    arenaPad(-3.5, 26, -33, 0, 10, -8);                // porch return accelerator west -> back into the court (NOT the stone: the stone is the ascent chain, not a pocket)
+    arenaPad(3.5, 26, -33, 0, 10, -8);                 // porch return accelerator east -> back into the court
+    arenaEdge(porch.node, stone.node, 'drop');
+    arenaEdge(stone.node, court.node, 'jump');         // running-jump exit off the stone's south rim onto the court lip
+    arenaSpawnPad(-7, 10.7, 5);   arenaSpawnPad(7, 10.7, 5);
+    arenaSpawnPad(-7, 10.7, -5);  arenaSpawnPad(7, 10.7, -5);
+    arenaSpawnPad(-28, 16.7, 0);  arenaSpawnPad(28, 16.7, 0);
+    arenaSpawnPad(-4, 26.7, -30); arenaSpawnPad(4, 26.7, -30);
+    arenaItem('cluster', -22, 17.2, 0, 22);            // mirrored wing clusters
+    arenaItem('cluster', 22, 17.2, 0, 22);
+    arenaItem('cluster', 0, 11.2, 8, 22);              // third cluster on the south rim (on the mirror axis)
+  }
+
+  // ---- 4) FACING WORLDS (UT99 CTF adapted to DM): two mirrored towers glaring across an open killzone.
+  // POINT symmetry (180° rotation about the centre) for the GEOMETRY; the item spawns are deliberately asymmetric
+  // (rocket at the heart of Tower A's base, rail commanding Tower B's cap) so the middle must be contested, not taxed.
+  // Fall = void. 4 bands: 6 / 13 / 15 bridge / 21+ (centre platform at 17).
+  function buildArenaFacingWorlds(chamber) {
+    chamber.symmetry = 'point (180° geometry; item spawns deliberately asymmetric — see comment above)';
+    const bA = arenaSlab(28, 6, 6, 6, 6, 2);           // Tower A base floor
+    const bB = arenaSlab(-28, 6, -6, 6, 6, 2);         // Tower B base floor (point-mirror of A)
+    const dor = arenaItem('rocket', 28, 7.2, 6, 25);   // rocket low in Tower A  (asymmetric by design)
+    const mA = arenaSlab(22, 13, 2, 4.5, 4.5, 2);      // Tower A mid
+    const mB = arenaSlab(-22, 13, -2, 4.5, 4.5, 2);    // Tower B mid (point-mirror)
+    const cA = arenaSlab(16, 21, 0, 4, 4, 2);          // Tower A cap
+    const cB = arenaSlab(-16, 21, 0, 4, 4, 2);         // Tower B cap (point-mirror) - rail perch
+    const pr = arenaItem('rail', -16, 22.2, 0, 30);    // rail high on Tower B (asymmetric by design)
+    const centre = arenaSlab(0, 17, 0, 5, 5, 2);       // contested centre platform
+    const pq = arenaItem('quad', 0, 18.2, 0, 80);
+    const brA = arenaSlab(11, 15, 1, 5.5, 1.5, 1);     // thin crossing from A to centre (3 m wide)
+    const brB = arenaSlab(-11, 15, -1, 5.5, 1.5, 1);   // thin crossing from B to centre (point-mirror)
+    arenaPad(24, 6, 6, 22, 13, 2, { rise: 5 });        // A base -> A mid
+    arenaPad(-24, 6, -6, -22, 13, -2, { rise: 5 });    // B base -> B mid
+    arenaPad(18, 13, 0, 16, 21, 0, { rise: 5 });       // A mid -> A cap
+    arenaPad(-18, 13, 0, -16, 21, 0, { rise: 5 });     // B mid -> B cap
+    arenaEdge(cA.node, mA.node, 'drop'); arenaEdge(cB.node, mB.node, 'drop');
+    arenaEdge(mA.node, bA.node, 'drop'); arenaEdge(mB.node, bB.node, 'drop');
+    arenaPad(17, 13, 2, 12, 15, 1, { rise: 4 });       // A mid -> A crossing
+    arenaPad(-17, 13, -2, -12, 15, -1, { rise: 4 });   // B mid -> B crossing
+    arenaEdge(brA.node, centre.node, 'walk'); arenaEdge(brB.node, centre.node, 'walk');  // near level: hop onto the centre
+    arenaEdge(centre.node, brA.node, 'walk'); arenaEdge(centre.node, brB.node, 'walk');
+    arenaEdge(brA.node, mA.node, 'drop'); arenaEdge(brB.node, mB.node, 'drop');
+    arenaPad(2, 15, 1, 5, 17, 0, { rise: 4 });         // crossing landing edge -> centre (verbal pad short hop)
+    arenaPad(-2, 15, -1, -5, 17, 0, { rise: 4 });
+    arenaSpawnPad(25, 6.7, 2);   arenaSpawnPad(31, 6.7, 9);
+    arenaSpawnPad(-25, 6.7, -2); arenaSpawnPad(-31, 6.7, -9);
+    arenaSpawnPad(22, 13.7, -2); arenaSpawnPad(20, 13.7, 4);
+    arenaSpawnPad(-22, 13.7, 2); arenaSpawnPad(-20, 13.7, -4);
+    arenaItem('cluster', 22, 14.2, 2, 22);             // armour pair on both mids (point-mirror is honoured for armour)
+    arenaItem('cluster', -22, 14.2, -2, 22);
+  }
+
+  // ---- THE ARENAS network: ONE closed chamber beside each active home tower. Archetype cycles by slot so a
+  // 6-slot match always shows every layout family and the mapping is deterministic (a specific slot always gets
+  // the same chamber shape this build). Player spawn points override the home roof for the duration.
+  function buildArenaNetwork(exitAngle) {
+    const hubs = activeStartHubs().map(home => ({ ...home }));
+    const active = activeStartHubs();
+    arenaChambers.length = 0;
+    for (let slot = 0; slot < active.length; slot++) {
+      const arch = AR_ARCHETYPES[slot % AR_ARCHETYPES.length];
+      const centre = universeCentre(slot), dir = { x: Math.cos(centre.angle), z: Math.sin(centre.angle) };
+      // push each chamber fully clear of its 32-wide home tower even for diagonal slots (the widest chamber corner
+      // reaches 68 m back toward the tower, and the tower corner sits 45 m out): 45 + 68 + 19 -> push 132 along the radial.
+      const cx = centre.x + dir.x * AR_PUSH, cz = centre.z + dir.z * AR_PUSH;
+      const chamber = buildArenaLayout(arch, cx, cz, slot);
+      chamber.homeSlot = slot;
+      arenaChambers.push(chamber);
+      beacon(cx, Math.min(...chamber.spawns.map(p => p.y)) + 40, cz, chamber.zone.plate);
+      const padList = chamber.spawns;
+      if (padList.length) { const p = padList[(slot * 3 + 1) % padList.length]; Object.assign(starts[slot], { x: p.x, y: p.y + 0.2, z: p.z }); }
+    }
+    arenaMatch = arenaChambers.find(c => c.slot === mySlot) || arenaChambers[0] || null;
+    arenaFall = arenaMatch ? { y: arenaMatch.fallY, why: arenaMatch.fallWhy, archetype: arenaMatch.archetype } : null;
+    window.__arena = { archetypes: AR_ARCHETYPES, maxSpan: AR_MAX_HW * 2, chambers: arenaChambers.map(c => ({ archetype: c.archetype, slot: c.slot, homeSlot: c.homeSlot, cx: c.cx, cz: c.cz, symmetry: c.symmetry, fall: c.fall, fallY: c.fallY, fallWhy: c.fallWhy, span: c.span, killPit: c.killPit, spawns: c.spawns, itemTable: c.itemTable, graph: c.graph })) };      // dev/test hook
+    return hubs;
+  }
+
 
   // THE GUT: Biological descent — pulsating flesh platforms, vein bridges, organ chambers,
   // peristalsis-moving platforms, throat shafts, acid pools, heartbeat-synced geometry.
@@ -4426,9 +4775,10 @@ function buildLevel() {
   specials.length = reserved.length = 0; psySpecialCount = 0; popArenaCount = 0; portalCooldown = 0; portalExit = null; psy.t = 0; psy.kind = ''; belowZeroBuilt = false; thresholdTouched = false; belowZeroHubs = []; belowZeroEntry = null; try { renderer.domElement.style.filter = ''; } catch (_) {}
   decalMesh.count = 0; decalNext = 0;
   applyTheme();
-  TOP = Math.min(480 + level * 100, 1200);       // MUCH taller towers
+  TOP = nosOn() ? Math.min(220 + level * 30, 420) : Math.min(480 + level * 100, 1200);       // MUCH taller towers (Nostalgia Overdose is a road level: a short fall)
   syncStartLayout(sixTowerLayout); checkpoint = { ...start };
-  seed = 11 + level * 97 + (rentOn() ? 5003 : nosOn() ? 8009 : gutOn() ? 11003 : 0); gutVeins = 0; levelSeed = seed;      // Rent's Due gets its own layout; the default level's seed is unchanged
+  seed = 11 + level * 97 + (rentOn() ? 5003 : nosOn() ? 8009 : gutOn() ? 11003 : arenaOn() ? 13337 : 0); gutVeins = 0; levelSeed = seed;      // each level family gets its own layout seed; the default level's seed is unchanged
+  arenaResetBuild();                                                            // THE ARENAS: clear chamber state before the body rebuilds it
   rentDueT = rentPeriod() * 0.55; rentWave = 0;                          // the clock starts half-run: you have no grace period
   const sceneAdd = scene.add;
   scene.add = o => lvl.add(o);           // route this function's scene.add calls into the level group
@@ -4509,7 +4859,7 @@ function buildLevelBody() {
   buildSky();
   // ten biome-styled heavy units guard the bottom terminal
   const padA = rand() * 6.283, endA = padA + Math.PI;
-  const bossRoster = rentOn() ? RENT_BOSSES : nosOn() ? NOS_BOSSES : gutOn() ? GUT_BOSSES : [
+  const bossRoster = rentOn() ? RENT_BOSSES : nosOn() ? NOS_BOSSES : gutOn() ? GUT_BOSSES : arenaOn() ? ARENA_BOSSES : [
     { variant: 'gorilla', biome: 'Jungle', name: 'CANOPY TYRANT', color: 0x9bdf4a },
     { variant: 'dinosaur', biome: 'Jungle', name: 'THE RAZOR KING', color: 0xb6d84a },
     { variant: 'charger', biome: 'Inferno', name: 'THE RAM', color: 0xff533e },
@@ -4565,6 +4915,7 @@ function buildLevelBody() {
     // the sky network: floating platforms from the roof to rooftops and themed arenas
   if (rentOn()) levelHubs = buildRentNetwork(padA);
   else if (nosOn()) levelHubs = buildNosNetwork(padA);
+  else if (arenaOn()) levelHubs = buildArenaNetwork(padA);
     else if (gutOn()) levelHubs = buildGutNetwork(padA);
     else levelHubs = buildNetwork(padA);
     scatterBosses();
@@ -5197,8 +5548,12 @@ function schizoTick(dt) {                                  // hallucinations: ph
 function respawn() {
   if (onVehicle) dismount(); grinding = null;
   if (poundPress) poundPress = false;
-  pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); checkpoint = { ...start };                  // always back to the home tower; discovered checkpoints are reached via the WARP PAD
-  health = MAXHP; glide = 1; pounding = false; invuln = 1.5; onGround = false;
+  // THE ARENAS: respawn rotates through the chamber's marked spawn pads instead of the home roof (the 0.9 s
+  // scatter timer and this pad list are the spawn-point selection; the 2 s death delay comes from die()'s deadT).
+  const arenaR = arenaOn() && arenaMatch && arenaMatch.spawns.length ? arenaMatch.spawns[(arenaSpawnIdx++) % arenaMatch.spawns.length] : null;
+  if (arenaR) { pos.set(arenaR.x, arenaR.y + 0.2, arenaR.z); vel.set(0, 0, 0); checkpoint = { x: arenaR.x, y: arenaR.y + 2, z: arenaR.z }; }
+  else { pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); checkpoint = { ...start }; }        // always back to the home tower; discovered checkpoints are reached via the WARP PAD
+  health = MAXHP; glide = 1; pounding = false; invuln = 1.5; onGround = false; quadT = 0;
   climbing = null; climbStam = 1; psy.t = 0; psy.kind = ''; try { renderer.domElement.style.filter = ''; } catch (_) {}
   setZone(null);
   state = 'play'; showMsg(''); clearBloodScreen();
@@ -5348,7 +5703,8 @@ function damageEnemy(e, dmg, kind = 'hit') {
     e.hit = 0.18; if (kind !== 'beam') { sfx.hit(); enemyHurtVoice(e); } bloodBurst(new THREE.Vector3(e.x, e.y + e.h / 2, e.z), kind === 'beam' ? 3 : 18, 1.0);
     return;
   }
-  e.hp -= dmg; e.hit = 0.18; if (e.hp > 0) { if (kind !== 'beam') { sfx.hit(); enemyHurtVoice(e); } } else { sfx.kill(); enemyDeathVoice(e); }
+  e.hp -= dmg * (quadT > 0 ? 3 : 1);              // QUAD damage triples anything it touches while active
+  e.hit = 0.18; if (e.hp > 0) { if (kind !== 'beam') { sfx.hit(); enemyHurtVoice(e); } } else { sfx.kill(); enemyDeathVoice(e); }
   if (e.variant === 'charger' && e.hp <= 0) sfx.squeal();
   const dx = e.x - (kbX ?? pos.x), dz = e.z - (kbZ ?? pos.z), d = Math.hypot(dx, dz) || 1;
   const tick = kind === 'beam';                           // continuous beams: gentle push, light effects
@@ -5600,6 +5956,7 @@ function radarTick(now) {
 }
 let eggBottom = false;
 function onLand(speed, sol) {
+  if (sol.arenaKill && state === 'play') { die('KNOCKED OUT', 'The kill pit got you. Respawn in 2s.'); return; }   // THE ARENAS: pit/moat floors are the fall behaviour
   trickLand();
   if (!thresholdTouched && sol.isThreshold && themeZones()) {
     thresholdTouched = true;
@@ -5867,7 +6224,7 @@ function hurtMonkeysNear(x, y, z, r, dmg, inFront = false) {
 // PvP: other players are hit client-side by the shooter, who tells the victim (directed 'pvp' message) to take the damage.
 function eachPeer(fn) { if (!net.on) return; for (const p of net.peers.values()) if (p.alive && p.seen && p.pos.y > -900) fn(p); }
 function hitPeer(p, dmg) {
-  netSend({ t: 'pvp', to: p.id, d: +dmg.toFixed(2) });
+  netSend({ t: 'pvp', to: p.id, d: +(dmg * (quadT > 0 ? 3 : 1)).toFixed(2) });     // QUAD triples player-vs-player damage too
   bloodBurst(new THREE.Vector3(p.pos.x, p.pos.y + 1, p.pos.z), dmg < 1 ? 3 : 14, 1.0); if (dmg >= 1) sfx.hit();
 }
 let pvpAcc = 0;
@@ -6255,7 +6612,7 @@ const RENT_ZONES = [
   { name: 'Condemned',   rent: 2, desc: 'boarded, flooded and rotting - the building is no longer safe to occupy', top: '#050808', mid: '#16241e', bot: '#4a5a36', fog: 0x16221c, hemi: 0.36, hemiCol: 0x7a9882, sun: 0.28, sunCol: 0xb0c880, cloud: 0x121a16, plate: 0x9ab07a, weather: 'soot', sky: 0.8 },
   { name: 'Collections', rent: 3, desc: 'the debt has been sold on - everything that is owed gets collected', top: '#0c0000', mid: '#3a0606', bot: '#b01818', fog: 0x3a0808, hemi: 0.6, hemiCol: 0xff3a2a, sun: 0.65, sunCol: 0xff5a1a, cloud: 0x300404, plate: 0xff2a3a, weather: 'ash', outline: true, sky: 0.8 },
 ];
-const zoneByName = nm => ZONES.find(z => z.name === nm) || RENT_ZONES.find(z => z.name === nm) || NOS_ZONES.find(z => z.name === nm);
+const zoneByName = nm => ZONES.find(z => z.name === nm) || RENT_ZONES.find(z => z.name === nm) || NOS_ZONES.find(z => z.name === nm) || ARENA_ZONE_LIST.find(z => z.name === nm) || null;      // ARENA_ZONE_LIST is a const declared later in module scope - fine, lookups only run at runtime
 Object.assign(BIOME_ENEMIES, {
   Foreclosure: ['notice', 'notice', 'notice', 'bailiff', 'collector', 'walker', 'drone'],
   Condemned: ['notice', 'bailiff', 'bailiff', 'collector', 'roach', 'roach', 'skeleton', 'landlord'],
@@ -6301,6 +6658,34 @@ const NOS_BOSSES = [      // the 80s synth court. Variants are the new tape / CR
   { variant: 'popstar', biome: 'Arcade Overdrive', name: 'THE LAST ARPEGGIO', color: 0xff2bd6 },
 ];
 const nosZoneForY = y => NOS_ZONES[y > TOP * 0.55 ? 0 : y > 0 ? 1 : 2];
+// THE ARENAS: four ZONES-shaped palette objects kept OUTSIDE ZONES (same reason as RENT_ZONES / NOS_ZONES - appending would
+// change 'Lil Spasticism'). One tight dueling palette per chamber family, all weather:'none':
+//   Longest Yard  ->stral void: black void, starlight cyan plates, no floor, fall = death
+//   Deck          ->industrial: gunmetal + safety orange, central kill pit
+//   Camping Grounds ->gothic/lava: charcoal + magma red ring pit
+//   Facing Worlds -> glass towers / plasma violet over open space
+const ARENA_ZONES = {
+  longestYard:   { name: 'Void Yard',      arena: 1, desc: 'absolute zero-g trophy garden - the void below is hungry', body: 0x101a30, top: '#02030c', mid: '#101840', bot: '#2a3a6a', fog: 0x0c1238, hemi: 0.62, hemiCol: 0x8ab4ff, sun: 0.45, sunCol: 0x9ad0ff, cloud: 0x101a34, plate: 0x48c8ff, weather: 'none', floor: 0x131c34, accent: 0x48c8ff, enemy: 'gunner' },
+  deck:          { name: 'Sunken Deck',    arena: 2, desc: 'a docked freighter stripped to catwalks - the pit eats what falls in', body: 0x23282e, top: '#0a0c10', mid: '#2a3038', bot: '#586066', fog: 0x1a2028, hemi: 0.6, hemiCol: 0xb8b0a0, sun: 0.5, sunCol: 0xffe0b0, cloud: 0x20262c, plate: 0xff8a2a, weather: 'none', floor: 0x252a30, accent: 0xffa040, enemy: 'charger' },
+  campingGrounds:{ name: 'Magma Grounds',  arena: 3, desc: 'gothic stonework over a lava moat - ranged duels only, thanks', body: 0x1a0f0a, top: '#0b0503', mid: '#1c0d08', bot: '#641c10', fog: 0x240c06, hemi: 0.5, hemiCol: 0xff9250, sun: 0.55, sunCol: 0xff7a2a, cloud: 0x1c0c08, plate: 0xff3a1a, weather: 'none', floor: 0x231512, accent: 0xff4a20, enemy: 'infernal' },
+  facingWorlds:  { name: 'Twin Spires',    arena: 4, desc: 'two glass towers glaring across an open killzone', body: 0x140b26, top: '#04021a', mid: '#180b3a', bot: '#3a1a6a', fog: 0x150a30, hemi: 0.58, hemiCol: 0xb08aff, sun: 0.5, sunCol: 0xd0a0ff, cloud: 0x1c1038, plate: 0xc04aff, weather: 'none', floor: 0x180f2c, accent: 0xc04aff, enemy: 'gunner' },
+};
+Object.assign(BIOME_ENEMIES, {       // duels stay clean: minimal rosters so ambient evolution never floods a chamber
+  'Void Yard':      ['alien', 'gunner', 'drone'],
+  'Sunken Deck':    ['charger', 'gunner', 'drone'],
+  'Magma Grounds':  ['infernal', 'shield', 'drone'],
+  'Twin Spires':    ['gunner', 'shield', 'drone'],
+});
+Object.assign(zoneByName.prototype || zoneByName, {});           // (zoneByName stays untouched; see ARENA_ZONE_LIST in pickHelper)
+const ARENA_ZONE_LIST = [ARENA_ZONES.longestYard, ARENA_ZONES.deck, ARENA_ZONES.campingGrounds, ARENA_ZONES.facingWorlds];
+// arena champions: a small gauntlet roster from the duel palettes' own species (they hold the boss court at world origin)
+const ARENA_BOSSES = [
+  { variant: 'alien',  biome: 'Void Yard',    name: 'VOID DUKE', color: 0x48c8ff },
+  { variant: 'charger', biome: 'Sunken Deck', name: 'DECKHAND BRUTE', color: 0xff8a2a },
+  { variant: 'infernal', biome: 'Magma Grounds', name: 'MAGENTIS', color: 0xff3a1a },
+  { variant: 'gunner', biome: 'Twin Spires', name: 'SPIRE SENTINEL', color: 0xc04aff },
+  { variant: 'bomber', biome: 'Twin Spires', name: 'THE SEVENTH WIRE', color: 0x8ab4ff },
+];
 // special-platform mix per zone, driven by an existing roll (no extra rand): cassette-reel TURNTABLES ('spin') everywhere, tracking-glitch BLINKERS in Tracking Error, crumbling cabinets late.
 const nosKind = (zone, roll) => {
   const s = zone && zone.nos; if (!s) return roll < 0.10 ? 'mover' : roll < 0.19 ? 'orbit' : roll < 0.28 ? 'crumble' : roll < 0.37 ? 'piston' : roll < 0.46 ? 'breath' : roll < 0.56 ? 'blink' : roll < 0.65 ? 'swing' : roll < 0.74 ? 'spin' : '';
@@ -6859,6 +7244,9 @@ function playerUpdate(dt) {
   // keep inside the play area
   const rr = Math.hypot(pos.x, pos.z);
   if (rr > WORLD_R) { pos.x *= WORLD_R / rr; pos.z *= WORLD_R / rr; dbgClamp.t = performance.now(); dbgClamp.at = [pos.x, pos.y, pos.z]; }
+  // THE ARENAS: falling out of a void chamber is a kill (die() already holds the ~2.6 s respawn delay; pit
+  // chambers kill on their arenaKill pit floors instead - see onLand). Gated on arenaOn() so every other level keeps its own fall logic.
+  if (arenaOn() && arenaFall && pos.y < arenaFall.y) { die('OUT OF THE ARENA', arenaFall.why || 'You fell out of the arena.'); return; }
   if (themeZones() && pos.y < 0 && !thresholdTouched) { respawn(); return; }   // themed levels only: before the threshold is touched, a fall below y=0 is still a normal respawn; the default level's void loop is untouched
   if (pos.y < VOID_Y) {
     if (themeZones()) { if (belowZeroBuilt) belowZeroLoop(); else respawn(); }
@@ -7112,7 +7500,12 @@ function announceEshay() {
   window.speechSynthesis.speak(line);
 }
 function updateItems(dt) {
+  if (quadT > 0) quadT = Math.max(0, quadT - dt);              // QUAD: counts down while standing anywhere
   for (const it of items) {
+    if (it.taken && it.respawnSec) {                            // ARENA pickups: re-arm after their respawn timer
+      if (performance.now() >= it.respawnAt) { it.taken = false; it.mesh.visible = true; it.respawnAt = 0; }
+      continue;
+    }
     if (it.taken || (it.type === 'dataCore' && !it.mesh.visible)) continue;
     { const q = it.mesh.position; if (Math.abs(q.x - pos.x) > 90 || Math.abs(q.z - pos.z) > 90) continue; }      // far pickups neither spin nor get tested
     it.mesh.rotation.y += dt * 3;
@@ -7136,7 +7529,9 @@ function updateItems(dt) {
         toast(`+${it.res === 'leaf' ? 2 : 1} ${RESOURCES[it.res].name}  (${hotbarRes[it.res]})`, 900);
         continue;
       }
-      it.taken = true; it.mesh.removeFromParent();
+      it.taken = true;
+      if (it.respawnSec && it.mesh.parent) { it.mesh.visible = false; it.respawnAt = performance.now() + it.respawnSec * 1000; }   // arena timers start on pickup
+      else it.mesh.removeFromParent();
       if (it.type === 'coin') {        score += 10; sfx.coin(); if (rentOn()) rentDueT = Math.max(0, rentDueT - 3.5); if (base) { if (it.banana) base.bananas += 1; else base.credits += 1; saveBase(); } }
       else if (it.type === 'weapon') {
         const i = it.weaponIndex, w = WEAPONS[i];
@@ -7150,6 +7545,8 @@ function updateItems(dt) {
         score += 50; sfx.coin(); const line = LORE[it.idx];
         try { $('subs').textContent = line; clearTimeout(window.__loreT); window.__loreT = setTimeout(() => { if ($('subs').textContent === line) $('subs').textContent = ''; }, 9000); } catch (_) {}
         toast('TRANSMISSION RECEIVED +50', 1400);
+      } else if (it.type === 'quad') {
+        quadT = 75; toast('QUAD DAMAGE — 75 SECONDS', 2400); shockRing(pos, 18, 0xb46aff); try { sfx.clear && sfx.clear(); } catch (_) {}
       } else {
         toast(it.type === 'ammo' ? 'AMMO CACHE' : '+1 HEART', 1100);
         sfx.eshay();                                   // (browser speechSynthesis removed: it stalls the whole page on pickup)
@@ -9759,6 +10156,7 @@ const LEVELS = [
   { id: 'descent', name: 'Lil Spasticism', subtitle: "The one endless procedural descent — floating platforms all the way down.", unlocked: true, startFn: () => startLevelDef('descent') },
   { id: 'rent', name: "Rent's Due", subtitle: 'Urban decay all the way down - eviction notices, loan sharks, and the rent is overdue.', unlocked: true, startFn: () => startLevelDef('rent') },
   { id: 'nos', name: 'Nostalgia Overdose', subtitle: 'VHS fog, CRT scanlines, cassette platforms and 80s synth bosses - be kind, rewind.', unlocked: true, startFn: () => startLevelDef('nos') },
+  { id: 'arena', name: 'THE ARENAS', subtitle: 'Four closed deathmatch chambers - Longest Yard, Deck, Camping Grounds, Facing Worlds - rocket, rail and quad, 2-8 players.', unlocked: true, startFn: () => startLevelDef('arena') },
   { id: 'locked3', name: '???', subtitle: 'LOCKED — COMING SOON', unlocked: false },
 ];
 let levelSel = 0;
