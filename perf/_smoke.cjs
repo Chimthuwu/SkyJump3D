@@ -14,7 +14,7 @@ const SRC = require('path').resolve(__dirname, '..', 'index.html');
       h = h.replace('window.__ng = {', `window.__hk = {
         setLevelDefById, buildLevel, buildBelowZeroForLevel,
         stats: () => ({ solids: solids.length, platforms: platforms.length, enemies: enemies.length, items: items.length, portals: portals.length, hubs: (typeof levelHubs !== 'undefined' && levelHubs) ? levelHubs.length : 0, seed }),
-        nosRoad: () => ({ chunks: nosRoadAudit.chunks, totalLength: nosRoadAudit.totalLength, gaps: nosRoadAudit.gaps.slice(), arenas: nosRoadAudit.arenas, services: nosRoadAudit.services, traffic: nosRoadAudit.traffic }),
+        nosRoad: () => ({ chunks: nosRoadAudit.chunks, totalLength: nosRoadAudit.totalLength, gaps: nosRoadAudit.gaps.slice(), arenas: nosRoadAudit.arenas, services: nosRoadAudit.services, traffic: nosRoadAudit.traffic, pipes: nosPipes.length, pipesLinked: nosPipes.filter(p=>p.to).length }),
         below: () => ({ built: belowZeroBuilt, touched: thresholdTouched, entry: !!belowZeroEntry, hubs: belowZeroHubs.length }),
         themeHubCounts: () => levelHubs.reduce((m, h) => { m[h.kind] = (m[h.kind] || 0) + 1; return m; }, {}),
         thresholdSolids: () => solids.filter(s => s.isThreshold).map(s => ({ top: Math.round(s.top), cx: Math.round(s.cx), cz: Math.round(s.cz) })),
@@ -38,9 +38,8 @@ const SRC = require('path').resolve(__dirname, '..', 'index.html');
   await evl(() => { window.__hk.setLevelDefById('nos'); window.__hk.buildLevel(); });
   await new Promise(r => setTimeout(r, 2500));
   const nos = await evl(() => ({ stats: window.__hk.stats(), road: window.__hk.nosRoad(), thr: window.__hk.thresholdSolids(), below: window.__hk.below(), roadSolids: window.__hk.roadSolids(), kinds: window.__hk.themeHubCounts() }));
-  const gapMin = Math.min(...nos.road.gaps), gapMax = Math.max(...nos.road.gaps);
-  console.log('NOS:', JSON.stringify(nos));
-  console.log(`NOS check: chunks=${nos.road.chunks} gaps[${gapMin.toFixed(1)}..${gapMax.toFixed(1)}] roadSolids=${nos.roadSolids} thresholdAtY0=${nos.thr.some(s => s.top === 0)} probing`);
+  console.log('NOS:', JSON.stringify({ ...nos, road: { ...nos.road, gaps: undefined } }));
+  console.log(`NOS check: chunks=${nos.road.chunks} rampSpans=${nos.road.gaps.length} roadSolids=${nos.roadSolids} thresholdAtY0=${nos.thr.some(s => s.top === 0)} probing`);
   // === below-0 (VCR) builds lazily only when asked ===
   await evl(() => window.__hk.buildBelowZeroForLevel());
   await new Promise(r => setTimeout(r, 1500));

@@ -10,3 +10,5 @@ cf-public/
 .dev.vars*
 !.dev.vars.example
 !.env.example
+
+music_raw/
