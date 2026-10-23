@@ -1915,7 +1915,7 @@ function marsTexture() {
 }
 function buildMarsRoute() {
   if (marsBuilt || !moonInfo) return; marsBuilt = true;
-  try { inLevel(buildAlienRoute); } catch (err) { console.error('[alien route] build failed', err); }   // never let a build error kill the frame loop
+  jobs.push({ gen: buildAlienRouteGen(), level: true });             // built a few ms per frame (was one ~100 ms hitch); failures are caught per slice and never kill the frame loop
   toast('MARS RISES IN THE DISTANCE — cross the Alien Void', 5000); sfx.psy && sfx.psy();
 }
 // ---------- BEYOND MARS: Jupiter, Saturn, Uranus, Neptune. Each is a ~1000+ platform bridge through a stack of strange biomes (glitch, kaomoji, hell, horror...) ----------
@@ -1952,9 +1952,9 @@ function planetReached(sol) {
 }
 function buildPlanetLeg(i) {
   if (planetLegBuilt[i] || !PLANETS[i]) return; planetLegBuilt[i] = true;
-  try { inLevel(() => buildPlanetLegInner(i)); } catch (err) { console.error('[planet leg] build failed', err); }
+  jobs.push({ gen: buildPlanetLegGen(i), level: true });
 }
-function buildPlanetLegInner(i) {
+function* buildPlanetLegGen(i) {
   const spec = PLANETS[i], from = i === 0 ? marsInfo : planetInfo[i - 1]; if (!from) return;
   const hd = Math.atan2(from.uz, from.ux) + (i % 2 ? 0.28 : -0.28), ux = Math.cos(hd), uz = Math.sin(hd), px = -uz, pz = ux;
   const R = missionRandom(((levelSeed | 0) ^ (0x9100 + i * 977)) | 0), LANES = 3, PER = spec.per, r0 = 60, rise = 0.34, SEGS = 4;
@@ -1986,6 +1986,7 @@ function buildPlanetLegInner(i) {
   for (let L = 0; L < LANES; L++) {
     let d = r0 + L * 5;
     for (let n = 0; n < PER; n++) {
+      if (n % 24 === 0) yield;
       const t = n / PER, seg = Math.min(SEGS - 1, Math.floor(t * SEGS)), Z = segZones[seg];
       d += 10.5 + R() * 6.5; endD = Math.max(endD, d);
       const lat = env2(t) * amp[L] * Math.sin(d * freq[L] + ph[L]) + (R() - 0.5) * 5 * env2(t);
@@ -2042,7 +2043,7 @@ function buildPlanetLegInner(i) {
 }
 // THE ALIEN VOID: three weaving lanes of ~1000 mixed platforms (small, round, beams, movers, orbiters, pistons, crumblers) crossing and cross-linking
 // all the way to Mars, with drifting space-cities hanging underneath (rooftops you can land on) tethered to the lanes.
-function buildAlienRoute() {
+function* buildAlienRouteGen() {
   const { ux, uz, x: mx, y: my, z: mz } = moonInfo, px = -uz, pz = ux, R = missionRandom((levelSeed | 0) ^ 0x5EED), Z = ALIEN_ZONE;
   const LANES = 3, PER = 300, r0 = 70, rise = 0.34;
   const lanes = [], all = [];                                   // all = every placed platform centre (for overlap nudging and cross-links)
@@ -2070,6 +2071,7 @@ function buildAlienRoute() {
   for (let L = 0; L < LANES; L++) {
     let d = r0 + L * 5, prev = null;
     for (let i = 0; i < PER; i++) {
+      if (i % 24 === 0) yield;
       const t = i / PER, step = 10.5 + R() * 6.5;
       d += step; endD = Math.max(endD, d);
       const lat = env(t) * amp[L] * Math.sin(d * freq[L] + ph[L]) + (R() - 0.5) * 5 * env(t);
@@ -6704,7 +6706,7 @@ function runJobs(ms) {
   const t0 = performance.now();
   while (jobs.length && performance.now() - t0 < ms) {
     const j = jobs[0]; let r;
-    try { r = j.gen.next(); } catch (err) { console.error('[job] failed', err); jobs.shift(); continue; }
+    try { r = j.level ? inLevel(() => j.gen.next()) : j.gen.next(); } catch (err) { console.error('[job] failed', err); jobs.shift(); continue; }
     if (r.done) { jobs.shift(); if (j.done) { try { j.done(); } catch (err) { console.error('[job] done failed', err); } } }
   }
 }
@@ -8269,6 +8271,7 @@ function warpGo() {
   if (!warp.dest.length) { toast('WARP PAD offline — touch a checkpoint to unlock destinations', 2400); return; }
   const d = warp.dest[warp.sel = Math.min(warp.sel, warp.dest.length - 1)];
   if (d.key === 'mars' && !marsBuilt) buildMarsRoute();
+  flushJobs();                                                      // a warp lands on the finished route
   pos.set(d.x, d.y, d.z); vel.set(0, 0, 0); onGround = false; pounding = false; climbing = null; invuln = Math.max(invuln, 1.5);
   checkpoint = { x: d.x, y: d.y, z: d.z, zone: d.zone }; setZone(d.zone || null);
   flashWhite(); shockRing(pos, 8, 0x36f6ff); sfx.clear && sfx.clear();
@@ -8708,7 +8711,7 @@ res ${outputWidth}x${outputHeight} @${adaptRes.scale.toFixed(2)}x  ${retroPreset
       for (let i = 0; i < 15; i++) makeWalker(pos.x - Math.sin(camYaw) * 8 + (i % 5) * 2 - 4, pos.y, pos.z - Math.cos(camYaw) * 8 + ((i / 5) | 0) * 2 - 2, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, kinds[i % kinds.length]);
       clearInterval(PERF._fire); PERF._fire = setInterval(() => { atkPress = true; }, 150);        // keep the weapon firing
     },
-    alien() { this.spawn(); buildMarsRoute(); const m = moonInfo; pos.set(m.x + m.ux * 95, m.y + 6, m.z + m.uz * 95); camYaw = Math.atan2(m.ux, m.uz) + Math.PI; fpPitch = -0.12; },
+    alien() { this.spawn(); buildMarsRoute(); flushJobs(); const m = moonInfo; pos.set(m.x + m.ux * 95, m.y + 6, m.z + m.uz * 95); camYaw = Math.atan2(m.ux, m.uz) + Math.PI; fpPitch = -0.12; },
   },
 };
 window.__ng.linkGraph = () => linkGraphFn ? linkGraphFn() : null;
@@ -8725,6 +8728,7 @@ window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math
 window.__ng.roofArena = i => { const h = buildingHubs[i | 0]; if (!h) return null; pos.set(h.x + 2, h.top + 0.5, h.z + 2); vel.set(0, 0, 0); startRoofArena(h); return { top: h.top, hw: h.hw }; };
 window.__ng.arenaKill = () => { for (const a of roofArenas) for (const f of a.foes) { f.dead = true; f.hp = 0; if (f.mesh) f.mesh.visible = false; } };
 window.__ng.arenaState = () => roofArenas.map(a => ({ phase: a.phase, foes: a.foes.length, alive: a.foes.filter(f => !f.dead).length, done: a.done, name: a.name, muts: a.foes.map(f => f.mut).slice(0, 6), opened: a.hub.opened }));
+window.__ng.awaken = () => { const t = platforms.filter(q => q.merged && q.hw >= 3).sort((a, b) => Math.hypot(a.cx - pos.x, a.cz - pos.z) - Math.hypot(b.cx - pos.x, b.cz - pos.z))[0]; if (!t) return { ok: false }; const ch = t.merged, n0 = ch.meshes.length, m0 = ch.members.length; const r = awakenPlatform(t); return { ok: r, cellMembers: [m0, ch.members.length], cellMeshes: [n0, ch.meshes.length], inScene: t.grp.parent === lvl, stillMerged: !!t.merged }; };
 window.__ng.jobs = () => ({ pending: jobs.length });
 window.__ng.flushJobs = () => { flushJobs(); return true; };
 window.__ng.adapt = () => ({ ...adaptRes, pr: renderer.getPixelRatio() });
