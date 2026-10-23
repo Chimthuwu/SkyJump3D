@@ -4092,7 +4092,8 @@ let decalNext = 0, goreDirty = false;
 // record: [x, y, z, scaleX, scaleY, spin, colorIdx, normalX, normalZ]  (normal 0,0 = lies on a floor)
 function spawnGoreBlocked(x, y, z) { return activeStartHubs().some(h => Math.hypot(x - h.x, z - h.z) < (h.hw || TH) + 6 && y > h.top - 60); }
 function putDecal(r) {
-  if (spawnGoreBlocked(r[0], r[1], r[2])) return;          // home roofs stay clean, including old saved splatter
+  if (spawnGoreBlocked(r[0], r[1], r[2])) return;
+  if (!r[9]) r[9] = Date.now();                              // birth time: blood fades away after 5 minutes          // home roofs stay clean, including old saved splatter
   const i = decals.length < MAXDEC ? decals.length : decalNext++ % MAXDEC;
   if (decals.length < MAXDEC) decals.push(r); else decals[i] = r;
   dummy.position.set(r[0], r[1], r[2]); dummy.scale.set(r[3], r[4], 1);
@@ -4136,6 +4137,30 @@ function wallSplat(x, y, z, n, size) {
 }
 // ----- persistence: the mess stays on the map, even after a page reload -----
 const goreKey = () => 'towerdrop.gore.L' + level;
+const GORE_LIFE = 300000, GORE_FADE = 60000;                  // blood lasts 5 minutes; the last minute shrinks away
+function wipeSavedGore() { try { for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.indexOf('towerdrop.gore.') === 0) localStorage.removeItem(k); } } catch (_) {} }
+try { if (localStorage.getItem('towerdrop.goreV') !== '2') { wipeSavedGore(); localStorage.setItem('towerdrop.goreV', '2'); } } catch (_) {}      // one-time reset of all the old accumulated blood
+function wipeGore() {                                          // a new game starts clean: no decals, no resting gibs, nothing saved
+  decals.length = 0; decalMesh.count = 0; decalNext = 0;
+  for (const g of gibsList) { g.mesh.removeFromParent(); g.mesh.geometry.dispose(); } gibsList.length = 0;
+  wipeSavedGore(); goreDirty = false;
+}
+let goreFadeT = 4;
+function goreFadeTick(dt) {
+  goreFadeT -= dt; if (goreFadeT > 0) return; goreFadeT = 4;
+  const now = Date.now(), start = GORE_LIFE - GORE_FADE; let touched = false;
+  for (let i = 0; i < decals.length; i++) {
+    const r = decals[i]; if (r[3] === 0 || !r[9]) continue;
+    const age = now - r[9]; if (age < start) continue;
+    const k = Math.max(0, 1 - (age - start) / GORE_FADE);
+    dummy.position.set(r[0], r[1], r[2]); dummy.scale.set(r[3] * k, r[4] * k, 1);
+    if (r[7] === 0 && r[8] === 0) dummy.rotation.set(-Math.PI / 2, 0, r[5]); else dummy.rotation.set(0, Math.atan2(r[7], r[8]), r[5]);
+    dummy.updateMatrix(); decalMesh.setMatrixAt(i, dummy.matrix); touched = true;
+    if (k === 0) { r[3] = r[4] = 0; goreDirty = true; }
+  }
+  if (touched) decalMesh.instanceMatrix.needsUpdate = true;
+  for (let i = gibsList.length - 1; i >= 0; i--) { const g = gibsList[i]; if (g.born && now - g.born > GORE_LIFE) { g.mesh.removeFromParent(); g.mesh.geometry.dispose(); gibsList.splice(i, 1); goreDirty = true; } }
+}
 const rnd2 = v => Math.round(v * 100) / 100;
 function saveGore() {
   if (!goreDirty) return; goreDirty = false;
@@ -4148,7 +4173,7 @@ function saveGore() {
 function addRestingGib(p, dims, col, rot) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(dims[0], dims[1], dims[2]), lam(col));
   m.position.set(p[0], p[1], p[2]); m.rotation.set(rot[0], rot[1], rot[2]); lvl.add(m);
-  return { mesh: m, rest: true, dims, col, vel: new THREE.Vector3(), spin: new THREE.Vector3() };
+  return { mesh: m, rest: true, dims, col, born: Date.now(), vel: new THREE.Vector3(), spin: new THREE.Vector3() };
 }
 function loadGore() {
   try {
@@ -4182,7 +4207,7 @@ function spawnGibs(p, parts, n, force) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(dims[0], dims[1], dims[2]), lam(col));
     m.position.set(p.x + (Math.random() - 0.5) * 0.6, p.y + Math.random() * 0.6, p.z + (Math.random() - 0.5) * 0.6);
     lvl.add(m);
-    gibsList.push({ mesh: m, rest: false, dims, col,
+    gibsList.push({ mesh: m, rest: false, dims, col, born: Date.now(),
       vel: new THREE.Vector3((Math.random() - 0.5) * force, 4 + Math.random() * force * 0.8, (Math.random() - 0.5) * force),
       spin: new THREE.Vector3(Math.random() * 14 - 7, Math.random() * 14 - 7, Math.random() * 14 - 7) });
     if (gibsList.length > 420) { const o = gibsList.shift(); o.mesh.removeFromParent(); o.mesh.geometry.dispose(); }
@@ -4423,6 +4448,7 @@ addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('wheel', e => { if (state === 'play') { if (hotbarSel === 1) { hotbarSel = 0; updateHotbar(); } cycleWeapon(e.deltaY > 0 ? 1 : -1); } });
 addEventListener('keydown', e => { if (e.code === 'KeyE' && state === 'play' && hotbarSel === 1 && !eUsedProp && !hintProp && !hintNpc && !onVehicle) placeBlock(); });
 function begin() {
+  wipeGore();
   $('menu').style.display = 'none';
   initAudio();
   state = 'play'; showMsg('');
@@ -8729,6 +8755,9 @@ window.__ng.roofArena = i => { const h = buildingHubs[i | 0]; if (!h) return nul
 window.__ng.arenaKill = () => { for (const a of roofArenas) for (const f of a.foes) { f.dead = true; f.hp = 0; if (f.mesh) f.mesh.visible = false; } };
 window.__ng.arenaState = () => roofArenas.map(a => ({ phase: a.phase, foes: a.foes.length, alive: a.foes.filter(f => !f.dead).length, done: a.done, name: a.name, muts: a.foes.map(f => f.mut).slice(0, 6), opened: a.hub.opened }));
 window.__ng.awaken = () => { const t = platforms.filter(q => q.merged && q.hw >= 3).sort((a, b) => Math.hypot(a.cx - pos.x, a.cz - pos.z) - Math.hypot(b.cx - pos.x, b.cz - pos.z))[0]; if (!t) return { ok: false }; const ch = t.merged, n0 = ch.meshes.length, m0 = ch.members.length; const r = awakenPlatform(t); return { ok: r, cellMembers: [m0, ch.members.length], cellMeshes: [n0, ch.meshes.length], inScene: t.grp.parent === lvl, stillMerged: !!t.merged }; };
+window.__ng.gore = () => ({ decals: decals.length, live: decals.filter(r => r[3] > 0).length, gibs: gibsList.length, saved: Object.keys(localStorage).filter(k => k.indexOf('towerdrop.gore.L') === 0).length });
+window.__ng.goreSpill = () => { splatter(pos.x, pos.y, pos.z, 40, 6, 1.2); return decals.length; };
+window.__ng.goreAge = ms => { for (const r of decals) if (r[9]) r[9] -= ms; };
 window.__ng.jobs = () => ({ pending: jobs.length });
 window.__ng.flushJobs = () => { flushJobs(); return true; };
 window.__ng.adapt = () => ({ ...adaptRes, pr: renderer.getPixelRatio() });
@@ -8742,7 +8771,7 @@ renderer.setAnimationLoop(now => {
   else if (state === 'play') { playerUpdate(dt); if (P) PERF.lap('player'); updateEnemies(dt); if (P) PERF.lap('enemies'); updateShots(dt); if (P) PERF.lap('shots'); }
   else if (state === 'dead') { deadT -= dt; if (deadT <= 0) respawn(); if (net.on) { updateEnemies(dt); updateShots(dt); } }
   else if (state === 'clear') { updateEnemies(dt); clearT -= dt; if (clearT <= 0) nextLevel(); }
-  updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); evolveTick(dt); updateGrowers(dt); updateRoofArenas(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); updateClouds(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
+  updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); evolveTick(dt); updateGrowers(dt); updateRoofArenas(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); goreFadeTick(dt); updateClouds(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
   updateVisuals(dt); setHint(); if (P) PERF.lap('visuals+hud');
   if (guideDialogOpen && state !== 'play') closeGuideDialog(false);
   netTick(dt); updatePeers(dt); debugTick(dt); if (P) PERF.lap('net+peers+debug');
