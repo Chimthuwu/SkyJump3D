@@ -7515,6 +7515,16 @@ function moveSpecial(s, ox, oy, oz) {          // shift a platform (solid + visu
 }
 let blinkAlt = 0; const blinkGhostGeo = new Map();   // cache: ghost-box geometry shared by footprint size across thousands of blink platforms
 let crackMat = null; const crackGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+function ensureCrackMat() {                  // one shared cracked-glass texture; each cracked platform is just ONE extra quad. Factored out of
+  if (crackMat) return;                       // makeSpecial so the loading screen can warm it up before any 'crumble' platform is ever built.
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  const seedLine = () => { let x = 20 + Math.random() * 88, y = 20 + Math.random() * 88; g.beginPath(); g.moveTo(x, y);
+    for (let i = 0; i < 6; i++) { x += (Math.random() - 0.5) * 50; y += (Math.random() - 0.5) * 50; g.lineTo(x, y); } g.stroke(); };
+  g.lineCap = 'round';
+  g.strokeStyle = 'rgba(255,90,48,0.75)'; g.lineWidth = 7; for (let i = 0; i < 6; i++) seedLine();       // hot glow under the crack
+  g.strokeStyle = '#03030a'; g.lineWidth = 3; for (let i = 0; i < 9; i++) seedLine();                     // dark crack on top
+  crackMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+}
 function makeSpecial(s, kind, d) {
   if (s.cx !== undefined && activeStartHubs().some(h => Math.hypot(s.cx - h.x, s.cz - h.z) < 90 && s.top > h.top - 70)) return;      // the area around every home stays calm: no pistons/movers/crumblers next to spawn
   s.sp = { kind, ...d, base: baseOf(s), ox: 0, oy: 0, oz: 0, state: 'idle', t: 0 };
@@ -7549,15 +7559,7 @@ function makeSpecial(s, kind, d) {
   }
   else if (kind === 'crumble') {            // cracked, brittle-looking
     s.sp.col = m.color.getHex();                 // keeps its zone colour; the CRACKS are the warning
-    if (!crackMat) {                             // one shared cracked-glass texture; each cracked platform is just ONE extra quad
-      const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
-      const seedLine = () => { let x = 20 + Math.random() * 88, y = 20 + Math.random() * 88; g.beginPath(); g.moveTo(x, y);
-        for (let i = 0; i < 6; i++) { x += (Math.random() - 0.5) * 50; y += (Math.random() - 0.5) * 50; g.lineTo(x, y); } g.stroke(); };
-      g.lineCap = 'round';
-      g.strokeStyle = 'rgba(255,90,48,0.75)'; g.lineWidth = 7; for (let i = 0; i < 6; i++) seedLine();       // hot glow under the crack
-      g.strokeStyle = '#03030a'; g.lineWidth = 3; for (let i = 0; i < 9; i++) seedLine();                     // dark crack on top
-      crackMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
-    }
+    ensureCrackMat();
     const hw = (s.maxx - s.minx) / 2;
     const q = new THREE.Mesh(crackGeo, crackMat); q.scale.set(hw * 2, 1, hw * 2); q.rotation.y = (Math.random() * 4 | 0) * Math.PI / 2;
     q.position.set(s.cx, s.top + 0.08, s.cz); s.grp.add(q);
@@ -8684,10 +8686,23 @@ function preloadThen(go) {
       await step(15, 'MERGING PLATFORMS'); flushJobs();
       await step(45, 'COMPILING SHADERS');
       const hidden = []; scene.traverse(o => { if (!o.visible) { hidden.push(o); o.visible = true; } });
+      // Warm the canvas textures/materials that otherwise build lazily on first use during real play (bullseye target
+      // rings, crumble-platform cracks, Hellscape pentagram sigil) -- each one does canvas drawing + a CanvasTexture
+      // upload the FIRST time its platform/decal kind appears, which can show up as a one-time hitch mid-game. Build
+      // them now, parked off-world under the loading overlay, so by the time one of these specials spawns for real
+      // the material/texture already exists and only cheap mesh instancing is left on the hot path.
+      const warmObjs = [];
+      try {
+        warmObjs.push(addBullseye(0, -5000, 0, 1));
+        ensureCrackMat();
+        const cq = new THREE.Mesh(crackGeo, crackMat); cq.position.set(0, -5000, 0); scene.add(cq); warmObjs.push(cq);
+        const pent = pentagramDecal(4); pent.position.set(0, -5000, 0); scene.add(pent); warmObjs.push(pent);
+      } catch (err) { console.warn('[preload] texture warmup failed', err); }
       try { renderer.compile(scene, camera); } catch (err) { console.warn('[preload] compile failed', err); }
       for (const o of hidden) o.visible = false;
       await step(80, 'WARMING UP');
       renderer.render(scene, camera);
+      for (const o of warmObjs) scene.remove(o);       // shared geometry/material caches (bullGeo/bullMat/crackGeo/crackMat/pentTexCache) stay alive for real use
       await step(100, 'READY');
     } catch (err) { console.warn('[preload] skipped', err); }
     preloadThen.done = true; el.style.display = 'none'; go();
