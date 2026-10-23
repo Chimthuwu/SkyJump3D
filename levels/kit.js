@@ -40,7 +40,7 @@ export function createKit(host) {
     },
     // bounce pad: same solid flags the game's own trampolines use (`bounce`, `boost`)
     bouncePad(cx, top, cz, size = 4, boost = 26, color = 0xffd23a) {
-      const s = kit.slab(cx, top, cz, size, size, 0.6, color, { bounce: true, boost }); return s;
+      const s = kit.slab(cx, top, cz, size, size, 0.5, color, { bounce: true, boost }); return s;      // 0.5 m: low enough for the game's 0.55 m step-up
     },
     // checkpoint: flat pad flagged exactly like the game's own checkpoint solids (physicsStep records it)
     checkpoint(cx, top, cz, color = 0x36f6ff) {
@@ -122,8 +122,12 @@ export function reach(kind, dy) {
 export function lintGraph(nodes, edges) {
   const bad = [];
   for (const e of edges) {
-    if (e.kind === 'walk') { if (e.gap > 0.3 || e.dy > 0.5) bad.push({ ...e, why: 'walk edge with gap/rise' }); continue; }
-    if (e.kind === 'pad' || e.kind === 'lift') continue;
+    if (e.kind === 'walk') { if (e.gap > 0.3 || (e.dy > 0.5 && !e.ramp)) bad.push({ ...e, why: 'walk edge with gap/rise' }); continue; }
+    if (e.kind === 'pad') {                                  // bounce pad: apex must clear dy with 1 m to spare; horizontal reach = steering while airborne
+      const b = e.boost || 26, H = b * b / (2 * G); if (e.dy > H - 1) { bad.push({ ...e, why: `pad apex ${H.toFixed(1)} < dy ${e.dy}+1` }); continue; }
+      const t = (b + Math.sqrt(Math.max(0, b * b - 60 * e.dy))) / G, r = 9 * t * 0.6; if (e.gap > r) bad.push({ ...e, why: `pad gap ${e.gap} > reach ${r.toFixed(1)}` }); continue;
+    }
+    if (e.kind === 'lift') continue;
     const r = reach(e.kind, e.dy); if (e.gap > r) bad.push({ ...e, why: `gap ${e.gap} > reach ${r.toFixed(2)}` });
   }
   return bad;

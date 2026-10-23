@@ -1420,7 +1420,7 @@ function updateMawDrips(dt) {
 let mawCd = 40, ambientCd = 4;
 function mawTick(dt) {
   updateMawDrips(dt);
-  if (state !== 'play' || paused || inInterior || net.on) return;
+  if (state !== 'play' || paused || inInterior || net.on || activeSpec) return;      // LEVELKIT:AMBIENT (specs own their encounters)
   if (activeStartHubs().some(h => Math.hypot(pos.x - h.x, pos.z - h.z) < h.hw + 70 && pos.y > h.top - 80)) return;      // never over a home roof
   mawCd -= dt; if (mawCd > 0) return;
   mawCd = 55 + Math.random() * 60;
@@ -1431,7 +1431,7 @@ function mawTick(dt) {
 }
 // the world should never feel empty: top up wild enemies on ledges around the player (never near a home roof)
 function ambientPopTick(dt) {
-  ambientCd -= dt; if (ambientCd > 0 || state !== 'play' || paused || inInterior) return;
+  ambientCd -= dt; if (ambientCd > 0 || state !== 'play' || paused || inInterior || activeSpec) return;      // LEVELKIT:AMBIENT
   ambientCd = 5 + Math.random() * 4;
   if (net.on && !net.host) return;
   if (activeStartHubs().some(h => Math.hypot(pos.x - h.x, pos.z - h.z) < 80 && pos.y > h.top - 80)) return;
