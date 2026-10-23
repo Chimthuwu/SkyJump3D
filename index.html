@@ -873,6 +873,8 @@ const WALKER_STATS = {
   demon:    { hp: 7, sp: 2.6, pts: 190, col: 0x7a0a0a },
   kaomoji:  { hp: 2, sp: 2.2, pts: 80,  col: 0xffc8ee },
   glitchling:{ hp: 2, sp: 3.2, pts: 90, col: 0x39ff88 },
+  raver:    { hp: 3, sp: 3.0, pts: 90, col: 0xff3fc8 },
+  crab:     { hp: 3, sp: 2.4, pts: 90, col: 0xe8704a },
 };
 const faceTex = {};
 const KAO_FACES = ['(*´ω｀*)', 'ヾ(＠⌒ー⌒＠)ノ', '((+_+))', '(◕‿◕)', 'ヽ(`Д´)ﾉ', '(╬ಠ益ಠ)', '(ಠ_ಠ)', '(¬_¬)', '(☉_☉)', '(⊙﹏⊙)'];
@@ -900,8 +902,8 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
   const V = WALKER_STATS[variant] || WALKER_STATS.walker;
   if (variant === 'charger') scale *= 1.25;
   const biomeName = plat && plat.zone ? plat.zone.name : null;
-  const biomeAccent = ({ Jungle: 0x91e85a, Psychedelic: 0xf13be8, Frozen: 0x91edff, Inferno: 0xff572b, Storm: 0x71aaff, Horror: 0xb20e35, Hellscape: 0xff2a10, Glitch: 0x39ff88, Kaomoji: 0xff8ad8, 'Alien Void': 0x7dff4a })[biomeName] || 0x20dff0;
-  const biomeBody = { Jungle: 0x52783a, Frozen: 0x5f9caa, Inferno: 0x9a3b28, Storm: 0x455f91, Horror: 0x682638, Psychedelic: 0x713b91, Hellscape: 0x1a0808, Glitch: 0x0a3a20, Kaomoji: 0xffc8ee };
+  const biomeAccent = ({ Rave: 0xff3fc8, Beach: 0x36f6ff, Jungle: 0x91e85a, Psychedelic: 0xf13be8, Frozen: 0x91edff, Inferno: 0xff572b, Storm: 0x71aaff, Horror: 0xb20e35, Hellscape: 0xff2a10, Glitch: 0x39ff88, Kaomoji: 0xff8ad8, 'Alien Void': 0x7dff4a })[biomeName] || 0x20dff0;
+  const biomeBody = { Rave: 0x2a0f5e, Beach: 0xe8704a, Jungle: 0x52783a, Frozen: 0x5f9caa, Inferno: 0x9a3b28, Storm: 0x455f91, Horror: 0x682638, Psychedelic: 0x713b91, Hellscape: 0x1a0808, Glitch: 0x0a3a20, Kaomoji: 0xffc8ee };
   const mat = retroMaterial(new THREE.MeshLambertMaterial({ color: biomeBody[biomeName] || V.col }));
   const dark = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x14141c }));
   const steel = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x5a6578 }));
@@ -1019,6 +1021,20 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
     for (const side of [-1, 1]) { add(new THREE.SphereGeometry(0.17, 6, 5), side * 0.32, 0.12, 0.1, mat); add(new THREE.SphereGeometry(0.1, 5, 4), side * 0.68, 0.85, 0, mat); }
     const faceS = new THREE.Sprite(new THREE.SpriteMaterial({ map: kaoTexture(KAO_FACES[(rand() * KAO_FACES.length) | 0]), transparent: true, depthTest: true }));
     faceS.scale.set(2.2, 0.83, 1); faceS.position.set(0, 1.0, 0.1); g.add(faceS); g.userData.face = faceS;
+  } else if (variant === 'raver') {      // Rave biome: skinny dancer, neon shades, mohawk and a glowstick in each hand
+    add(new THREE.BoxGeometry(0.4, 0.62, 0.26), 0, 0.95, 0, mat); add(new THREE.SphereGeometry(0.22, 8, 6), 0, 1.5, 0, mat);
+    add(new THREE.BoxGeometry(0.34, 0.09, 0.08), 0, 1.52, 0.2, neonCyan); add(new THREE.ConeGeometry(0.1, 0.42, 4), 0, 1.86, -0.02, neonMag);
+    for (const side of [-1, 1]) {
+      add(new THREE.BoxGeometry(0.12, 0.56, 0.12), side * 0.13, 0.3, 0, dark); add(new THREE.BoxGeometry(0.1, 0.5, 0.1), side * 0.3, 1.02, 0.06, mat);
+      const gs = add(new THREE.CylinderGeometry(0.035, 0.035, 0.6, 5), side * 0.38, 1.42, 0.2, side < 0 ? neonMag : neonCyan); gs.rotation.z = side * 0.55;
+    }
+  } else if (variant === 'crab') {        // Beach biome: wide shell, eye stalks, two big claws, side legs
+    const shell = add(new THREE.SphereGeometry(0.6, 8, 6), 0, 0.45, 0, mat); shell.scale.set(1.3, 0.6, 1);
+    for (const side of [-1, 1]) {
+      add(new THREE.CylinderGeometry(0.04, 0.04, 0.3, 4), side * 0.2, 0.92, 0.42, dark); add(new THREE.SphereGeometry(0.09, 6, 4), side * 0.2, 1.1, 0.42, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      add(new THREE.BoxGeometry(0.5, 0.12, 0.12), side * 0.78, 0.5, 0.45, mat); const claw = add(new THREE.ConeGeometry(0.22, 0.5, 5), side * 1.05, 0.52, 0.72, mat); claw.rotation.x = Math.PI / 2;
+      for (let k = 0; k < 3; k++) { const leg = add(new THREE.BoxGeometry(0.5, 0.06, 0.06), side * 0.85, 0.2, -0.25 + k * 0.25, dark); leg.rotation.z = side * 0.5; }
+    }
   } else if (variant === 'glitchling') { // Glitch biome: unstable cluster of neon cubes that will not hold still
     for (let i = 0; i < 7; i++) {
       const cm = new THREE.MeshBasicMaterial({ color: [0x39ff88, 0xff2bd6, 0x2be8ff, 0xffffff][i % 4] });
@@ -1229,6 +1245,8 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
   if (variant === 'demon') { e.h = 2.8 * scale; e.r = 1.0 * scale; e.growlCd = 1 + rand() * 2; e.slamCd = 2 + rand() * 2; e.slamWind = 0; }
   if (variant === 'kaomoji') { e.h = 1.6 * scale; e.r = 0.7 * scale; e.hopT = rand() * 1.5; e.hopY = 0; }
   if (variant === 'glitchling') { e.h = 1.9 * scale; e.r = 0.7 * scale; }
+  if (variant === 'raver') { e.h = 1.95 * scale; e.r = 0.55 * scale; }
+  if (variant === 'crab') { e.h = 0.95 * scale; e.r = 0.85 * scale; }
   if (variant === 'alien') { e.h = 2.0 * scale; e.r = 0.6 * scale; }
   if (variant === 'rider') { e.h = 1.5 * scale; e.r = 0.95 * scale; e.speed = 6.2; }
   if (isBoss) { e.h = Math.max(e.h, 2.2 * scale); e.r = Math.max(e.r, 0.95 * scale); }
@@ -1525,7 +1543,7 @@ function spawnEvolutionPack(zone) {
     spawnBiomeEnemy(x, pos.y, z, plat, zone, 0.75);
   }
   const evolved = zone.name === 'Jungle' ? 'dinosaurs' : zone.name === 'Frozen' ? 'cryo raptors' : zone.name === 'Inferno' ? 'furnace fiends'
-    : zone.name === 'Storm' ? 'ion phantoms' : zone.name === 'Horror' ? 'grave stalkers' : zone.name === 'Psychedelic' ? 'prism wraiths' : 'creatures';
+    : zone.name === 'Storm' ? 'ion phantoms' : zone.name === 'Horror' ? 'grave stalkers' : zone.name === 'Psychedelic' ? 'prism wraiths' : zone.name === 'Rave' ? 'glowstick ravers' : zone.name === 'Beach' ? 'angry crabs' : 'creatures';
   toast(`${zone.name.toUpperCase()} EVOLVES — ${evolved} moving in`, 2200);
   shockRing(pos, 12, zone.plate);
 }
@@ -1792,7 +1810,7 @@ function unlockPortal(p, quiet) {                 // a dormant gate materialises
 }
 const clusterThemes = {
   Psychedelic: 'NEON', Jungle: 'CANOPY', Frozen: 'GLACIER',
-  Inferno: 'EMBER', Storm: 'THUNDER', Horror: 'GRAVE',
+  Inferno: 'EMBER', Storm: 'THUNDER', Horror: 'GRAVE', Rave: 'DISCO', Beach: 'LAGOON',
 };
 function buildRouteCluster(anchor, ux, uz, zone) {
   zone = zone || pickAmbientZone();
@@ -1837,7 +1855,7 @@ function buildHubPortalLoop(hubs) {
     const homeRoof = hub.kind === 'start';     // home roofs use their own routes; a dormant gate here could never wake
     const x = hub.kind === 'arena' ? hub.bull[0] : hub.x;
     const z = hub.kind === 'arena' ? hub.bull[1] : hub.z;
-    const zoneLabel = hub.zone ? ({ Psychedelic: 'PSY', Jungle: 'JUNGLE', Frozen: 'ICE', Inferno: 'EMBER', Storm: 'STORM', Horror: 'CRYPT' }[hub.zone.name] || 'ZONE') : 'CITY';
+    const zoneLabel = hub.zone ? ({ Psychedelic: 'PSY', Jungle: 'JUNGLE', Frozen: 'ICE', Inferno: 'EMBER', Storm: 'STORM', Horror: 'CRYPT', Rave: 'RAVE', Beach: 'BEACH' }[hub.zone.name] || 'ZONE') : 'CITY';
     const label = hub.kind === 'arena' ? hub.type.toUpperCase() : hub.kind === 'start' ? `HOME ${hub.slot + 1}` : hub.kind === 'exit' ? 'STREET' : `${zoneLabel} ROOF`;
     const color = portalColors[i % portalColors.length];
     if (!homeRoof && !portalNearHome(x, hub.top, z)) addPortal(x, hub.top, z, color, `${label} GATE`, hub);
@@ -2550,14 +2568,15 @@ function buildNetwork(exitAngle) {
   const nAu = Math.max(3, Math.round(nA * 0.45)), nBu = Math.max(4, Math.round(nB * 0.45));
   const types = ARENA_TYPES.slice(); for (let i = types.length - 1; i > 0; i--) { const j = (rand() * (i + 1)) | 0; [types[i], types[j]] = [types[j], types[i]]; }
 const prevActiveZone = () => activeZ;   // biome-evolution helper (used by setZone crossings)
-const zoneForRegion = region => biomeForRegion(level, region);
-  const regionSpan = level <= 4 ? 12 : Math.max(6, 12 - Math.floor((level - 4) / 2));
+const EARLY_BIOMES = ['Jungle', 'Beach', 'Rave', 'Jungle'];
+const zoneForRegion = (region, i = 0, slot = 0) => level <= 2 ? ZONES.find(z => z.name === EARLY_BIOMES[(i + slot) % EARLY_BIOMES.length]) : biomeForRegion(level, region);      // early levels mix the common biomes per building instead of one region-wide biome
+  const regionSpan = level <= 2 ? 3 : level <= 4 ? 12 : Math.max(6, 12 - Math.floor((level - 4) / 2));
   const regionForHub = i => Math.floor(Math.max(0, i - 1) / regionSpan);
   const biomeBands = ZONES.filter(zone => zone.name !== 'Jungle' && zone.name !== 'Psychedelic').length;
   for (let slot = 0; slot < HOME_SLOT_COUNT; slot++) {
     const centre = universeCentre(slot), want = [];
-    for (let i = 0; i < nAu; i++) { const region = regionForHub(i + 1); want.push({ arena: true, type: types[(i + slot * 3) % types.length], region, zone: zoneForRegion(region) }); }
-    for (let i = 0; i < nBu; i++) { const region = regionForHub(nAu + i + 1); want.push({ arena: false, region, zone: zoneForRegion(region) }); }
+    for (let i = 0; i < nAu; i++) { const region = regionForHub(i + 1); want.push({ arena: true, type: types[(i + slot * 3) % types.length], region, zone: zoneForRegion(region, i, slot) }); }
+    for (let i = 0; i < nBu; i++) { const region = regionForHub(nAu + i + 1); want.push({ arena: false, region, zone: zoneForRegion(region, nAu + i, slot) }); }
     for (const w of want) {
       const ext = w.arena ? ((w.type === 'gauntlet' || w.type === 'runway') ? 46 : (w.type === 'ring' || w.type === 'reactor') ? 32 : 26) : 20;
       for (let tries = 0; tries < 250; tries++) {
@@ -5204,6 +5223,8 @@ const ZONES = [   // beauty pass: lifted fog density, stronger suns, richer mid-
   { name: 'Hellscape',   desc: 'you went down far enough - brimstone, sigils and things that burn', top: '#120000', mid: '#4a0000', bot: '#ff3a00', fog: 0x4a0a00, hemi: 0.65, hemiCol: 0xff4a2a, sun: 0.7, sunCol: 0xff3a10, cloud: 0x3a0500, plate: 0xff1a1a, weather: 'hellfire', outline: true, sky: 0.8 },
   { name: 'Glitch',      desc: 'the simulation is failing - nothing stays where you left it', top: '#000a04', mid: '#04210f', bot: '#ff00aa', fog: 0x062a14, hemi: 0.75, hemiCol: 0x39ff88, sun: 0.6, sunCol: 0xff2bd6, cloud: 0x0a3a20, plate: 0x39ff88, weather: 'glitch', sky: 0.8 },
   { name: 'Kaomoji',     desc: '(*´ω｀*) everyone is very happy to see you ヽ(`Д´)ﾉ', top: '#ff9ee0', mid: '#c8a8ff', bot: '#9ff0ff', fog: 0xe9b4ff, hemi: 0.95, hemiCol: 0xffe0f4, sun: 0.9, sunCol: 0xfff0b0, cloud: 0xffffff, plate: 0xff8ad8, weather: 'petals', sky: 0.85 },
+  { name: 'Beach',       desc: 'a tropical island - sun, sand and very territorial crabs', top: '#2b9cf0', mid: '#7fd6ff', bot: '#ffe7a6', fog: 0x9fe2ff, hemi: 0.95, hemiCol: 0xfff2cc, sun: 1.0, sunCol: 0xffe9a8, cloud: 0xffffff, plate: 0xffd98a, weather: 'sunbits', sky: 0.85 },
+  { name: 'Rave',        desc: 'the sky is a nightclub - lasers, disco balls and glowstick monkeys', top: '#08001a', mid: '#3a0a7a', bot: '#ff2bd6', fog: 0x2a0a56, hemi: 0.7, hemiCol: 0xd88fff, sun: 0.7, sunCol: 0xff3fc8, cloud: 0x5a1a9a, plate: 0xff3fc8, weather: 'confetti', sky: 0.8 },
   { name: 'Horror',      desc: 'the fog remembers every death - the dead are listening', top: '#0a0310', mid: '#33101e', bot: '#8e1c2e', fog: 0x43101e, hemi: 0.4, hemiCol: 0x9c3050, sun: 0.3, sunCol: 0xd84560, cloud: 0x2c1420, plate: 0xb83550, weather: 'ash' },
 ];
 const BIOME_ENEMIES = {
@@ -5216,6 +5237,8 @@ const BIOME_ENEMIES = {
   Hellscape: ['demon', 'demon', 'infernal', 'infernal', 'charger', 'bomber', 'skeleton'],
   Glitch: ['glitchling', 'glitchling', 'glitchling', 'gunner', 'drone', 'stalker'],
   Kaomoji: ['kaomoji', 'kaomoji', 'kaomoji', 'kaomoji', 'gunner', 'drone'],
+  Beach: ['crab', 'crab', 'crab', 'frog', 'gunner', 'drone'],
+  Rave: ['raver', 'raver', 'raver', 'gunner', 'drone', 'walker'],
   'Alien Void': ['alien', 'alien', 'alien', 'ufo', 'ufo', 'bomber'],
 };
 function pickAmbientZone(region = 0) {
@@ -5224,7 +5247,7 @@ function pickAmbientZone(region = 0) {
   return biomeForRegion(level, region) || standard[(rand() * standard.length) | 0];
 }
 function biomeForRegion(levelNumber, regionIndex) {
-  if (levelNumber <= 2) return ZONES.find(z => z.name === 'Jungle');
+  if (levelNumber <= 2) { const early = ['Jungle', 'Beach', 'Rave']; return ZONES.find(z => z.name === early[((regionIndex | 0) % 3 + 3) % 3]); }      // the common early-game biomes
   const laterBiomes = ZONES.filter(z => z.name !== 'Jungle');
   const regionGroup = levelNumber < 6 ? 2 : 1;
   const offset = levelNumber === 3 ? laterBiomes.length - 1 : levelNumber - 4;
@@ -5248,6 +5271,8 @@ const WEATHER = {
   hellfire:{ vx: 1, vy: 8, size: 4.6, color: 0xff2a10, op: 0.95, sway: 1.2 },
   glitch:  { vx: 0, vy: -2, size: 4.2, color: 0x39ff88, op: 0.9, sway: 5 },
   petals:  { vx: 1.5, vy: -3.2, size: 5.4, color: 0xffb7e6, op: 0.95, sway: 2.2 },
+  sunbits: { vx: 1.2, vy: -1.2, size: 3.6, color: 0xfff2a8, op: 0.8, sway: 2.6 },
+  confetti:{ vx: 0.8, vy: -4.5, size: 4.6, color: 0xff5ad8, op: 0.95, sway: 3.4 },
 };
 const mkCol = () => new THREE.Color();
 const env = { top: mkCol(), mid: mkCol(), bot: mkCol(), fog: mkCol(), hemiCol: mkCol(), sunCol: mkCol(), cloud: mkCol(), hemi: 1, sun: 1 };
@@ -5378,6 +5403,11 @@ function updateEnv(dt, cp) {
     const h = performance.now() / 1000 * 0.07;
     goal.top.setHSL(h % 1, 0.9, 0.16); goal.mid.setHSL((h + 0.33) % 1, 0.9, 0.42); goal.bot.setHSL((h + 0.66) % 1, 0.95, 0.6);
     goal.fog.setHSL((h + 0.15) % 1, 0.8, 0.32); goal.cloud.setHSL((h + 0.5) % 1, 0.9, 0.7);
+  }
+  if (!inInterior && activeZ && activeZ.name === 'Rave') {             // the whole sky is a light show: hues swing round and flash on every kick
+    const h = performance.now() / 1000 * 0.12;
+    goal.top.setHSL(h % 1, 0.9, 0.08 + 0.05 * ravePulse); goal.mid.setHSL((h + 0.3) % 1, 0.9, 0.28 + 0.12 * ravePulse); goal.bot.setHSL((h + 0.6) % 1, 1, 0.45 + 0.15 * ravePulse);
+    goal.fog.setHSL((h + 0.1) % 1, 0.8, 0.2 + 0.1 * ravePulse); goal.cloud.setHSL((h + 0.5) % 1, 0.9, 0.5);
   }
   if (!inInterior && activeZ && activeZ.name === 'Jungle') {           // jungle sky breathes: hue drifts slowly through greens
     const h = 0.32 + Math.sin(performance.now() / 1000 * 0.13) * 0.045;
@@ -5734,6 +5764,14 @@ function playerUpdate(dt) {
 // ---------- THE FUNK: a procedural live-band (drums, slap bass, chord stabs, licks) that changes key/tempo per zone ----------
 // Scheduler with look-ahead on the WebAudio clock. Intensity rises near enemies and in free-fall; space strips it down to a pad + arp.
 let musicOn = false, musicBus = null, musicNext = 0, musicStep = 0;
+let ravePulse = 0;                       // 1 on each kick, decaying: drives the Rave biome's lights
+const beatQ = [];                        // scheduled beat start times [audioTime, duration] (filled by musicTick)
+function raveBeat() {
+  let ph;
+  if (actx && musicOn && !muted && beatQ.length) { const now = actx.currentTime; let b = null; for (const q of beatQ) if (q[0] <= now) b = q; ph = b ? clamp((now - b[0]) / b[1], 0, 1) : 0.5; }
+  else ph = (performance.now() / 1000 * (128 / 60)) % 1;
+  return Math.exp(-ph * 4.5);
+}
 const MUSIC = {          // root MIDI note, bpm, scale intervals, swing, drum placement
   city:        { root: 45, bpm: 108, sc: [0, 3, 5, 7, 10], sw: 0.12, kick: [0, 6, 10], snare: [4, 12] },
   Psychedelic: { root: 50, bpm: 118, sc: [0, 2, 3, 7, 9],  sw: 0.18, kick: [0, 3, 8, 11], snare: [4, 12] },
@@ -5741,6 +5779,8 @@ const MUSIC = {          // root MIDI note, bpm, scale intervals, swing, drum pl
   Frozen:      { root: 45, bpm: 96,  sc: [0, 2, 3, 7, 8],  sw: 0.08, kick: [0, 8], snare: [12] },
   Inferno:     { root: 48, bpm: 126, sc: [0, 1, 4, 5, 7],  sw: 0.1,  kick: [0, 2, 4, 6, 8, 10, 12, 14], snare: [4, 12] },
   Storm:       { root: 41, bpm: 112, sc: [0, 3, 5, 6, 7],  sw: 0.14, kick: [0, 7, 10], snare: [4, 12] },
+  Rave:        { root: 50, bpm: 128, sc: [0, 2, 4, 7, 9], sw: 0.0, kick: [0, 4, 8, 12], snare: [4, 12] },
+  Beach:       { root: 55, bpm: 104, sc: [0, 2, 4, 7, 9], sw: 0.2, kick: [0, 6, 10], snare: [4, 12] },
   Horror:      { root: 35, bpm: 84,  sc: [0, 1, 3, 6, 7],  sw: 0.05, kick: [0, 10], snare: [12] },
 };
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
@@ -5775,6 +5815,7 @@ function musicTick(dt) {
   if (musicNext < now - 0.5) musicNext = now + 0.05;
   while (musicNext < now + 0.25) {
     const i = musicStep % 16, t = musicNext + ((i % 2) ? stepDur * M.sw : 0), deg = n => M.root + M.sc[((n % 5) + 5) % 5] + 12 * Math.floor(n / 5);
+    if (i % 4 === 0) { beatQ.push([t, stepDur * 4]); if (beatQ.length > 6) beatQ.shift(); }
     const bar = Math.floor(musicStep / 16) % 4, shift = [0, 0, 3, 2][bar];                          // i - i - iv - bVII feel (scale degrees)
     if (sk < 0.5) {
       if (M.kick.includes(i)) musicHit(t, 'kick');
@@ -7486,7 +7527,7 @@ function updateSpecials(dt) {
       const cyc = (T / 3) % 1, ph2 = sp.alt ? (cyc + 0.5) % 1 : cyc, on = ph2 < 0.5, warn = on && ph2 > 0.37;
       if (on !== sp.on) {
         sp.on = on;
-        if (on) { solids.push(s); sfx.click && sfx.click(); } else { const i2 = solids.indexOf(s); if (i2 >= 0) solids.splice(i2, 1); }
+        if (on) { solids.push(s); if (Math.hypot(s.cx - pos.x, s.cz - pos.z) < 16 && Math.abs(s.top - pos.y) < 16) sfx.click && sfx.click(); } else { const i2 = solids.indexOf(s); if (i2 >= 0) solids.splice(i2, 1); }
         solidsVer++; if (sp.ghost) sp.ghost.visible = !on;
       }
       s.grp.visible = on && (!warn || Math.floor(performance.now() / 70) % 2 === 0);
@@ -7672,6 +7713,51 @@ function dressSite(site, zone) {
       sp.scale.set(3.4, 1.3, 1); add(sp, x, y0, z); anims.push({ k: 'bob', m: sp, y0, ph: r() * 6 });
     }
     for (let i = 0, c = n(2, big ? 6 : 3); i < c; i++) { const [x, z] = spot(); for (let k = 0; k < 3; k++) add(new THREE.Mesh(GG('puffG', () => new THREE.SphereGeometry(1, 8, 6)), puff), x + (k - 1) * 0.9, 0.55 + (k === 1 ? 0.35 : 0), z).scale.set(0.9, 0.7, 0.9); }
+  } else if (zone.name === 'Rave') {
+    const NEON = [0xff3fc8, 0x36f6ff, 0x7dff4a, 0xffe03a];
+    for (let i = 0, c = Math.min(9, Math.max(4, Math.floor(site.hw * site.hd / 6))); i < c; i++) {                // dance floor: colour-cycling tiles that flash on the beat
+      const [x, z] = spot(), t = new THREE.Mesh(GG('raveTile', () => new THREE.BoxGeometry(1.5, 0.05, 1.5)), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false })); add(t, x, 0.06, z); anims.push({ k: 'tile', m: t, ph: i * 0.17 });
+    }
+    for (let i = 0, c = big ? 2 : 1; i < c; i++) {                                                              // disco ball on a wire
+      const [bx, bz] = spot(), by = 5 + r() * 2.5, rod = new THREE.Mesh(GG('raveRod', () => new THREE.CylinderGeometry(0.03, 0.03, 1, 4)), MM('raveRodM', () => basicC(0x8890a8))); add(rod, bx, by + 4, bz).scale.set(1, 8, 1);
+      const ball = new THREE.Mesh(GG('raveBall', () => new THREE.IcosahedronGeometry(1, 1)), new THREE.MeshLambertMaterial({ color: 0xe8eeff, flatShading: true, emissive: 0x5a5a9a })); add(ball, bx, by, bz); anims.push({ k: 'disco', m: ball, ph: r() * 6 });
+    }
+    for (let i = 0, c = n(2, big ? 5 : 3); i < c; i++) {                                                        // sweeping lasers
+      const [x, z] = spot(), grp = new THREE.Group(), geo = GG('raveBeam', () => new THREE.CylinderGeometry(0.045, 0.045, 18, 4).translate(0, 9, 0));
+      grp.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xff3fc8, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })));
+      add(grp, x, 0.3, z); grp.rotation.z = 0.5 + r() * 0.7; grp.rotation.y = r() * 6.28; anims.push({ k: 'laser', m: grp, sp: (r() < 0.5 ? -1 : 1) * (0.5 + r() * 1.1), ph: r() * 6 });
+    }
+    for (let i = 0, c = n(1, 2); i < c; i++) {                                                                  // speaker stacks that thump
+      const [x, z] = spot(), sp = new THREE.Group(), body = new THREE.Mesh(GG('spkB', () => new THREE.BoxGeometry(0.9, 1.5, 0.8)), MM('spkM', () => lamC(0x15101e))); body.position.y = 0.75; sp.add(body);
+      for (const yy of [0.45, 1.1]) { const cone = new THREE.Mesh(GG('spkC', () => new THREE.CircleGeometry(0.3, 12)), MM('spkG', () => basicC(0xff3fc8))); cone.position.set(0, yy, 0.41); sp.add(cone); }
+      add(sp, x, 0, z); sp.rotation.y = r() * 6.28; anims.push({ k: 'beat', m: sp });
+    }
+    const dropRaveMonkey = () => {                                                                              // monkeys with glowsticks
+      const [x, z] = spot(), mk = makeMonkey();
+      for (const arm of [mk.armL, mk.armR]) { const gs = new THREE.Mesh(GG('gsG', () => new THREE.CylinderGeometry(0.04, 0.04, 0.5, 5)), new THREE.MeshBasicMaterial({ color: NEON[(r() * 4) | 0], toneMapped: false })); gs.position.set(0, -0.32, 0.1); gs.rotation.x = 1.2; arm.add(gs); }
+      add(mk.g, x, 0, z); anims.push({ k: 'monkey', mk, ph: r() * 6, bx: x, bz: z, ix: inX, iz: inZ, t: r() * 2, hop: 0, tx: x, tz: z });
+    };
+    dropRaveMonkey(); if (r() < 0.7) dropRaveMonkey(); if (big) { dropRaveMonkey(); dropRaveMonkey(); }
+  } else if (zone.name === 'Beach') {
+    const trunkM = MM('palmT', () => lamC(0x9a6a3a)), frondM = MM('palmL', () => lamC(0x2fc46a)), frondG = GG('palmFrond', () => new THREE.BoxGeometry(2.6, 0.06, 0.5));
+    for (let i = 0, c = n(1, big ? 5 : 3); i < c; i++) {                                                        // palm trees
+      const [x, z] = spot(), h = 3.2 + r() * 2.6, lean = (r() - 0.5) * 0.5;
+      const tr = add(new THREE.Mesh(GG('palmTrunk', () => new THREE.CylinderGeometry(0.14, 0.24, 1, 6)), trunkM), x, h / 2, z); tr.scale.set(1, h, 1); tr.rotation.z = lean;
+      const crown = new THREE.Group(); add(crown, x - Math.sin(lean) * h / 2, h / 2 + Math.cos(lean) * h / 2, z);
+      for (let k = 0; k < 6; k++) { const a = k / 6 * 6.2832, f = new THREE.Mesh(frondG, frondM); f.position.set(Math.cos(a) * 1.2, -0.1, Math.sin(a) * 1.2); f.rotation.set(0, -a, -0.35); crown.add(f); }
+      for (let k = 0; k < 3; k++) { const cn = new THREE.Mesh(GG('coco', () => new THREE.SphereGeometry(0.13, 6, 5)), MM('cocoM', () => lamC(0x5a3a1a))); cn.position.set((k - 1) * 0.22, -0.25, 0.1 * k); crown.add(cn); }
+      anims.push({ k: 'sway', m: crown, ph: r() * 6 });
+    }
+    for (let i = 0, c = n(0, big ? 3 : 1); i < c; i++) {                                                        // beach umbrellas
+      const [x, z] = spot(), pole = new THREE.Mesh(GG('umbP', () => new THREE.CylinderGeometry(0.04, 0.04, 2.2, 5)), MM('umbPM', () => lamC(0xdddddd)));
+      add(pole, x, 1.1, z); add(new THREE.Mesh(GG('umbC', () => new THREE.ConeGeometry(1.5, 0.6, 8)), MM('umbR' + (i % 2), () => lamC(i % 2 ? 0xff3a5a : 0x36c6ff))), x, 2.35, z);
+    }
+    for (let i = 0, c = n(1, 3); i < c; i++) {                                                                  // surfboards stuck in the sand
+      const [x, z] = spot(), sb = new THREE.Mesh(GG('surf', () => new THREE.BoxGeometry(0.5, 2.2, 0.08)), new THREE.MeshBasicMaterial({ color: [0xff3fc8, 0x36f6ff, 0xffe03a, 0x7dff4a][(r() * 4) | 0] })); add(sb, x, 1.0, z); sb.rotation.set((r() - 0.5) * 0.3, r() * 3, (r() - 0.5) * 0.4);
+    }
+    for (let i = 0, c = n(1, 2); i < c; i++) { const [x, z] = spot(), y0 = 0.9, ball = new THREE.Mesh(GG('bball', () => new THREE.SphereGeometry(0.45, 8, 6)), new THREE.MeshLambertMaterial({ color: [0xff5a5a, 0xffd23a, 0x5ad8ff][(r() * 3) | 0] })); add(ball, x, y0, z); anims.push({ k: 'bob', m: ball, y0, ph: r() * 6 }); }       // beach balls
+    for (let i = 0, c = n(2, 4); i < c; i++) { const [x, z] = spot(), mound = new THREE.Mesh(GG('mound', () => new THREE.SphereGeometry(1, 8, 5)), MM('moundM', () => lamC(0xf2d28a))); add(mound, x, 0.05, z).scale.set(0.9 + r() * 0.8, 0.28, 0.9 + r() * 0.8); }
+    for (const [w, d, x, z] of [[site.hw * 2 + 0.4, 0.5, 0, site.hd], [site.hw * 2 + 0.4, 0.5, 0, -site.hd], [0.5, site.hd * 2 + 0.4, site.hw, 0], [0.5, site.hd * 2 + 0.4, -site.hw, 0]]) add(new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, d), MM('shore', () => addC(0x40e0ff, 0.55))), x, 0.08, z);      // turquoise shoreline
   } else if (zone.name === 'Psychedelic') {
     const geos = [GG('oct', () => new THREE.OctahedronGeometry(1)), GG('ico', () => new THREE.IcosahedronGeometry(1, 0)), GG('tet', () => new THREE.TetrahedronGeometry(1)), GG('tor', () => new THREE.TorusGeometry(1, 0.28, 6, 14))];
     for (let i = 0, c = n(3, big ? 10 : 5); i < c; i++) {                      // spinning colour-cycling shapes
@@ -7757,6 +7843,10 @@ function animDress(d, T, dt) {
       case 'lava': a.m.color.setHSL(0.06 + 0.02 * Math.sin(T * 3 + a.ph), 1, 0.5 + 0.1 * Math.sin(T * 5 + a.ph)); break;
       case 'shape': a.m.rotation.x += dt * a.sx; a.m.rotation.y += dt * a.sy; a.m.position.y = a.y0 + Math.sin(T * 1.7 + a.ph) * 0.5; a.m.material.color.setHSL((T * 0.25 + a.ph) % 1, 1, 0.55); break;
       case 'hue': a.m.material.color.setHSL((T * 0.3 + a.ph) % 1, 1, 0.55); break;
+      case 'tile': a.m.material.color.setHSL((T * 0.15 + a.ph) % 1, 1, 0.38 + 0.3 * ravePulse); break;
+      case 'beat': a.m.scale.set(1 + 0.09 * ravePulse, 1 + 0.14 * ravePulse, 1 + 0.09 * ravePulse); break;
+      case 'laser': a.m.rotation.y += dt * a.sp; a.m.children[0].material.color.setHSL((T * 0.25 + a.ph) % 1, 1, 0.6); break;
+      case 'disco': a.m.rotation.y += dt * 1.3; a.m.material.emissive.setHSL((T * 0.4 + a.ph) % 1, 1, 0.25 + 0.3 * ravePulse); break;
       case 'sway': a.m.rotation.z = Math.sin(T * 1.5 + a.ph) * 0.08; break;
       case 'glitchbox': if (a.still) { if (Math.random() < 0.05) a.m.visible = !a.m.visible; break; } a.t -= dt; if (a.t <= 0) { a.t = 0.05 + Math.random() * 0.5; a.m.position.set(a.bx + (Math.random() - 0.5) * 2.5, a.y0 + (Math.random() - 0.5) * 2, a.bz + (Math.random() - 0.5) * 2.5); a.m.material.color.setHSL(Math.random() < 0.5 ? 0.38 : 0.86, 1, 0.55); a.m.scale.x = 0.2 + Math.random() * 1.5; a.m.rotation.y = Math.random() * 3; } break;
       case 'bob': a.m.position.y = a.y0 + Math.sin(T * 1.6 + a.ph) * 0.4; break;
@@ -7877,6 +7967,7 @@ let monkeyBumpAt = 0;
 let dressAcc = 0, groundCur = null, monkeyAcc = 0, horrorAcc = 7;
 function updateWorlds(dt) {
   const T = performance.now() / 1000, z = inInterior ? null : activeZ;
+  ravePulse = z && z.name === 'Rave' ? raveBeat() : 0;
   dressAcc += dt;
   if (dressAcc > 0.4) {                      // dress the platforms near you for the active world; strip the rest
     dressAcc = 0;
