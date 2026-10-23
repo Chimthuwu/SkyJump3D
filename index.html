@@ -24,6 +24,8 @@
 <meta name="twitter:image" content="https://sky-jump.pages.dev/og-image.png">
 <link rel="alternate" type="application/json+oembed" href="https://sky-jump.pages.dev/oembed.json" title="SkyJump3D">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23050817'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23ff3fc8' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%2336f6ff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
   :root{--neon-cyan:#36f6ff;--neon-pink:#ff3fc8;--neon-lime:#c4ff4d;--panel:rgba(5,10,27,.82)}
   html,body{margin:0;height:100%;overflow:hidden;background:#050817;font-family:ui-monospace,Consolas,monospace;color:#e9faff;user-select:none}
@@ -54,19 +56,49 @@
   body.horror-world #hint{border-color:rgba(178,12,36,.8);color:#ffd2d8;box-shadow:0 0 18px rgba(120,0,24,.28)}
   @keyframes horrorBreath{from{filter:brightness(.86) contrast(1.07);transform:scale(1)}to{filter:brightness(.62) contrast(1.25);transform:scale(1.018)}}
   @keyframes horrorGrain{0%{transform:translate(0,0)}50%{transform:translate(-1px,1px)}100%{transform:translate(1px,-1px)}}
-  #hud,#players{position:fixed;top:12px;padding:10px 13px;background:var(--panel);border:1px solid rgba(54,246,255,.55);box-shadow:0 0 14px rgba(54,246,255,.16),inset 0 0 18px rgba(54,246,255,.05);font-size:15px;line-height:1.5;text-shadow:0 0 8px #36f6ff55;pointer-events:none;z-index:2}
-  #hud{left:12px;border-left:3px solid var(--neon-cyan);max-width:min(300px,42vw);font-size:13px;line-height:1.4;padding:7px 10px;background:rgba(5,9,22,.72);opacity:1}
-  #players{right:12px;text-align:right;border-right:3px solid var(--neon-pink)}
-  #hud .hearts{display:flex;align-items:center;gap:2px;margin:0 0 7px;padding:4px 9px 4px 8px;background:rgba(14,2,20,.96);border:2px solid #ff4a7a;border-radius:9px;box-shadow:0 0 14px rgba(255,50,110,.65),inset 0 0 10px rgba(255,50,110,.25)}
-  #hud .hearts .hl{font-size:11px;font-weight:800;letter-spacing:.12em;color:#ffd0dc;margin-right:6px;line-height:1;text-align:center}
-  #hud .hearts .hl b{display:block;font-size:19px;color:#fff;text-shadow:0 0 8px #ff2d6a}
-  #hud .hearts i{font-style:normal;font-size:34px;line-height:1;color:#ff3d6a;-webkit-text-stroke:1px #fff;paint-order:stroke fill;filter:drop-shadow(0 0 5px #ff2d55) drop-shadow(0 0 12px #ff0a4a)}
-  #hud .hearts i.e{color:#26101e;-webkit-text-stroke:1.5px #ff7a9a;filter:none;opacity:.85}
-  #hud .hearts.low{animation:hpLow .6s ease-in-out infinite alternate}
-  @keyframes hpLow{from{box-shadow:0 0 12px rgba(255,40,80,.5),inset 0 0 8px rgba(255,40,80,.2);border-color:#ff4a7a}to{box-shadow:0 0 30px rgba(255,20,60,1),inset 0 0 16px rgba(255,20,60,.5);border-color:#fff}}
-  .bar{width:170px;height:8px;background:#090e20;border:1px solid #486078;overflow:hidden;margin-top:3px}
-  .bar>div{height:100%;background:var(--neon-cyan);width:100%;box-shadow:0 0 10px currentColor}
-  #bossbar{position:fixed;top:14px;left:50%;transform:translateX(-50%);width:min(420px,60vw);text-align:center;font-weight:700;text-shadow:0 0 10px #ff3fc8;display:none;z-index:3}
+  /* ===== RETRO ARCADE HUD: chunky pixel panels, hard drop shadows, segmented bars ===== */
+  :root{--px:'Press Start 2P',ui-monospace,Consolas,monospace}
+  #hud,#players,#hp{position:fixed;pointer-events:none;z-index:2;font-family:var(--px);text-transform:uppercase;letter-spacing:.04em;color:#fff;text-shadow:2px 2px 0 #000}
+  #hud{left:12px;top:12px;width:min(292px,44vw);padding:9px 10px 10px;background:linear-gradient(180deg,#14083a,#0a0522);border:3px solid #36f6ff;box-shadow:4px 4px 0 #000,inset 0 0 0 2px #000,inset 0 0 22px rgba(54,246,255,.22);font-size:9px;line-height:1.5;opacity:1}
+  #hp{right:12px;top:12px;padding:8px 11px 9px;background:linear-gradient(180deg,#2a0630,#12041c);border:3px solid #ff4f86;box-shadow:4px 4px 0 #000,inset 0 0 0 2px #000,inset 0 0 22px rgba(255,60,120,.32);text-align:center}
+  #hp .hp-top{display:flex;justify-content:space-between;align-items:baseline;gap:14px;font-size:9px;color:#ffb3cd;margin-bottom:6px}
+  #hp .hp-top b{font-size:15px;color:#fff;text-shadow:2px 2px 0 #b3002d,3px 3px 0 #000}
+  #hp .hp-row{display:flex;gap:5px;justify-content:center}
+  #hp .hh{width:34px;height:30px;filter:drop-shadow(1px 0 0 #000) drop-shadow(-1px 0 0 #000) drop-shadow(0 1px 0 #000) drop-shadow(0 -1px 0 #000) drop-shadow(0 0 7px rgba(255,40,90,.75))}
+  #hp .hh.e{filter:drop-shadow(1px 0 0 #ff7a9a) drop-shadow(-1px 0 0 #ff7a9a) drop-shadow(0 1px 0 #ff7a9a) drop-shadow(0 -1px 0 #ff7a9a);opacity:.6}
+  #hp.low{animation:hpLow .5s steps(2) infinite}
+  #hp.low .hh:not(.e){animation:hpBeat .5s steps(2) infinite}
+  @keyframes hpLow{from{border-color:#ff4f86;box-shadow:4px 4px 0 #000,inset 0 0 0 2px #000,inset 0 0 22px rgba(255,60,120,.32)}to{border-color:#fff;box-shadow:4px 4px 0 #000,0 0 22px #ff1744,inset 0 0 0 2px #000,inset 0 0 30px rgba(255,20,60,.7)}}
+  @keyframes hpBeat{from{transform:scale(1)}to{transform:scale(1.14)}}
+  #hud .rt-top{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:7px}
+  #hud .chip{display:inline-block;padding:3px 5px 2px;background:#000;border:2px solid #36f6ff;color:#36f6ff;font-size:8px;text-shadow:none}
+  #hud .chip b{color:#fff;font-size:10px;text-shadow:2px 2px 0 #000}
+  #hud .rt-score{display:flex;justify-content:space-between;align-items:center;margin:2px 0 8px;padding:5px 6px 4px;background:#000;border:2px solid #ffd23a}
+  #hud .rt-score span{color:#ffd23a;font-size:8px;text-shadow:none}
+  #hud .rt-score b{font-size:14px;color:#fff;letter-spacing:.08em;text-shadow:2px 2px 0 #b36b00}
+  #hud .rt-bar{display:flex;align-items:center;gap:7px;margin:0 0 5px}
+  #hud .rt-bar i{font-style:normal;width:62px;font-size:8px;color:var(--c1,#36f6ff);text-shadow:2px 2px 0 #000}
+  #hud .rt-track{position:relative;flex:1;height:14px;background:#06030f;border:2px solid #000;box-shadow:0 0 0 2px var(--c1,#36f6ff)}
+  #hud .rt-fill{height:100%;background:linear-gradient(180deg,#fff 0 2px,var(--c1,#36f6ff) 2px 55%,var(--c2,#0a8aff) 55%);box-shadow:0 0 8px var(--c1,#36f6ff)}
+  #hud .rt-track::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 9px,rgba(0,0,0,.7) 9px 11px);pointer-events:none}
+  #hud .rt-bar.glide{--c1:#4ff0ff;--c2:#1a6aff}
+  #hud .rt-bar.grip{--c1:#ffb347;--c2:#e0560a}
+  #hud .rt-bar.nrg{--c1:#5aff8a;--c2:#0a9a64}
+  #hud .rt-bar.locked{--c1:#ff4a4a;--c2:#8a0a0a}
+  #hud .rt-bar.low .rt-fill{animation:barBlink .35s steps(2) infinite}
+  @keyframes barBlink{from{filter:brightness(1)}to{filter:brightness(.35)}}
+  #hud .rt-line{margin-top:6px;font-size:8px;color:#bfe9ff;text-shadow:2px 2px 0 #000}
+  #hud .rt-line b{color:#fff;font-size:9px}
+  #hud .rt-wpn{margin-top:7px;display:flex;flex-wrap:wrap;gap:4px}
+  #hud .rt-wpn span{padding:3px 4px 2px;background:#000;border:2px solid #2a3350;color:#6b7699;font-size:7px;text-shadow:none}
+  #hud .rt-wpn span.on{border-color:var(--wc,#fff);color:#fff;background:#10162e;box-shadow:0 0 8px var(--wc,#fff)}
+  #hud .rt-wpn span.lock{opacity:.45}
+  #players{right:12px;top:116px;padding:7px 9px;font-size:8px;line-height:1.7;text-align:right;background:linear-gradient(180deg,#14083a,#0a0522);border:3px solid #ff3fc8;box-shadow:4px 4px 0 #000,inset 0 0 0 2px #000}
+  #players:empty{display:none}
+  #players span{text-shadow:none}
+  .bar{width:170px;height:10px;background:#06030f;border:2px solid #000;box-shadow:0 0 0 2px #486078;overflow:hidden;margin-top:3px}
+  .bar>div{height:100%;background:var(--neon-cyan);width:100%}
+  #bossbar{position:fixed;top:14px;left:50%;transform:translateX(-50%);width:min(420px,40vw);text-align:center;font:400 10px var(--px);text-transform:uppercase;text-shadow:2px 2px 0 #000;display:none;z-index:3}
   #bossbar .bar{width:100%;height:14px;margin-top:4px}
   #bossbar .bar>div{background:var(--neon-pink)}
   #msg{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
@@ -119,7 +151,8 @@
   #ride{position:fixed;left:50%;bottom:128px;transform:translateX(-50%);z-index:4;pointer-events:none;font:700 15px monospace;letter-spacing:2px;color:#0b0b14;background:#36f6ff;padding:7px 16px;border-radius:3px;box-shadow:0 0 18px #36f6ff;opacity:0;transition:opacity .25s}
   #dread{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:0;background:radial-gradient(ellipse at center,transparent 38%,rgba(20,0,6,.55) 72%,rgba(0,0,0,.96) 100%)}
   #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:40}
-  #toast{position:fixed;top:22%;width:100%;text-align:center;font-size:clamp(22px,4vw,30px);font-weight:700;color:var(--neon-lime);text-shadow:0 0 10px #c4ff4d,0 2px 8px #000b;pointer-events:none;z-index:4}
+  #toast{position:fixed;top:20%;left:50%;transform:translateX(-50%);max-width:min(60vw,760px);text-align:center;font:400 clamp(11px,1.5vw,15px)/1.7 var(--px);text-transform:uppercase;padding:10px 14px 9px;background:linear-gradient(180deg,#1c0a4a,#0c0526);border:3px solid var(--neon-lime);box-shadow:4px 4px 0 #000,inset 0 0 0 2px #000;color:#fff;text-shadow:2px 2px 0 #000;pointer-events:none;z-index:4}
+  #toast:empty{display:none}
   #toast.crazy{color:#ff3fc8;text-shadow:0 0 10px #20dff0,2px 2px 0 #000;animation:crazyPulse .5s infinite alternate}
   #portalPreview{--portal-color:#36f6ff;--dest-color:#ff3fc8;position:fixed;right:16px;bottom:62px;display:none;align-items:center;gap:11px;min-width:220px;max-width:min(330px,calc(100vw - 32px));box-sizing:border-box;padding:10px 12px;background:rgba(4,9,24,.92);border:1px solid color-mix(in srgb,var(--portal-color),transparent 25%);border-left:3px solid var(--portal-color);box-shadow:0 0 18px color-mix(in srgb,var(--portal-color),transparent 72%),inset 0 0 18px rgba(54,246,255,.05);z-index:6;pointer-events:none}
   #portalPreview.visible{display:flex;animation:portalPreviewIn .18s ease-out}
@@ -133,7 +166,7 @@
   @keyframes portalPreviewIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
   @media(max-width:620px){#portalPreview{right:10px;bottom:54px;min-width:0;padding:8px 10px}#portalPreview .portal-meta{display:none}}
   @keyframes crazyPulse{from{transform:skewX(-6deg) scale(1)}to{transform:skewX(6deg) scale(1.05)}}
-  #hint{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);box-sizing:border-box;text-align:center;font-size:12px;opacity:.95;padding:7px 12px;background:rgba(5,10,27,.85);border:1px solid rgba(255,63,200,.5);border-bottom:2px solid var(--neon-pink);text-shadow:0 0 8px #36f6ff;pointer-events:none;z-index:2}
+  #hint{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);box-sizing:border-box;text-align:center;font-size:11px;opacity:.97;padding:7px 12px;background:linear-gradient(180deg,#14083a,#0a0522);border:3px solid var(--neon-pink);box-shadow:4px 4px 0 #000,inset 0 0 0 2px #000;color:#dff6ff;text-shadow:1px 1px 0 #000;pointer-events:none;z-index:2}
   #guideDialog{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:rgba(2,5,18,.68);z-index:45}
   #guideDialog.open{display:flex}
   #guideDialog .guide-panel{width:min(680px,94vw);max-height:min(82vh,760px);overflow:auto;box-sizing:border-box;padding:20px;background:linear-gradient(145deg,rgba(7,16,34,.98),rgba(13,9,34,.97));border:1px solid rgba(54,246,255,.78);border-left:4px solid #36f6ff;box-shadow:0 0 28px rgba(54,246,255,.22),inset 0 0 24px rgba(255,63,200,.07)}
@@ -204,7 +237,9 @@
 <div id="scope"></div>
 <div id="cross"></div>
 <div id="players"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="hpg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9ab8"/><stop offset=".45" stop-color="#ff2d55"/><stop offset="1" stop-color="#a00026"/></linearGradient></defs></svg>
 <div id="hud"></div>
+<div id="hp"></div>
 <div id="hotbar"></div>
 <div id="bossbar"></div>
 <div id="toast"></div>
@@ -1280,41 +1315,54 @@ function makeUfo(hx, hy, hz) {           // flying saucer: rotating rim lights, 
 }
 // ---------- VOID MAW: a hungry cosmic rift. It drifts in anywhere, drags you toward its teeth, and swallows you whole unless you kill it first ----------
 function makeMaw(hx, hy, hz) {
-  const g = new THREE.Group(), core = new THREE.Mesh(new THREE.SphereGeometry(2.3, 14, 10), new THREE.MeshBasicMaterial({ color: 0x000000 })); g.add(core);
-  const flesh = new THREE.MeshBasicMaterial({ color: 0x8a0f3a }), glowM = new THREE.MeshBasicMaterial({ color: 0xd23cff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  const lip = new THREE.Mesh(new THREE.TorusGeometry(2.7, 0.55, 8, 24), flesh); g.add(lip);
-  const lip2 = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.28, 6, 24), new THREE.MeshBasicMaterial({ color: 0x4a0620 })); g.add(lip2);
-  const teeth = new THREE.Group(); g.add(teeth);
-  const toothM = new THREE.MeshBasicMaterial({ color: 0xeee6d0 });
-  for (let k = 0; k < 16; k++) { const a = k / 16 * 6.2832, t = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.2 + (k % 2) * 0.5, 4), toothM); t.position.set(Math.cos(a) * 2.35, Math.sin(a) * 2.35, 0.15); t.rotation.z = a + Math.PI / 2; teeth.add(t); }
-  const swirl = new THREE.Mesh(new THREE.RingGeometry(0.6, 8, 40, 3), glowM); swirl.position.z = -0.1; g.add(swirl);
-  const swirl2 = new THREE.Mesh(new THREE.RingGeometry(3, 14, 40, 1), new THREE.MeshBasicMaterial({ color: 0x6a1cff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); swirl2.position.z = -0.3; g.add(swirl2);
+  // body-horror flesh rift: two fat folded lips around a dark vertical opening, a hood fold above, ruffled inner edges and a few teeth, breathing as it hunts
+  const g = new THREE.Group();
+  const flesh = lam(0xe8688a, { emissive: 0x7a1233, emissiveIntensity: 0.75 }), fleshD = lam(0xb02052, { emissive: 0x500a22, emissiveIntensity: 0.75 }), fold = lam(0xf59ab4, { emissive: 0x8a2a4a, emissiveIntensity: 0.65 });
+  const glowM = new THREE.MeshBasicMaterial({ color: 0xd23cff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const sph = (rx, ry, rz, m, x, y, z, parent = g) => { const o = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), m); o.scale.set(rx, ry, rz); o.position.set(x, y, z); parent.add(o); return o; };
+  sph(1.15, 3.2, 0.8, new THREE.MeshBasicMaterial({ color: 0x14000a }), 0, 0, 0);                                      // the dark opening
+  const swirl = new THREE.Mesh(new THREE.RingGeometry(0.6, 8, 40, 3), glowM); swirl.position.z = -0.7; g.add(swirl);       // glowing void behind it
+  const swirl2 = new THREE.Mesh(new THREE.RingGeometry(3, 15, 40, 1), new THREE.MeshBasicMaterial({ color: 0x6a1cff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); swirl2.position.z = -0.9; g.add(swirl2);
+  const lips = new THREE.Group(); g.add(lips);
+  const toothM = new THREE.MeshBasicMaterial({ color: 0xf2ead2 });
+  for (const side of [-1, 1]) {
+    sph(1.3, 4.0, 1.15, flesh, side * 2.0, 0, -0.2, lips);                                                           // big outer fold
+    sph(0.82, 3.2, 0.95, fleshD, side * 1.1, 0, 0.35, lips);                                                         // darker inner fold
+    for (let k = 0; k < 7; k++) sph(0.34, 0.36, 0.34, fold, side * (0.66 + 0.1 * Math.sin(k * 1.7)), -2.6 + k * 0.87, 1.0, lips);       // ruffled edge
+    for (let k = 0; k < 6; k++) { const t = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.45 + (k % 2) * 0.15, 4), toothM); t.position.set(side * 0.5, -2.2 + k * 0.88, 0.85); t.rotation.z = side * Math.PI / 2; lips.add(t); }
+  }
+  sph(1.9, 1.15, 1.1, fold, 0, 4.4, 0.1, lips); sph(0.55, 0.5, 0.5, flesh, 0, 3.7, 0.9, lips);                       // hood fold above
+  sph(1.5, 0.95, 1.0, flesh, 0, -4.3, 0, lips);                                                                      // lower fold
+  const inhale = [];
+  for (let i = 0; i < 3; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(1, 0.05, 4, 36), new THREE.MeshBasicMaterial({ color: 0xff7ad8, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false })); r.position.z = 1.2; g.add(r); inhale.push(r); }
   g.position.set(hx, hy, hz); scene.add(g);
   const mat = new THREE.MeshLambertMaterial({ color: 0x220018 });
-  const e = { kind: 'drone', mesh: g, ring: new THREE.Group(), lights: teeth, swirl, swirl2, mat, zone: null, x: hx, cy: hy, y: hy - 2.5, z: hz, hx, hy, hz, ph: rand() * 6, w: 0.3,
-    hp: 16, maxhp: 16, r: 1.2, h: 5, kx: 0, kz: 0, ky: 0, stun: 0, hit: 0, dead: false, pts: 600, variant: 'maw', accent: 0xd23cff };
+  const e = { kind: 'drone', mesh: g, ring: new THREE.Group(), lights: lips, swirl, swirl2, inhale, mat, zone: null, x: hx, cy: hy, y: hy - 4, z: hz, hx, hy, hz, ph: rand() * 6, w: 0.3,
+    hp: 16, maxhp: 16, r: 2.4, h: 8.5, kx: 0, kz: 0, ky: 0, stun: 0, hit: 0, dead: false, pts: 600, variant: 'maw', accent: 0xff5aa0 };
   enemies.push(e); return e;
 }
 function mawAI(e, dt, t) {
   const P = nearestPlayer(e), px = P.x, py = P.y + 1.0, pz = P.z, dx = px - e.x, dy = py - e.cy, dz = pz - e.z, d = Math.hypot(dx, dy, dz) || 1;
   const live = state === 'play' && !paused;
   e.stun = 0;                                        // it does not flinch
-  const sw = e.swirl; sw.rotation.z -= dt * 1.8; e.swirl2.rotation.z += dt * 0.9; e.lights.rotation.z += dt * 0.7;
-  e.mesh.scale.setScalar(1 + 0.05 * Math.sin(t * 3 + e.ph) + e.hit * 0.25);
+  e.swirl.rotation.z -= dt * 1.8; e.swirl2.rotation.z += dt * 0.9;
+  const br = Math.sin(t * 2.2 + e.ph); e.lights.scale.set(1 + 0.09 * br, 1 + 0.03 * br, 1 + 0.05 * br);          // the lips breathe open and shut
+  e.mesh.scale.setScalar(1 + 0.04 * Math.sin(t * 3 + e.ph) + e.hit * 0.25);
   e.mesh.lookAt(px, py, pz);
-  const RANGE = 55;
+  for (let i = 0; i < e.inhale.length; i++) { const r = e.inhale[i], ph = (t * 0.8 + i / e.inhale.length) % 1; r.scale.setScalar(2 + 11 * (1 - ph)); r.material.opacity = 0.5 * ph; }     // rings collapsing into the opening = suction
+  const RANGE = 70;
   if (live && d < RANGE && !inInterior) {
-    const k = 1 - d / RANGE, pull = 5 + 26 * k * k;           // gets nastier the closer you are
-    vel.x += dx / d * pull * dt; vel.z += dz / d * pull * dt; if (!onGround || dy > 0.5) vel.y += dy / d * pull * 0.55 * dt;
-    if (onGround && d < 20) { pos.x += dx / d * pull * 0.08 * dt; pos.z += dz / d * pull * 0.08 * dt; }
-    shake = Math.max(shake, 0.12 + k * 0.3);
-    if (!e.warned) { e.warned = true; toast('VOID MAW — IT IS PULLING YOU IN. SHOOT IT!', 3200); dreadSting(0.25); }
-    e.humT = (e.humT || 0) - dt; if (e.humT <= 0) { e.humT = 0.35 - k * 0.2; tone(55 + k * 90, 40, 0.3, 'sine', 0.1 + k * 0.2); }
-    if (d < 3.4) { e.warned = false; die('CONSUMED', 'The void maw swallowed you whole. Shoot it before it gets close.'); return; }
+    const k = 1 - d / RANGE, sp = 4 + 26 * Math.pow(k, 1.3);        // metres/second of FORCED drift (sprinting is ~14): from 30 m out you cannot outrun it on foot
+    pos.x += dx / d * sp * dt; pos.z += dz / d * sp * dt; pos.y += dy / d * sp * dt * 0.85;
+    vel.x += dx / d * sp * 0.6 * dt; vel.z += dz / d * sp * 0.6 * dt; if (dy > 1) vel.y += dy / d * sp * dt; onGround = onGround && dy < 1.5;
+    shake = Math.max(shake, 0.12 + k * 0.35);
+    if (!e.warned) { e.warned = true; toast('VOID MAW — IT IS INHALING YOU. SHOOT IT!', 3200); dreadSting(0.25); }
+    e.humT = (e.humT || 0) - dt; if (e.humT <= 0) { e.humT = 0.35 - k * 0.2; tone(55 + k * 90, 40, 0.3, 'sine', 0.1 + k * 0.2); noise(0.2, 0.05 + k * 0.12, 300 + k * 900); }
+    if (d < 3.8) { e.warned = false; die('CONSUMED', 'The void maw swallowed you whole. Shoot it before it gets close.'); return; }
   }
   // it creeps after you
   if (live && d < 90) { const st = Math.min(d, 2.4 * dt); e.x += dx / d * st; e.cy += dy / d * st * 0.4; e.z += dz / d * st; }
-  e.y = e.cy - 2.5; e.mesh.position.set(e.x, e.cy, e.z);
+  e.y = e.cy - 4; e.mesh.position.set(e.x, e.cy, e.z);
 }
 let mawCd = 40, ambientCd = 4;
 function mawTick(dt) {
@@ -3981,9 +4029,9 @@ let schizoOn = true, schizoAcc = 20;                       // ON by default — 
 // Minecraft-style hotbar pinned bottom-centre: [1] blade  [2] builder hand, rest reserved for future slots
 const hotbarCss = document.createElement('style'); hotbarCss.textContent = `
   #hotbar{position:fixed;bottom:66px;left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:9;pointer-events:none}
-  #hotbar .slot{width:52px;height:52px;background:rgba(10,12,22,.78);border:2px solid #3a4668;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06),0 2px 8px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:30px;color:#cfd8ff;text-shadow:0 0 6px rgba(120,200,255,.35)}
-  #hotbar .slot.sel{border-color:#ffffff;box-shadow:0 0 12px rgba(255,255,255,.55),inset 0 0 0 1px #fff;background:rgba(24,30,48,.9)}
-  #hotbar .slot .cnt{position:absolute;bottom:2px;right:5px;font:900 13px monospace;color:#fff;text-shadow:0 1px 3px #000}
+  #hotbar .slot{position:relative;width:50px;height:50px;background:linear-gradient(180deg,#1a0f44,#0a0522);border:3px solid #3a4a8a;box-shadow:3px 3px 0 #000,inset 0 0 0 2px #000;display:flex;align-items:center;justify-content:center;font-size:26px;color:#cfd8ff}
+  #hotbar .slot.sel{border-color:#ffe03a;box-shadow:3px 3px 0 #000,0 0 14px rgba(255,224,58,.8),inset 0 0 0 2px #000;background:linear-gradient(180deg,#3a2a08,#1a1004);transform:translateY(-4px)}
+  #hotbar .slot .cnt{position:absolute;bottom:2px;right:4px;font:400 9px var(--px);color:#fff;text-shadow:2px 2px 0 #000}
 `;
 document.head.appendChild(hotbarCss);
 const goreEl = $('gore');
@@ -6832,11 +6880,19 @@ function updateVisuals(dt) {
 
   // HUD (hidden behind the main menu)  $('hud').style.display = state === 'title' ? 'none' : '';
   $('hotbar').style.display = state === 'title' ? 'none' : '';
-  const hp = clamp(health, 0, MAXHP), hearts = '<i>♥</i>'.repeat(hp) + '<i class="e">♥</i>'.repeat(MAXHP - hp);
-  const hudHtml = `<div class="hearts${hp <= 2 ? ' low' : ''}"><span class="hl">HEALTH<b>${hp}/${MAXHP}</b></span>${hearts}</div>Glide<div class="bar"><div style="width:${(glide * 100) | 0}%"></div></div>Grip<div class="bar"><div style="width:${(climbStam * 100) | 0}%;background:#ffb347"></div></div>Energy<div class="bar"><div style="width:${(cont.energy * 100) | 0}%;background:${cont.locked ? '#ff4a4a' : '#3affd0'}"></div></div>` +
-    `Level <b>${level}</b> · Altitude <b>${pos.y | 0}</b> m<br>Score <b>${score}</b> · Coins <b>${base.credits}</b> · Bananas <b>${base.bananas}</b> · Best ${Math.max(best.score, score)} (L${best.level})` +
-    (curPN !== null && ladderTop ? `<br><span style="color:${curPN < 0 ? '#ff3a5a' : '#ffd23a'}">PLATFORM #${curPN}</span> · deepest #${ladderBot.n} · highest #${ladderTop.n}` : '') +
-    (combo > 0 ? ` · <span style="color:#ffd23a">Bullseye combo x${combo}</span>` : '') + '<br>' + weaponHud();
+  const hp = clamp(health, 0, MAXHP);
+  const heart = e => `<svg class="hh${e ? ' e' : ''}" viewBox="0 0 7 6" shape-rendering="crispEdges"><path d="M1 0h2v1H1zM4 0h2v1H4zM0 1h7v2H0zM1 3h5v1H1zM2 4h3v1H2zM3 5h1v1H3z" fill="${e ? '#1b0a26' : 'url(#hpg)'}"/>${e ? '' : '<path d="M1 1h1v1H1zM4 1h1v1H4z" fill="#fff" opacity=".9"/>'}</svg>`;
+  const hpHtml = `<div class="hp-top"><span>HEALTH</span><b>${hp}/${MAXHP}</b></div><div class="hp-row">${Array.from({ length: MAXHP }, (_, i) => heart(i >= hp)).join('')}</div>`;
+  const hpEl = $('hp'); if (hpEl) { const lowCls = hp <= 2 ? 'low' : ''; if (hpHtml !== updateVisuals._hp) { updateVisuals._hp = hpHtml; hpEl.innerHTML = hpHtml; } if (hpEl.className !== lowCls) hpEl.className = lowCls; hpEl.style.display = state === 'title' ? 'none' : ''; }
+  const bar = (cls, v, label, extra = '') => `<div class="rt-bar ${cls}${v < 0.25 ? ' low' : ''}${extra}"><i>${label}</i><div class="rt-track"><div class="rt-fill" style="width:${clamp(v * 100, 0, 100) | 0}%"></div></div></div>`;
+  const wpn = WEAPONS.map((w, i) => `<span class="${!weaponOwned[i] ? 'lock' : i === weapon ? 'on' : ''}" style="--wc:${w.col}">${i + 1} ${weaponOwned[i] ? w.name + (w.ammoKey ? ' x' + ammo[w.ammoKey] : '') : '???'}</span>`).join('');
+  const hudHtml = `<div class="rt-top"><span class="chip">LV <b>${level}</b></span><span class="chip">ALT <b>${pos.y | 0}</b>M</span>${combo > 0 ? `<span class="chip" style="border-color:#ffd23a;color:#ffd23a">x<b>${combo}</b></span>` : ''}</div>` +
+    `<div class="rt-score"><span>SCORE</span><b>${String(Math.max(0, score | 0)).padStart(7, '0')}</b></div>` +
+    bar('glide', glide, 'GLIDE') + bar('grip', climbStam, 'GRIP') + bar('nrg', cont.energy, 'ENERGY', cont.locked ? ' locked' : '') +
+    `<div class="rt-line">COINS <b>${base.credits}</b> &nbsp; BANANAS <b>${base.bananas}</b></div>` +
+    `<div class="rt-line">BEST <b>${Math.max(best.score, score)}</b> (L${best.level})</div>` +
+    (curPN !== null && ladderTop ? `<div class="rt-line" style="color:${curPN < 0 ? '#ff5a7a' : '#ffd23a'}">PLATFORM <b>#${curPN}</b></div>` : '') +
+    `<div class="rt-wpn">${wpn}</div>`;
   if (hudHtml !== updateVisuals._hud) { updateVisuals._hud = hudHtml; $('hud').innerHTML = hudHtml; }      // no DOM rebuild unless the HUD text actually changed
   const bb = $('bossbar');
   let tgt = null, tn = 1e9;
