@@ -139,7 +139,7 @@
   #menu input{margin-left:10px;padding:8px 10px;width:min(240px,50vw);font:600 16px Consolas,monospace;color:#e9fbff;background:#0a1226;border:1px solid #ff3fc8;border-radius:4px;outline:none}
   #menu input:focus{box-shadow:0 0 10px #ff3fc8}
   #menu .hint{margin-top:22px;font-size:13px;opacity:.6;letter-spacing:.1em}
-  #menuMulti,#menuHost,#menuJoin,#menuBye{display:none}
+  #menuMulti,#menuHost,#menuJoin,#menuBye,#menuLevels{display:none}      /* LEVELKIT:MENU */
   #menu .steps{list-style:none;padding:0;margin:0 auto 14px;max-width:660px;text-align:left}
   #menu .steps li{display:flex;gap:12px;align-items:flex-start;margin:10px 0;line-height:1.5}
   #menu .steps li>b:first-child{flex:none;width:22px;text-align:center;color:#ff3fc8}
@@ -199,7 +199,10 @@
 <div id="menu">
   <h1>SkyJump3D</h1>
   <div class="sub" id="menuSub">You're on the roof of a towering neon city. The only way is down &mdash; hop between floating platforms, stomp or blast the bots, beat each arena's Guardian, and reach the street.</div>
-  <div id="menuMain"><button id="bStart">START</button><button id="bMulti">MULTIPLAYER</button><button id="bExit">EXIT</button></div>
+  <div id="menuMain"><button id="bStart">START</button><button id="bLevels">LEVELS</button><button id="bMulti">MULTIPLAYER</button><button id="bExit">EXIT</button></div>
+  <!-- >>> LEVELKIT:MENU BEGIN -->
+  <div id="menuLevels"><div class="sub" id="levelsSub">Single-player levels. They are separate from the sky-city.</div><div id="levelsList"></div><button id="bBackL">BACK</button></div>
+  <!-- <<< LEVELKIT:MENU END -->
   <div id="menuMulti">
     <div class="sub">Co-op for 2&ndash;8 players. Pick a role and I'll walk you through the setup.</div>
     <button id="bHost">HOST A GAME</button><button id="bJoin">JOIN A GAME</button><button id="bBack">BACK</button>
@@ -676,6 +679,9 @@ const starts = Array.from({ length: HOME_SLOT_COUNT }, () => ({ x: 10, y: TOP, z
 const startHubs = Array.from({ length: HOME_SLOT_COUNT }, (_, slot) => ({ kind: 'start', slot, universe: slot, x: 0, z: 0, top: TOP, hw: TH, hd: TH, zone: null, r: 20, active: true }));
 let mySlot = 0, sixTowerLayout = true, start = starts[0];
 let checkpoint = { ...start };
+// >>> LEVELKIT:STATE BEGIN
+let activeSpec = null, liveSpec = null, specKit = null, specInfo = null;      // level/arena spec being played (see LEVEL-EXPANSION-PLAN.md); null = the normal sky-city
+// <<< LEVELKIT:STATE END
 function universeCentre(slot) { const a = slot * Math.PI * 2 / HOME_SLOT_COUNT; return { x: Math.cos(a) * UNIVERSE_R, z: Math.sin(a) * UNIVERSE_R, angle: a }; }
 // All six home towers always exist (one per universe); the player just spawns on their own slot's roof.
 function syncStartLayout() {
@@ -3666,10 +3672,79 @@ function buildStatic() {
   ground.rotation.x = -Math.PI / 2; ground.visible = false; scene.add(ground); groundMesh = ground; groundOrigMat = ground.material;   // NO FLOOR: the void loops (see voidLoop)
 }
 
+// >>> LEVELKIT:KIT BEGIN
+// Level/arena specs live in levels/*.js and arenas/*.js (lazy ES modules). They only ever see `kit` (levels/kit.js), which is built from this bridge.
+function specHost() {
+  return {
+    THREE, lam, retroMaterials, addSolid, missionRandom, buildSky, toast, showMsg, now: () => performance.now(),
+    get scene() { return scene; },
+    setZone: (name, snap, quiet) => setZone(name ? ZONES.find(z => z.name === name) || null : null, snap, quiet),
+    player: { pos, vel, get health() { return health; }, set health(v) { health = v; }, get state() { return state; }, get onGround() { return onGround; }, get checkpoint() { return checkpoint; }, look(yaw, pitch = 0) { camYaw = yaw; fpPitch = pitch; } },
+    setStart(x, y, z, yaw) { const sp = starts[mySlot] || starts[0]; sp.x = x; sp.y = y; sp.z = z; start = sp; checkpoint = { ...start }; specInfo.yaw = yaw || 0; },
+    setBounds(o) { if (o.worldR) WORLD_R = o.worldR; if (o.killY !== undefined) VOID_Y = o.killY; if (o.far) { camera.far = o.far; camera.updateProjectionMatrix(); } },
+    complete(title, html) { if (state !== 'play') return; state = 'clear'; clearT = 4; vel.set(0, 0, 0); pounding = false; try { sfx.clear(); } catch (_) {} showMsg(title, html, 'Returning to the sky-city…'); },
+  };
+}
+// replaces buildLevelBody() while a spec is active. Runs inside buildLevel's reset shell, so scene.add already lands in `lvl`.
+function buildSpecBody(spec) {
+  const t0 = performance.now();
+  specInfo = { yaw: 0 };
+  // sky-city leftovers that must not leak into a spec (voidLoop/levelClear/missions all key off these)
+  moonInfo = null; marsInfo = null; marsBuilt = false; warp.dest.length = 0; warp.idx = -1; warp.sel = 0; planetInfo.length = 0; planetLegBuilt = {};
+  endBosses = []; boss = null; groundPad = null; levelHubs = []; ladder.length = 0; ladderTop = ladderBot = ladderLoop = null; curPN = null;
+  WORLD_R = 700; VOID_Y = -200; seed = 11; levelSeed = 11;
+  const kit = specKit = specKitFactory(specHost());
+  if (spec.biome !== undefined) kit.applyBiome(spec.biome);
+  if (spec.sky !== false) kit.sky(true);
+  specInfo.result = spec.build(kit) || {};
+  kit.finish();
+  liveSpec = spec; specInfo.buildMs = Math.round(performance.now() - t0);
+}
+function specTeardown() {                           // called by buildLevel before it disposes `lvl`
+  if (!liveSpec) return;
+  try { liveSpec.dispose && liveSpec.dispose(specKit); } catch (err) { console.error('[spec] dispose failed', err); }
+  try { specKit._dispose(); } catch (err) { console.error('[spec] kit dispose failed', err); }
+  liveSpec = null; specKit = null;
+}
+let specKitFactory = null, specRegistry = null;
+async function loadSpecModules() {
+  if (!specKitFactory) { const m = await import('./levels/kit.js'); specKitFactory = m.createKit; }
+  if (!specRegistry) specRegistry = await import('./levels/registry.js');
+  return specRegistry;
+}
+// Enter a spec (offline only). Rebuilds the world with the spec, then puts the player on its spawn.
+async function enterSpec(id) {
+  if (net.on) { toast('Levels are single-player only — leave the room first', 2600); return false; }
+  const reg = await loadSpecModules(), entry = reg.findSpec(id); if (!entry || (!reg.ENABLED && !reg.TEST_SPECS.includes(entry))) return false;
+  const mod = await entry.load(); activeSpec = mod.default;
+  buildLevel();
+  pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); camYaw = specInfo.yaw; fpPitch = 0; camInit = false;
+  health = MAXHP; glide = 1; invuln = 1.5; onGround = false; climbing = null; climbStam = 1; state = state === 'title' ? 'title' : 'play';
+  if (activeSpec.activate) activeSpec.activate(specKit);
+  toast(activeSpec.name, 2200);
+  return true;
+}
+function exitSpec() {                               // back to the sky-city at the current level (deterministic rebuild)
+  if (!activeSpec) return;
+  activeSpec = null; buildLevel();
+  pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); checkpoint = { ...start };
+  health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; climbing = null; climbStam = 1; showMsg('');
+  toast(`LEVEL ${level} — ${theme().name}`, 2200);
+}
+function specRespawn() {                            // death inside a spec: back to the last checkpoint touched (or the spawn)
+  if (onVehicle) dismount(); grinding = null; poundPress = false;
+  pos.set(checkpoint.x, checkpoint.y + 0.05, checkpoint.z); vel.set(0, 0, 0);
+  health = MAXHP; glide = 1; pounding = false; invuln = 1.5; onGround = false; climbing = null; climbStam = 1;
+  state = 'play'; showMsg(''); clearBloodScreen();
+  if (liveSpec && liveSpec.reset) liveSpec.reset(specKit);
+}
+// <<< LEVELKIT:KIT END
+
 // Builds (or rebuilds) the tower for the current `level`. Everything added goes into `lvl`.
 function buildLevel() {
   if (!staticBuilt) { staticBuilt = true; buildStatic(); }
   saveBase();
+  specTeardown();      // LEVELKIT:HOOK (no-op unless a spec is live)
   scene.remove(lvl);
   lvl.traverse(o => { if (o.geometry) o.geometry.dispose(); });
   lvl = new THREE.Group(); lvl.matrixAutoUpdate = false; scene.add(lvl);
@@ -3690,7 +3765,7 @@ function buildLevel() {
   const sceneAdd = scene.add;
   scene.add = o => lvl.add(o);           // route this function's scene.add calls into the level group
   levelHubs = []; missions.length = 0; activeMission = null;
-  buildLevelBody();
+  if (activeSpec) buildSpecBody(activeSpec); else buildLevelBody();      // LEVELKIT:HOOK
   scene.add = sceneAdd;
   loadGore();                            // blood and guts from earlier runs of this level
   if (towersOfTheWild.on) { trunkify(false); trunkify(true); }   // rebuilt levels in an active jungle keep their trunks
@@ -4358,6 +4433,7 @@ function schizoTick(dt) {                                  // hallucinations: ph
 }
 
 function respawn() {
+  if (activeSpec) { specRespawn(); return; }      // LEVELKIT:RESPAWN
   if (onVehicle) dismount(); grinding = null;
   if (poundPress) poundPress = false;
   pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); checkpoint = { ...start };                  // always back to the home tower; discovered checkpoints are reached via the WARP PAD
@@ -4372,7 +4448,7 @@ function die(title, why) {
   state = 'dead'; deadT = 2.6; vel.set(0, 0, 0); pounding = false; combo = 0; saveBest();
   goreDeath(title === 'SPLAT!');
   netSend({ t: 'died', x: +pos.x.toFixed(1), y: +pos.y.toFixed(1), z: +pos.z.toFixed(1), big: title === 'SPLAT!' });
-  showMsg(title, why, 'Back to your home tower… (checkpoints you found are on the WARP PAD)');
+  showMsg(title, why, activeSpec ? 'Back to your last checkpoint…' : 'Back to your home tower… (checkpoints you found are on the WARP PAD)');      // LEVELKIT:RESPAWN
   const h1 = $('msg').querySelector('h1'); if (h1) h1.style.color = '#d6121f';
 }
 function hurt(n, fromX, fromZ) {
@@ -4823,6 +4899,7 @@ function levelClear(why, bonus, remote = false) {      // remote: a teammate cle
     `Next: Level ${level + 1} — a taller tower and tougher bots`);
 }
 function nextLevel() {
+  if (activeSpec) { exitSpec(); return; }      // LEVELKIT:CLEAR
   level++; buildLevel();
   pos.set(start.x, start.y, start.z); vel.set(0, 0, 0);
   health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; climbing = null; climbStam = 1;
@@ -5715,7 +5792,7 @@ function physicsStep(h) {
   } else onGround = false;
   if (onGround && standOn && standOn.checkpoint && (checkpoint.y !== standOn.top)) {
     checkpoint = { x: standOn.cx, y: standOn.top, z: standOn.cz, zone: standOn.zone };
-    const fresh = !(standOn.moon || standOn.mars || standOn.planet) && warpUnlock(`cp:${Math.round(standOn.cx)},${Math.round(standOn.top)},${Math.round(standOn.cz)}`, `${standOn.zone && standOn.zone.name ? standOn.zone.name.toUpperCase() : 'SKY'} CHECKPOINT · ${Math.round(standOn.top)}m`, standOn.cx, standOn.top + 1, standOn.cz, standOn.zone, 'CHECKPOINT FOUND — warp back to it from the pad on your home tower');
+    const fresh = !activeSpec /*LEVELKIT:CP*/ && !(standOn.moon || standOn.mars || standOn.planet) && warpUnlock(`cp:${Math.round(standOn.cx)},${Math.round(standOn.top)},${Math.round(standOn.cz)}`, `${standOn.zone && standOn.zone.name ? standOn.zone.name.toUpperCase() : 'SKY'} CHECKPOINT · ${Math.round(standOn.top)}m`, standOn.cx, standOn.top + 1, standOn.cz, standOn.zone, 'CHECKPOINT FOUND — warp back to it from the pad on your home tower');
     if (!fresh) toast('Checkpoint!', 1500);
   }
   if (state === 'play') enemyContacts();
@@ -5778,6 +5855,7 @@ function updateLadderLabels(dt) {      // floating numbers over the nearest numb
   }
 }
 function voidLoop() {
+  if (activeSpec) { if (state === 'play') die('YOU FELL', 'Back to your last checkpoint…'); return; }      // LEVELKIT:RESPAWN
   if (state !== 'play' || !moonInfo) return;
   loops++;
   const L = moonInfo.loop;                                                                   // the fall corridor beside the skyway (full of catchable platforms)
@@ -8615,13 +8693,14 @@ function enemyDeathVoice(e) {
 }
 
 // ---------- main menu: START / MULTIPLAYER / EXIT ----------
-const menuBtns = ['bStart', 'bMulti', 'bExit'];
+const menuBtns = ['bStart', 'bLevels', 'bMulti', 'bExit'];      // LEVELKIT:MENU (bLevels added)
 let menuSel = 0, menuMode = 'main';
 function menuRender() {
   $('menuSub').style.display = menuMode === 'main' ? 'block' : 'none';
   menuBtns.forEach((id, i) => { $(id).className = i === menuSel ? 'sel' : ''; });
   $('menuMain').style.display = menuMode === 'main' ? 'block' : 'none';
   $('menuMulti').style.display = menuMode === 'multi' ? 'block' : 'none';
+  $('menuLevels').style.display = menuMode === 'levels' ? 'block' : 'none';      // LEVELKIT:MENU
   $('menuHost').style.display = menuMode === 'host' ? 'block' : 'none';
   $('menuJoin').style.display = menuMode === 'join' ? 'block' : 'none';
   $('menuBye').style.display = menuMode === 'bye' ? 'block' : 'none';
@@ -8650,6 +8729,23 @@ function preloadThen(go) {
   })();
 }
 function menuMulti() { menuMode = 'multi'; menuRender(); }
+// >>> LEVELKIT:MENU BEGIN
+// Single-player level picker. Offline START flow only: arenas (MULTIPLAYER) are listed by a different handler from a different registry array.
+async function menuLevels() {
+  menuMode = 'levels'; menuRender();
+  const box = $('levelsList'); box.textContent = '';
+  if (!servedByServer()) { $('levelsSub').textContent = 'Levels need the game served over http(s) (not opened as a file). Run: python -m http.server 8080'; return; }
+  try {
+    const reg = await loadSpecModules(); $('levelsSub').textContent = 'Single-player levels. They are separate from the sky-city.';
+    if (!reg.ENABLED || !reg.SP_LEVELS.length) { $('levelsSub').textContent = 'No levels available.'; return; }
+    for (const L of reg.SP_LEVELS) {
+      const b = document.createElement('button'); b.textContent = L.name; b.title = L.blurb || ''; b.dataset.level = L.id;
+      b.onclick = () => { $('levelsSub').textContent = 'Loading ' + L.name + '…'; enterSpec(L.id).then(ok => { if (ok) preloadThen(begin); else $('levelsSub').textContent = 'Could not load that level.'; }).catch(err => { console.error(err); $('levelsSub').textContent = 'Could not load that level.'; }); };
+      box.appendChild(b);
+    }
+  } catch (err) { console.error(err); $('levelsSub').textContent = 'Could not load the level list.'; }
+}
+// <<< LEVELKIT:MENU END
 // ----- guided multiplayer setup: the player is walked through installing Tailscale, running the server and sharing an invite link -----
 const roomVal = () => (($('inRoom').value || '').trim().replace(/[^\w-]/g, '').slice(0, 24) || 'lobby');
 // The public site (Pages) is static and has no relay, so online play goes through the Cloudflare Worker relay.
@@ -8711,18 +8807,20 @@ function menuExit() {
 }
 function menuKey(e) {
   if (menuMode === 'main') {
-    if (e.code === 'ArrowUp' || e.code === 'KeyW') menuSel = (menuSel + 2) % 3;
-    else if (e.code === 'ArrowDown' || e.code === 'KeyS') menuSel = (menuSel + 1) % 3;
-    else if (e.code === 'Enter' || e.code === 'Space') [menuStart, menuMulti, menuExit][menuSel]();
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') menuSel = (menuSel + menuBtns.length - 1) % menuBtns.length;
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') menuSel = (menuSel + 1) % menuBtns.length;
+    else if (e.code === 'Enter' || e.code === 'Space') [menuStart, menuLevels, menuMulti, menuExit][menuSel]();
     else if (e.code === 'KeyP') menuMulti();
     menuRender();
+  } else if (menuMode === 'levels') {
+    if (e.code === 'Escape') { menuMode = 'main'; menuRender(); }      // LEVELKIT:MENU
   } else if (menuMode === 'multi') {
     if (e.code === 'KeyH') menuHostOpen(); else if (e.code === 'KeyJ') menuJoinOpen(); else if (e.code === 'Escape') { menuMode = 'main'; menuRender(); }
   } else if (menuMode === 'host' || menuMode === 'join') {
     if (e.code === 'Enter') menuConnect(); else if (e.code === 'Escape') { menuMode = 'multi'; menuRender(); }
   } else if (e.code === 'Enter' || e.code === 'Escape') { menuMode = 'main'; menuRender(); }
 }
-$('bStart').onclick = menuStart; $('bMulti').onclick = menuMulti; $('bExit').onclick = menuExit;
+$('bStart').onclick = menuStart; $('bLevels').onclick = menuLevels; $('bBackL').onclick = () => { menuMode = 'main'; menuRender(); }; $('bMulti').onclick = menuMulti; $('bExit').onclick = menuExit;      // LEVELKIT:MENU
 $('bHost').onclick = menuHostOpen; $('bJoin').onclick = menuJoinOpen;
 $('bBack').onclick = () => { menuMode = 'main'; menuRender(); }; $('bBye').onclick = () => { menuMode = 'main'; menuRender(); };
 $('bBack2').onclick = $('bBack3').onclick = () => { menuMode = 'multi'; menuRender(); };
@@ -8865,6 +8963,20 @@ res ${outputWidth}x${outputHeight} @${adaptRes.scale.toFixed(2)}x  ${retroPreset
 window.__ng.linkGraph = () => linkGraphFn ? linkGraphFn() : null;
 window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.plateInfo = () => platforms.slice(0, 3).map(p => ({ top: p.top, y: p.plate && p.plate.position.y, vis: p.plate && p.plate.visible, col: p.plate && p.plate.material.color.getHex(), em: p.plate && p.plate.material.emissive.getHex(), ei: p.plate && p.plate.material.emissiveIntensity, po: p.plate && p.plate.material.polygonOffset, par: p.plate && p.plate.parent && p.plate.parent.type, h: p.plate && p.plate.geometry.parameters.height })); window.__ng.towerWindows = () => buildingHubs.flatMap(h => h.windows || []).map(w => ({ x: w.x, y: w.y, z: w.z, nx: w.nx, nz: w.nz })); window.__ng.netState = () => ({ on: net.on, room: net.room, peers: net.peers.size, slot: net.slot }); window.__ng.pvpShot = () => { let r = 'nopeer'; eachPeer(p => { const o = new THREE.Vector3(pos.x, pos.y + 1.4, pos.z), d = new THREE.Vector3(p.pos.x - pos.x, p.pos.y + 1 - o.y, p.pos.z - pos.z).normalize(), h = castRay(o, d, 60); r = (h.peer ? 'hit' : 'miss') + JSON.stringify({ me: [pos.x, pos.y, pos.z].map(v => +v.toFixed(1)), peer: [p.pos.x, p.pos.y, p.pos.z].map(v => +v.toFixed(1)), t: +h.t.toFixed(2), wall: !!h.hit, alive: p.alive }); if (h.peer) hitPeer(h.peer, 1); }); return r; }; window.__ng.health = () => health; window.__ng.setCull = r => { CULL_R = r; };
 window.__ng.lvl = () => lvl;
+// >>> LEVELKIT:DEVHOOK BEGIN
+window.__ng.levels = {
+  load: async id => { const ok = await enterSpec(id); if (ok && state === 'title') { preloadThen.done = true; begin(); } return ok; },
+  exit: () => { exitSpec(); },
+  list: async () => { const r = await loadSpecModules(); return { sp: r.SP_LEVELS.map(l => l.id), mp: r.MP_ARENAS.map(l => l.id), enabled: r.ENABLED }; },
+  state: () => ({ active: activeSpec ? activeSpec.id : null, live: !!liveSpec, buildMs: specInfo && specInfo.buildMs, solids: solids.length, checkpoint: { ...checkpoint }, state, worldR: WORLD_R, killY: VOID_Y }),
+  sig: () => specKit ? { sig: specKit.sig(), hash: specKit.hash(), lint: specKit.lintGraph(), graph: specKit.graphSig(specInfo.result.start, specInfo.result.exit), topology: activeSpec.topology || null } : null,
+  graph: () => specKit ? specKit.graph(specInfo.result.start, specInfo.result.exit) : null,
+  spec: () => activeSpec,
+  kit: () => specKit,
+  rendererInfo: () => ({ geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }),
+  sceneCounts: () => ({ scene: scene.children.length, lvl: lvl.children.length, solids: solids.length, enemies: enemies.length, items: items.length }),
+};
+// <<< LEVELKIT:DEVHOOK END
 window.__ng.cull = () => ({ tracked: cull.list.length, hidden: cull.hidden, children: lvl.children.length, solids: solids.length, platforms: platforms.length, specials: specials.length, enemies: enemies.length, items: items.length, props: props.length });
 window.__ng.renderInfo = () => new Promise(res => { renderer.info.autoReset = false; renderer.info.reset(); requestAnimationFrame(() => requestAnimationFrame(() => { const i = renderer.info; res({ calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries }); renderer.info.autoReset = true; })); });
 window.__ng.perf = PERF; window.__ng.drawStats = () => { const fr = new THREE.Frustum(), m = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); fr.setFromProjectionMatrix(m); const enemyRoots = new Set(enemies.map(e => e.mesh)); const out = { enemyParts: 0, enemiesVisible: 0, other: 0, instanced: 0, sprites: 0, transparent: 0 }; const seen = new Set(); scene.traverseVisible(o => { if (!o.isMesh && !o.isSprite && !o.isPoints) return; if (o.frustumCulled && o.geometry && !fr.intersectsObject(o)) return; if (o.isSprite) { out.sprites++; return; } let a = o, isE = false; while (a) { if (enemyRoots.has(a)) { isE = true; seen.add(a); break; } a = a.parent; } if (isE) out.enemyParts++; else if (o.isInstancedMesh) out.instanced++; else { out.other++; const k = (o.geometry ? o.geometry.type : '?') + '|' + (o.material && o.material.type) + (o.material && o.material.transparent ? '|T' : '') + '|d' + Math.round(Math.hypot(o.getWorldPosition(new THREE.Vector3()).x - camera.position.x, o.getWorldPosition(new THREE.Vector3()).z - camera.position.z) / 100); (out.k = out.k || {})[k] = (out.k[k] || 0) + 1; } if (o.material && o.material.transparent) out.transparent++; }); out.enemiesVisible = seen.size; return out; }; window.__ng.farWho = () => { const fr = new THREE.Frustum(); fr.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)); const tops = new Map(); scene.traverseVisible(o => { if (!o.isMesh || (o.frustumCulled && !fr.intersectsObject(o))) return; const wp = o.getWorldPosition(new THREE.Vector3()); if (Math.hypot(wp.x - camera.position.x, wp.z - camera.position.z) < 450) return; let a = o; while (a.parent && a.parent !== scene && a.parent !== lvl) a = a.parent; const e = tops.get(a) || { n: 0, cullable: cullable(a), type: a.type, kids: a.children.length, inLvl: a.parent === lvl, ud: Object.keys(a.userData || {}).join(), x: Math.round(a.position.x), y: Math.round(a.position.y), z: Math.round(a.position.z) }; e.n++; tops.set(a, e); }); return [...tops.values()].sort((p, q) => q.n - p.n).slice(0, 8); };
@@ -8895,6 +9007,7 @@ renderer.setAnimationLoop(now => {
   else if (state === 'play') { playerUpdate(dt); if (P) PERF.lap('player'); updateEnemies(dt); if (P) PERF.lap('enemies'); updateShots(dt); if (P) PERF.lap('shots'); }
   else if (state === 'dead') { deadT -= dt; if (deadT <= 0) respawn(); if (net.on) { updateEnemies(dt); updateShots(dt); } }
   else if (state === 'clear') { updateEnemies(dt); clearT -= dt; if (clearT <= 0) nextLevel(); }
+  if (liveSpec && liveSpec.update && !paused && state === 'play') { try { liveSpec.update(specKit, dt); } catch (err) { console.error('[spec] update failed', err); liveSpec.update = null; } }      // LEVELKIT:TICK
   updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); evolveTick(dt); updateGrowers(dt); updateRoofArenas(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); goreFadeTick(dt); updateClouds(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
   updateVisuals(dt); setHint(); if (P) PERF.lap('visuals+hud');
   if (guideDialogOpen && state !== 'play') closeGuideDialog(false);

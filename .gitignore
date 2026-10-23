@@ -10,3 +10,6 @@ cf-public/
 .dev.vars*
 !.dev.vars.example
 !.env.example
+
+.qa-cache/
+tests/out/
