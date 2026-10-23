@@ -14,6 +14,8 @@ Spawn-region cleanliness (no portals/gore/duplicate rides), six-player spawn tow
 ## Idea pool (user ideas, NOT scheduled - do not implement unless asked)
 - **Terminal biome**: enemies are literally code (text/glyph/ASCII bodies, console look, commands, stack traces). Must feel very different from Glitch.
 - **Glitch biome retune**: lean into a "signal lost" broken-television style (static, scanlines, tracking errors, channel flips), distinct from Terminal.
+- **Tropical island / beach biome** for the early game near spawn (today: Jungle for levels 1-2 plus the plain night-city look; nothing else).
+- **Depth theming under platform -1**: an overall UNDERGROUND theme below -1, easing into a full HELL theme as the player nears **-666** (today `zoneFor` in index.html cycles Kaomoji/Glitch/Hellscape/Horror from -3 and is all Hell from -72).
 - **Late-game biome mixing / mutating**: biomes blend or mutate over time/progress in later stages (see AUDIT.md section 3.4 for a hybrid-biome design sketch).
 
 ## Backlog (ordered, top = highest priority)

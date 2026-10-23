@@ -476,10 +476,24 @@ function cycleRetroPreset() {
   const next = (RETRO_PRESETS.indexOf(retroPreset) + 1) % RETRO_PRESETS.length;
   applyRetroPreset(RETRO_PRESETS[next]);
 }
+// ADAPTIVE RESOLUTION (MODERN look only): if the frame rate sags the render resolution steps down, and creeps back up when there is headroom.
+const adaptRes = { on: true, scale: 1, min: 0.5, acc: 0, n: 0, t: 0, cool: 4 };
+function adaptiveTick(dtMs) {
+  if (!adaptRes.on || retroPreset !== 'MODERN' || paused || state === 'title' || document.hidden || dtMs > 250) return;     // ignore hitches / tab switches / menus
+  adaptRes.acc += dtMs; adaptRes.n++; adaptRes.t += dtMs / 1000; adaptRes.cool -= dtMs / 1000;
+  if (adaptRes.t < 1) return;
+  const avg = adaptRes.acc / adaptRes.n; adaptRes.acc = 0; adaptRes.n = 0; adaptRes.t = 0;
+  if (adaptRes.cool > 0) return;
+  const basePR = Math.min(window.devicePixelRatio || 1, 2); let next = adaptRes.scale;
+  if (avg > 20) next = Math.max(adaptRes.min, adaptRes.scale - (avg > 30 ? 0.2 : 0.1));          // below ~50 fps: shrink
+  else if (avg < 14.5 && adaptRes.scale < 1) next = Math.min(1, adaptRes.scale + 0.05);          // comfortably above 60 fps: grow back
+  if (basePR * next < 0.6) next = adaptRes.scale;                                                // never below ~0.6 device pixels per CSS pixel
+  if (next !== adaptRes.scale) { adaptRes.scale = +next.toFixed(2); adaptRes.cool = 3; resizeRenderer(); }
+}
 function resizeRenderer() {
   const width = Math.max(1, window.innerWidth), height = Math.max(1, window.innerHeight);
   const modern = retroPreset === 'MODERN';
-  renderer.setPixelRatio(modern ? Math.min(window.devicePixelRatio || 1, 2) : 1);
+  renderer.setPixelRatio(modern ? Math.min(window.devicePixelRatio || 1, 2) * adaptRes.scale : 1);
   // Three.js applies the renderer pixel ratio inside setViewport; keep these in CSS pixels.
   outputWidth = width;
   outputHeight = height;
@@ -531,7 +545,7 @@ function watchDevicePixelRatio() {
 }
 watchDevicePixelRatio();
 
-const scene = new THREE.Scene();
+const scene = new THREE.Scene(); scene.matrixAutoUpdate = false;        // the scene and level roots never move: stops three marking the whole tree dirty every frame (needed for frozen subtrees to be skipped)
 {
   const c = document.createElement('canvas'); c.width = 2; c.height = 256;
   const x = c.getContext('2d'), g = x.createLinearGradient(0, 0, 0, 256);
@@ -617,7 +631,7 @@ const shots = [];             // projectiles in flight (player rockets + enemy b
 let boss = null;
 let endBosses = [];
 let groundPad = null;         // street-level target that also clears the level
-let lvl = new THREE.Group();  // everything belonging to the current level (rebuilt each level)
+let lvl = new THREE.Group(); lvl.matrixAutoUpdate = false;  // everything belonging to the current level (rebuilt each level)
 scene.add(lvl);
 let staticBuilt = false;
 const HOME_SLOT_COUNT = 6, UNIVERSE_R = 600, SPAWN_RING_R = UNIVERSE_R;     // six spawn universes on a ~600 m ring, always built (solo and co-op alike)
@@ -1916,6 +1930,7 @@ function buildPlanetLegInner(i) {
       let hw = 1.9 + R() * 1.5, hd = hw, shape = 'box', kind = null;
       if (pick < 0.16 && canSpecial) kind = 'mover'; else if (pick < 0.22 && canSpecial) kind = 'orbit'; else if (pick < 0.30 && canSpecial) kind = 'crumble';
       else if (pick < 0.35 && canSpecial) kind = 'piston'; else if (pick < 0.40 && canSpecial) kind = 'breath';
+      else if (pick < 0.46 && canSpecial) kind = 'blink'; else if (pick < 0.52 && canSpecial) kind = 'swing'; else if (pick < 0.58 && canSpecial) kind = 'spin';
       else if (pick < 0.62) shape = 'disc'; else if (pick < 0.74) { if (Math.abs(ux) > Math.abs(uz)) { hw = 5.6; hd = 1.25; } else { hw = 1.25; hd = 5.6; } }
       let sl;
       if (kind) {
@@ -1999,6 +2014,7 @@ function buildAlienRoute() {
       let hw = 1.9 + R() * 1.5, hd = hw, shape = 'box', kind = null;
       if (pick < 0.16 && canSpecial) kind = 'mover'; else if (pick < 0.22 && canSpecial) kind = 'orbit'; else if (pick < 0.30 && canSpecial) kind = 'crumble';
       else if (pick < 0.35 && canSpecial) kind = 'piston'; else if (pick < 0.40 && canSpecial) kind = 'breath';
+      else if (pick < 0.46 && canSpecial) kind = 'blink'; else if (pick < 0.52 && canSpecial) kind = 'swing'; else if (pick < 0.58 && canSpecial) kind = 'spin';
       else if (pick < 0.62) shape = 'disc'; else if (pick < 0.74) { if (Math.abs(ux) > Math.abs(uz)) { hw = 5.6; hd = 1.25; } else { hw = 1.25; hd = 5.6; } }          // thin beam
       let sl;
       if (kind) {
@@ -2315,7 +2331,7 @@ function connect(A, B) {
     coin(x, y + 1.2, z, zone);
     if (prev && k % 2 === 0) for (let u = 0.33; u < 0.9; u += 0.33) coin(prev.cx + (x - prev.cx) * u, prev.top + (y - prev.top) * u + 1.5 + 3 * Math.sin(Math.PI * u), prev.cz + (z - prev.cz) * u, zone);
     // weird platforms: movers, crumblers and psychedelic warpers (never the first/last stepping stone)
-    const roll = rand(), weird = canMorph && k > 0 && k < n - 1 ? (roll < 0.10 ? 'mover' : roll < 0.19 ? 'orbit' : roll < 0.28 ? 'crumble' : roll < 0.37 ? 'piston' : roll < 0.46 ? 'breath' : roll < 0.472 && psyPlatformEligible() ? 'psy' : '') : '';
+    const roll = rand(), weird = canMorph && k > 0 && k < n - 1 ? (roll < 0.10 ? 'mover' : roll < 0.19 ? 'orbit' : roll < 0.28 ? 'crumble' : roll < 0.37 ? 'piston' : roll < 0.46 ? 'breath' : roll < 0.472 && psyPlatformEligible() ? 'psy' : roll < 0.56 ? 'blink' : roll < 0.65 ? 'swing' : roll < 0.74 ? 'spin' : '') : '';
     if (weird === 'psy') tryPsySpecial(p, { ph: rand() * 6.28, period: 4 + rand() * 3, amp: 4 + rand() * 2.5, lift: rand() < 0.35, px: -uz, pz: ux, fx: ['trip', 'warp', 'invert'][(rand() * 3) | 0] });
     else if (weird) makeSpecial(p, weird, { ph: rand() * 6.28, period: weird === 'piston' ? 2.6 + rand() * 1.6 : 4 + rand() * 3, amp: weird === 'orbit' ? 5 + rand() * 3.5 : weird === 'piston' ? 3.5 + rand() * 2.5 : 4 + rand() * 2.5, lift: rand() < 0.35, px: -uz, pz: ux });
     else {
@@ -3434,13 +3450,16 @@ function walkBranch(src, mode, len, aim) {
   let x = src.cx, y = src.top, z = src.cz, last = src, pending = null;
   const decorate = (p, dir, canMorph) => {
     const roll = rand();
-    if (roll < 0.10) makeSpecial(p, 'mover', { ph: rand() * 6.28, period: 4 + rand() * 3, amp: 4 + rand() * 2.5, lift: rand() < 0.35, px: -Math.sin(dir), pz: Math.cos(dir) });
-    else if (roll < 0.20) makeSpecial(p, 'orbit', { ph: rand() * 6.28, period: 5 + rand() * 4, amp: 5 + rand() * 3.5 });
-    else if (roll < 0.30) makeSpecial(p, 'crumble', {});
-    else if (canMorph && roll < 0.40) makeSpecial(p, 'piston', { ph: rand() * 6.28, period: 2.6 + rand() * 1.6, amp: 3.5 + rand() * 2.5 });
-    else if (canMorph && roll < 0.50) makeSpecial(p, 'breath', { ph: rand() * 6.28, period: 3 + rand() * 2.4 });
-    else if (roll < 0.532 && psyPlatformEligible()) tryPsySpecial(p, { ph: rand() * 6.28, fx: ['trip', 'warp', 'invert'][(rand() * 3) | 0] });
-    else if (roll < 0.62) bounceDress(p);
+    if (roll < 0.09) makeSpecial(p, 'mover', { ph: rand() * 6.28, period: 4 + rand() * 3, amp: 4 + rand() * 2.5, lift: rand() < 0.35, px: -Math.sin(dir), pz: Math.cos(dir) });
+    else if (roll < 0.17) makeSpecial(p, 'orbit', { ph: rand() * 6.28, period: 5 + rand() * 4, amp: 5 + rand() * 3.5 });
+    else if (roll < 0.23) makeSpecial(p, 'crumble', {});
+    else if (canMorph && roll < 0.30) makeSpecial(p, 'piston', { ph: rand() * 6.28, period: 2.6 + rand() * 1.6, amp: 3.5 + rand() * 2.5 });
+    else if (canMorph && roll < 0.36) makeSpecial(p, 'breath', { ph: rand() * 6.28, period: 3 + rand() * 2.4 });
+    else if (canMorph && roll < 0.46) makeSpecial(p, 'blink', { ph: 0, period: 3 });
+    else if (canMorph && roll < 0.55) makeSpecial(p, 'swing', { ph: rand() * 6.28, period: 3.4 + rand() * 2, amp: 3.5 + rand() * 2, px: -Math.sin(dir), pz: Math.cos(dir) });
+    else if (canMorph && roll < 0.64) makeSpecial(p, 'spin', { ph: 0, period: 1 });
+    else if (roll < 0.652 && psyPlatformEligible()) tryPsySpecial(p, { ph: rand() * 6.28, fx: ['trip', 'warp', 'invert'][(rand() * 3) | 0] });
+    else if (roll < 0.72) bounceDress(p);
     else { if (rand() < 0.5) coin(p.cx, p.top + 1.2, p.cz, src.zone); if (rand() < (src.zone && src.zone.name === 'Jungle' ? 0.85 : 0.55)) spawnBiomeEnemy(p.cx, p.top, p.cz, p, src.zone, 0.5); }
   };
   for (let k = 0; k < len; k++) {
@@ -3552,7 +3571,7 @@ function buildLevel() {
   saveBase();
   scene.remove(lvl);
   lvl.traverse(o => { if (o.geometry) o.geometry.dispose(); });
-  lvl = new THREE.Group(); scene.add(lvl);
+  lvl = new THREE.Group(); lvl.matrixAutoUpdate = false; scene.add(lvl);
   routeLandmarks.length = 0;
   buildingHubs.length = interiorTargets.length = openedTowers.length = 0; activeTowerInterior = null; inInterior = false; interiorKeyLight = null;
   homeGuide = null; hintNpc = false; homeGuides.length = 0;
@@ -5358,10 +5377,11 @@ function enemyContacts() {
 
 // Collision only tests solids whose footprint is near the player (six universes ~3x the solids). Rebuilt when the player moves 20 m, the solid list changes, or every 0.5 s (movers shift a few metres).
 let nearSolids = [], nsX = 1e9, nsZ = 1e9, nsLen = -1, nsAt = 0;
+let solidsVer = 0, nsVer = -1;          // bumped when a platform is switched in/out without changing solids.length (blinkers)
 function refreshNearSolids() {
   const now = performance.now();
-  if (solids.length === nsLen && Math.abs(pos.x - nsX) < 20 && Math.abs(pos.z - nsZ) < 20 && now - nsAt < 500) return;
-  nsLen = solids.length; nsX = pos.x; nsZ = pos.z; nsAt = now; nearSolids.length = 0;
+  if (solids.length === nsLen && nsVer === solidsVer && Math.abs(pos.x - nsX) < 20 && Math.abs(pos.z - nsZ) < 20 && now - nsAt < 500) return;
+  nsLen = solids.length; nsVer = solidsVer; nsX = pos.x; nsZ = pos.z; nsAt = now; nearSolids.length = 0;
   const M = 75;
   for (const q of solids) if (q.maxx > pos.x - M && q.minx < pos.x + M && q.maxz > pos.z - M && q.minz < pos.z + M) nearSolids.push(q);
 }
@@ -6513,6 +6533,26 @@ function cullable(o) {
   return ok;
 }
 const _cullSize = new THREE.Vector3();
+// STATIC MATRIX FREEZE: the first batch of level objects that nothing animates is told to stop recomputing world matrices (three skips a whole subtree
+// when matrixWorldAutoUpdate is false). Anything that later mutates a frozen platform group must call thawRoot(). A sampler thaws any root that drifts.
+const frozenRoots = []; let frozenScan = 0;
+function lvlRoot(o) { while (o && o.parent && o.parent !== lvl) o = o.parent; return o; }
+function freezeRoot(o) { if (o._fz) return; o._fz = [o.position.x, o.position.y, o.position.z, o.scale.x, o.scale.y, o.scale.z, o.quaternion.x, o.quaternion.y, o.quaternion.z, o.quaternion.w]; o.matrixWorldAutoUpdate = false; frozenRoots.push(o); }
+function thawRoot(o) { o = lvlRoot(o); if (!o || !o._fz) return; o._fz = null; o.matrixWorldAutoUpdate = true; o.matrixWorldNeedsUpdate = true; const i = frozenRoots.indexOf(o); if (i >= 0) frozenRoots.splice(i, 1); }
+function frozenSample() {            // cheap watchdog: thaw any frozen root whose own transform changed since it was frozen
+  const n = frozenRoots.length; if (!n) return;
+  for (let k = 0; k < 160 && frozenRoots.length; k++) {
+    frozenScan = (frozenScan + 1) % frozenRoots.length; const o = frozenRoots[frozenScan], f = o._fz; if (!f) continue;
+    const q = o.quaternion;
+    if (o.position.x !== f[0] || o.position.y !== f[1] || o.position.z !== f[2] || o.scale.x !== f[3] || o.scale.y !== f[4] || o.scale.z !== f[5] || q.x !== f[6] || q.y !== f[7] || q.z !== f[8] || q.w !== f[9]) { thawRoot(o); console.warn('[freeze] thawed a drifting root'); }
+  }
+}
+function dynRoots() {                // level roots that gameplay animates: never frozen
+  const set = new Set(), add = o => { const r = o && lvlRoot(o); if (r) set.add(r); };
+  for (const e of specials) add(e.grp); for (const e of enemies) add(e.mesh); for (const e of items) add(e.mesh); for (const e of props) add(e.mesh);
+  for (const d of dressings.values()) add(d.g); for (const g of growers) { add(g.body); add(g.rim); }
+  return set;
+}
 function setFar(o, far) {                              // hide/show an object we own the visibility of (remembers it was us)
   if (far) { if (o.visible && !o._cullOff) { o.visible = false; o._cullOff = true; o.matrixWorldAutoUpdate = false; } }
   else if (o._cullOff) { o.visible = true; o._cullOff = false; o.matrixWorldAutoUpdate = true; o.matrixWorldNeedsUpdate = true; }
@@ -6520,13 +6560,16 @@ function setFar(o, far) {                              // hide/show an object we
 function cullTick(dt) {
   cull.t -= dt; if (cull.t > 0) return; cull.t = 0.35;
   if (inInterior) return;
-  if (cull.lvl !== lvl) { cull.lvl = lvl; cull.n = 0; cull.list = []; cull.hidden = 0; }
+  if (cull.lvl !== lvl) { cull.lvl = lvl; cull.n = 0; cull.list = []; cull.hidden = 0; frozenRoots.length = 0; frozenScan = 0; }
   let budget = lvl.children.length - cull.n > 1500 ? 20000 : 1500;      // a freshly built level registers in one go (a slow trickle left thousands of far meshes drawn), later additions trickle
+  const firstBatch = cull.n === 0 && budget > 1500, dyn = firstBatch ? dynRoots() : null;       // only the initial build is frozen; anything added at runtime stays live
   for (; cull.n < lvl.children.length && budget-- > 0; cull.n++) {
     const o = lvl.children[cull.n]; if (!cullable(o)) continue;
     o.updateWorldMatrix(true, true); const b = new THREE.Box3().setFromObject(o);
     if (b.isEmpty()) continue; b.getSize(_cullSize); b.expandByScalar(6); cull.list.push({ o, b, big: Math.max(_cullSize.x, _cullSize.y, _cullSize.z) >= CULL_BIG_SIZE, off: false });
+    if (firstBatch && !dyn.has(o)) freezeRoot(o);
   }
+  frozenSample();
   const cp = camera.position; let hidden = 0;
   for (const e of cull.list) {
     const far = e.b.distanceToPoint(cp) > (e.big ? CULL_BIG_R : CULL_R);
@@ -6539,8 +6582,13 @@ function cullTick(dt) {
     const dFar = Math.hypot(en.x - cp.x, en.z - cp.z);
     if ((dFar > 460 || Math.abs(en.y - cp.y) > 500) !== !!en._gone) { en._gone = !en._gone; en.mesh.visible = !en._gone; }      // beyond the horizon even the beacon is dropped
     const far = dFar > 170 || Math.abs(en.y - cp.y) > 200;
+    if (far && !en._gone && en._bodyOff) {                  // frozen far enemy: its marker (aura/beacon/arrow) follows at the cull tick rate instead of a full subtree matrix update every frame
+      const m = en.mesh; m.updateMatrix(); m.matrixWorld.multiplyMatrices(m.parent.matrixWorld, m.matrix);
+      for (const c of m.children) if (c.visible) c.updateMatrixWorld(true);
+    }
     if (far === !!en._bodyOff) continue;
     en._bodyOff = far;
+    en.mesh.matrixWorldAutoUpdate = !far; if (!far) en.mesh.matrixWorldNeedsUpdate = true;
     for (const c of en.mesh.children) if (c !== en.aura && c !== en.beacon && c.geometry !== aggroGeo) c.visible = !far;
   }
   for (const it of items) {                            // far pickups
@@ -7074,6 +7122,7 @@ function moveSpecial(s, ox, oy, oz) {          // shift a platform (solid + visu
   sp.ox = ox; sp.oy = oy; sp.oz = oz;
   if (standOn === s && onGround && state === 'play') { pos.x += dx; pos.y += dy; pos.z += dz; }
 }
+let blinkAlt = 0;
 let crackMat = null; const crackGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
 function makeSpecial(s, kind, d) {
   if (s.cx !== undefined && activeStartHubs().some(h => Math.hypot(s.cx - h.x, s.cz - h.z) < 90 && s.top > h.top - 70)) return;      // the area around every home stays calm: no pistons/movers/crumblers next to spawn
@@ -7083,6 +7132,22 @@ function makeSpecial(s, kind, d) {
   else if (kind === 'orbit') { m.color.setHex(0x9b73ff); m.emissive.setHex(0x9b73ff); }   // orbiters glow violet
   else if (kind === 'piston') { m.color.setHex(0xff7ad8); m.emissive.setHex(0xff7ad8); }   // pistons glow hot pink
   else if (kind === 'breath') { m.color.setHex(0x36ffd8); m.emissive.setHex(0x2fbfa8); }   // growers/gloopers pulse teal
+  else if (kind === 'blink') {              // ALTERNATING: two colour teams (cyan / magenta) take turns being solid on a shared 3 s beat
+    blinkAlt ^= 1; s.sp.alt = blinkAlt; const bc = blinkAlt ? 0xff3fc8 : 0x36f6ff;
+    m.color.setHex(bc); m.emissive.setHex(bc); s.sp.on = true;
+    const gh = new THREE.Mesh(new THREE.BoxGeometry(s.hw * 2, 0.25, s.hd * 2), new THREE.MeshBasicMaterial({ color: bc, wireframe: true, transparent: true, opacity: 0.55 }));
+    gh.position.set(s.cx, s.top - 0.05, s.cz); gh.visible = false; (lvl || scene).add(gh); s.sp.ghost = gh;
+  }
+  else if (kind === 'swing') { m.color.setHex(0xff9a3a); m.emissive.setHex(0xff9a3a); }      // pendulum: arcs back and forth, dipping in the middle
+  else if (kind === 'spin') {               // TURNTABLE: a lit spoked wheel on top that carries you round in a circle
+    m.color.setHex(0xffe03a); m.emissive.setHex(0xffb01a);
+    const wheel = new THREE.Group(), wr = Math.max(0.8, Math.min(s.hw, s.hd) * 0.92);
+    const wm = new THREE.MeshBasicMaterial({ color: 0x2a1a00, toneMapped: false }), wl = new THREE.MeshBasicMaterial({ color: 0xffe03a, toneMapped: false });
+    for (let i = 0; i < 3; i++) { const bar = new THREE.Mesh(new THREE.BoxGeometry(wr * 2, 0.07, 0.34), i === 0 ? wl : wm); bar.rotation.y = i * Math.PI / 3; wheel.add(bar); }
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(wr, 0.07, 4, 24), wl); rim.rotation.x = Math.PI / 2; wheel.add(rim);
+    const nub = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 0.5), wl); nub.position.set(wr, 0.1, 0); wheel.add(nub);       // a marker so the rotation is readable
+    wheel.position.set(s.cx, s.top + 0.16, s.cz); s.grp.add(wheel); s.sp.wheel = wheel; s.sp.w = (rand() < 0.5 ? -1 : 1) * (0.55 + rand() * 0.45);
+  }
   else if (kind === 'crumble') {            // cracked, brittle-looking
     s.sp.col = m.color.getHex();                 // keeps its zone colour; the CRACKS are the warning
     if (!crackMat) {                             // one shared cracked-glass texture; each cracked platform is just ONE extra quad
@@ -7101,7 +7166,7 @@ function makeSpecial(s, kind, d) {
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.12, 8, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
     ring.position.set(s.cx, s.top + 1.5, s.cz); s.grp.add(ring); s.sp.ring = ring;
   }
-  specials.push(s);
+  specials.push(s); thawRoot(s.grp);
 }
 function tryPsySpecial(s, data) {
   if (psySpecialCount >= 1) return false;
@@ -7274,10 +7339,31 @@ function updateSpecials(dt) {
   for (let i = specials.length - 1; i >= 0; i--) {
     const s = specials[i], sp = s.sp;
     if (!sp) { specials.splice(i, 1); continue; }
-    if (sp.base && (sp.kind === 'mover' || sp.kind === 'orbit' || sp.kind === 'piston' || sp.kind === 'breath') && standOn !== s && (Math.abs(sp.base.cx - pos.x) > 230 || Math.abs(sp.base.cz - pos.z) > 230)) continue;      // far movers freeze (time-based, so they snap to the right place when you approach)
+    if (sp.base && (sp.kind === 'mover' || sp.kind === 'orbit' || sp.kind === 'piston' || sp.kind === 'breath' || sp.kind === 'swing' || sp.kind === 'blink' || sp.kind === 'spin') && standOn !== s) {
+      const farAway = Math.abs(sp.base.cx - pos.x) > 230 || Math.abs(sp.base.cz - pos.z) > 230;           // far movers freeze (time-based, so they snap to the right place when you approach)
+      if (farAway) { if (s.grp.matrixWorldAutoUpdate && !s.grp._fz) s.grp.matrixWorldAutoUpdate = false; continue; }
+      if (!s.grp.matrixWorldAutoUpdate && !s.grp._fz) { s.grp.matrixWorldAutoUpdate = true; s.grp.matrixWorldNeedsUpdate = true; }
+    }
     if (sp.kind === 'mover') {
       const w = Math.sin(T * (2 * Math.PI / sp.period) + sp.ph);
       moveSpecial(s, sp.lift ? 0 : sp.px * w * sp.amp, sp.lift ? w * sp.amp * 0.6 : 0, sp.lift ? 0 : sp.pz * w * sp.amp);
+    } else if (sp.kind === 'swing') {        // pendulum arc along its heading, lowest point in the middle
+      const w = Math.sin(T * (2 * Math.PI / sp.period) + sp.ph);
+      moveSpecial(s, (sp.px || 0) * w * sp.amp * 1.4, -w * w * sp.amp * 0.55, (sp.pz || 0) * w * sp.amp * 1.4);
+    } else if (sp.kind === 'blink') {        // alternating solid / ghost, last 0.4 s of "on" flickers as a warning
+      const cyc = (T / 3) % 1, ph2 = sp.alt ? (cyc + 0.5) % 1 : cyc, on = ph2 < 0.5, warn = on && ph2 > 0.37;
+      if (on !== sp.on) {
+        sp.on = on;
+        if (on) { solids.push(s); sfx.click && sfx.click(); } else { const i2 = solids.indexOf(s); if (i2 >= 0) solids.splice(i2, 1); }
+        solidsVer++; if (sp.ghost) sp.ghost.visible = !on;
+      }
+      s.grp.visible = on && (!warn || Math.floor(performance.now() / 70) % 2 === 0);
+    } else if (sp.kind === 'spin') {         // turntable: spin the wheel and sweep a rider around the centre
+      const dth = sp.w * dt; sp.wheel.rotation.y -= dth;
+      if (standOn === s && onGround && state === 'play') {
+        const rx = pos.x - s.cx, rz = pos.z - s.cz, c = Math.cos(dth), sn = Math.sin(dth);
+        pos.x = s.cx + rx * c + rz * sn; pos.z = s.cz - rx * sn + rz * c;
+      }
     } else if (sp.kind === 'orbit') {        // circling around its base like a carousel stone
       const a = T * (2 * Math.PI / sp.period) + sp.ph;
       moveSpecial(s, Math.cos(a) * sp.amp, 0, Math.sin(a) * sp.amp);
@@ -7321,7 +7407,7 @@ function spawnGate(spec) {
     const p = addPlatform(spec.x, spec.y, spec.z, spec.half, false, 0, spec.zone, true);
     for (const c of spec.coins) coin(c[0], c[1], c[2], spec.zone);
     p.sp = { kind: 'rise', base: baseOf(p), ox: 0, oy: 0, oz: 0, t: 0 };
-    specials.push(p); moveSpecial(p, 0, -14, 0);
+    specials.push(p); thawRoot(p.grp); moveSpecial(p, 0, -14, 0);
   });
 }
 function unlockArena(A) {
@@ -7668,7 +7754,7 @@ function updateWorlds(dt) {
       const d = dressings.get(site);
       if (d) { if (!z || d.zone !== z.name || far) d.target = 0; else d.target = 1; }
       else if (z && near && made < 8 && dressings.size < 90) {
-        const dr = dressSite(site, z); dr.zone = z.name; dr.k = 0; dr.target = 1; dr.site = site; (site.grp || lvl).add(dr.g); dr.g.scale.setScalar(0.001); dressings.set(site, dr); made++;
+        const dr = dressSite(site, z); dr.zone = z.name; dr.k = 0; dr.target = 1; dr.site = site; (site.grp || lvl).add(dr.g); thawRoot(dr.g); dr.g.scale.setScalar(0.001); dressings.set(site, dr); made++;
       }
     }
   }
@@ -8298,7 +8384,7 @@ const PERF = {
       `calls ${o['draw calls/frame']}  tris ${(o['triangles/frame'] / 1000).toFixed(0)}k  submit ${o['render submit ms']} ms
 ` +
       `geo ${o['geometries']}  tex ${o['textures']}  ${mem}
-res ${outputWidth}x${outputHeight}  ${retroPreset}  enemies ${o['enemies alive']}
+res ${outputWidth}x${outputHeight} @${adaptRes.scale.toFixed(2)}x  ${retroPreset}  enemies ${o['enemies alive']}
 ` +
       top.map(k => `${k.slice(9)} ${o[k]}`).join('\n');
     const c = this._gfx.getContext('2d'), W = 200, H = 44; c.clearRect(0, 0, W, H);
@@ -8325,9 +8411,16 @@ window.__ng.lvl = () => lvl;
 window.__ng.cull = () => ({ tracked: cull.list.length, hidden: cull.hidden, children: lvl.children.length, solids: solids.length, platforms: platforms.length, specials: specials.length, enemies: enemies.length, items: items.length, props: props.length });
 window.__ng.renderInfo = () => new Promise(res => { renderer.info.autoReset = false; renderer.info.reset(); requestAnimationFrame(() => requestAnimationFrame(() => { const i = renderer.info; res({ calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries }); renderer.info.autoReset = true; })); });
 window.__ng.perf = PERF; window.__ng.drawStats = () => { const fr = new THREE.Frustum(), m = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); fr.setFromProjectionMatrix(m); const enemyRoots = new Set(enemies.map(e => e.mesh)); const out = { enemyParts: 0, enemiesVisible: 0, other: 0, instanced: 0, sprites: 0, transparent: 0 }; const seen = new Set(); scene.traverseVisible(o => { if (!o.isMesh && !o.isSprite && !o.isPoints) return; if (o.frustumCulled && o.geometry && !fr.intersectsObject(o)) return; if (o.isSprite) { out.sprites++; return; } let a = o, isE = false; while (a) { if (enemyRoots.has(a)) { isE = true; seen.add(a); break; } a = a.parent; } if (isE) out.enemyParts++; else if (o.isInstancedMesh) out.instanced++; else { out.other++; const k = (o.geometry ? o.geometry.type : '?') + '|' + (o.material && o.material.type) + (o.material && o.material.transparent ? '|T' : '') + '|d' + Math.round(Math.hypot(o.getWorldPosition(new THREE.Vector3()).x - camera.position.x, o.getWorldPosition(new THREE.Vector3()).z - camera.position.z) / 100); (out.k = out.k || {})[k] = (out.k[k] || 0) + 1; } if (o.material && o.material.transparent) out.transparent++; }); out.enemiesVisible = seen.size; return out; }; window.__ng.farWho = () => { const fr = new THREE.Frustum(); fr.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)); const tops = new Map(); scene.traverseVisible(o => { if (!o.isMesh || (o.frustumCulled && !fr.intersectsObject(o))) return; const wp = o.getWorldPosition(new THREE.Vector3()); if (Math.hypot(wp.x - camera.position.x, wp.z - camera.position.z) < 450) return; let a = o; while (a.parent && a.parent !== scene && a.parent !== lvl) a = a.parent; const e = tops.get(a) || { n: 0, cullable: cullable(a), type: a.type, kids: a.children.length, inLvl: a.parent === lvl, ud: Object.keys(a.userData || {}).join(), x: Math.round(a.position.x), y: Math.round(a.position.y), z: Math.round(a.position.z) }; e.n++; tops.set(a, e); }); return [...tops.values()].sort((p, q) => q.n - p.n).slice(0, 8); };
-window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.plateInfo = () => platforms.slice(0, 3).map(p => ({ top: p.top, y: p.plate && p.plate.position.y, vis: p.plate && p.plate.visible, col: p.plate && p.plate.material.color.getHex(), em: p.plate && p.plate.material.emissive.getHex(), ei: p.plate && p.plate.material.emissiveIntensity, po: p.plate && p.plate.material.polygonOffset, par: p.plate && p.plate.parent && p.plate.parent.type, h: p.plate && p.plate.geometry.parameters.height })); window.__ng.towerWindows = () => buildingHubs.flatMap(h => h.windows || []).map(w => ({ x: w.x, y: w.y, z: w.z, nx: w.nx, nz: w.nz })); window.__ng.netState = () => ({ on: net.on, room: net.room, peers: net.peers.size, slot: net.slot }); window.__ng.pvpShot = () => { let r = 'nopeer'; eachPeer(p => { const o = new THREE.Vector3(pos.x, pos.y + 1.4, pos.z), d = new THREE.Vector3(p.pos.x - pos.x, p.pos.y + 1 - o.y, p.pos.z - pos.z).normalize(), h = castRay(o, d, 60); r = (h.peer ? 'hit' : 'miss') + JSON.stringify({ me: [pos.x, pos.y, pos.z].map(v => +v.toFixed(1)), peer: [p.pos.x, p.pos.y, p.pos.z].map(v => +v.toFixed(1)), t: +h.t.toFixed(2), wall: !!h.hit, alive: p.alive }); if (h.peer) hitPeer(h.peer, 1); }); return r; }; window.__ng.health = () => health; window.__ng.setCull = (r, big) => { CULL_R = r; CULL_BIG_R = big; cull.t = 0; }; window.__ng.sectors = () => { const out = []; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + 0.2; let n = 0; for (const q of solids) { if (q.cx === undefined || Math.abs(q.top - TOP) > 60) continue; const dx = q.cx - start.x, dz = q.cz - start.z, d = Math.hypot(dx, dz); if (d < 30 || d > 170) continue; let da = Math.abs(Math.atan2(dz, dx) - a); da = Math.min(da, Math.PI * 2 - da); if (da < Math.PI / 8) n++; } out.push(n); } return out; }; window.__ng.bossesNow = () => endBosses.map(e => ({ n: e.name, v: e.bossRole, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), hub: e.hub ? e.hub.kind : 'bottom' })); window.__ng.enemyCount = () => enemies.filter(e => !e.dead).length; window.__ng.propsNow = () => props.map(p => ({ k: p.kind, x: +p.mesh.position.x.toFixed(1), y: +p.mesh.position.y.toFixed(1), z: +p.mesh.position.z.toFixed(1) })); window.__ng.bounceNear = (x, z, r = 12) => solids.filter(s => s.bounce && Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z) < r).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +s.maxy.toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), w: +(s.maxx - s.minx).toFixed(1), d: +(s.maxz - s.minz).toFixed(1), boost: s.boost })); window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute(); window.__ng.moonTp = () => { const m = moonInfo; pos.set(m.x + m.ux * 8, m.y + 4, m.z + m.uz * 8); vel.set(0, 0, 0); return m.y; }; window.__ng.findZone = nm => { const q = solids.filter(x => x.zone && x.zone.name === nm && x.alien && x.cx !== undefined && !x.sp); const m = q[(q.length / 2) | 0]; return m ? { x: m.cx, y: m.top, z: m.cz, n: q.length } : null; }; window.__ng.mk = (v, dx = 0, dz = 8, sc = 1.2) => { const e = makeWalker(pos.x + dx, pos.y, pos.z + dz, standOn && standOn.minx !== undefined ? standOn : null, sc, false, v); e.zone = activeZ; return enemies.length; }; window.__ng.tp = (x, y, z) => { pos.set(x, y, z); vel.set(0, 0, 0); }; window.__ng.me = () => ({ x: pos.x, y: pos.y, z: pos.z, state }); window.__ng.maw = () => makeMaw(pos.x + 12, pos.y + 4, pos.z + 12); window.__ng.planet = i => { buildMarsRoute(); marsInfo && buildPlanetLeg(i | 0); }; window.__ng.warpTo = k => { const d = warp.dest[k | 0]; if (d) { warp.sel = k | 0; warpGo(); } return warp.dest.map(q => q.name); }; window.__ng.cps = () => solids.filter(q => q.checkpoint).slice(0, 6).map(q => ({ x: q.cx, y: q.top, z: q.cz })); window.__ng.warpState = () => ({ sel: warp.sel, n: warp.dest.length, names: warp.dest.map(q => q.name) }); window.__ng.scare = k => k ? spawnScareCreatures(k) : jumpScare('face'); window.__ng.zone = nm => { const z = ZONES.find(q => q.name === nm); setZone(z || null); return !!z; }; window.__ng.zoneInfo = () => ({ zone: activeZ && activeZ.name, enemies: enemies.filter(e => !e.dead).length, planets: planetInfo.length, warps: warp.dest.length });
+window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.plateInfo = () => platforms.slice(0, 3).map(p => ({ top: p.top, y: p.plate && p.plate.position.y, vis: p.plate && p.plate.visible, col: p.plate && p.plate.material.color.getHex(), em: p.plate && p.plate.material.emissive.getHex(), ei: p.plate && p.plate.material.emissiveIntensity, po: p.plate && p.plate.material.polygonOffset, par: p.plate && p.plate.parent && p.plate.parent.type, h: p.plate && p.plate.geometry.parameters.height })); window.__ng.towerWindows = () => buildingHubs.flatMap(h => h.windows || []).map(w => ({ x: w.x, y: w.y, z: w.z, nx: w.nx, nz: w.nz })); window.__ng.netState = () => ({ on: net.on, room: net.room, peers: net.peers.size, slot: net.slot }); window.__ng.pvpShot = () => { let r = 'nopeer'; eachPeer(p => { const o = new THREE.Vector3(pos.x, pos.y + 1.4, pos.z), d = new THREE.Vector3(p.pos.x - pos.x, p.pos.y + 1 - o.y, p.pos.z - pos.z).normalize(), h = castRay(o, d, 60); r = (h.peer ? 'hit' : 'miss') + JSON.stringify({ me: [pos.x, pos.y, pos.z].map(v => +v.toFixed(1)), peer: [p.pos.x, p.pos.y, p.pos.z].map(v => +v.toFixed(1)), t: +h.t.toFixed(2), wall: !!h.hit, alive: p.alive }); if (h.peer) hitPeer(h.peer, 1); }); return r; }; window.__ng.health = () => health; window.__ng.setCull = (r, big) => { CULL_R = r; CULL_BIG_R = big; cull.t = 0; }; window.__ng.sectors = () => { const out = []; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + 0.2; let n = 0; for (const q of solids) { if (q.cx === undefined || Math.abs(q.top - TOP) > 60) continue; const dx = q.cx - start.x, dz = q.cz - start.z, d = Math.hypot(dx, dz); if (d < 30 || d > 170) continue; let da = Math.abs(Math.atan2(dz, dx) - a); da = Math.min(da, Math.PI * 2 - da); if (da < Math.PI / 8) n++; } out.push(n); } return out; }; window.__ng.bossesNow = () => endBosses.map(e => ({ n: e.name, v: e.bossRole, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), hub: e.hub ? e.hub.kind : 'bottom' })); window.__ng.enemyCount = () => enemies.filter(e => !e.dead).length; window.__ng.propsNow = () => props.map(p => ({ k: p.kind, x: +p.mesh.position.x.toFixed(1), y: +p.mesh.position.y.toFixed(1), z: +p.mesh.position.z.toFixed(1) })); window.__ng.bounceNear = (x, z, r = 12) => solids.filter(s => s.bounce && Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z) < r).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +s.maxy.toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), w: +(s.maxx - s.minx).toFixed(1), d: +(s.maxz - s.minz).toFixed(1), boost: s.boost })); window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute(); window.__ng.moonTp = () => { const m = moonInfo; pos.set(m.x + m.ux * 8, m.y + 4, m.z + m.uz * 8); vel.set(0, 0, 0); return m.y; }; window.__ng.findZone = nm => { const q = solids.filter(x => x.zone && x.zone.name === nm && x.alien && x.cx !== undefined && !x.sp); const m = q[(q.length / 2) | 0]; return m ? { x: m.cx, y: m.top, z: m.cz, n: q.length } : null; }; window.__ng.mk = (v, dx = 0, dz = 8, sc = 1.2) => { const e = makeWalker(pos.x + dx, pos.y, pos.z + dz, standOn && standOn.minx !== undefined ? standOn : null, sc, false, v); e.zone = activeZ; return enemies.length; }; window.__ng.tp = (x, y, z) => { pos.set(x, y, z); vel.set(0, 0, 0); }; window.__ng.me = () => ({ x: pos.x, y: pos.y, z: pos.z, state }); window.__ng.maw = () => makeMaw(pos.x + 12, pos.y + 4, pos.z + 12); window.__ng.planet = i => { buildMarsRoute(); marsInfo && buildPlanetLeg(i | 0); }; window.__ng.warpTo = k => { const d = warp.dest[k | 0]; if (d) { warp.sel = k | 0; warpGo(); } return warp.dest.map(q => q.name); }; window.__ng.freezeCheck = () => {      // dev: how many frozen roots are STALE (their subtree moved since freezing)? forces a full matrix refresh afterwards
+  const sig = o => { let t = 0; o.traverse(c => { const e = c.matrixWorld.elements; t += e[12] * 1.1 + e[13] * 1.7 + e[14] * 2.3 + e[0] * 3.1 + e[5] * 4.1 + e[10] * 5.3 + e[1] * 7.7 + e[2] * 8.9; }); return t; };
+  const before = frozenRoots.map(sig); lvl.updateMatrixWorld(true); const stale = []; frozenRoots.forEach((o, i) => { if (Math.abs(sig(o) - before[i]) > 1e-3) stale.push(o); });
+  return { frozen: frozenRoots.length, stale: stale.length, ex: stale.slice(0, 8).map(o => ({ t: o.type, n: o.children.length, ud: Object.keys(o.userData || {}).join(','), y: Math.round(o.position.y), kid: (o.children[0] && o.children[0].type) + '/' + (o.children[0] && o.children[0].geometry ? o.children[0].geometry.type : '') })) };
+};
+window.__ng.adapt = () => ({ ...adaptRes, pr: renderer.getPixelRatio() });
+window.__ng.cps = () => solids.filter(q => q.checkpoint).slice(0, 6).map(q => ({ x: q.cx, y: q.top, z: q.cz })); window.__ng.warpState = () => ({ sel: warp.sel, n: warp.dest.length, names: warp.dest.map(q => q.name) }); window.__ng.scare = k => k ? spawnScareCreatures(k) : jumpScare('face'); window.__ng.zone = nm => { const z = ZONES.find(q => q.name === nm); setZone(z || null); return !!z; }; window.__ng.zoneInfo = () => ({ zone: activeZ && activeZ.name, enemies: enemies.filter(e => !e.dead).length, planets: planetInfo.length, warps: warp.dest.length });
 let last = performance.now();
 renderer.setAnimationLoop(now => {
+  adaptiveTick(now - last);
   const P = PERF.enabled; if (P) { renderer.info.reset(); PERF.frame(now); PERF.lapStart(); }
   const dt = paused ? 0 : Math.min((now - last) / 1000, 0.05); last = now;
   if (paused) { /* frozen: the ESC menu is open */ }
