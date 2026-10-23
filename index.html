@@ -5204,7 +5204,7 @@ function buildLevel() {
   saveBase();
   specTeardown();      // LEVELKIT:HOOK (no-op unless a spec is live)
   scene.remove(lvl);
-  lvl.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+  lvl.traverse(o => { if (o.geometry) o.geometry.dispose(); const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) for (const k of ['map', 'emissiveMap', 'alphaMap']) if (m[k]) m[k].dispose(); });      // TEXFIX: every rebuild used to leak ~7 GPU textures (canvas textures were never disposed); a texture still shared elsewhere just re-uploads once
   lvl = new THREE.Group(); lvl.matrixAutoUpdate = false; scene.add(lvl);
   routeLandmarks.length = 0;
   buildingHubs.length = interiorTargets.length = openedTowers.length = roofArenas.length = 0; jobs.length = 0; activeTowerInterior = null; inInterior = false; interiorKeyLight = null;
