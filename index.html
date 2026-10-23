@@ -3621,7 +3621,7 @@ function buildLevel() {
   lvl.traverse(o => { if (o.geometry) o.geometry.dispose(); });
   lvl = new THREE.Group(); lvl.matrixAutoUpdate = false; scene.add(lvl);
   routeLandmarks.length = 0;
-  buildingHubs.length = interiorTargets.length = openedTowers.length = 0; activeTowerInterior = null; inInterior = false; interiorKeyLight = null;
+  buildingHubs.length = interiorTargets.length = openedTowers.length = roofArenas.length = 0; activeTowerInterior = null; inInterior = false; interiorKeyLight = null;
   homeGuide = null; hintNpc = false; homeGuides.length = 0;
   if (guideDialogOpen) closeGuideDialog(false);
   solids.length = platforms.length = portals.length = enemies.length = items.length = decals.length = gibsList.length = clouds.length = shots.length = 0; buildingBoxes.length = 0; bleeders.length = 0; armoryGun = null; railSolids.length = 0;
@@ -4533,6 +4533,82 @@ function updateGrowers(dt) {
     }
   }
 }
+// ---------- ROOF ARENAS: land on a building and its roof turns into a battle arena. A blend of late-stage species, each mutated into something odd, must die before the roof opens ----------
+const roofArenas = [];
+const ARENA_POOL = ['demon', 'infernal', 'glitchling', 'kaomoji', 'spider', 'skeleton', 'stalker', 'stormWraith', 'frozenStalker', 'gorilla', 'dinosaur', 'alien', 'charger'];
+const MUTATIONS = [
+  { name: 'GIANT', scale: 1.5, hp: 1.8, speed: 0.8, tint: 0xff5a2a, spikes: 4 },
+  { name: 'SWIFT', scale: 0.85, hp: 0.8, speed: 1.6, tint: 0x39ff88, halo: true },
+  { name: 'PRISM', scale: 1.1, hp: 1.3, speed: 1.1, tint: 0xc070ff, spikes: 6, halo: true },
+  { name: 'HOLLOW', scale: 1.2, hp: 1.0, speed: 1.25, tint: 0x36f6ff, halo: true },
+  { name: 'GILDED', scale: 1.0, hp: 2.2, speed: 0.95, tint: 0xffd23a, spikes: 3 },
+];
+function mutateEnemy(e, mut) {          // recolour, add spikes / a halo, bend the stats: the same species, but wrong
+  const tint = new THREE.Color(mut.tint);
+  e.mesh.traverse(c => { const m = c.material; if (m && m.isMeshLambertMaterial && !m._mut) { m._mut = true; m.color.lerp(tint, 0.6); if (m.emissive) { m.emissive.copy(tint).multiplyScalar(0.22); } } });
+  const glow = new THREE.MeshBasicMaterial({ color: mut.tint }), sc = Math.max(0.8, e.h / 1.8);
+  for (let i = 0; i < (mut.spikes || 0); i++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.1 * sc, 0.55 * sc, 4), glow); sp.position.set((i % 2 ? 1 : -1) * 0.16 * sc, e.h * (0.45 + 0.1 * i), -0.34 * sc); sp.rotation.x = -0.7; e.mesh.add(sp); }
+  if (mut.halo) { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.55 * sc, 0.045, 4, 16), glow); ring.position.y = e.h + 0.35; ring.rotation.x = Math.PI / 2; e.mesh.add(ring); e.halo = ring; }
+  e.hp = e.maxhp = Math.max(1, Math.round(e.maxhp * mut.hp * (1 + level * 0.06))); e.speed *= mut.speed; e.mut = mut.name; e.pts = Math.round(e.pts * 1.6);
+}
+function roofLanding(hub) {
+  if (!hub || hub.opened || hub.arenaState) return;
+  if (net.on || hub.top < 24 || enemies.filter(q => !q.dead).length > evolveCap() + 30) { openTower(hub); return; }      // co-op keeps the instant hatch (arena state is not networked yet)
+  startRoofArena(hub);
+}
+function startRoofArena(hub) {
+  const r = rngFor((levelSeed ^ Math.floor(hub.x * 41 + hub.z * 23 + hub.top)) | 0);
+  const pool = ARENA_POOL.slice(), kinds = []; for (let i = 0; i < 3; i++) kinds.push(pool.splice((r() * pool.length) | 0, 1)[0]);
+  const muts = MUTATIONS.slice().sort(() => r() - 0.5).slice(0, 3);
+  const a = { hub, kinds, muts, t: 0, phase: 'intro', foes: [], done: false, rim: null, name: `${muts[0].name} ${kinds[0].toUpperCase()} NEST` };
+  hub.arenaState = 'active';
+  inLevel(() => {
+    a.rim = new THREE.Mesh(new THREE.BoxGeometry(1, 0.3, 1), new THREE.MeshBasicMaterial({ color: 0xff3a5a, transparent: true, opacity: 0.85 }));
+    a.rim.scale.set(hub.hw * 2 + 0.6, 1, hub.hd * 2 + 0.6); a.rim.position.set(hub.x, hub.top - 0.1, hub.z); scene.add(a.rim);
+    a.pyl = [];
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 7, 0.5), new THREE.MeshBasicMaterial({ color: 0xff3a5a, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false })); m.position.set(hub.x + sx * hub.hw * 0.96, hub.top + 3.5, hub.z + sz * hub.hd * 0.96); scene.add(m); a.pyl.push(m); }
+  });
+  roofArenas.push(a);
+  toast(`ROOF ARENA — ${a.name}`, 2600); sfx.roar(); shake = Math.max(shake, 0.5); shockRing({ x: hub.x, y: hub.top, z: hub.z }, Math.max(hub.hw, hub.hd), 0xff3a5a);
+}
+function spawnRoofWave(a, wave) {
+  const hub = a.hub, n = wave === 1 ? 4 + Math.min(level, 5) : 5 + Math.min(level, 6), before = enemies.length;
+  for (let i = 0; i < n; i++) {
+    const ang = Math.random() * 6.283, rr = 0.35 + Math.random() * 0.55, x = hub.x + Math.cos(ang) * hub.hw * rr, z = hub.z + Math.sin(ang) * hub.hd * rr;
+    const kind = a.kinds[i % a.kinds.length], mut = a.muts[(Math.random() * a.muts.length) | 0];
+    const e = makeWalker(x, hub.top, z, hub.roofSolid, 0.95 * mut.scale, false, kind); e.zone = hub.zone || null; mutateEnemy(e, mut);
+  }
+  if (wave === 2) {                      // the alpha: a huge double-mutant that shows a boss bar
+    const mut = a.muts[0], e = makeWalker(hub.x, hub.top, hub.z, hub.roofSolid, 1.9, false, a.kinds[0]); e.zone = hub.zone || null; mutateEnemy(e, mut); mutateEnemy(e, a.muts[1]);
+    e.hp = e.maxhp = Math.round(e.maxhp * 1.5 + 6); e.mini = true; e.pts += 400;
+  }
+  a.foes = enemies.slice(before); toast(wave === 1 ? 'THEY HAVE MUTATED — KILL THEM ALL' : 'THE ALPHA ARRIVES', 1800); sfx.roar && sfx.roar();
+}
+function finishRoofArena(a) {
+  a.done = true; const hub = a.hub; hub.arenaState = 'done'; score += 600; sfx.clear();
+  openTower(hub);
+  toast('ROOF CLEARED — THE BUILDING OPENS. JUMP THROUGH THE HOLE!', 3600);
+  shockRing({ x: hub.x, y: hub.top, z: hub.z }, 9, 0x6bff8a); flashWhite && flashWhite();
+  heart(hub.x + 2.5, hub.top + 1.3, hub.z + 2.5); ammoBox(hub.x - 2.5, hub.top + 0.8, hub.z + 2.5); for (let i = 0; i < 5; i++) coin(hub.x + Math.cos(i * 1.26) * 3, hub.top + 1.4, hub.z + Math.sin(i * 1.26) * 3, hub.zone);
+  if (a.rim) a.rim.material.color.setHex(0x6bff8a); for (const m of a.pyl || []) m.material.color.setHex(0x6bff8a);
+  a.fade = 4;
+}
+function updateRoofArenas(dt) {
+  for (let i = roofArenas.length - 1; i >= 0; i--) {
+    const a = roofArenas[i];
+    if (a.done) { a.fade -= dt; if (a.fade <= 0) { if (a.rim) a.rim.removeFromParent(); for (const m of a.pyl || []) m.removeFromParent(); roofArenas.splice(i, 1); } else if (a.rim) a.rim.material.opacity = 0.85 * Math.min(1, a.fade / 2); continue; }
+    if (state !== 'play') continue;
+    a.t += dt; const alive = a.foes.some(f => !f.dead), pulse = 0.55 + 0.35 * Math.sin(performance.now() / 160);
+    if (a.rim) a.rim.material.opacity = alive || a.phase === 'intro' ? pulse : 0.9;
+    if (a.hub.opened && a.phase !== 'intro' && !alive) { a.phase = 'w2'; }
+    if (a.phase === 'intro' && a.t > 1.4) { spawnRoofWave(a, 1); a.phase = 'w1'; }
+    else if (a.phase === 'w1' && !alive) { a.phase = 'gap'; a.t = 0; toast('WAVE CLEARED — MORE ARE COMING', 1600); }
+    else if (a.phase === 'gap' && a.t > 2.2) { spawnRoofWave(a, 2); a.phase = 'w2'; }
+    else if (a.phase === 'w2' && !alive) finishRoofArena(a);
+    if (a.halo) a.halo.rotation.z += dt;
+    for (const f of a.foes) if (f.halo && !f.dead) f.halo.rotation.z += dt * 2.4;
+  }
+}
 let eggBottom = false;
 function onLand(speed, sol) {
   trickLand();
@@ -4560,7 +4636,7 @@ function onLand(speed, sol) {
   if (sol.ground) setZone(null);
   else if (sol.interior) { if (activeTowerInterior) setZone(activeTowerInterior.zone, false, true); }
   else if (!sol.bounce && !(psy.t > 0)) setZone(sol.zone || null);
-  if (sol.building && state === 'play' && sol.hub) openTower(sol.hub);
+  if (sol.building && state === 'play' && sol.hub) roofLanding(sol.hub);
   if (sol.sp && sol.sp.kind === 'psy') psyTrigger(sol);
   // Not every landing stays a landing: a few ordinary floating ledges wake up into compact combat arenas.
   if (state === 'play' && popArenaCount < 4 && !sol.arena && !sol.bounce && !sol.awakened && !sol.sp && sol.grp && rand() < 0.115) {
@@ -6741,7 +6817,7 @@ function updateStreet(dt) {
   playerShadowTick(); cullTick(dt); updateHomeBase(dt);
   updateTowerInterior(dt); updateInteriorDecor(dt);
   // Standing on a building roof wakes that tower (the landing hook catches the very first touch).
-  if (state === 'play' && standOn && standOn.building && standOn.hub && !standOn.hub.opened) openTower(standOn.hub);
+  if (state === 'play' && standOn && standOn.building && standOn.hub && !standOn.hub.opened) roofLanding(standOn.hub);
   for (const hub of openedTowers) {                       // the roof hatch irises open right after the tower wakes
     const shell = hub.interior && hub.interior.shell;
     if (!shell || !shell.hatch) continue;
@@ -8472,6 +8548,9 @@ window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math
   const before = frozenRoots.map(sig); lvl.updateMatrixWorld(true); const stale = []; frozenRoots.forEach((o, i) => { if (Math.abs(sig(o) - before[i]) > 1e-3) stale.push(o); });
   return { frozen: frozenRoots.length, stale: stale.length, ex: stale.slice(0, 8).map(o => ({ t: o.type, n: o.children.length, ud: Object.keys(o.userData || {}).join(','), y: Math.round(o.position.y), kid: (o.children[0] && o.children[0].type) + '/' + (o.children[0] && o.children[0].geometry ? o.children[0].geometry.type : '') })) };
 };
+window.__ng.roofArena = i => { const h = buildingHubs[i | 0]; if (!h) return null; pos.set(h.x + 2, h.top + 0.5, h.z + 2); vel.set(0, 0, 0); startRoofArena(h); return { top: h.top, hw: h.hw }; };
+window.__ng.arenaKill = () => { for (const a of roofArenas) for (const f of a.foes) { f.dead = true; f.hp = 0; if (f.mesh) f.mesh.visible = false; } };
+window.__ng.arenaState = () => roofArenas.map(a => ({ phase: a.phase, foes: a.foes.length, alive: a.foes.filter(f => !f.dead).length, done: a.done, name: a.name, muts: a.foes.map(f => f.mut).slice(0, 6), opened: a.hub.opened }));
 window.__ng.adapt = () => ({ ...adaptRes, pr: renderer.getPixelRatio() });
 window.__ng.cps = () => solids.filter(q => q.checkpoint).slice(0, 6).map(q => ({ x: q.cx, y: q.top, z: q.cz })); window.__ng.warpState = () => ({ sel: warp.sel, n: warp.dest.length, names: warp.dest.map(q => q.name) }); window.__ng.scare = k => k ? spawnScareCreatures(k) : jumpScare('face'); window.__ng.zone = nm => { const z = ZONES.find(q => q.name === nm); setZone(z || null); return !!z; }; window.__ng.zoneInfo = () => ({ zone: activeZ && activeZ.name, enemies: enemies.filter(e => !e.dead).length, planets: planetInfo.length, warps: warp.dest.length });
 let last = performance.now();
@@ -8483,7 +8562,7 @@ renderer.setAnimationLoop(now => {
   else if (state === 'play') { playerUpdate(dt); if (P) PERF.lap('player'); updateEnemies(dt); if (P) PERF.lap('enemies'); updateShots(dt); if (P) PERF.lap('shots'); }
   else if (state === 'dead') { deadT -= dt; if (deadT <= 0) respawn(); if (net.on) { updateEnemies(dt); updateShots(dt); } }
   else if (state === 'clear') { updateEnemies(dt); clearT -= dt; if (clearT <= 0) nextLevel(); }
-  updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); evolveTick(dt); updateGrowers(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); updateClouds(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
+  updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); evolveTick(dt); updateGrowers(dt); updateRoofArenas(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); updateClouds(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
   updateVisuals(dt); setHint(); if (P) PERF.lap('visuals+hud');
   if (guideDialogOpen && state !== 'play') closeGuideDialog(false);
   netTick(dt); updatePeers(dt); debugTick(dt); if (P) PERF.lap('net+peers+debug');
