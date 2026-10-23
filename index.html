@@ -7505,7 +7505,7 @@ function moveSpecial(s, ox, oy, oz) {          // shift a platform (solid + visu
   sp.ox = ox; sp.oy = oy; sp.oz = oz;
   if (standOn === s && onGround && state === 'play') { pos.x += dx; pos.y += dy; pos.z += dz; }
 }
-let blinkAlt = 0;
+let blinkAlt = 0; const blinkGhostGeo = new Map();   // cache: ghost-box geometry shared by footprint size across thousands of blink platforms
 let crackMat = null; const crackGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
 function makeSpecial(s, kind, d) {
   if (s.cx !== undefined && activeStartHubs().some(h => Math.hypot(s.cx - h.x, s.cz - h.z) < 90 && s.top > h.top - 70)) return;      // the area around every home stays calm: no pistons/movers/crumblers next to spawn
@@ -7515,10 +7515,18 @@ function makeSpecial(s, kind, d) {
   else if (kind === 'orbit') { m.color.setHex(0x9b73ff); m.emissive.setHex(0x9b73ff); }   // orbiters glow violet
   else if (kind === 'piston') { m.color.setHex(0xff7ad8); m.emissive.setHex(0xff7ad8); }   // pistons glow hot pink
   else if (kind === 'breath') { m.color.setHex(0x36ffd8); m.emissive.setHex(0x2fbfa8); }   // growers/gloopers pulse teal
-  else if (kind === 'blink') {              // ALTERNATING: two colour teams (cyan / magenta) take turns being solid on a shared 3 s beat
-    blinkAlt ^= 1; s.sp.alt = blinkAlt; const bc = blinkAlt ? 0xff3fc8 : 0x36f6ff;
+  else if (kind === 'blink') {              // ALTERNATING: two colour teams take turns being solid on a shared 3 s beat.
+    // Deliberately NOT cyan/magenta: those are the exact hex values the default plate (0x36f6ff) and big/checkpoint
+    // plate (0xff3fc8) use, so a blink platform used to look identical to an ordinary platform until it flickered,
+    // which read as a rendering bug rather than an intentional "about to go non-solid" warning. Amber/lime are unique
+    // in the special-platform palette (mover teal / orbit violet / piston pink / breath teal) and in ordinary zones.
+    blinkAlt ^= 1; s.sp.alt = blinkAlt; const bc = blinkAlt ? 0xffb62a : 0x7cff3a;
     m.color.setHex(bc); m.emissive.setHex(bc); s.sp.on = true;
-    const gh = new THREE.Mesh(new THREE.BoxGeometry(s.hw * 2, 0.25, s.hd * 2), new THREE.MeshBasicMaterial({ color: bc, wireframe: true, transparent: true, opacity: 0.55 }));
+    // geometry shared/cached per footprint size (thousands of platforms now; the ghost box only ever differs by hw/hd),
+    // but the material stays per-instance because updateSpecials animates its opacity independently per platform.
+    const gk = s.hw.toFixed(2) + ',' + s.hd.toFixed(2);
+    const gg = blinkGhostGeo.get(gk) || (blinkGhostGeo.set(gk, new THREE.BoxGeometry(s.hw * 2, 0.25, s.hd * 2)), blinkGhostGeo.get(gk));
+    const gh = new THREE.Mesh(gg, new THREE.MeshBasicMaterial({ color: bc, wireframe: true, transparent: true, opacity: 0.55, depthWrite: false }));
     gh.position.set(s.cx, s.top - 0.05, s.cz); gh.visible = false; (lvl || scene).add(gh); s.sp.ghost = gh;
   }
   else if (kind === 'swing') { m.color.setHex(0xff9a3a); m.emissive.setHex(0xff9a3a); }      // pendulum: arcs back and forth, dipping in the middle
@@ -7733,14 +7741,25 @@ function updateSpecials(dt) {
     } else if (sp.kind === 'swing') {        // pendulum arc along its heading, lowest point in the middle
       const w = Math.sin(T * (2 * Math.PI / sp.period) + sp.ph);
       moveSpecial(s, (sp.px || 0) * w * sp.amp * 1.4, -w * w * sp.amp * 0.55, (sp.pz || 0) * w * sp.amp * 1.4);
-    } else if (sp.kind === 'blink') {        // alternating solid / ghost, last 0.4 s of "on" flickers as a warning
+    } else if (sp.kind === 'blink') {        // alternating solid / ghost; last 0.4 s of "on" warns before it flips (timing unchanged below)
       const cyc = (T / 3) % 1, ph2 = sp.alt ? (cyc + 0.5) % 1 : cyc, on = ph2 < 0.5, warn = on && ph2 > 0.37;
       if (on !== sp.on) {
         sp.on = on;
         if (on) { solids.push(s); if (Math.hypot(s.cx - pos.x, s.cz - pos.z) < 16 && Math.abs(s.top - pos.y) < 16) sfx.click && sfx.click(); } else { const i2 = solids.indexOf(s); if (i2 >= 0) solids.splice(i2, 1); }
-        solidsVer++; if (sp.ghost) sp.ghost.visible = !on;
+        solidsVer++;
       }
-      s.grp.visible = on && (!warn || Math.floor(performance.now() / 70) % 2 === 0);
+      // VISUAL FIX: this used to hard-toggle grp.visible on/off every 70 ms during warn (a true video-strobe flicker
+      // that read as a rendering bug, especially on the cyan team which shared its hex colour with ordinary platform
+      // plates). The platform itself is now only ever hidden while it is genuinely non-solid (never strobes while
+      // still safe to stand on); the warning instead reads as a smooth glowing pulse plus the ghost outline easing
+      // into view, so it's legible as "about to flip" rather than "glitching".
+      s.grp.visible = on;
+      if (sp.ghost) {
+        const warnK = warn ? Math.min(1, (ph2 - 0.37) / 0.13) : 0;
+        sp.ghost.visible = !on || warn;
+        sp.ghost.material.opacity = on ? 0.08 + 0.3 * warnK : 0.55;
+      }
+      if (on) s.plate.material.emissiveIntensity = warn ? 0.8 + 0.7 * (0.5 + 0.5 * Math.sin(performance.now() / 55)) : 0.8;
     } else if (sp.kind === 'spin') {         // turntable: spin the wheel and sweep a rider around the centre
       const dth = sp.w * dt; sp.wheel.rotation.y -= dth;
       if (standOn === s && onGround && state === 'play') {
