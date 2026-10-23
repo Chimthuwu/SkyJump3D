@@ -55,9 +55,15 @@
   @keyframes horrorBreath{from{filter:brightness(.86) contrast(1.07);transform:scale(1)}to{filter:brightness(.62) contrast(1.25);transform:scale(1.018)}}
   @keyframes horrorGrain{0%{transform:translate(0,0)}50%{transform:translate(-1px,1px)}100%{transform:translate(1px,-1px)}}
   #hud,#players{position:fixed;top:12px;padding:10px 13px;background:var(--panel);border:1px solid rgba(54,246,255,.55);box-shadow:0 0 14px rgba(54,246,255,.16),inset 0 0 18px rgba(54,246,255,.05);font-size:15px;line-height:1.5;text-shadow:0 0 8px #36f6ff55;pointer-events:none;z-index:2}
-  #hud{left:12px;border-left:3px solid var(--neon-cyan);max-width:min(300px,42vw);font-size:13px;line-height:1.4;padding:7px 10px;background:rgba(5,9,22,.55);opacity:.92}
+  #hud{left:12px;border-left:3px solid var(--neon-cyan);max-width:min(300px,42vw);font-size:13px;line-height:1.4;padding:7px 10px;background:rgba(5,9,22,.72);opacity:1}
   #players{right:12px;text-align:right;border-right:3px solid var(--neon-pink)}
-  #hud .hearts{font-size:27px;color:#ff4a9b;letter-spacing:2px;text-shadow:0 0 10px #ff3fc8}
+  #hud .hearts{display:flex;align-items:center;gap:2px;margin:0 0 7px;padding:4px 9px 4px 8px;background:rgba(14,2,20,.96);border:2px solid #ff4a7a;border-radius:9px;box-shadow:0 0 14px rgba(255,50,110,.65),inset 0 0 10px rgba(255,50,110,.25)}
+  #hud .hearts .hl{font-size:11px;font-weight:800;letter-spacing:.12em;color:#ffd0dc;margin-right:6px;line-height:1;text-align:center}
+  #hud .hearts .hl b{display:block;font-size:19px;color:#fff;text-shadow:0 0 8px #ff2d6a}
+  #hud .hearts i{font-style:normal;font-size:34px;line-height:1;color:#ff3d6a;-webkit-text-stroke:1px #fff;paint-order:stroke fill;filter:drop-shadow(0 0 5px #ff2d55) drop-shadow(0 0 12px #ff0a4a)}
+  #hud .hearts i.e{color:#26101e;-webkit-text-stroke:1.5px #ff7a9a;filter:none;opacity:.85}
+  #hud .hearts.low{animation:hpLow .6s ease-in-out infinite alternate}
+  @keyframes hpLow{from{box-shadow:0 0 12px rgba(255,40,80,.5),inset 0 0 8px rgba(255,40,80,.2);border-color:#ff4a7a}to{box-shadow:0 0 30px rgba(255,20,60,1),inset 0 0 16px rgba(255,20,60,.5);border-color:#fff}}
   .bar{width:170px;height:8px;background:#090e20;border:1px solid #486078;overflow:hidden;margin-top:3px}
   .bar>div{height:100%;background:var(--neon-cyan);width:100%;box-shadow:0 0 10px currentColor}
   #bossbar{position:fixed;top:14px;left:50%;transform:translateX(-50%);width:min(420px,60vw);text-align:center;font-weight:700;text-shadow:0 0 10px #ff3fc8;display:none;z-index:3}
@@ -1811,12 +1817,13 @@ function moonTexture() {
 }
 // MARS: reaching the moon no longer ends the level. Landing there reveals a red planet far out in space and a 1000-platform bridge to it.
 let marsBuilt = false;
-// WARP PAD (home roof): every checkpoint you reach in space (moon, Mars, each planet) unlocks a destination. E on the pad hops to the next one.
-const warp = { dest: [], idx: -1, pad: null, hint: 0 };
-function warpUnlock(key, name, x, y, z, zone) {
-  if (warp.dest.some(d => d.key === key)) return;
-  warp.dest.push({ key, name, x, y, z, zone: zone || null });
-  toast(`WARP UNLOCKED: ${name} — use the pad on your home roof`, 4200); sfx.clear && sfx.clear();
+// WARP PAD (home roof): every checkpoint you touch (plus moon, Mars, each planet) unlocks a destination. Q on the pad picks one, E warps. Death always respawns you at the home tower.
+const warp = { dest: [], idx: -1, sel: 0, pad: null, hint: 0 };
+function warpUnlock(key, name, x, y, z, zone, msg) {
+  if (warp.dest.some(d => d.key === key)) return false;
+  warp.dest.push({ key, name, x, y, z, zone: zone || null }); warp.sel = warp.dest.length - 1;      // newest discovery is pre-selected
+  toast(msg || `WARP UNLOCKED: ${name} — use the pad on your home roof`, 4200); sfx.clear && sfx.clear();
+  return true;
 }
 function marsTexture() {
   const c = document.createElement('canvas'); c.width = 512; c.height = 256; const g = c.getContext('2d');
@@ -2175,7 +2182,7 @@ function buildSkyway(hubs) {
   const eggRing = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.12, 6, 24), new THREE.MeshBasicMaterial({ color: 0xffd23a })); eggRing.rotation.x = Math.PI / 2; eggRing.position.set(bx, by + 0.15, bz); scene.add(eggRing);
   ladder.sort((a, b) => a.top - b.top); ladder.forEach((sl, i) => { sl.pn = i + 1; });      // PLATFORM COUNTER: lowest = #1, highest = biggest number
   ladderBot = { n: 1, y: ladder[0].top }; ladderTop = { n: ladder.length, y: ladder[ladder.length - 1].top }; ladderLoop = loop;
-  marsBuilt = false; warp.dest.length = 0; warp.idx = -1; marsInfo = null; planetInfo.length = 0; planetLegBuilt = {}; WORLD_R = UNIVERSE_R + 420; camera.far = 2500; camera.updateProjectionMatrix();
+  marsBuilt = false; warp.dest.length = 0; warp.idx = -1; warp.sel = 0; marsInfo = null; planetInfo.length = 0; planetLegBuilt = {}; WORLD_R = UNIVERSE_R + 420; camera.far = 2500; camera.updateProjectionMatrix();
   moonInfo = { ux, uz, x: mx, y: moonTop, z: mz, col: [ux * colR, baseY, uz * colR], top: topY, loop };
   return keepOut;
 }
@@ -2869,7 +2876,7 @@ function guideTips() {
     'Walk up to a ride and press E to mount. Hold X for nitro; a vehicle suspension absorbs most hard drops.',
     'Find a rail and fall onto it to grind. SPACE launches you off the rail with extra momentum.',
     'Slot 2 is your builder hand. Mine glowing ore by walking into it, then press E to place a platform.',
-    'Checkpoints save your return point and stock the weapon you found at the armory.',
+    'Checkpoints stock the weapon you found at the armory and unlock a destination on the WARP PAD at your home tower.',
     'Arena Guardians lock the path onward. Defeat the crowned Guardian to raise its ghost platforms.',
     'The moon is not the end: land there to reveal the long bridge toward Mars.',
     'Frozen ledges are slippery; brake your approach early and keep your next jump planned.',
@@ -2891,7 +2898,7 @@ function guideTips() {
   if (health <= 2) return 'You are low on hearts. Grab a heart pickup or craft a medkit with leaf and wood before another hard landing.';
   if (activeMission && activeMission.state === 'ready') return 'Your task is ready to turn in. Return to the Home Base and talk to me for your reward.';
   if (!weaponOwned.slice(2).some(Boolean)) return 'You only have your starter kit. Follow the weapon beacons and bring back a new gun from the route.';
-  if (runDeaths > 0) return 'You have fallen before; respawning keeps your task. Checkpoints shorten the way back into the route.';
+  if (runDeaths > 0) return 'You have fallen before; you respawn at your home tower and keep your task. Every checkpoint you touched is a destination on the WARP PAD.';
   if (!hasUsedVehicle) return 'Your rides are parked nearby. Press E at the bike or DeLorean, then hold SHIFT to boost.';
   if (!hasUsedHoverboard) return 'You have not tried the hoverboard yet. Use your second jump, then hold SPACE to glide on it.';
   if (Object.values(hotbarRes).reduce((sum, n) => sum + n, 0) >= 12) return 'You are carrying a nice haul of ore. Check RECIPES for a medkit, ammo pack or a lasting upgrade.';
@@ -2941,7 +2948,7 @@ function buildHomeBase(hub, slot = mySlot) {
     const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.76, 1.7, 8), lam(color)); barrel.position.set(bx, 0.86, bz); g.add(barrel);
     const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.08, 4, 8), glow(0x36f6ff)); hoop.position.set(bx, 0.88, bz); hoop.rotation.x = Math.PI / 2; g.add(hoop);
   }
-  if (slot === mySlot) {                                  // WARP PAD: dormant until you have stood on the moon
+  if (slot === mySlot) {                                  // WARP PAD: dormant until you have touched a checkpoint
     const ringM = new THREE.MeshBasicMaterial({ color: 0x555a66, toneMapped: false }), discM = new THREE.MeshBasicMaterial({ color: 0x11141c, toneMapped: false });
     const ring = new THREE.Mesh(new THREE.TorusGeometry(2.1, 0.14, 5, 20), ringM); ring.rotation.x = -Math.PI / 2; ring.position.set(-8, 0.2, 8); g.add(ring);
     const disc = new THREE.Mesh(new THREE.CircleGeometry(2.0, 20), discM); disc.rotation.x = -Math.PI / 2; disc.position.set(-8, 0.16, 8); g.add(disc);
@@ -3696,7 +3703,7 @@ function limb(x, y, len, col) {
 }  const armL = limb(-0.52, 1.75, 0.9, 0x26324a), armR = limb(0.52, 1.75, 0.9, 0x26324a);
 const legL = limb(-0.22, 0.8, 0.8, 0x2b3a67), legR = limb(0.22, 0.8, 0.8, 0x2b3a67);
 // weapon models, all pointing along +z: [sword, pistol, shotgun, rocket launcher]
-// sci-fi arsenal: [energy blade, laser pistol, scatter cannon, plasma launcher, railgun]
+// sci-fi arsenal: [energy blade, pulse rifle, scatter cannon, plasma launcher, railgun]
 function makeWeaponMeshes() {
   const gunMat = col => { const c = new THREE.Color(col); if (c.r * 0.3 + c.g * 0.59 + c.b * 0.11 < 0.2) c.lerp(new THREE.Color(0x4a5366), 0.55); return new THREE.MeshLambertMaterial({ color: c, flatShading: true }); };      // weapons: bright steel + coloured bodies, never dark mud; no emissive wash so the colours stay saturated
   const part = (g, w, h, d, col, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), gunMat(col)); m.position.set(x, y, z); g.add(m); return m; };
@@ -3707,10 +3714,32 @@ function makeWeaponMeshes() {
   const blade = new THREE.Group();
   part(blade, 0.08, 0.08, 0.32, 0x2b2f36, 0, 0, 0.05); part(blade, 0.34, 0.05, 0.07, 0xd6a82a, 0, 0, 0.23);
   glow(blade, box(0.12, 0.12, 1.25), 0x2ad8ff, 0, 0, 0.9, 0.45); glow(blade, box(0.04, 0.04, 1.2), 0xe8ffff, 0, 0, 0.9);
-  // 1: laser pistol - white/steel, red glow strip, red emitter
+  // 1: pulse rifle (the starter gun) - long purple receiver, neon-green gradient glow, scope, magazine, stock. Vertex-colour gradients.
   const laser = new THREE.Group();
-  part(laser, 0.12, 0.17, 0.5, 0xdfe6ee, 0, 0, 0.25); part(laser, 0.1, 0.24, 0.12, 0x2b2f36, 0, -0.17, 0.08);
-  glow(laser, box(0.13, 0.04, 0.4), 0xff2a4a, 0, 0.07, 0.28); glow(laser, box(0.07, 0.07, 0.16), 0xff6a7a, 0, 0, 0.6); glow(laser, box(0.04, 0.12, 0.24), 0xff2a4a, 0, 0.13, 0.2);
+  const grad = (g, w, h, d, c1, c2, x, y, z, axis = 'z', lit = false) => {          // box whose colour blends (self-lit by default so the purple stays vivid under the scene lighting) c1 -> c2 along one axis
+    const geo = new THREE.BoxGeometry(w, h, d), P = geo.attributes.position, cols = new Float32Array(P.count * 3), A = new THREE.Color(c1), B = new THREE.Color(c2), T = new THREE.Color();
+    const half = axis === 'z' ? d / 2 : axis === 'y' ? h / 2 : w / 2;
+    for (let i = 0; i < P.count; i++) { const v = axis === 'z' ? P.getZ(i) : axis === 'y' ? P.getY(i) : P.getX(i); T.copy(A).lerp(B, (v / half + 1) / 2); cols[i * 3] = T.r; cols[i * 3 + 1] = T.g; cols[i * 3 + 2] = T.b; }
+    geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    const m = new THREE.Mesh(geo, lit ? new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }) : new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }));
+    m.position.set(x, y, z); g.add(m); return m;
+  };
+  const PUR = 0xc070ff, DPUR = 0x5a28b0, NEON = 0x39ff6a, TEAL = 0x00e5b0;
+  grad(laser, 0.12, 0.2, 0.34, DPUR, PUR, 0, 0.0, -0.2);                                         // stock
+  grad(laser, 0.14, 0.06, 0.1, NEON, TEAL, 0, 0.0, -0.39, 'z', false);                            // glowing butt pad
+  grad(laser, 0.15, 0.22, 0.62, PUR, DPUR, 0, 0, 0.3);                                            // receiver
+  grad(laser, 0.17, 0.05, 0.5, NEON, TEAL, 0, 0.115, 0.3, 'z', false);                            // glowing top spine
+  for (const sx of [-1, 1]) grad(laser, 0.02, 0.05, 0.46, TEAL, NEON, sx * 0.082, 0.0, 0.3, 'z', false);   // glowing side strips
+  grad(laser, 0.12, 0.13, 0.55, 0x7a3ad8, 0x3a1a80, 0, -0.01, 0.9);                                  // handguard
+  grad(laser, 0.04, 0.03, 0.5, 0x39ff6a, 0xb06aff, 0, 0.065, 0.9, 'z', false);                    // green->violet light bar on the handguard
+  grad(laser, 0.05, 0.05, 0.38, 0xa8b0d0, 0x5a4a9a, 0, 0.0, 1.35);                                // barrel
+  grad(laser, 0.1, 0.1, 0.14, PUR, NEON, 0, 0.0, 1.58, 'z', false);                               // muzzle brake: purple -> neon green
+  grad(laser, 0.09, 0.09, 0.34, 0x8a50e0, 0x4a2a9a, 0, 0.19, 0.42);                                   // scope tube
+  grad(laser, 0.07, 0.07, 0.04, NEON, TEAL, 0, 0.19, 0.6, 'z', false);                            // scope lens
+  grad(laser, 0.05, 0.08, 0.05, 0x6a5aa0, 0x6a5aa0, 0, 0.14, 0.32); grad(laser, 0.05, 0.08, 0.05, 0x6a5aa0, 0x6a5aa0, 0, 0.14, 0.52);   // scope mounts
+  const mag = grad(laser, 0.09, 0.28, 0.14, NEON, DPUR, 0, -0.22, 0.34, 'y'); mag.rotation.x = 0.18;   // magazine: green at the base -> purple at the well
+  grad(laser, 0.12, 0.05, 0.16, TEAL, NEON, 0, -0.37, 0.37, 'z', false).rotation.x = 0.18;
+  const grip = grad(laser, 0.09, 0.22, 0.1, DPUR, PUR, 0, -0.18, 0.05, 'y'); grip.rotation.x = -0.25;
   // 2: scatter cannon - chunky purple body, three glowing barrels, side cell
   const scatter = new THREE.Group();
   part(scatter, 0.32, 0.28, 0.75, 0x4a2a6a, 0, 0, 0.38); part(scatter, 0.1, 0.26, 0.14, 0x2b2f36, 0, -0.24, 0.1);
@@ -3742,8 +3771,6 @@ function makeWeaponMeshes() {
   // chunky boomer-shooter detailing: hazard stripes, vents, bolts and ammo cells so every gun reads as hard metal
   const dark = 0x1a1d26, brass = 0xc89a2a;
   part(blade, 0.1, 0.1, 0.1, brass, 0, 0, -0.04); part(blade, 0.05, 0.1, 0.3, dark, 0.05, 0, 0.06); part(blade, 0.1, 0.03, 0.12, 0xff3a5a, 0, 0.06, 0.12);
-  part(laser, 0.14, 0.06, 0.34, dark, 0, 0.12, 0.28); part(laser, 0.16, 0.14, 0.1, 0x8a96aa, 0, 0, 0.5); glow(laser, box(0.05, 0.05, 0.05), 0xff2a4a, 0, 0.2, 0.42);
-  for (let k = 0; k < 3; k++) part(laser, 0.15, 0.025, 0.05, dark, 0, 0.0, 0.1 + k * 0.1);
   part(scatter, 0.34, 0.07, 0.3, dark, 0, 0.17, 0.5); part(scatter, 0.36, 0.05, 0.1, 0xe8c030, 0, 0.08, 0.2); part(scatter, 0.36, 0.05, 0.1, dark, 0, 0.08, 0.3);
   part(scatter, 0.28, 0.16, 0.18, 0x6a3a8a, 0, -0.04, 0.78); for (const sx of [-0.17, 0.17]) part(scatter, 0.04, 0.2, 0.5, dark, sx, 0, 0.45);
   part(plasma, 0.14, 0.14, 0.5, dark, 0, 0.22, 0.3); part(plasma, 0.3, 0.3, 0.1, 0x2b3a2e, 0, 0, 1.05); for (const sx of [-0.2, 0.2]) part(plasma, 0.05, 0.05, 0.9, 0x8aa58a, sx, 0.12, 0.5);
@@ -3755,8 +3782,8 @@ function makeWeaponMeshes() {
 }
 // Give every weapon a readable, animated power source and muzzle assembly rather than leaving it as a static prop.
 function heroWeapon(g, i) {
-  const colors = [0x2ad8ff, 0xff335d, 0xff3af0, 0x5aff8a, 0x72baff, 0x3affd0, 0xb06aff];
-  const z = [1.42, .72, 1.28, 1.2, 1.82, 1.72, 1.25][i], col = colors[i];
+  const colors = [0x2ad8ff, 0x39ff6a, 0xff3af0, 0x5aff8a, 0x72baff, 0x3affd0, 0xb06aff];
+  const z = [1.42, 1.66, 1.28, 1.2, 1.82, 1.72, 1.25][i], col = colors[i];
   const coreMat = new THREE.MeshBasicMaterial({ color: col });
   const core = new THREE.Mesh(new THREE.SphereGeometry(i === 4 ? .12 : .09, 8, 6), coreMat); core.position.set(0, .02, z); g.add(core);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(i === 4 ? .18 : .13, .025, 5, 12), coreMat); ring.position.copy(core.position); ring.rotation.x = Math.PI / 2; g.add(ring);
@@ -3779,6 +3806,7 @@ scene.add(camera);
 const vm = new THREE.Group(); vm.scale.setScalar(0.7); vm.position.set(0.3, -0.3, -0.55); vm.visible = false; camera.add(vm);
 const vmGuns = makeWeaponMeshes().map(heroWeapon);
 vmGuns.forEach(g => { g.rotation.y = Math.PI; vm.add(g); });
+vmGuns[1].scale.setScalar(0.72); vmGuns[1].position.set(-0.08, 0.06, 0.05);        // the rifle is long: shrink it in first person so it does not fill the screen
 
 // HOVERBOARD: summoned by the double jump, ridden while you hold SPACE in the air
 function makeBoard() {
@@ -4187,10 +4215,10 @@ function schizoTick(dt) {                                  // hallucinations: ph
 function respawn() {
   if (onVehicle) dismount(); grinding = null;
   if (poundPress) poundPress = false;
-  pos.set(checkpoint.x, checkpoint.y, checkpoint.z); vel.set(0, 0, 0);
+  pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); checkpoint = { ...start };                  // always back to the home tower; discovered checkpoints are reached via the WARP PAD
   health = MAXHP; glide = 1; pounding = false; invuln = 1.5; onGround = false;
   climbing = null; climbStam = 1; psy.t = 0; psy.kind = ''; try { renderer.domElement.style.filter = ''; } catch (_) {}
-  setZone(checkpoint.zone || null);
+  setZone(null);
   state = 'play'; showMsg(''); clearBloodScreen();
 }
 function die(title, why) {
@@ -4199,7 +4227,7 @@ function die(title, why) {
   state = 'dead'; deadT = 2.6; vel.set(0, 0, 0); pounding = false; combo = 0; saveBest();
   goreDeath(title === 'SPLAT!');
   netSend({ t: 'died', x: +pos.x.toFixed(1), y: +pos.y.toFixed(1), z: +pos.z.toFixed(1), big: title === 'SPLAT!' });
-  showMsg(title, why, 'Back to the last checkpoint…');
+  showMsg(title, why, 'Back to your home tower… (checkpoints you found are on the WARP PAD)');
   const h1 = $('msg').querySelector('h1'); if (h1) h1.style.color = '#d6121f';
 }
 function hurt(n, fromX, fromZ) {
@@ -4239,6 +4267,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyC' || e.code === 'ControlLeft') poundPress = true;      // SHIFT is sprint now
   if (e.code === 'KeyF' || e.code === 'KeyJ') atkPress = true;
   eUsedProp = false;
+  if (e.code === 'KeyQ' && state === 'play' && warp.near) { warpCycle(); return; }
   if (e.code === 'KeyE' && state === 'play' && warp.near) { eUsedProp = true; warpGo(); return; }
   if (e.code === 'KeyE' && state === 'play' && hintNpc && !hintProp && !onVehicle) { eUsedProp = true; openGuideDialog(); return; }
   if ((e.code === 'Enter' || (e.code === 'KeyE' && (hintProp || onVehicle))) && state === 'play') { eUsedProp = e.code === 'KeyE'; useProp(); }
@@ -4285,6 +4314,8 @@ document.addEventListener('mousemove', e => {
   else { mdx = e.clientX - lastMouse.x; mdy = e.clientY - lastMouse.y; }
   lastMouse.x = e.clientX; lastMouse.y = e.clientY;
   if (!mdx && !mdy) return;
+  // Browsers occasionally report one giant movementX/Y (pointer-lock glitch, lock/unlock re-centre): drop those instead of whipping the view
+  if (Math.abs(mdx) > 220 || Math.abs(mdy) > 220) return;
   camYaw -= mdx * 0.0025; camPitch = clamp(camPitch + mdy * 0.002, -0.15, 1.3);
   fpPitch = clamp(fpPitch - mdy * 0.002, -1.45, 1.45);
 });
@@ -4296,6 +4327,7 @@ renderer.domElement.addEventListener('mousedown', e => {
 });
 document.addEventListener('mouseup', e => { if (e.button === 0) mouseHeld = false; if (e.button === 2) aiming = false; });
 document.addEventListener('pointerlockchange', () => {
+  lastMouse.x = null; lastMouse.y = null;                     // forget the stale cursor so the first move after a lock change can't jolt the camera
   if (!document.pointerLockElement) lockLost('reload hook');  // aim fallback keeps the game playable without lock
 });
 document.addEventListener('pointerlockerror', () => lockLost('reload hook'));
@@ -4512,7 +4544,7 @@ function nextLevel() {
 // ---------- weapons ----------
 const WEAPONS = [
   { name: 'Blade',   col: '#4fe8ff' },                                   // energy sword (melee)
-  { name: 'Laser',   col: '#ff3a5a', cd: 0.14 },                        // rapid red bolts, infinite
+  { name: 'Rifle',   col: '#39ff6a', cd: 0.14 },                        // rapid neon-green bolts, infinite (starter rifle)
   { name: 'Scatter', col: '#ff4af0', cd: 0.75, ammoKey: 'shells', starterAmmo: 8, ammoCap: 24, ammoPickup: 5 },      // spread of magenta beams
   { name: 'Plasma',  col: '#5aff8a', cd: 1.1, ammoKey: 'rockets', starterAmmo: 3, ammoCap: 9, ammoPickup: 1 },      // slow glowing orb, big blast, rocket-jump
   { name: 'Railgun', col: '#7ab8ff', cd: 1.5, ammoKey: 'rails', starterAmmo: 3, ammoCap: 6, ammoPickup: 1 },        // piercing beam through everything in line
@@ -4784,7 +4816,7 @@ function aimDirection(o) {
 }
 const spread = (d, a) => d.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2 * a, (Math.random() - 0.5) * 2 * a, (Math.random() - 0.5) * 2 * a)).normalize();
 const BEAMS = {
-  laser:   { color: 0xff2244, width: 0.07, life: 0.16 },
+  laser:   { color: 0x39ff6a, width: 0.07, life: 0.16 },
   scatter: { color: 0xff3af0, width: 0.065, life: 0.13 },
   rail:    { color: 0x6ab8ff, width: 0.22, life: 0.44 },
 };
@@ -4843,11 +4875,11 @@ function useWeapon() {
   const o = chest(), d = aimDirection(o);
   face = Math.atan2(d.x, d.z);
   const mz = o.clone().addScaledVector(d, 1.1);
-  const fireCol = [0x2ad8ff, 0xff335d, 0xff3af0, 0x5aff8a, 0x72baff, 0x3affd0, 0xb06aff][weapon];
+  const fireCol = [0x2ad8ff, 0x39ff6a, 0xff3af0, 0x5aff8a, 0x72baff, 0x3affd0, 0xb06aff][weapon];
   const firePower = weapon === 4 ? 1.8 : weapon === 3 ? 1.45 : weapon === 2 ? 1.25 : 1;
   muzzleFlash(mz, d, fireCol, firePower);
   for (const gun of [handGuns[weapon], vmGuns[weapon]]) if (gun && gun.userData.hero) gun.userData.hero.kick = 1;
-  if (weapon === 1) { shootRay(o, d, 1, 90, BEAMS.laser); flashFx(mz, 0xff4a6a, 0.3); sfx.laser(); }
+  if (weapon === 1) { shootRay(o, d, 1, 90, BEAMS.laser); flashFx(mz, 0x7aff9a, 0.3); sfx.laser(); }
   else if (weapon === 2) {
     for (let i = 0; i < 6; i++) shootRay(o, spread(d, 0.09 * (1 - 0.7 * aimK)), 1, 32, BEAMS.scatter);      // sights tighten the spread
     flashFx(mz, 0xff6af6, 0.55, 0.09); sfx.scatter();
@@ -5382,7 +5414,9 @@ function physicsStep(h) {
     if (landed.bounce && state === 'play') { vel.y = landed.boost || 26; onGround = false; jumps = 1; sfx.jump(true); burst(pos, 0x55e6ff, 8); }
   } else onGround = false;
   if (onGround && standOn && standOn.checkpoint && (checkpoint.y !== standOn.top)) {
-    checkpoint = { x: standOn.cx, y: standOn.top, z: standOn.cz, zone: standOn.zone }; toast('Checkpoint!', 1500);
+    checkpoint = { x: standOn.cx, y: standOn.top, z: standOn.cz, zone: standOn.zone };
+    const fresh = !(standOn.moon || standOn.mars || standOn.planet) && warpUnlock(`cp:${Math.round(standOn.cx)},${Math.round(standOn.top)},${Math.round(standOn.cz)}`, `${standOn.zone && standOn.zone.name ? standOn.zone.name.toUpperCase() : 'SKY'} CHECKPOINT · ${Math.round(standOn.top)}m`, standOn.cx, standOn.top + 1, standOn.cz, standOn.zone, 'CHECKPOINT FOUND — warp back to it from the pad on your home tower');
+    if (!fresh) toast('Checkpoint!', 1500);
   }
   if (state === 'play') enemyContacts();
 }
@@ -6681,7 +6715,7 @@ function updateVisuals(dt) {
   }
   if (weapon > 0) {                                  // ranged weapons: raise the arm(s) and aim
     armR.rotation.x = -1.5 + recoil * 0.35; armR.rotation.z = -0.12;
-    if (weapon >= 2) { armL.rotation.x = -1.3; armL.rotation.z = 0.35; }
+    if (weapon >= 1) { armL.rotation.x = -1.3; armL.rotation.z = 0.35; }
   }
   if (climbing) {                                    // hug the wall: arms reaching up, legs scrabbling
     const sw = Math.sin(t * 9) * (Math.abs(vel.y) + Math.abs(vel.x) + Math.abs(vel.z) > 1.5 ? 0.5 : 0);
@@ -6750,8 +6784,8 @@ function updateVisuals(dt) {
 
   // HUD (hidden behind the main menu)  $('hud').style.display = state === 'title' ? 'none' : '';
   $('hotbar').style.display = state === 'title' ? 'none' : '';
-  const hearts = '♥'.repeat(Math.max(0, health)) + '<span style="opacity:.35">' + '♥'.repeat(MAXHP - Math.max(0, health)) + '</span>';
-  const hudHtml = `<div class="hearts">${hearts}</div>Glide<div class="bar"><div style="width:${(glide * 100) | 0}%"></div></div>Grip<div class="bar"><div style="width:${(climbStam * 100) | 0}%;background:#ffb347"></div></div>Energy<div class="bar"><div style="width:${(cont.energy * 100) | 0}%;background:${cont.locked ? '#ff4a4a' : '#3affd0'}"></div></div>` +
+  const hp = clamp(health, 0, MAXHP), hearts = '<i>♥</i>'.repeat(hp) + '<i class="e">♥</i>'.repeat(MAXHP - hp);
+  const hudHtml = `<div class="hearts${hp <= 2 ? ' low' : ''}"><span class="hl">HEALTH<b>${hp}/${MAXHP}</b></span>${hearts}</div>Glide<div class="bar"><div style="width:${(glide * 100) | 0}%"></div></div>Grip<div class="bar"><div style="width:${(climbStam * 100) | 0}%;background:#ffb347"></div></div>Energy<div class="bar"><div style="width:${(cont.energy * 100) | 0}%;background:${cont.locked ? '#ff4a4a' : '#3affd0'}"></div></div>` +
     `Level <b>${level}</b> · Altitude <b>${pos.y | 0}</b> m<br>Score <b>${score}</b> · Coins <b>${base.credits}</b> · Bananas <b>${base.bananas}</b> · Best ${Math.max(best.score, score)} (L${best.level})` +
     (curPN !== null && ladderTop ? `<br><span style="color:${curPN < 0 ? '#ff3a5a' : '#ffd23a'}">PLATFORM #${curPN}</span> · deepest #${ladderBot.n} · highest #${ladderTop.n}` : '') +
     (combo > 0 ? ` · <span style="color:#ffd23a">Bullseye combo x${combo}</span>` : '') + '<br>' + weaponHud();
@@ -7832,12 +7866,16 @@ function warpTick(dt) {
   p.ring.color.setHex(on ? 0x36f6ff : 0x555a66); p.colM.color.setHex(on ? 0x36f6ff : 0x555a66); p.colM.opacity = on ? 0.18 + 0.1 * Math.sin(t * 3) : 0;
   warp.near = state === 'play' && !inInterior && Math.hypot(pos.x - p.x, pos.z - p.z) < 3 && Math.abs(pos.y - p.y) < 3;
   warp.hint -= dt;
-  if (warp.near && warp.hint <= 0) { warp.hint = 2.5; const nx = warp.dest[(warp.idx + 1) % Math.max(1, warp.dest.length)]; toast(on ? `[E] WARP → ${nx.name}` : 'WARP PAD offline — reach the Moon to power it', 2400); }
+  if (warp.near && warp.hint <= 0) { warp.hint = 2.5; const nx = warp.dest[warp.sel]; toast(on ? `[E] WARP → ${nx.name}  (${warp.sel + 1}/${warp.dest.length})${warp.dest.length > 1 ? '  ·  [Q] next destination' : ''}` : 'WARP PAD offline — touch a checkpoint to unlock destinations', 2400); }
+}
+function warpCycle() {
+  if (warp.dest.length < 2) return;
+  warp.sel = (warp.sel + 1) % warp.dest.length; warp.hint = 2.5;
+  toast(`[E] WARP → ${warp.dest[warp.sel].name}  (${warp.sel + 1}/${warp.dest.length})  ·  [Q] next destination`, 2400);
 }
 function warpGo() {
-  if (!warp.dest.length) { toast('WARP PAD offline — reach the Moon to power it', 2400); return; }
-  warp.idx = (warp.idx + 1) % warp.dest.length;
-  const d = warp.dest[warp.idx];
+  if (!warp.dest.length) { toast('WARP PAD offline — touch a checkpoint to unlock destinations', 2400); return; }
+  const d = warp.dest[warp.sel = Math.min(warp.sel, warp.dest.length - 1)];
   if (d.key === 'mars' && !marsBuilt) buildMarsRoute();
   pos.set(d.x, d.y, d.z); vel.set(0, 0, 0); onGround = false; pounding = false; climbing = null; invuln = Math.max(invuln, 1.5);
   checkpoint = { x: d.x, y: d.y, z: d.z, zone: d.zone }; setZone(d.zone || null);
@@ -8287,7 +8325,7 @@ window.__ng.lvl = () => lvl;
 window.__ng.cull = () => ({ tracked: cull.list.length, hidden: cull.hidden, children: lvl.children.length, solids: solids.length, platforms: platforms.length, specials: specials.length, enemies: enemies.length, items: items.length, props: props.length });
 window.__ng.renderInfo = () => new Promise(res => { renderer.info.autoReset = false; renderer.info.reset(); requestAnimationFrame(() => requestAnimationFrame(() => { const i = renderer.info; res({ calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries }); renderer.info.autoReset = true; })); });
 window.__ng.perf = PERF; window.__ng.drawStats = () => { const fr = new THREE.Frustum(), m = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); fr.setFromProjectionMatrix(m); const enemyRoots = new Set(enemies.map(e => e.mesh)); const out = { enemyParts: 0, enemiesVisible: 0, other: 0, instanced: 0, sprites: 0, transparent: 0 }; const seen = new Set(); scene.traverseVisible(o => { if (!o.isMesh && !o.isSprite && !o.isPoints) return; if (o.frustumCulled && o.geometry && !fr.intersectsObject(o)) return; if (o.isSprite) { out.sprites++; return; } let a = o, isE = false; while (a) { if (enemyRoots.has(a)) { isE = true; seen.add(a); break; } a = a.parent; } if (isE) out.enemyParts++; else if (o.isInstancedMesh) out.instanced++; else { out.other++; const k = (o.geometry ? o.geometry.type : '?') + '|' + (o.material && o.material.type) + (o.material && o.material.transparent ? '|T' : '') + '|d' + Math.round(Math.hypot(o.getWorldPosition(new THREE.Vector3()).x - camera.position.x, o.getWorldPosition(new THREE.Vector3()).z - camera.position.z) / 100); (out.k = out.k || {})[k] = (out.k[k] || 0) + 1; } if (o.material && o.material.transparent) out.transparent++; }); out.enemiesVisible = seen.size; return out; }; window.__ng.farWho = () => { const fr = new THREE.Frustum(); fr.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)); const tops = new Map(); scene.traverseVisible(o => { if (!o.isMesh || (o.frustumCulled && !fr.intersectsObject(o))) return; const wp = o.getWorldPosition(new THREE.Vector3()); if (Math.hypot(wp.x - camera.position.x, wp.z - camera.position.z) < 450) return; let a = o; while (a.parent && a.parent !== scene && a.parent !== lvl) a = a.parent; const e = tops.get(a) || { n: 0, cullable: cullable(a), type: a.type, kids: a.children.length, inLvl: a.parent === lvl, ud: Object.keys(a.userData || {}).join(), x: Math.round(a.position.x), y: Math.round(a.position.y), z: Math.round(a.position.z) }; e.n++; tops.set(a, e); }); return [...tops.values()].sort((p, q) => q.n - p.n).slice(0, 8); };
-window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.plateInfo = () => platforms.slice(0, 3).map(p => ({ top: p.top, y: p.plate && p.plate.position.y, vis: p.plate && p.plate.visible, col: p.plate && p.plate.material.color.getHex(), em: p.plate && p.plate.material.emissive.getHex(), ei: p.plate && p.plate.material.emissiveIntensity, po: p.plate && p.plate.material.polygonOffset, par: p.plate && p.plate.parent && p.plate.parent.type, h: p.plate && p.plate.geometry.parameters.height })); window.__ng.towerWindows = () => buildingHubs.flatMap(h => h.windows || []).map(w => ({ x: w.x, y: w.y, z: w.z, nx: w.nx, nz: w.nz })); window.__ng.netState = () => ({ on: net.on, room: net.room, peers: net.peers.size, slot: net.slot }); window.__ng.pvpShot = () => { let r = 'nopeer'; eachPeer(p => { const o = new THREE.Vector3(pos.x, pos.y + 1.4, pos.z), d = new THREE.Vector3(p.pos.x - pos.x, p.pos.y + 1 - o.y, p.pos.z - pos.z).normalize(), h = castRay(o, d, 60); r = (h.peer ? 'hit' : 'miss') + JSON.stringify({ me: [pos.x, pos.y, pos.z].map(v => +v.toFixed(1)), peer: [p.pos.x, p.pos.y, p.pos.z].map(v => +v.toFixed(1)), t: +h.t.toFixed(2), wall: !!h.hit, alive: p.alive }); if (h.peer) hitPeer(h.peer, 1); }); return r; }; window.__ng.health = () => health; window.__ng.setCull = (r, big) => { CULL_R = r; CULL_BIG_R = big; cull.t = 0; }; window.__ng.sectors = () => { const out = []; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + 0.2; let n = 0; for (const q of solids) { if (q.cx === undefined || Math.abs(q.top - TOP) > 60) continue; const dx = q.cx - start.x, dz = q.cz - start.z, d = Math.hypot(dx, dz); if (d < 30 || d > 170) continue; let da = Math.abs(Math.atan2(dz, dx) - a); da = Math.min(da, Math.PI * 2 - da); if (da < Math.PI / 8) n++; } out.push(n); } return out; }; window.__ng.bossesNow = () => endBosses.map(e => ({ n: e.name, v: e.bossRole, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), hub: e.hub ? e.hub.kind : 'bottom' })); window.__ng.enemyCount = () => enemies.filter(e => !e.dead).length; window.__ng.propsNow = () => props.map(p => ({ k: p.kind, x: +p.mesh.position.x.toFixed(1), y: +p.mesh.position.y.toFixed(1), z: +p.mesh.position.z.toFixed(1) })); window.__ng.bounceNear = (x, z, r = 12) => solids.filter(s => s.bounce && Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z) < r).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +s.maxy.toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), w: +(s.maxx - s.minx).toFixed(1), d: +(s.maxz - s.minz).toFixed(1), boost: s.boost })); window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute(); window.__ng.moonTp = () => { const m = moonInfo; pos.set(m.x + m.ux * 8, m.y + 4, m.z + m.uz * 8); vel.set(0, 0, 0); return m.y; }; window.__ng.findZone = nm => { const q = solids.filter(x => x.zone && x.zone.name === nm && x.alien && x.cx !== undefined && !x.sp); const m = q[(q.length / 2) | 0]; return m ? { x: m.cx, y: m.top, z: m.cz, n: q.length } : null; }; window.__ng.mk = (v, dx = 0, dz = 8, sc = 1.2) => { const e = makeWalker(pos.x + dx, pos.y, pos.z + dz, standOn && standOn.minx !== undefined ? standOn : null, sc, false, v); e.zone = activeZ; return enemies.length; }; window.__ng.tp = (x, y, z) => { pos.set(x, y, z); vel.set(0, 0, 0); }; window.__ng.me = () => ({ x: pos.x, y: pos.y, z: pos.z, state }); window.__ng.maw = () => makeMaw(pos.x + 12, pos.y + 4, pos.z + 12); window.__ng.planet = i => { buildMarsRoute(); marsInfo && buildPlanetLeg(i | 0); }; window.__ng.warpTo = k => { const d = warp.dest[k | 0]; if (d) { warp.idx = (k | 0) - 1; warpGo(); } return warp.dest.map(q => q.name); }; window.__ng.scare = k => k ? spawnScareCreatures(k) : jumpScare('face'); window.__ng.zone = nm => { const z = ZONES.find(q => q.name === nm); setZone(z || null); return !!z; }; window.__ng.zoneInfo = () => ({ zone: activeZ && activeZ.name, enemies: enemies.filter(e => !e.dead).length, planets: planetInfo.length, warps: warp.dest.length });
+window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.plateInfo = () => platforms.slice(0, 3).map(p => ({ top: p.top, y: p.plate && p.plate.position.y, vis: p.plate && p.plate.visible, col: p.plate && p.plate.material.color.getHex(), em: p.plate && p.plate.material.emissive.getHex(), ei: p.plate && p.plate.material.emissiveIntensity, po: p.plate && p.plate.material.polygonOffset, par: p.plate && p.plate.parent && p.plate.parent.type, h: p.plate && p.plate.geometry.parameters.height })); window.__ng.towerWindows = () => buildingHubs.flatMap(h => h.windows || []).map(w => ({ x: w.x, y: w.y, z: w.z, nx: w.nx, nz: w.nz })); window.__ng.netState = () => ({ on: net.on, room: net.room, peers: net.peers.size, slot: net.slot }); window.__ng.pvpShot = () => { let r = 'nopeer'; eachPeer(p => { const o = new THREE.Vector3(pos.x, pos.y + 1.4, pos.z), d = new THREE.Vector3(p.pos.x - pos.x, p.pos.y + 1 - o.y, p.pos.z - pos.z).normalize(), h = castRay(o, d, 60); r = (h.peer ? 'hit' : 'miss') + JSON.stringify({ me: [pos.x, pos.y, pos.z].map(v => +v.toFixed(1)), peer: [p.pos.x, p.pos.y, p.pos.z].map(v => +v.toFixed(1)), t: +h.t.toFixed(2), wall: !!h.hit, alive: p.alive }); if (h.peer) hitPeer(h.peer, 1); }); return r; }; window.__ng.health = () => health; window.__ng.setCull = (r, big) => { CULL_R = r; CULL_BIG_R = big; cull.t = 0; }; window.__ng.sectors = () => { const out = []; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + 0.2; let n = 0; for (const q of solids) { if (q.cx === undefined || Math.abs(q.top - TOP) > 60) continue; const dx = q.cx - start.x, dz = q.cz - start.z, d = Math.hypot(dx, dz); if (d < 30 || d > 170) continue; let da = Math.abs(Math.atan2(dz, dx) - a); da = Math.min(da, Math.PI * 2 - da); if (da < Math.PI / 8) n++; } out.push(n); } return out; }; window.__ng.bossesNow = () => endBosses.map(e => ({ n: e.name, v: e.bossRole, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), hub: e.hub ? e.hub.kind : 'bottom' })); window.__ng.enemyCount = () => enemies.filter(e => !e.dead).length; window.__ng.propsNow = () => props.map(p => ({ k: p.kind, x: +p.mesh.position.x.toFixed(1), y: +p.mesh.position.y.toFixed(1), z: +p.mesh.position.z.toFixed(1) })); window.__ng.bounceNear = (x, z, r = 12) => solids.filter(s => s.bounce && Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z) < r).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +s.maxy.toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), w: +(s.maxx - s.minx).toFixed(1), d: +(s.maxz - s.minz).toFixed(1), boost: s.boost })); window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute(); window.__ng.moonTp = () => { const m = moonInfo; pos.set(m.x + m.ux * 8, m.y + 4, m.z + m.uz * 8); vel.set(0, 0, 0); return m.y; }; window.__ng.findZone = nm => { const q = solids.filter(x => x.zone && x.zone.name === nm && x.alien && x.cx !== undefined && !x.sp); const m = q[(q.length / 2) | 0]; return m ? { x: m.cx, y: m.top, z: m.cz, n: q.length } : null; }; window.__ng.mk = (v, dx = 0, dz = 8, sc = 1.2) => { const e = makeWalker(pos.x + dx, pos.y, pos.z + dz, standOn && standOn.minx !== undefined ? standOn : null, sc, false, v); e.zone = activeZ; return enemies.length; }; window.__ng.tp = (x, y, z) => { pos.set(x, y, z); vel.set(0, 0, 0); }; window.__ng.me = () => ({ x: pos.x, y: pos.y, z: pos.z, state }); window.__ng.maw = () => makeMaw(pos.x + 12, pos.y + 4, pos.z + 12); window.__ng.planet = i => { buildMarsRoute(); marsInfo && buildPlanetLeg(i | 0); }; window.__ng.warpTo = k => { const d = warp.dest[k | 0]; if (d) { warp.sel = k | 0; warpGo(); } return warp.dest.map(q => q.name); }; window.__ng.cps = () => solids.filter(q => q.checkpoint).slice(0, 6).map(q => ({ x: q.cx, y: q.top, z: q.cz })); window.__ng.warpState = () => ({ sel: warp.sel, n: warp.dest.length, names: warp.dest.map(q => q.name) }); window.__ng.scare = k => k ? spawnScareCreatures(k) : jumpScare('face'); window.__ng.zone = nm => { const z = ZONES.find(q => q.name === nm); setZone(z || null); return !!z; }; window.__ng.zoneInfo = () => ({ zone: activeZ && activeZ.name, enemies: enemies.filter(e => !e.dead).length, planets: planetInfo.length, warps: warp.dest.length });
 let last = performance.now();
 renderer.setAnimationLoop(now => {
   const P = PERF.enabled; if (P) { renderer.info.reset(); PERF.frame(now); PERF.lapStart(); }
