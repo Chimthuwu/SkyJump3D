@@ -61,7 +61,7 @@
   body.rent-3::before{opacity:.8;background:radial-gradient(ellipse at 50% 46%,rgba(255,40,30,.07) 0 14%,rgba(60,0,0,.4) 42%,rgba(0,0,0,.97) 100%)}
   /* NOSTALGIA OVERDOSE: CRT + VHS overlay. Pure DOM/CSS, so it is identical in EVERY render mode (smooth, PS1, retro presets). ::after = scanlines + RGB phosphor stripes + a slow rolling bright bar;
      ::before = curved-tube vignette tinted per zone (nos-1 sunset magenta, nos-2 cold tracking blue, nos-3 arcade violet). .nos-tear (Tracking Error) lurches the canvas sideways for ~0.4 s. */
-  body.nos-world::after{opacity:.5;background:repeating-linear-gradient(0deg,rgba(0,0,0,.36) 0 1px,transparent 1px 3px),repeating-linear-gradient(90deg,rgba(255,0,80,.07) 0 1px,rgba(0,255,120,.05) 1px 2px,rgba(0,80,255,.08) 2px 3px),background-size:100% 3px,3px 100%;mask-image:none;mix-blend-mode:normal}
+  body.nos-world::after{opacity:.5;background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.36) 0 1px,transparent 1px 3px),repeating-linear-gradient(90deg,rgba(255,0,80,.07) 0 1px,rgba(0,255,120,.05) 1px 2px,rgba(0,80,255,.08) 2px 3px);background-size:100% 3px,3px 100%;mask-image:none;mix-blend-mode:normal}
   #nosBar{display:none;position:fixed;left:0;right:0;top:0;height:16vh;pointer-events:none;z-index:1;background:linear-gradient(180deg,transparent 0,rgba(255,255,255,.09) 50%,transparent 100%);will-change:transform;transform:translateY(-20vh)}
   body.nos-world #nosBar{display:block;animation:nosRoll 6.5s linear infinite}
   body.nos-1::before{opacity:.75;background:radial-gradient(ellipse at 50% 46%,rgba(255,110,220,.05) 0 18%,rgba(60,8,90,.32) 52%,rgba(8,0,24,.93) 100%);animation:none}
