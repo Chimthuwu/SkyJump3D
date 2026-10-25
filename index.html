@@ -2303,7 +2303,10 @@ const PLANETS = [
   { key: 'jupiter', name: 'JUPITER', rad: 1500, cols: ['#c8a27a', '#9c6b45', '#e8d3b0', '#b5703c', '#f0e2c8'], spot: true, biomes: ['Glitch', 'Hellscape', 'Kaomoji', 'Horror'], per: 380, col: 0xffb070 },
   { key: 'saturn', name: 'SATURN', rad: 1300, cols: ['#e6d29a', '#c9b070', '#f2e4b4', '#b49a5a'], rings: true, biomes: ['Kaomoji', 'Horror', 'Glitch', 'Hellscape'], per: 420, col: 0xffe8a0 },
   { key: 'uranus', name: 'URANUS', rad: 1100, cols: ['#9ff0f0', '#7fd8e8', '#b8fafa'], biomes: ['Frozen', 'Glitch', 'Kaomoji', 'Hellscape'], per: 460, col: 0x9ff0f0 },
-  { key: 'neptune', name: 'NEPTUNE', rad: 1100, cols: ['#2a4bd8', '#1c2f9c', '#4a6cf0', '#6a8aff'], biomes: ['Storm', 'Horror', 'Hellscape', 'Glitch'], per: 500, col: 0x6a8aff, final: true },
+  { key: 'neptune', name: 'NEPTUNE', rad: 1100, cols: ['#2a4bd8', '#1c2f9c', '#4a6cf0', '#6a8aff'], biomes: ['Storm', 'Horror', 'Hellscape', 'Glitch'], per: 500, col: 0x6a8aff },
+  { key: 'pluto', name: 'PLUTO', rad: 1000, cols: ['#4a0a0a', '#250505', '#6b0a0a', '#a00a0a'], biomes: ['Hellscape', 'Horror', 'Glitch', 'Hellscape'], per: 520, col: 0x2a0a0a },
+  { key: 'charon', name: 'CHARON', rad: 950, cols: ['#1a1a2e', '#0f0f23', '#1b1b3e', '#2c2c5a'], biomes: ['Psychosis', 'Hellscape', 'Horror', 'Glitch'], per: 540, col: 0x151530 },
+  { key: 'osis', name: 'OSIS', rad: 900, cols: ['#0a0a1e', '#050510', '#101025', '#1a1a3e'], biomes: ['Hellscape', 'Psychosis', 'Horror', 'Glitch'], per: 560, col: 0x0d0d2a },
 ];
 function planetTexture(spec) {
   const c = document.createElement('canvas'); c.width = 512; c.height = 256; const g = c.getContext('2d');
@@ -2336,7 +2339,7 @@ function buildPlanetLeg(i) {
 }
 function* buildPlanetLegGen(i) {
   const spec = PLANETS[i], from = i === 0 ? marsInfo : planetInfo[i - 1]; if (!from) return;
-  const hd = Math.atan2(from.uz, from.ux) + (i % 2 ? 0.28 : -0.28), ux = Math.cos(hd), uz = Math.sin(hd), px = -uz, pz = ux;
+  const hd = Math.atan2(from.uz, from.ux) + i * 0.8, ux = Math.cos(hd), uz = Math.sin(hd), px = -uz, pz = ux;
   const R = missionRandom(((levelSeed | 0) ^ (0x9100 + i * 977)) | 0), LANES = 3, PER = spec.per, r0 = 60, rise = 0.34, SEGS = 4;
   const segZones = spec.biomes.map(nm => ({ ...ZONES.find(z => z.name === nm), sky: 0.85 }));
   const zoneAt = idx => segZones[Math.min(SEGS - 1, Math.floor(idx / PER * SEGS))];
@@ -8051,27 +8054,30 @@ const vehicleMatBases = new WeakMap();
 let vehicleFovKick = 0;
 
 function makeRiderVisual() {                     // seated rider silhouette; also used for enemy 'rider' walkers
-  const g = new THREE.Group(), suit = lam(0x8c2b3a), armor = lam(0x253044);
+  const g = new THREE.Group(), suit = lam(0x8b2835), armor = lam(0x222a3f);
   const part = (mat, x, y, z, sx, sy, sz, rotX = 0, rotZ = 0) => {
     const m = new THREE.Mesh(BIKE_GEO.box, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.set(rotX, 0, rotZ); g.add(m); return m;
   };
-  const torso = part(suit, 0, 1.08, -0.02, 0.42, 0.48, 0.32, -0.22);
-  part(armor, 0, 1.13, 0.16, 0.3, 0.25, 0.07, -0.22);
-  part(lam(0xd8c0a8), 0, 1.47, 0.08, 0.27, 0.27, 0.26);                       // angular helmet
-  part(new THREE.MeshBasicMaterial({ color: 0x36f6ff }), 0, 1.48, 0.218, 0.22, 0.075, 0.035); // opaque visor
+  // Seated rider with compact posture, optimized for third-person visibility
+  const torso = part(suit, 0, 1.00, -0.02, 0.38, 0.44, 0.28, -0.20);
+  part(armor, 0, 1.05, 0.12, 0.28, 0.22, 0.05, -0.20);
+  // Angular helmet with visor
+  const helmet = part(new THREE.MeshBasicMaterial({ color: 0x36f6ff, transparent: false, opacity: 1 }), 0, 1.38, 0.06, 0.24, 0.24, 0.20);
+  helmet.material.side = THREE.DoubleSide;
+  // Arms bent toward handlebars
   for (const side of [-1, 1]) {
-    part(suit, side * 0.25, 1.02, 0.31, 0.13, 0.35, 0.14, -0.82, side * -0.12); // arms reach toward bars
-    part(armor, side * 0.25, 0.82, 0.78, 0.14, 0.12, 0.2, -0.28);                 // gloves on the handlebars
-    part(suit, side * 0.13, 0.72, 0.19, 0.18, 0.28, 0.3, 0.48);                 // bent thighs
-    part(armor, side * 0.15, 0.48, 0.34, 0.19, 0.13, 0.28, -0.12);              // boots on pegs
+    part(suit, side * 0.22, 0.95, 0.25, 0.12, 0.32, 0.12, -0.78, side * -0.10); // arms reach toward bars
+    part(armor, side * 0.22, 0.70, 0.70, 0.12, 0.10, 0.16, -0.25);                 // gloves on the handlebars
+    part(suit, side * 0.10, 0.58, 0.15, 0.14, 0.24, 0.22, 0.42);                 // bent thighs
+    part(armor, side * 0.12, 0.40, 0.28, 0.16, 0.11, 0.24, -0.10);              // boots on footpegs
   }
-  torso.rotation.x = -0.28;
+  torso.rotation.x = -0.25;
   return g;
 }
 
 function makeBikeMesh(prop) {
   const root = prop.mesh, body = new THREE.Group(); root.add(body);
-  const dark = lam(0x171d2a), armor = lam(0x263249), trim = lam(0x34465c);
+  const dark = lam(0x151920), armor = lam(0x222e3a), trim = lam(0x2a3e4f);
   const bikePalettes = [
     { glow: 0x36f6ff, shade: 0x13aab7 },
     { glow: 0x45ffc2, shade: 0x13a986 },
@@ -8101,51 +8107,65 @@ function makeBikeMesh(prop) {
     const m = new THREE.Mesh(BIKE_GEO.pod, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.x = Math.PI / 2; parent.add(m); return m;
   };
 
-  // Long, low armored frame with a faceted nose and a raised seat hump.
-  box(dark, 0, 0.49, -0.03, 0.66, 0.24, 1.72);
-  box(armor, 0, 0.63, -0.12, 0.43, 0.18, 1.22);
-  const nose = new THREE.Mesh(BIKE_GEO.nose, armor); nose.position.set(0, 0.57, 0.74); nose.rotation.x = Math.PI / 2; nose.scale.set(0.43, 0.76, 0.38); body.add(nose);
+  // Chunky low-frame with bold color blocking and prominent nose fairing.
+  // Frame is wider and more angular for instant recognizability.
+  box(dark, 0, 0.52, -0.05, 0.80, 0.32, 1.85);
+  box(armor, 0, 0.70, -0.15, 0.55, 0.28, 1.35);
+  const nose = new THREE.Mesh(BIKE_GEO.nose, armor); nose.position.set(0, 0.62, 0.85); nose.rotation.x = Math.PI / 2; nose.scale.set(0.55, 0.88, 0.44); body.add(nose);
+  // Angular nose accent plates
   for (const side of [-1, 1]) {
-    box(armor, side * 0.32, 0.5, -0.05, 0.12, 0.32, 1.1, 0, 0, side * -0.1);
-    box(cyan, side * 0.386, 0.52, 0.02, 0.035, 0.075, 0.94);
-    box(trim, side * 0.23, 0.75, -0.51, 0.16, 0.16, 0.48, 0, 0, side * 0.08); // rear seat hump
+    box(armor, side * 0.20, 0.55, -0.05, 0.15, 0.38, 1.25, 0, 0, side * -0.12);
+    box(trim, side * 0.25, 0.58, -0.02, 0.04, 0.08, 0.98);
   }
-  box(dark, 0, 0.71, -0.54, 0.32, 0.12, 0.57);
-  box(armor, 0, 0.9, 0.39, 0.42, 0.24, 0.08, -0.35);                         // opaque dark windscreen
-  box(cyanDark, 0, 0.62, 0.25, 0.16, 0.045, 0.34);
+  // Extended frame sides for side profile readability
+  box(dark, 0, 0.78, -0.60, 0.40, 0.18, 0.65);
+  box(armor, 0, 0.88, -0.39, 0.44, 0.28, 0.12, -0.38);                        // dark windscreen (more upright)
+  box(cyanDark, 0, 0.72, 0.22, 0.18, 0.06, 0.38);
 
-  // Steerable front fork carries a twin pair of solid hover pods and the headlamp.
-  const fork = new THREE.Group(); fork.position.set(0, 0.43, 0.91); body.add(fork); steer.push(fork);
-  const forkLeg = new THREE.Mesh(BIKE_GEO.box, trim); forkLeg.position.set(0, 0.12, 0.06); forkLeg.scale.set(0.1, 0.48, 0.12); forkLeg.rotation.x = -0.24; fork.add(forkLeg);
-  const bar = new THREE.Mesh(BIKE_GEO.box, trim); bar.position.set(0, 0.42, -0.04); bar.scale.set(0.84, 0.075, 0.1); fork.add(bar);
+  // Prominent steerable front fork with twin hover pods and bold headlamp.
+  const fork = new THREE.Group(); fork.position.set(0, 0.50, 0.95); body.add(fork); steer.push(fork);
+  // Fork legs - more pronounced
+  const forkLeg = new THREE.Mesh(BIKE_GEO.box, trim); forkLeg.position.set(0, 0.18, 0.08); forkLeg.scale.set(0.14, 0.55, 0.16); forkLeg.rotation.x = -0.28; fork.add(forkLeg);
+  // Handlebars - thicker and more readable
+  const bar = new THREE.Mesh(BIKE_GEO.box, trim); bar.position.set(0, 0.48, -0.02); bar.scale.set(1.0, 0.09, 0.14); fork.add(bar);
+  // Handlebar grips
   for (const side of [-1, 1]) {
-    const grip = new THREE.Mesh(BIKE_GEO.box, dark); grip.position.set(side * 0.43, 0.42, -0.04); grip.scale.set(0.18, 0.1, 0.13); fork.add(grip);
-    pod(fork, side * 0.46, -0.14, -0.04, 0.19, 0.22, 0.3, armor);
-    const glowDisc = new THREE.Mesh(BIKE_GEO.disc, cyan); glowDisc.position.set(side * 0.46, -0.31, -0.04); glowDisc.scale.set(0.16, 0.035, 0.25); fork.add(glowDisc);
-    box(cyan, side * 0.46, 0.23, 0.72, 0.08, 0.055, 0.11);
+    const grip = new THREE.Mesh(BIKE_GEO.box, dark); grip.position.set(side * 0.50, 0.48, -0.02); grip.scale.set(0.22, 0.12, 0.15); fork.add(grip);
   }
-  const headlight = new THREE.Mesh(BIKE_GEO.box, lamp); headlight.position.set(0, 0.2, 0.23); headlight.scale.set(0.25, 0.14, 0.08); fork.add(headlight); lights.push(headlight);
-  box(cyan, 0, 0.96, 0.97, 0.18, 0.055, 0.08); // brow marker
+  // Twin headlights for DeLorean-style symmetry
+  const headlight = new THREE.Mesh(BIKE_GEO.box, lamp); headlight.position.set(0, 0.22, 0.25); headlight.scale.set(0.30, 0.16, 0.10); fork.add(headlight); lights.push(headlight);
+  const headlight2 = new THREE.Mesh(BIKE_GEO.box, lamp); headlight2.position.set(0, 0.22, -0.02); headlight2.scale.set(0.30, 0.16, 0.10); fork.add(headlight2);
+  // Side accent markers
+  box(cyan, 0, 0.98, 0.95, 0.20, 0.07, 0.10); // brow marker
+  box(cyan, 0, 0.98, -0.05, 0.20, 0.07, 0.10); // rear brow
 
-  // Paired rear thrusters, with emissive lower faces and recorded exhaust emitter points.
+  // Distinct rear thruster pods with readable geometry and recorded exhaust points.
   for (const side of [-1, 1]) {
-    pod(body, side * 0.47, 0.35, -0.72, 0.19, 0.23, 0.34, dark);
-    const nozzle = new THREE.Mesh(BIKE_GEO.disc, cyanDark); nozzle.position.set(side * 0.47, 0.19, -0.72); nozzle.scale.set(0.145, 0.045, 0.23); body.add(nozzle);
-    const emitter = new THREE.Object3D(); emitter.position.set(side * 0.28, 0.43, -1.02); body.add(emitter); exhausts.push(emitter);
-    const pivot = new THREE.Group(); pivot.position.set(side * 0.61, 0.34, -0.72); body.add(pivot);
-    const turbine = new THREE.Mesh(BIKE_GEO.turbine, trim); turbine.rotation.z = Math.PI / 2; turbine.scale.set(0.16, 0.07, 0.16); pivot.add(turbine);
-    const hub = new THREE.Mesh(BIKE_GEO.turbine, cyan); hub.rotation.z = Math.PI / 2; hub.scale.set(0.085, 0.078, 0.085); pivot.add(hub);
-    const vanes = new THREE.InstancedMesh(BIKE_GEO.box, dark, 4), vanePose = new THREE.Object3D();
-    for (let vane = 0; vane < 4; vane++) {
-      vanePose.position.set(0, Math.cos(vane * Math.PI / 2) * 0.095, Math.sin(vane * Math.PI / 2) * 0.095); vanePose.scale.set(0.035, 0.035, 0.15); vanePose.updateMatrix(); vanes.setMatrixAt(vane, vanePose.matrix);
+    // Main thruster pod - wider and more prominent
+    pod(body, side * 0.52, 0.40, -0.78, 0.24, 0.30, 0.42, dark);
+    // Glowing exhaust nozzle at pod base
+    const nozzle = new THREE.Mesh(BIKE_GEO.disc, cyanDark); nozzle.position.set(side * 0.52, 0.25, -0.85); nozzle.scale.set(0.20, 0.05, 0.30); body.add(nozzle);
+    // Exhaust emitter for boost particles
+    const emitter = new THREE.Object3D(); emitter.position.set(side * 0.35, 0.52, -1.15); body.add(emitter); exhausts.push(emitter);
+    // Steerable thruster pivot with turbine effect
+    const pivot = new THREE.Group(); pivot.position.set(side * 0.68, 0.45, -0.78); body.add(pivot);
+    // Turbine disk - larger with vanes
+    const turbine = new THREE.Mesh(BIKE_GEO.turbine, trim); turbine.rotation.z = Math.PI / 2; turbine.scale.set(0.22, 0.09, 0.22); pivot.add(turbine);
+    // Turbine accent hub (cyan center)
+    const hub = new THREE.Mesh(BIKE_GEO.turbine, cyan); hub.rotation.z = Math.PI / 2; hub.scale.set(0.10, 0.09, 0.10); pivot.add(hub);
+    // Four turbine vanes for readable rotation
+    const vanes = new THREE.InstancedMesh(BIKE_GEO.box, dark, 8);
+    for (let vane = 0; vane < 8; vane++) {
+      vanePose.position.set(0, Math.cos(vane * Math.PI / 4) * 0.11, Math.sin(vane * Math.PI / 4) * 0.11); vanePose.scale.set(0.04, 0.04, 0.18); vanePose.updateMatrix(); vanes.setMatrixAt(vane, vanePose.matrix);
     }
     vanes.instanceMatrix.needsUpdate = true; pivot.add(vanes);
     prop.wheels.push(pivot); // existing local-X spin animation drives these turbine discs
   }
-  box(armor, 0, 0.78, -0.91, 0.16, 0.42, 0.32, -0.12);
-  box(cyan, 0, 0.78, -0.95, 0.19, 0.055, 0.19);
-  const tail = new THREE.Mesh(BIKE_GEO.box, tailLamp); tail.position.set(0, 0.47, -0.94); tail.scale.set(0.32, 0.11, 0.08); body.add(tail); lights.push(tail);
-  for (const side of [-1, 1]) box(trim, side * 0.43, 0.45, -0.98, 0.09, 0.16, 0.08);
+  // Rear tail light bar - prominent
+  box(armor, 0, 0.72, -0.98, 0.18, 0.38, 0.16, -0.12);
+  const tail = new THREE.Mesh(BIKE_GEO.box, tailLamp); tail.position.set(0, 0.38, -1.05); tail.scale.set(0.40, 0.14, 0.12); body.add(tail); lights.push(tail);
+  // Side trim fins for side-profile readability
+  for (const side of [-1, 1]) box(trim, side * 0.48, 0.40, -0.92, 0.10, 0.18, 0.12);
 
   // A thin ground-level hover ring; the bike's armor remains opaque and solid.
   flushBoxes();
@@ -8203,10 +8223,10 @@ function makeBuggyMesh(prop) {
   // --- 1. CHASSIS & LOWER BODY ---
   addBox(dark, 1.90, 0.14, 3.5, 0, 0.44, 0);                               // dark underbody / rocker skirts
   addBox(accent, 1.86, 0.28, 3.65, 0, 0.62, 0);                             // main stainless steel lower body
-  addBox(black, 1.92, 0.05, 3.75, 0, 0.74, 0);                             // black waistline rub-strip along sides
+  addBox(black, 1.92, 0.07, 3.75, 0, 0.74, 0);                             // black waistline rub-strip along sides (slightly thicker for readability)
   for (const side of [-1, 1]) {
-    addBox(dark, 0.08, 0.12, 0.88, side * 0.95, 0.76, 1.15);                // front fender lips
-    addBox(dark, 0.08, 0.12, 0.88, side * 0.95, 0.76, -1.05);               // rear fender lips
+    addBox(dark, 0.08, 0.14, 0.88, side * 0.95, 0.76, 1.15);                // front fender lips (slightly taller)
+    addBox(dark, 0.08, 0.14, 0.88, side * 0.95, 0.76, -1.05);               // rear fender lips (slightly taller)
   }
 
   // --- 2. FRONT WEDGE NOSE & HOOD ---
@@ -8229,7 +8249,7 @@ function makeBuggyMesh(prop) {
     addBox(accent, 0.08, 0.76, 0.08, side * 0.75, 1.15, 0.38, -0.62);      // stainless A-pillars
   }
   addBox(accent, 1.48, 0.08, 0.92, 0, 1.42, -0.32);                        // flat stainless roof
-  addBox(dark, 0.06, 0.09, 0.92, 0, 1.43, -0.32);                          // roof center seam
+  addBox(dark, 0.06, 0.12, 0.92, 0, 1.43, -0.32);                          // roof center seam (slightly taller for readability)
   // Cockpit interior
   addBox(dark, 0.48, 0.14, 0.52, -0.34, 0.72, -0.15);                      // driver seat
   addBox(dark, 0.48, 0.14, 0.52, 0.34, 0.72, -0.15);                       // passenger seat
@@ -8243,46 +8263,45 @@ function makeBuggyMesh(prop) {
   addBox(glowMat, 0.22, 0.04, 0.04, 0, 0.91, 0.36);                        // GREEN: Present Time
   addBox(amberLight, 0.22, 0.04, 0.04, 0, 0.86, 0.36);                     // AMBER: Last Time Departed
   // Flux Capacitor between the seats!
-  addBox(dark, 0.22, 0.24, 0.14, 0, 1.05, -0.40);                          // flux box casing
-  addBox(glowMat, 0.18, 0.20, 0.04, 0, 1.05, -0.32);                       // glowing cyan flux capacitor face
+  addBox(dark, 0.22, 0.26, 0.14, 0, 1.05, -0.40);                          // flux box casing (slightly taller)
+  addBox(glowMat, 0.18, 0.22, 0.04, 0, 1.05, -0.32);                       // glowing cyan flux capacitor face (brighter)
   addBox(warmLight, 0.05, 0.10, 0.05, 0, 1.05, -0.31);                     // center pulse emitter
 
   // --- 4. GULL-WING DOORS (The DeLorean Signature Silhouette!) ---
   for (const side of [-1, 1]) {
     // Open/raised gull-wing door panels framing the cockpit
-    addBox(accent, 0.10, 0.62, 0.94, side * 0.86, 1.52, -0.26, 0, 0, -side * 0.42);
-    addBox(darkGlass, 0.06, 0.34, 0.72, side * 0.90, 1.54, -0.26, 0, 0, -side * 0.42);
-    addBox(dark, 0.06, 0.28, 0.96, side * 0.89, 0.78, -0.26);              // lower cabin sill
-  }
+    addBox(accent, 0.12, 0.66, 1.00, side * 0.86, 1.56, -0.30, 0, 0, -side * 0.44);
+    addBox(darkGlass, 0.08, 0.38, 0.78, side * 0.90, 1.58, -0.32, 0, 0, -side * 0.44);
+    addBox(dark, 0.08, 0.32, 1.02, side * 0.89, 0.82, -0.30);              // lower cabin sill (slightly more prominent)
 
   // --- 5. REAR WINDOW BLACK LOUVRES ---
-  for (let k = 0; k < 5; k++) {
-    addBox(black, 1.46, 0.04, 0.22, 0, 1.34 - k * 0.08, -0.84 - k * 0.13, 0.12);
+  for (let k = 0; k < 7; k++) {  // increased from 5 to 7 for better rear readability
+    addBox(black, 1.46, 0.05, 0.22, 0, 1.34 - k * 0.06, -0.84 - k * 0.11, 0.12);
   }
 
   // --- 6. TIME MACHINE REAR DECK: TWIN REACTOR HEAT EXCHANGERS & MR. FUSION ---
   for (const side of [-1, 1]) {
     // Large rectangular cooling boxes on rear deck (angled slightly outward)
-    addBox(dark, 0.46, 0.38, 0.68, side * 0.58, 0.98, -1.65, 0, side * 0.10, 0);
+    addBox(dark, 0.50, 0.42, 0.72, side * 0.58, 1.02, -1.70, 0, side * 0.10, 0);
     // Radiator cooling slats on rear face
-    for (let r = 0; r < 4; r++) {
-      addBox(black, 0.38, 0.04, 0.04, side * 0.58, 0.84 + r * 0.08, -1.99, 0, side * 0.10, 0);
+    for (let r = 0; r < 5; r++) {  // increased from 4 to 5 slats
+      addBox(black, 0.40, 0.05, 0.04, side * 0.58, 0.86 + r * 0.07, -2.03, 0, side * 0.10, 0);
     }
-    // Reactor exhaust nozzle
-    addBox(metal, 0.22, 0.20, 0.12, side * 0.58, 0.98, -2.00, 0, side * 0.10, 0);
+    // Reactor exhaust nozzle (prominent)
+    addBox(metal, 0.26, 0.24, 0.14, side * 0.58, 1.02, -2.04, 0, side * 0.10, 0);
   }
   // Mr. Fusion
-  addBox(white, 0.26, 0.32, 0.26, 0, 1.18, -1.48);                         // white reactor body
-  addBox(black, 0.22, 0.10, 0.22, 0, 1.38, -1.48);                         // black latch cap
-  addBox(goldGlow, 0.12, 0.06, 0.05, 0, 1.20, -1.34);                      // hazard symbol
+  addBox(white, 0.28, 0.36, 0.28, 0, 1.22, -1.52);                         // white reactor body (slightly larger)
+  addBox(black, 0.24, 0.12, 0.24, 0, 1.42, -1.52);                         // black latch cap (slightly larger)
+  addBox(goldGlow, 0.14, 0.08, 0.06, 0, 1.24, -1.38);                      // hazard symbol (slightly larger, more visible)
 
   // --- 7. GLOWING TIME-CIRCUIT CONDUITS (Flux bands) ---
   for (const side of [-1, 1]) {
-    addBox(glowMat, 0.04, 0.04, 2.6, side * 0.94, 0.78, 0.15);              // waistline flux cable
-    addBox(glowMat, 0.04, 0.04, 0.8, side * 0.85, 0.86, -1.45, 0, -side * 0.25, 0); // feed into reactor!
-    addBox(glowMat, 0.04, 0.04, 0.6, side * 0.70, 0.92, 1.62, 0, side * 0.20, 0);  // front fender coil
+    addBox(glowMat, 0.05, 0.05, 2.8, side * 0.94, 0.80, 0.18);              // waistline flux cable (slightly wider)
+    addBox(glowMat, 0.05, 0.05, 0.9, side * 0.85, 0.88, -1.55, 0, -side * 0.25, 0); // feed into reactor! (slightly longer)
+    addBox(glowMat, 0.05, 0.05, 0.7, side * 0.70, 0.94, 1.70, 0, side * 0.20, 0);  // front fender coil (slightly extended)
   }
-  addBox(glowMat, 0.95, 0.04, 0.04, 0, 0.76, -1.98);                       // rear bumper cross-conduit
+  addBox(glowMat, 1.05, 0.05, 0.05, 0, 0.78, -2.08);                       // rear bumper cross-conduit (brighter/more visible)
 
   // --- 8. REAR FASCIA & GRID TAILLIGHTS ---
   addBox(black, 1.88, 0.28, 0.18, 0, 0.68, -1.94);                         // rear black panel
