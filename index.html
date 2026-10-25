@@ -8077,17 +8077,17 @@ function makeRiderVisual() {                     // seated rider silhouette; als
 
 function makeBikeMesh(prop) {
   const root = prop.mesh, body = new THREE.Group(); root.add(body);
-  const dark = lam(0x151920), armor = lam(0x222e3a), trim = lam(0x2a3e4f);
+  const dark = lam(0x1a2230), armor = lam(0x2a364a), trim = lam(0x304055);
   const bikePalettes = [
-    { glow: 0x36f6ff, shade: 0x13aab7 },
-    { glow: 0x45ffc2, shade: 0x13a986 },
-    { glow: 0xff50d8, shade: 0xb91f91 }
+    { glow: 0x38fffd, shade: 0x1aaccf },
+    { glow: 0x50ffc5, shade: 0x1aaa94 },
+    { glow: 0xff51d8, shade: 0xcc2a81 }
   ];
   const palette = bikePalettes[props.filter(p => p.kind === 'bike').length % bikePalettes.length];
   const cyan = new THREE.MeshBasicMaterial({ color: palette.glow, toneMapped: false });
   const cyanDark = new THREE.MeshBasicMaterial({ color: palette.shade, toneMapped: false });
-  const lamp = new THREE.MeshBasicMaterial({ color: 0xc8ffff, toneMapped: false });
-  const tailLamp = new THREE.MeshBasicMaterial({ color: 0xff3048, toneMapped: false });
+  const lamp = new THREE.MeshBasicMaterial({ color: 0xcaffff, emissive: 0x80b0ff, emissiveIntensity: 0.25 });
+  const tailLamp = new THREE.MeshBasicMaterial({ color: 0xff4858, emissive: 0xff2038, emissiveIntensity: 0.35 });
   const accents = [cyan, cyanDark], lights = [], exhausts = [], steer = [], boxBatches = new Map();
   const box = (mat, x, y, z, sx, sy, sz, rx = 0, ry = 0, rz = 0) => {
     if (!boxBatches.has(mat)) boxBatches.set(mat, []);
@@ -8190,14 +8190,14 @@ function makeBuggyMesh(prop) {
   body.position.y = BODY_Y; g.add(body);
   const paletteIndex = props.filter(p => p.kind === 'buggy').length % 3;
   const accentColor = [0xc4ccd6, 0xd0d6df, 0xb8c0ca][paletteIndex];      // DeLorean brushed stainless steel
-  const dark = lam(0x22262d), tireMat = lam(0x111317), metal = lam(0x767e8a);
-  const accent = lam(accentColor), black = lam(0x121418), darkGlass = lam(0x0e131b);
-  const white = lam(0xe8edf2);
-  const glowMat = new THREE.MeshBasicMaterial({ color: 0x58e5ff });          // flux capacitor / time circuits cyan
-  const warmLight = new THREE.MeshBasicMaterial({ color: 0xfffae6 });        // quad square halogen headlamps
-  const tailLight = new THREE.MeshBasicMaterial({ color: 0xff2838 });        // red tail/brake lights
-  const amberLight = new THREE.MeshBasicMaterial({ color: 0xff9224 });       // amber indicators / side markers
-  const goldGlow = new THREE.MeshBasicMaterial({ color: 0xffd23a });         // time circuits / hazard symbol
+  const dark = lam(0x252d3a), tireMat = lam(0x1a222f), metal = lam(0x8a92a8);
+  const accent = lam(accentColor), black = lam(0x1a1f27), darkGlass = lam(0x0a0e13);
+  const white = lam(0xf0f4f7);
+  const glowMat = new THREE.MeshBasicMaterial({ color: 0x7ae8ff, emissive: 0x1a5fff, emissiveIntensity: 0.3 });          // flux capacitor / time circuits cyan - brighter + emissive
+  const warmLight = new THREE.MeshBasicMaterial({ color: 0xffffec, emissive: 0xfff3b2, emissiveIntensity: 0.2 });        // quad square halogen headlamps - warmer glow
+  const tailLight = new THREE.MeshBasicMaterial({ color: 0xff3a4a, emissive: 0xff202f, emissiveIntensity: 0.4 });        // red tail/brake lights - deeper red with emissive
+  const amberLight = new THREE.MeshBasicMaterial({ color: 0xffa314, emissive: 0xff8800, emissiveIntensity: 0.45 });       // amber indicators / side markers - vivid amber
+  const goldGlow = new THREE.MeshBasicMaterial({ color: 0xffd858, emissive: 0xffaa00, emissiveIntensity: 0.4 });         // time circuits / hazard symbol - golden glow with emissive
   const boxBatches = new Map(), lights = [];
   const addBox = (mat, w, h, d, x, y, z, rx = 0, ry = 0, rz = 0) => {
     if (!boxBatches.has(mat)) boxBatches.set(mat, []);
