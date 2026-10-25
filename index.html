@@ -9171,7 +9171,9 @@ function netMessage(m) {
         if ((m.level | 0) > 0 && (m.level | 0) !== level) level = clamp(m.level | 0, 1, 99);
         applyNetSlot(m.slot, true);
       }
-      toast(net.host ? 'Online — you are the host' : 'Online — joined room', 2400); break;
+      toast(net.host ? 'Online — you are the host' : 'Online — joined room', 2400);
+      if (!net.host && state === 'title') preloadThen(begin);      // joining (unlike hosting) used to just connect and strand you on the title screen; drop straight into the room instead
+      break;
     case 'full': toast('That room is full — six players maximum', 3600); break;
     case 'join':
       addPeer(m.id); toast(`Player ${m.id | 0} joined`, 1500);
