@@ -2258,7 +2258,24 @@ function moonTexture() {
   const t = trackRetroTexture(new THREE.CanvasTexture(c)); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
 }
 // MARS: reaching the moon no longer ends the level. Landing there reveals a red planet far out in space and a 1000-platform bridge to it.
-let marsBuilt = false;
+let marsBuilt = false, marsRewardBuilt = false;
+// MARS REWARD: the first time Mars is reached, a monument + bonus platforms appear back at the shared launch hub (the common area every home tower funnels into) —
+// a visible payoff near spawn for players who never go all the way out to Mars themselves (co-op: everyone in the room sees it once anyone gets there, since the level is shared).
+function spawnMarsReward() {
+  if (marsRewardBuilt) return; marsRewardBuilt = true;
+  const launch = (levelHubs || []).find(h => h.kind === 'launch'); if (!launch) return;
+  const cx = launch.x, cz = launch.z, cy = launch.top + 2, rad = 22;
+  for (let i = 0; i < 8; i++) {                                     // a ring of new stepping platforms, half coins half ammo
+    const a = i / 8 * Math.PI * 2, x = cx + Math.cos(a) * rad, z = cz + Math.sin(a) * rad;
+    addPlatform(x, cy, z, 2.6, false, 0, null, true, true);
+    if (i % 2 === 0) coin(x, cy + 1.2, z, null); else ammoBox(x, cy + 0.8, z);
+  }
+  const obelisk = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 1.4, 14, 6), new THREE.MeshBasicMaterial({ map: marsTexture(), color: 0xffb080 }));
+  obelisk.position.set(cx, cy + 7, cz); lvl.add(obelisk);
+  const glow = new THREE.PointLight(0xff7a2a, 1.4, 60); glow.position.set(cx, cy + 10, cz); lvl.add(glow);
+  weaponPickup(WEAPONS.length - 1, cx, cy + 16, cz);                // a prize weapon on top, visible from the home towers as a reason to look over
+  toast('A MARS MONUMENT RISES NEAR THE LAUNCH PAD', 4000);
+}
 // WARP PAD (home roof): every checkpoint you touch (plus moon, Mars, each planet) unlocks a destination. Q on the pad picks one, E warps. Death always respawns you at the home tower.
 const warp = { dest: [], idx: -1, sel: 0, pad: null, hint: 0 };
 function warpUnlock(key, name, x, y, z, zone, msg) {
@@ -2302,6 +2319,7 @@ function marsReached(sol) {
     score += 6000; shockRing(pos, 16, 0xff7a2a); sfx.clear(); flashWhite();
     toast('MARS CLEAR  ·  JUPITER AND THE OUTER PLANETS ARE WAITING', 6000);
     try { $('subs').textContent = '[IT] You think this was the end? There is so much more sky.'; setTimeout(() => { $('subs').textContent = ''; }, 6500); } catch (_) {}
+    spawnMarsReward();
   }
   buildPlanetLeg(0);
 }
@@ -2562,27 +2580,54 @@ function buildSkyway(hubs) {
   // launch platform near the column; the roof reaches it by an ordinary platform chain
   addSlab(ux * colR, baseY, uz * colR, 9, 9, 3, null, true);
   hubs.push({ kind: 'launch', x: ux * colR, z: uz * colR, top: baseY, hw: 9, hd: 9, zone: null, r: 16 });
+  // MULTIPLE PATHS TO THE MOON: the main bounce-pad column plus two more lanes offset to the side, cross-linked every few steps so you can switch between them
   const padMat = () => new THREE.MeshLambertMaterial({ color: 0x33e0ff, emissive: 0x0b7a99 });
-  let y = baseY, side = 1, x = ux * colR, z = uz * colR;
-  for (let i = 0; y < topY - 1; i++) {
-    const rise = Math.min(38, topY - y), nx = ux * (colR + Math.sin(i * 1.3) * 6) + px * 10 * side, nz = uz * (colR + Math.sin(i * 1.3) * 6) + pz * 10 * side;
-    // this platform's pad throws you up to the next one
-    const H = rise + 4, gAvg = GRAV * (1 - 0.65 * spaceK(y + rise / 2)), boost = Math.sqrt(2 * gAvg * H);
-    const padX = x + (nx - x) * 0.18, padZ = z + (nz - z) * 0.18;
-    const pad = addSolid(padX - 2.5, padX + 2.5, y, y + 0.4, padZ - 2.5, padZ + 2.5); pad.bounce = true; pad.boost = boost;
-    const pm = new THREE.Mesh(new THREE.BoxGeometry(5, 0.4, 5), padMat()); pm.position.set(padX, y + 0.2, padZ); scene.add(pm);
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, rise * 0.9, 8), new THREE.MeshBasicMaterial({ color: 0x36f6ff, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false }));
-    beam.position.set(padX, y + rise * 0.45, padZ); scene.add(beam);                 // a light shaft shows where each launch is heading
-    y += rise; x = nx; z = nz; side = -side;
-    addSlab(x, y, z, 7, 7, 2, y > TOP + 100 ? MOON_ZONE : null, true);
-    if (i % 4 === 3) { heart(x - 2, y + 1.3, z); ammoBox(x + 2, y + 0.8, z); }
-    coin(x, y + 1.2, z, y > TOP + 100 ? MOON_ZONE : null);
+  const climbLanes = [{ off: 0, side: 1, phase: 0, col: 0x36f6ff }, { off: 34, side: 1, phase: 1.1, col: 0xff3fc8 }, { off: -34, side: -1, phase: 2.4, col: 0x7dff4a }];
+  const laneTrail = climbLanes.map(() => []);
+  for (let li = 0; li < climbLanes.length; li++) {
+    const { off, phase, col } = climbLanes[li], laneMat = li === 0 ? padMat() : new THREE.MeshLambertMaterial({ color: col, emissive: col });
+    let y = baseY, side = climbLanes[li].side, x = ux * colR + px * off, z = uz * colR + pz * off;
+    for (let i = 0; y < topY - 1; i++) {
+      const rise = Math.min(38, topY - y), nx = ux * (colR + off + Math.sin(i * 1.3 + phase) * 6) + px * 10 * side, nz = uz * (colR + off + Math.sin(i * 1.3 + phase) * 6) + pz * 10 * side;
+      // this platform's pad throws you up to the next one
+      const H = rise + 4, gAvg = GRAV * (1 - 0.65 * spaceK(y + rise / 2)), boost = Math.sqrt(2 * gAvg * H);
+      const padX = x + (nx - x) * 0.18, padZ = z + (nz - z) * 0.18;
+      const pad = addSolid(padX - 2.5, padX + 2.5, y, y + 0.4, padZ - 2.5, padZ + 2.5); pad.bounce = true; pad.boost = boost;
+      const pm = new THREE.Mesh(new THREE.BoxGeometry(5, 0.4, 5), laneMat); pm.position.set(padX, y + 0.2, padZ); scene.add(pm);
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, rise * 0.9, 8), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false }));
+      beam.position.set(padX, y + rise * 0.45, padZ); scene.add(beam);               // a light shaft shows where each launch is heading
+      y += rise; x = nx; z = nz; side = -side;
+      addSlab(x, y, z, 7, 7, 2, y > TOP + 100 ? MOON_ZONE : null, true);
+      laneTrail[li].push({ x, y, z });
+      if (i % 4 === 3) { heart(x - 2, y + 1.3, z); ammoBox(x + 2, y + 0.8, z); }
+      coin(x, y + 1.2, z, y > TOP + 100 ? MOON_ZONE : null);
+    }
   }
-  // flat bridge from the top of the column across to the moon
+  for (let i = 0; i < Math.min(laneTrail[0].length, laneTrail[1].length, laneTrail[2].length); i++) {       // cross-link platforms: bridges between the three climb lanes every few steps
+    if (i % 3 !== 1) continue;
+    for (const [a, b] of [[0, 1], [0, 2]]) {
+      const A = laneTrail[a][i], B = laneTrail[b][i]; if (!A || !B) continue;
+      addPlatform((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2, 2.6, false, 0, A.y > TOP + 100 ? MOON_ZONE : null, true, true);
+    }
+  }
+  // flat bridge from the top of each climb lane across to the moon — same three lanes, also cross-linked
   const n = Math.floor((moonR - 34 - colR) / 12);
-  for (let k = 1; k <= n; k++) {
-    const r = colR + k * 12 + (px * 0), bx = ux * r + px * Math.sin(k * 0.8) * 4, bz = uz * r + pz * Math.sin(k * 0.8) * 4;
-    addPlatform(bx, topY + k * 0.12, bz, 4.5, false, 0, MOON_ZONE, true, true); if (k % 3 === 0) coin(bx, topY + 1.4, bz, MOON_ZONE);
+  const climbEnd = laneTrail.map((a, li) => a.length ? a[a.length - 1] : { x: ux * (colR + climbLanes[li].off), y: topY, z: uz * (colR + climbLanes[li].off) });
+  const bridgeTrail = climbEnd.map(() => []);
+  for (let bi = 0; bi < climbEnd.length; bi++) {
+    const phase = climbLanes[bi].phase;
+    for (let k = 1; k <= n; k++) {
+      const bx = climbEnd[bi].x + ux * (k * 12) + px * Math.sin(k * 0.8 + phase) * 4, bz = climbEnd[bi].z + uz * (k * 12) + pz * Math.sin(k * 0.8 + phase) * 4;
+      addPlatform(bx, topY + k * 0.12, bz, 4.5, false, 0, MOON_ZONE, true, true); if (k % 3 === 0) coin(bx, topY + 1.4, bz, MOON_ZONE);
+      bridgeTrail[bi].push({ x: bx, y: topY + k * 0.12, z: bz });
+    }
+  }
+  for (let k = 0; k < n; k++) {
+    if (k % 4 !== 1) continue;
+    for (const [a, b] of [[0, 1], [0, 2]]) {
+      const A = bridgeTrail[a][k], B = bridgeTrail[b][k]; if (!A || !B) continue;
+      addPlatform((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2, 2.3, false, 0, MOON_ZONE, true, true);
+    }
   }
   }
   for (let i = skyTag0; i < lvl.children.length; i++) lvl.children[i].userData.noCull = true;      // the stairway + bridge are the landmark you navigate by: never distance-cull them
@@ -2636,7 +2681,7 @@ function buildSkyway(hubs) {
   const eggRing = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.12, 6, 24), new THREE.MeshBasicMaterial({ color: 0xffd23a })); eggRing.rotation.x = Math.PI / 2; eggRing.position.set(bx, by + 0.15, bz); scene.add(eggRing);
   ladder.sort((a, b) => a.top - b.top); ladder.forEach((sl, i) => { sl.pn = i + 1; });      // PLATFORM COUNTER: lowest = #1, highest = biggest number
   ladderBot = { n: 1, y: ladder[0].top }; ladderTop = { n: ladder.length, y: ladder[ladder.length - 1].top }; ladderLoop = loop;
-  marsBuilt = false; warp.dest.length = 0; warp.idx = -1; warp.sel = 0; marsInfo = null; planetInfo.length = 0; planetLegBuilt = {}; WORLD_R = UNIVERSE_R + 420; camera.far = 2500; camera.updateProjectionMatrix();
+  marsBuilt = false; marsRewardBuilt = false; warp.dest.length = 0; warp.idx = -1; warp.sel = 0; marsInfo = null; planetInfo.length = 0; planetLegBuilt = {}; WORLD_R = UNIVERSE_R + 420; camera.far = 2500; camera.updateProjectionMatrix();
   // Themed worlds: moonInfo is a STUB (loop handle + voidLoop restart math) — voidLoop restarts at TOP+180, exactly like the default.
   // Note mx/mz/moonTop above only exist in the !moonless branch, hence the rebuild of values here.
   moonInfo = moonless ? { ux, uz, x: ux * moonR, y: topY + 700, z: uz * moonR, col: [ux * moonR, 0, uz * moonR], top: topY, loop, moonless: true }
@@ -10908,7 +10953,7 @@ window.__ng.lvl = () => lvl;
 window.__ng.cull = () => ({ tracked: cull.list.length, hidden: cull.hidden, children: lvl.children.length, solids: solids.length, platforms: platforms.length, specials: specials.length, enemies: enemies.length, items: items.length, props: props.length });
 window.__ng.renderInfo = () => new Promise(res => { renderer.info.autoReset = false; renderer.info.reset(); requestAnimationFrame(() => requestAnimationFrame(() => { const i = renderer.info; res({ calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries }); renderer.info.autoReset = true; })); });
 window.__ng.perf = PERF; window.__ng.drawStats = () => { const fr = new THREE.Frustum(), m = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); fr.setFromProjectionMatrix(m); const enemyRoots = new Set(enemies.map(e => e.mesh)); const out = { enemyParts: 0, enemiesVisible: 0, other: 0, instanced: 0, sprites: 0, transparent: 0 }; const seen = new Set(); scene.traverseVisible(o => { if (!o.isMesh && !o.isSprite && !o.isPoints) return; if (o.frustumCulled && o.geometry && !fr.intersectsObject(o)) return; if (o.isSprite) { out.sprites++; return; } let a = o, isE = false; while (a) { if (enemyRoots.has(a)) { isE = true; seen.add(a); break; } a = a.parent; } if (isE) out.enemyParts++; else if (o.isInstancedMesh) out.instanced++; else { out.other++; const k = (o.geometry ? o.geometry.type : '?') + '|' + (o.material && o.material.type) + (o.material && o.material.transparent ? '|T' : '') + '|d' + Math.round(Math.hypot(o.getWorldPosition(new THREE.Vector3()).x - camera.position.x, o.getWorldPosition(new THREE.Vector3()).z - camera.position.z) / 100); (out.k = out.k || {})[k] = (out.k[k] || 0) + 1; } if (o.material && o.material.transparent) out.transparent++; }); out.enemiesVisible = seen.size; return out; }; window.__ng.farWho = () => { const fr = new THREE.Frustum(); fr.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)); const tops = new Map(); scene.traverseVisible(o => { if (!o.isMesh || (o.frustumCulled && !fr.intersectsObject(o))) return; const wp = o.getWorldPosition(new THREE.Vector3()); if (Math.hypot(wp.x - camera.position.x, wp.z - camera.position.z) < 450) return; let a = o; while (a.parent && a.parent !== scene && a.parent !== lvl) a = a.parent; const e = tops.get(a) || { n: 0, cullable: cullable(a), type: a.type, kids: a.children.length, inLvl: a.parent === lvl, ud: Object.keys(a.userData || {}).join(), x: Math.round(a.position.x), y: Math.round(a.position.y), z: Math.round(a.position.z) }; e.n++; tops.set(a, e); }); return [...tops.values()].sort((p, q) => q.n - p.n).slice(0, 8); };
-window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.plateInfo = () => platforms.slice(0, 3).map(p => ({ top: p.top, y: p.plate && p.plate.position.y, vis: p.plate && p.plate.visible, col: p.plate && p.plate.material.color.getHex(), em: p.plate && p.plate.material.emissive.getHex(), ei: p.plate && p.plate.material.emissiveIntensity, po: p.plate && p.plate.material.polygonOffset, par: p.plate && p.plate.parent && p.plate.parent.type, h: p.plate && p.plate.geometry.parameters.height })); window.__ng.towerWindows = () => buildingHubs.flatMap(h => h.windows || []).map(w => ({ x: w.x, y: w.y, z: w.z, nx: w.nx, nz: w.nz })); window.__ng.netState = () => ({ on: net.on, room: net.room, peers: net.peers.size, slot: net.slot }); window.__ng.pvpShot = () => { let r = 'nopeer'; eachPeer(p => { const o = new THREE.Vector3(pos.x, pos.y + 1.4, pos.z), d = new THREE.Vector3(p.pos.x - pos.x, p.pos.y + 1 - o.y, p.pos.z - pos.z).normalize(), h = castRay(o, d, 60); r = (h.peer ? 'hit' : 'miss') + JSON.stringify({ me: [pos.x, pos.y, pos.z].map(v => +v.toFixed(1)), peer: [p.pos.x, p.pos.y, p.pos.z].map(v => +v.toFixed(1)), t: +h.t.toFixed(2), wall: !!h.hit, alive: p.alive }); if (h.peer) hitPeer(h.peer, 1); }); return r; }; window.__ng.health = () => health; window.__ng.setCull = (r, big) => { CULL_R = r; CULL_BIG_R = big; cull.t = 0; }; window.__ng.sectors = () => { const out = []; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + 0.2; let n = 0; for (const q of solids) { if (q.cx === undefined || Math.abs(q.top - TOP) > 60) continue; const dx = q.cx - start.x, dz = q.cz - start.z, d = Math.hypot(dx, dz); if (d < 30 || d > 170) continue; let da = Math.abs(Math.atan2(dz, dx) - a); da = Math.min(da, Math.PI * 2 - da); if (da < Math.PI / 8) n++; } out.push(n); } return out; }; window.__ng.bossesNow = () => endBosses.map(e => ({ n: e.name, v: e.bossRole, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), hub: e.hub ? e.hub.kind : 'bottom' })); window.__ng.enemyCount = () => enemies.filter(e => !e.dead).length; window.__ng.propsNow = () => props.map(p => ({ k: p.kind, x: +p.mesh.position.x.toFixed(1), y: +p.mesh.position.y.toFixed(1), z: +p.mesh.position.z.toFixed(1) })); window.__ng.bounceNear = (x, z, r = 12) => solids.filter(s => s.bounce && Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z) < r).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +s.maxy.toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), w: +(s.maxx - s.minx).toFixed(1), d: +(s.maxz - s.minz).toFixed(1), boost: s.boost })); window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute(); window.__ng.moonTp = () => { const m = moonInfo; pos.set(m.x + m.ux * 8, m.y + 4, m.z + m.uz * 8); vel.set(0, 0, 0); return m.y; }; window.__ng.findZone = nm => { const q = solids.filter(x => x.zone && x.zone.name === nm && x.alien && x.cx !== undefined && !x.sp); const m = q[(q.length / 2) | 0]; return m ? { x: m.cx, y: m.top, z: m.cz, n: q.length } : null; }; window.__ng.mk = (v, dx = 0, dz = 8, sc = 1.2) => { const e = makeWalker(pos.x + dx, pos.y, pos.z + dz, standOn && standOn.minx !== undefined ? standOn : null, sc, false, v); e.zone = activeZ; return enemies.length; }; window.__ng.tp = (x, y, z) => { pos.set(x, y, z); vel.set(0, 0, 0); }; window.__ng.me = () => ({ x: pos.x, y: pos.y, z: pos.z, state }); window.__ng.maw = () => makeMaw(pos.x + 12, pos.y + 4, pos.z + 12); window.__ng.planet = i => { buildMarsRoute(); marsInfo && buildPlanetLeg(i | 0); }; window.__ng.warpTo = k => { const d = warp.dest[k | 0]; if (d) { warp.sel = k | 0; warpGo(); } return warp.dest.map(q => q.name); }; window.__ng.freezeCheck = () => {      // dev: how many frozen roots are STALE (their subtree moved since freezing)? forces a full matrix refresh afterwards
+window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.plateInfo = () => platforms.slice(0, 3).map(p => ({ top: p.top, y: p.plate && p.plate.position.y, vis: p.plate && p.plate.visible, col: p.plate && p.plate.material.color.getHex(), em: p.plate && p.plate.material.emissive.getHex(), ei: p.plate && p.plate.material.emissiveIntensity, po: p.plate && p.plate.material.polygonOffset, par: p.plate && p.plate.parent && p.plate.parent.type, h: p.plate && p.plate.geometry.parameters.height })); window.__ng.towerWindows = () => buildingHubs.flatMap(h => h.windows || []).map(w => ({ x: w.x, y: w.y, z: w.z, nx: w.nx, nz: w.nz })); window.__ng.netState = () => ({ on: net.on, room: net.room, peers: net.peers.size, slot: net.slot }); window.__ng.pvpShot = () => { let r = 'nopeer'; eachPeer(p => { const o = new THREE.Vector3(pos.x, pos.y + 1.4, pos.z), d = new THREE.Vector3(p.pos.x - pos.x, p.pos.y + 1 - o.y, p.pos.z - pos.z).normalize(), h = castRay(o, d, 60); r = (h.peer ? 'hit' : 'miss') + JSON.stringify({ me: [pos.x, pos.y, pos.z].map(v => +v.toFixed(1)), peer: [p.pos.x, p.pos.y, p.pos.z].map(v => +v.toFixed(1)), t: +h.t.toFixed(2), wall: !!h.hit, alive: p.alive }); if (h.peer) hitPeer(h.peer, 1); }); return r; }; window.__ng.health = () => health; window.__ng.setCull = (r, big) => { CULL_R = r; CULL_BIG_R = big; cull.t = 0; }; window.__ng.sectors = () => { const out = []; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + 0.2; let n = 0; for (const q of solids) { if (q.cx === undefined || Math.abs(q.top - TOP) > 60) continue; const dx = q.cx - start.x, dz = q.cz - start.z, d = Math.hypot(dx, dz); if (d < 30 || d > 170) continue; let da = Math.abs(Math.atan2(dz, dx) - a); da = Math.min(da, Math.PI * 2 - da); if (da < Math.PI / 8) n++; } out.push(n); } return out; }; window.__ng.bossesNow = () => endBosses.map(e => ({ n: e.name, v: e.bossRole, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), hub: e.hub ? e.hub.kind : 'bottom' })); window.__ng.enemyCount = () => enemies.filter(e => !e.dead).length; window.__ng.propsNow = () => props.map(p => ({ k: p.kind, x: +p.mesh.position.x.toFixed(1), y: +p.mesh.position.y.toFixed(1), z: +p.mesh.position.z.toFixed(1) })); window.__ng.bounceNear = (x, z, r = 12) => solids.filter(s => s.bounce && Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z) < r).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +s.maxy.toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), w: +(s.maxx - s.minx).toFixed(1), d: +(s.maxz - s.minz).toFixed(1), boost: s.boost })); window.__ng.shootMonkey = () => { let n = 0; eachMonkey((a, x, y, z) => { if (n) return; const o = new THREE.Vector3(x, y + 0.3, z + 4), d = new THREE.Vector3(0, -0.05, -1).normalize(), h = castRay(o, d, 20); if (h.monkey) { n = 1; hurtMonkey(h.monkey.a, 1, h.monkey.x, h.monkey.y, h.monkey.z); } }); return n; }; window.__ng.mars = () => buildMarsRoute(); window.__ng.marsReward = () => spawnMarsReward(); window.__ng.moonTp = () => { const m = moonInfo; pos.set(m.x + m.ux * 8, m.y + 4, m.z + m.uz * 8); vel.set(0, 0, 0); return m.y; }; window.__ng.findZone = nm => { const q = solids.filter(x => x.zone && x.zone.name === nm && x.alien && x.cx !== undefined && !x.sp); const m = q[(q.length / 2) | 0]; return m ? { x: m.cx, y: m.top, z: m.cz, n: q.length } : null; }; window.__ng.mk = (v, dx = 0, dz = 8, sc = 1.2) => { const e = makeWalker(pos.x + dx, pos.y, pos.z + dz, standOn && standOn.minx !== undefined ? standOn : null, sc, false, v); e.zone = activeZ; return enemies.length; }; window.__ng.tp = (x, y, z) => { pos.set(x, y, z); vel.set(0, 0, 0); }; window.__ng.me = () => ({ x: pos.x, y: pos.y, z: pos.z, state }); window.__ng.maw = () => makeMaw(pos.x + 12, pos.y + 4, pos.z + 12); window.__ng.planet = i => { buildMarsRoute(); marsInfo && buildPlanetLeg(i | 0); }; window.__ng.warpTo = k => { const d = warp.dest[k | 0]; if (d) { warp.sel = k | 0; warpGo(); } return warp.dest.map(q => q.name); }; window.__ng.freezeCheck = () => {      // dev: how many frozen roots are STALE (their subtree moved since freezing)? forces a full matrix refresh afterwards
   const sig = o => { let t = 0; o.traverse(c => { const e = c.matrixWorld.elements; t += e[12] * 1.1 + e[13] * 1.7 + e[14] * 2.3 + e[0] * 3.1 + e[5] * 4.1 + e[10] * 5.3 + e[1] * 7.7 + e[2] * 8.9; }); return t; };
   const before = frozenRoots.map(sig); lvl.updateMatrixWorld(true); const stale = []; frozenRoots.forEach((o, i) => { if (Math.abs(sig(o) - before[i]) > 1e-3) stale.push(o); });
   return { frozen: frozenRoots.length, stale: stale.length, ex: stale.slice(0, 8).map(o => ({ t: o.type, n: o.children.length, ud: Object.keys(o.userData || {}).join(','), y: Math.round(o.position.y), kid: (o.children[0] && o.children[0].type) + '/' + (o.children[0] && o.children[0].geometry ? o.children[0].geometry.type : '') })) };
