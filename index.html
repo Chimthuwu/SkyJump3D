@@ -130,7 +130,7 @@
   #hud .rt-wpn span.on{border-color:var(--wc,#fff);color:#fff;background:#10162e;box-shadow:0 0 8px var(--wc,#fff)}
   #hud .rt-wpn span.lock{opacity:.45}
   #radarWrap{position:fixed;right:14px;top:62px;pointer-events:none;z-index:2}
-  #radarWrap canvas{display:block;position:static;inset:auto;z-index:auto;width:156px;height:156px;filter:drop-shadow(3px 3px 0 #000)}
+  #radarWrap canvas{display:block;position:static;inset:auto;z-index:auto;width:220px;height:220px;filter:drop-shadow(3px 3px 0 #000)}
   #players{right:12px;top:230px;padding:7px 9px;font-size:8px;line-height:1.7;text-align:right;background:linear-gradient(180deg,#14083a,#0a0522);border:3px solid #ff3fc8;box-shadow:4px 4px 0 #000,inset 0 0 0 2px #000}
   #players:empty{display:none}
   #players span{text-shadow:none}
@@ -289,7 +289,7 @@
 <div id="hud"></div>
 <div id="hp"></div>
 <div id="nosBar"></div>
-<div id="radarWrap"><canvas id="radar" width="312" height="312"></canvas></div>
+<div id="radarWrap"><canvas id="radar" width="440" height="440"></canvas></div>
 <div id="hotbar"></div>
 <div id="bossbar"></div>
 <div id="toast"></div>
@@ -6258,12 +6258,12 @@ function radarTick(now) {
   const show = state !== 'title';
   if (wrap.style.display !== (show ? '' : 'none')) wrap.style.display = show ? '' : 'none';
   if (!show || now - radarT < 50) return; radarT = now;
-  const c = radarCtx, W = 312, cx = 156, cy = 156, R = 146, fw = camera.getWorldDirection(new THREE.Vector3()), hl = Math.hypot(fw.x, fw.z) || 1, fx = fw.x / hl, fz = fw.z / hl, rx = -fz, rz = fx;
+  const c = radarCtx, W = 440, cx = 220, cy = 220, R = 206, fw = camera.getWorldDirection(new THREE.Vector3()), hl = Math.hypot(fw.x, fw.z) || 1, fx = fw.x / hl, fz = fw.z / hl, rx = -fz, rz = fx;
   const proj = (x, z) => { const dx = x - pos.x, dz = z - pos.z; return [dx * rx + dz * rz, -(dx * fx + dz * fz)]; };       // [right, up] in metres
   c.clearRect(0, 0, W, W);
-  const g = c.createRadialGradient(cx, cy, 8, cx, cy, R); g.addColorStop(0, '#0d2a4a'); g.addColorStop(1, '#04101f');
+  const g = c.createRadialGradient(cx, cy, 11, cx, cy, R); g.addColorStop(0, '#0d2a4a'); g.addColorStop(1, '#04101f');
   c.fillStyle = g; c.beginPath(); c.arc(cx, cy, R, 0, 6.2832); c.fill();
-  c.strokeStyle = '#36f6ff'; c.lineWidth = 5; c.beginPath(); c.arc(cx, cy, R, 0, 6.2832); c.stroke();
+  c.strokeStyle = '#36f6ff'; c.lineWidth = 6; c.beginPath(); c.arc(cx, cy, R, 0, 6.2832); c.stroke();
   c.strokeStyle = 'rgba(54,246,255,.35)'; c.lineWidth = 2;
   for (const k of [1 / 3, 2 / 3]) { c.beginPath(); c.arc(cx, cy, R * k, 0, 6.2832); c.stroke(); }
   c.beginPath(); c.moveTo(cx - R, cy); c.lineTo(cx + R, cy); c.moveTo(cx, cy - R); c.lineTo(cx, cy + R); c.stroke();
@@ -6271,38 +6271,38 @@ function radarTick(now) {
   const wg = c.createConicGradient ? c.createConicGradient(sweep - 1.2, 0, 0) : null;
   if (wg) { wg.addColorStop(0, 'rgba(54,246,255,0)'); wg.addColorStop(1 / 6.2832 * 1.2, 'rgba(54,246,255,.30)'); wg.addColorStop(1 / 6.2832 * 1.2 + 0.001, 'rgba(54,246,255,0)'); c.fillStyle = wg; c.beginPath(); c.arc(0, 0, R, 0, 6.2832); c.fill(); }
   c.restore();
-  const toPx = (sx, sy) => { const k = R / RADAR_RANGE; let px = sx * k, py = sy * k; const d = Math.hypot(px, py); let edge = false; if (d > R - 10) { px *= (R - 10) / d; py *= (R - 10) / d; edge = true; } return [cx + px, cy + py, edge, Math.atan2(py, px)]; };
-  c.font = '14px "Press Start 2P", monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  const toPx = (sx, sy) => { const k = R / RADAR_RANGE; let px = sx * k, py = sy * k; const d = Math.hypot(px, py); let edge = false; if (d > R - 14) { px *= (R - 14) / d; py *= (R - 14) / d; edge = true; } return [cx + px, cy + py, edge, Math.atan2(py, px)]; };
+  c.font = '20px "Press Start 2P", monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
   const [nx, ny] = proj(pos.x, pos.z - 1000), npx = toPx(nx, ny);                                                  // north marker
   c.fillStyle = '#ffd23a'; c.fillText('N', cx + (npx[0] - cx) * 0.92, cy + (npx[1] - cy) * 0.92);
   for (const e of enemies) {                                                                                       // nearby hostiles: small red dots, bosses bigger
     if (e.dead) continue; const dx = e.x - pos.x, dz = e.z - pos.z; if (Math.abs(dx) > 70 || Math.abs(dz) > 70 || Math.abs(e.y - pos.y) > 40) continue;
     const [sx, sy] = proj(e.x, e.z), [px, py, edge] = toPx(sx, sy); if (edge) continue;
-    const big = e.boss || e.mini; c.fillStyle = big ? '#ff2a4a' : 'rgba(255,90,90,.8)'; const sz = big ? 9 : 5; c.fillRect(px - sz / 2, py - sz / 2, sz, sz);
+    const big = e.boss || e.mini; c.fillStyle = big ? '#ff2a4a' : 'rgba(255,90,90,.8)'; const sz = big ? 13 : 7; c.fillRect(px - sz / 2, py - sz / 2, sz, sz);
   }
   for (const o of radarObjectives()) {                                                                             // mission objective(s)
     const [sx, sy] = proj(o.x, o.z), [px, py, edge, ang] = toPx(sx, sy), col = hexCss(o.col), pulse = 0.6 + 0.4 * Math.sin(now / 200);
     c.save(); c.translate(px, py); c.fillStyle = col; c.strokeStyle = '#000'; c.lineWidth = 3;
     if (edge) c.rotate(ang + Math.PI / 2);
-    c.beginPath(); c.moveTo(0, -10); c.lineTo(9, 0); c.lineTo(0, 10); c.lineTo(-9, 0); c.closePath(); c.stroke(); c.fill();
+    c.beginPath(); c.moveTo(0, -14); c.lineTo(13, 0); c.lineTo(0, 14); c.lineTo(-13, 0); c.closePath(); c.stroke(); c.fill();
     c.globalAlpha = pulse; c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke(); c.globalAlpha = 1;
-    if (edge) { c.fillStyle = '#fff'; c.beginPath(); c.moveTo(0, -17); c.lineTo(6, -10); c.lineTo(-6, -10); c.closePath(); c.fill(); }
+    if (edge) { c.fillStyle = '#fff'; c.beginPath(); c.moveTo(0, -24); c.lineTo(8, -14); c.lineTo(-8, -14); c.closePath(); c.fill(); }
     c.restore();
-    const dy = o.y - pos.y; if (!edge && Math.abs(dy) > 6) { c.fillStyle = '#fff'; c.fillText(dy > 0 ? '^' : 'v', px, py - 17); }
+    const dy = o.y - pos.y; if (!edge && Math.abs(dy) > 6) { c.fillStyle = '#fff'; c.fillText(dy > 0 ? '^' : 'v', px, py - 24); }
   }
-  for (const p of net.peers.values()) {                                                                            // other players
+  for (const p of net.peers.values()) {                                                                            // other players: always green (friendly), distinct from red hostiles
     if (!p.seen || !p.alive) continue;
-    const [sx, sy] = proj(p.pos.x, p.pos.z), [px, py, edge] = toPx(sx, sy), col = hexCss(PEER_COLS[p.id % PEER_COLS.length]);
-    c.globalAlpha = edge ? 0.55 : 1; c.fillStyle = col; c.strokeStyle = '#000'; c.lineWidth = 3; c.beginPath(); c.arc(px, py, 8, 0, 6.2832); c.stroke(); c.fill();
-    c.fillStyle = '#fff'; c.fillText((p.name || '?').slice(0, 1).toUpperCase(), px, py - 19);
+    const [sx, sy] = proj(p.pos.x, p.pos.z), [px, py, edge] = toPx(sx, sy), col = '#4dff6a';
+    c.globalAlpha = edge ? 0.55 : 1; c.fillStyle = col; c.strokeStyle = '#000'; c.lineWidth = 3; c.beginPath(); c.arc(px, py, 11, 0, 6.2832); c.stroke(); c.fill();
+    c.fillStyle = '#04260f'; c.fillText((p.name || '?').slice(0, 1).toUpperCase(), px, py - 27);
     const dy = p.pos.y - pos.y; if (Math.abs(dy) > 6) { c.fillStyle = '#000'; c.fillText(dy > 0 ? '^' : 'v', px, py + 1); }
     c.globalAlpha = 1;
   }
-  c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 3; c.beginPath(); c.moveTo(cx, cy - 11); c.lineTo(cx + 8, cy + 8); c.lineTo(cx, cy + 4); c.lineTo(cx - 8, cy + 8); c.closePath(); c.stroke(); c.fill();     // you
+  c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 3; c.beginPath(); c.moveTo(cx, cy - 16); c.lineTo(cx + 11, cy + 11); c.lineTo(cx, cy + 6); c.lineTo(cx - 11, cy + 11); c.closePath(); c.stroke(); c.fill();     // you
   const objs = radarObjectives();
   if (objs.length || net.on) {
     const t = objs.length ? `${objs[0].label} ${Math.round(Math.hypot(objs[0].x - pos.x, objs[0].z - pos.z))}M` : `${net.peers.size + 1} PLAYERS`;
-    c.font = '13px "Press Start 2P", monospace'; c.textAlign = 'center'; c.lineWidth = 5; c.strokeStyle = '#000'; c.strokeText(t, cx, cy + R - 22); c.fillStyle = '#fff'; c.fillText(t, cx, cy + R - 22);
+    c.font = '18px "Press Start 2P", monospace'; c.textAlign = 'center'; c.lineWidth = 5; c.strokeStyle = '#000'; c.strokeText(t, cx, cy + R - 31); c.fillStyle = '#fff'; c.fillText(t, cx, cy + R - 31);
   }
 }
 let eggBottom = false;
