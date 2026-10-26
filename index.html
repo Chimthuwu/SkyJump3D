@@ -3146,6 +3146,15 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
     for (let retry = 0; retry < 2 && !ok; retry++) ok = connectFar(A, B);
     if (!ok) console.log('[mids] far causeway to', zone.name, 'found no clear line — the land still sits on its spoke past the skyline');
   };
+  const spGeo = new THREE.BoxGeometry(1, 1, 1), orbGeo = new THREE.SphereGeometry(1, 8, 6);   // shared landmark geometry
+  const farSpire = (sx2, sz2, baseY, c, tall) => {       // landmark tower per far land: fog:false + noCull so each land reads from spawn the way the far skyline towers do
+    const body = new THREE.Mesh(spGeo, lam(0x181426, { emissive: c, emissiveIntensity: 0.22, fog: false }));
+    body.scale.set(14, tall, 14); body.position.set(sx2, baseY + tall / 2, sz2); scene.add(body); body.userData.noCull = true;
+    const cap = new THREE.Mesh(spGeo, new THREE.MeshBasicMaterial({ color: c, fog: false }));
+    cap.scale.set(17, 4, 17); cap.position.set(sx2, baseY + tall + 2, sz2); scene.add(cap); cap.userData.noCull = true;
+    const orb = new THREE.Mesh(orbGeo, new THREE.MeshBasicMaterial({ color: c, fog: false, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
+    orb.scale.setScalar(6); orb.position.set(sx2, baseY + tall + 9, sz2); scene.add(orb); orb.userData.noCull = true;
+  };
   // ---- site 1: THE GIANT PUSSY (flesh nest + ball-chair arena) ----
   // Adaptive placement: try several arena radii/drops, then build the chain BACK from whichever arena found air.
   if (nestNode) {
@@ -3182,7 +3191,8 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
         pod.position.set(bx, ay + 2 + Math.sin(a2 * 3) * 1.4, bz); scene.add(pod);
       }
       const lbl = makeLabel('THE GIANT PUSSY'); lbl.position.set(ax, ay + 9, az); lbl.scale.set(13, 3.25, 1); scene.add(lbl);
-      beacon(ax, ay + 1, az, 0xff5aa0);
+      const nb = beacon(ax, ay + 1, az, 0xff5aa0);
+      if (AN.far) { nb.material.fog = false; nb.userData.noCull = true; farSpire(ax + nz * 26, az - nx * 26, ay - 12, 0xff5aa0, 150); }   // spawn-visible landmark
       sites.nest = { x: ax, z: az, y: ay };
       if (AN.far) connectMid(nestNode, X0, Z0, y0, FP, 9, 9);        // THE JOURNEY: full causeway from the ring to this land
     }
@@ -3234,7 +3244,8 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
       }
       if (steps.length) { const l2 = steps[steps.length - 1]; addRail(l2.x, l2.z, l2.y + 1.35, hx - nx * 18, hz - nz * 18, 0x9dff3a, hy + 1.35, false); addDashPad(l2.x, l2.y, l2.z, nx, nz); }
       const lbl = makeLabel('THE HAUNTED NEXUS HOUSE'); lbl.position.set(hx, hy + 42, hz); lbl.scale.set(14, 3.5, 1); scene.add(lbl);
-      beacon(hx, hy + 1, hz, 0x7dff4a);
+      const hb = beacon(hx, hy + 1, hz, 0x7dff4a);
+      if (AH.far) { hb.material.fog = false; hb.userData.noCull = true; farSpire(hx + nz * 34, hz - nx * 34, hy - 4, 0x9dff3a, 170); }   // spawn-visible landmark
       sites.house = { x: hx, z: hz, y: hy, slabs: [land, f1, f2, spire] };
       if (AH.far) connectMid(houseNode, X0, Z0, y0, FHT, 9, 9);      // THE JOURNEY: full causeway from the ring to this land
     }
@@ -3278,7 +3289,8 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
       const eggLbls = ['EAT ME', 'DRINK ME', 'CURIOUSER AND CURIOUSER', 'DOWN THE RABBIT HOLE', 'WE ARE ALL MAD HERE'];
       for (let i = 0; i < eggLbls.length; i++) { const el2 = makeLabel(eggLbls[i]); el2.position.set(mx + Math.cos(i * 1.256 + 0.5) * 13, my + 1.6 + (i % 2) * 2.4, mz + Math.sin(i * 1.256 + 0.5) * 13); el2.scale.set(7, 1.75, 1); scene.add(el2); }
       const shroomLbl = makeLabel('THE GRAND SHROOM'); shroomLbl.position.set(mx, my + 12, mz); shroomLbl.scale.set(13, 3.25, 1); scene.add(shroomLbl);
-      beacon(mx, my + 1, mz, 0xf13be8);
+      const sb = beacon(mx, my + 1, mz, 0xf13be8);
+      if (AS.far) { sb.material.fog = false; sb.userData.noCull = true; farSpire(mx + nz * 28, mz - nx * 28, my - 20, 0xf13be8, 160); }   // spawn-visible landmark
       sites.shroom = { x: mx, z: mz, y: my, slabs: [cap, ...discs.map(d => d.slab)] };
       if (AS.far) connectMid(shroomNode, X0, Z0, y0, FSH, 9, 9);     // THE JOURNEY: full causeway from the ring to this land
     } else console.log('[mids] shroom cap blocked at every outward nudge — site skipped this build');
