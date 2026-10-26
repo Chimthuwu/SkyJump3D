@@ -6318,6 +6318,17 @@ function gpEdge(gp, i) {
   return v && !was;
 }
 
+// Look tuning, persisted in localStorage so a handheld keeps its owner's thumb feel between plays.
+// `[` / `]` = sensitivity down/up, `I` = invert right-stick Y. Mouse/keyboard look is untouched.
+const GP_SENS_KEY = 'towerdrop.gp.sens', GP_INVY_KEY = 'towerdrop.gp.invertY';
+const GP_SENS_DEF = 1, GP_SENS_MIN = 0.3, GP_SENS_MAX = 3, GP_SENS_STEP = 0.25;
+let gpSens = GP_SENS_DEF, gpInvertY = false;
+function gpStoreLook() { try { localStorage.setItem(GP_SENS_KEY, String(gpSens)); localStorage.setItem(GP_INVY_KEY, gpInvertY ? '1' : ''); } catch (_) {} }
+try {
+  gpSens = Math.min(GP_SENS_MAX, Math.max(GP_SENS_MIN, parseFloat(localStorage.getItem(GP_SENS_KEY)) || GP_SENS_DEF));
+  gpInvertY = localStorage.getItem(GP_INVY_KEY) === '1';
+} catch (_) {}
+
 function showMsg(title, body, sub) {
   $('msg').innerHTML = title ? `<h1>${title}</h1><p>${body || ''}</p><p><b>${sub || ''}</b></p>` : '';
 }
@@ -6524,9 +6535,12 @@ function menuExit() {
 }
 function menuKey(e) {
   if (menuMode === 'main') {
-    if (e.code === 'Enter' || e.code === 'Space') menuStart();
+    const vis = menuBtns.filter(id => { const b = $(id); return b && b.offsetParent !== null; });   // step only VISIBLE buttons (bExit is hidden)
+    let idx = vis.indexOf(menuBtns[menuSel]); if (idx < 0) idx = 0;
+    if (e.code === 'Enter' || e.code === 'Space') { ({ bStart: menuStart, bMulti: menuMulti, bExit: menuExit })[vis[idx] || 'bStart'](); menuRender(); }
     else if (e.code === 'KeyP') menuMulti();
-    menuRender();
+    else if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'ArrowLeft' || e.code === 'KeyA') { menuSel = menuBtns.indexOf(vis[(idx + vis.length - 1) % vis.length]); menuRender(); }
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'ArrowRight' || e.code === 'KeyD') { menuSel = menuBtns.indexOf(vis[(idx + 1) % vis.length]); menuRender(); }
   } else if (menuMode === 'levels') {
     const n = LEVELS.length, step = dir => { let j = levelSel; for (let k = 0; k < n; k++) { j = (j + dir + n) % n; if (LEVELS[j].unlocked) { levelSel = j; break; } } };
     if (e.code === 'ArrowUp' || e.code === 'KeyW') { step(-1); menuLevelsRender(); }
@@ -6591,6 +6605,8 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyP' && state !== 'title') cycleRetroPreset();
   if (e.code === 'KeyB' && state !== 'title') toggleCrazy();
   if (e.code === 'KeyG') { goreOn = !goreOn; decalMesh.visible = goreOn; toast(goreOn ? 'Gore on' : 'Gore off', 900); }
+  if (e.code === 'BracketRight' || e.code === 'BracketLeft') { gpSens = Math.min(GP_SENS_MAX, Math.max(GP_SENS_MIN, gpSens + (e.code === 'BracketRight' ? GP_SENS_STEP : -GP_SENS_STEP))); gpStoreLook(); toast(`Gamepad look sensitivity ${Math.round(gpSens * 100)}%  ([\u00A0/ ] to tune)`, 1400); }
+  if (e.code === 'KeyI') { gpInvertY = !gpInvertY; gpStoreLook(); toast(gpInvertY ? 'Gamepad look Y INVERTED' : 'Gamepad look Y standard', 1400); }
   if (e.code === 'KeyH' && state !== 'title') { schizoOn = !schizoOn; document.body.classList.toggle('schizo', schizoOn); toast(schizoOn ? 'the voices are back' : 'silence', 1400); }
 });
 addEventListener('keyup', e => { keys[e.code] = false; kbdKeys[e.code] = false; });
@@ -6617,16 +6633,36 @@ function gamepadTick(nowMs) {
   if (playing) {
     const rx = gpDead(ax[2] || 0), ry = gpDead(ax[3] || 0);
     if (rx || ry) {
-      camYaw -= rx * 4.2 * gdt;
-      camPitch = clamp(camPitch + ry * 2.4 * gdt, -0.15, 1.3);
-      fpPitch = clamp(fpPitch - ry * 2.4 * gdt, -1.45, 1.45);
+      const inv = gpInvertY ? -1 : 1;
+      camYaw -= rx * 4.2 * gpSens * gdt;
+      camPitch = clamp(camPitch + ry * 2.4 * gpSens * inv * gdt, -0.15, 1.3);
+      fpPitch = clamp(fpPitch - ry * 2.4 * gpSens * inv * gdt, -1.45, 1.45);
     }
   }
   if (!gpSeen) {
     gpSeen = true;
-    toast('Gamepad: left stick move · right stick look · A jump · B ground pound · X use/interact · RT fire · LT aim · RB weapons · LB grapple · L3 sprint/boost · Y view · Start pause', 7000);
+    toast('Gamepad: left stick move · right stick look · A jump · B ground pound · X use/interact · RT fire · LT aim · RB weapons · LB grapple · L3 sprint/boost · Y view · Start pause · [ and ] look speed · I invert Y', 7000);
   }
   if (!playing) {
+    // Menus (title) and pause: A = confirm, B/Back = back, d-pad or left stick up/down = browse,
+    // all routed through menuKey() so pad input behaves EXACTLY like pressing the real keys.
+    if (gpEdge(gp, 0)) menuKey({ code: 'Enter' });
+    if (gpEdge(gp, 1) || gpEdge(gp, 8)) {                  // B / Back = Escape (un-pause during play)
+      if (state === 'play') { if (paused && !guideDialogOpen && performance.now() - pausedAt > 250) setPaused(false); }
+      else menuKey({ code: 'Escape' });
+    }
+    if (state === 'title') {
+      if (gpEdge(gp, 12)) menuKey({ code: 'ArrowUp' });
+      if (gpEdge(gp, 13)) menuKey({ code: 'ArrowDown' });
+      if (menuMode === 'multi') {                          // MULTIPLAYER screen: X = host (H), Y = join (J)
+        if (gpEdge(gp, 2)) menuKey({ code: 'KeyH' });
+        if (gpEdge(gp, 3)) menuKey({ code: 'KeyJ' });
+      }
+      const msUp = (ax[1] || 0) < -0.5, msDown = (ax[1] || 0) > 0.5;   // left stick browse with hysteresis latch
+      if (msUp || msDown) {
+        if (gpPrev.msDir !== (msUp ? -1 : 1)) { gpPrev.msDir = msUp ? -1 : 1; menuKey({ code: msUp ? 'ArrowUp' : 'ArrowDown' }); }
+      } else gpPrev.msDir = 0;
+    }
     if (gpEdge(gp, 9)) {                                   // Start button: menus
       if (state === 'title') menuKey({ code: 'Enter' });
       else if (!guideDialogOpen && (!paused || performance.now() - pausedAt > 250)) setPaused(!paused);

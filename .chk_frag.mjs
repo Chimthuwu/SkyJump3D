@@ -1,0 +1,1 @@
+const commons = { mid: {} }; const s = commons.mid.k; const f = (commons) => commons && commons.mid ? Object.fromEntries(['nest'].map(k => { const s = commons.mid[k]; return [k, s ? {} : null; }])) : null;
