@@ -6223,8 +6223,9 @@ function preloadThen(go, pre) {      // pre: optional heavy work (e.g. a level r
   const step = (pct, txt) => { $('loadBar').style.width = pct + '%'; $('loadTxt').textContent = txt; return new Promise(r => requestAnimationFrame(() => setTimeout(r, 0))); };
   (async () => {
     try {
-      await step(15, pre ? 'BUILDING LEVEL' : 'MERGING PLATFORMS'); if (pre) { pre(); await step(30, 'MERGING PLATFORMS'); } flushJobs();
+      await step(15, pre ? 'BUILDING LEVEL' : 'MERGING PLATFORMS'); if (pre) { pre(); await step(30, 'MERGING PLATFORMS'); }
       await step(45, 'COMPILING SHADERS');
+      try { flushJobs(); } catch (_) {}
       const hidden = []; scene.traverse(o => { if (!o.visible) { hidden.push(o); o.visible = true; } });
       // Warm the canvas textures/materials that otherwise build lazily on first use during real play (bullseye target
       // rings, crumble-platform cracks, Hellscape pentagram sigil) -- each one does canvas drawing + a CanvasTexture
