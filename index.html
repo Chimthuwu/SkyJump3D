@@ -3220,13 +3220,26 @@ function updatePalaceMotion(dt) {
   const t = palaceMotionClock;
   for (const palace of palaceMotions) {
     for (const c of palace.clouds) {
-      const w = t * c.speed + c.phase;
-      c.mesh.position.set(c.x + Math.sin(w) * c.drift, c.y + Math.sin(w * 0.72) * c.bob, c.z + Math.cos(w * 0.8) * c.drift * 0.45);
-      const pulse = 1 + Math.sin(w * 0.65) * 0.018;
+      const angle = c.angle + t * c.orbitSpeed;
+      const radius = c.radius + Math.sin(t * 0.12 + c.phase) * c.radiusWobble;
+      const puffX = c.puffX * Math.cos(angle) - c.puffZ * Math.sin(angle);
+      const puffZ = c.puffX * Math.sin(angle) + c.puffZ * Math.cos(angle);
+      const bob = Math.sin(t * 0.32 + c.phase) * c.bob;
+      c.mesh.position.set(Math.cos(angle) * radius + puffX, c.y + bob, Math.sin(angle) * radius + puffZ);
+      const pulse = 1 + Math.sin(t * 0.24 + c.phase) * 0.018;
       c.mesh.scale.set(c.sx * pulse, c.sy * pulse, c.sz * pulse);
     }
+    const breath = Math.sin(t * 1.25 + palace.breathPhase);
+    const spread = 1 + breath * 0.018;
+    const lift = breath * 0.55;
+    for (const f of palace.folds) {
+      f.mesh.scale.set(f.sx * spread, f.sy * (1 + breath * 0.012), f.sz * (1 + breath * 0.025));
+      f.mesh.position.x = f.x * spread;
+      f.mesh.position.y = f.y + lift * f.lift;
+      f.mesh.position.z = f.z;
+    }
     for (const h of palace.highlights) {
-      const pulse = 1 + Math.sin(t * 1.35 + h.phase) * 0.07;
+      const pulse = 1 + Math.sin(t * 1.35 + h.phase) * 0.07 + breath * 0.012;
       h.mesh.scale.set(h.sx * pulse, h.sy * pulse, h.sz * pulse);
     }
     for (const d of palace.drips) {
@@ -3274,7 +3287,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
     const glow = col => new THREE.MeshBasicMaterial({ color: col, fog: false, toneMapped: false });
     const bx2 = new THREE.BoxGeometry(1, 1, 1), sp2 = new THREE.SphereGeometry(1, 9, 7), cy2 = new THREE.CylinderGeometry(1, 1, 1, 9), cn2 = new THREE.ConeGeometry(0.5, 1, 4);
     if (kind === 'pussy') {                            // fleshy gothic keep with its entrance built into the front façade
-      const cloudMotion = [], wetHighlights = [], wetDrips = [];
+      const cloudMotion = [], wetHighlights = [], wetDrips = [], entranceFolds = [];
       const stone = lamF(0x9f536c, 0x431526, 0.28), lightStone = lamF(0xc8798e, 0x572336, 0.25);   // castle stonework back to its own palette
       const deepStone = lamF(0x673247, 0x290c1b, 0.25), trim = lamF(0xe09aaa, 0x682a40, 0.22);
       const softGeo = new THREE.SphereGeometry(1, 12, 9);
@@ -3321,8 +3334,10 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
       cleft.userData.noCull = true;
       // Outer labia: two broad, softly rounded folds, parted around the doorway.
       for (const side of [-1, 1]) {
-        M(softGeo, outerFlesh, side * 14.2, 36, 34, 11.2, 32, 7.2, 0, -side * 0.12);
-        M(softGeo, innerFlesh, side * 6.2, 34, 40, 4.1, 25, 3.8, 0, side * 0.06);          // distinct inner labium
+        const outerLip = M(softGeo, outerFlesh, side * 14.2, 36, 34, 11.2, 32, 7.2, 0, -side * 0.12);
+        entranceFolds.push({ mesh: outerLip, x: side * 14.2, y: 36, z: 34, sx: 11.2, sy: 32, sz: 7.2, lift: 1 });
+        const innerLip = M(softGeo, innerFlesh, side * 6.2, 34, 40, 4.1, 25, 3.8, 0, side * 0.06);
+        entranceFolds.push({ mesh: innerLip, x: side * 6.2, y: 34, z: 40, sx: 4.1, sy: 25, sz: 3.8, lift: 0.65 });   // distinct inner labium
         // Fine raised crease on each outer fold, giving the lips a rounded, sculpted edge.
         const crease = new THREE.CatmullRomCurve3([
           new THREE.Vector3(side * 22, 8, 38), new THREE.Vector3(side * 23, 25, 40),
@@ -3332,10 +3347,14 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
         creaseMesh.userData.noCull = true; g.add(creaseMesh);
       }
       // Hood and clitoral glans are separate forms above the cleft, not another blob on the doorway.
-      M(softGeo, hoodMat, 0, 69, 34, 15, 9, 7);                                              // mons / clitoral hood
-      M(softGeo, foldLight, 0, 61, 41, 5.8, 4.8, 3.6);                                        // hood edge
-      M(softGeo, innerFlesh, 0, 57, 44, 2.6, 3.4, 2.2);                                       // small, clearly defined clitoris
-      M(softGeo, outerFlesh, 0, 5, 38, 9, 5, 5);                                               // lower commissure
+      const mons = M(softGeo, hoodMat, 0, 69, 34, 15, 9, 7);                                 // mons / clitoral hood
+      entranceFolds.push({ mesh: mons, x: 0, y: 69, z: 34, sx: 15, sy: 9, sz: 7, lift: 0.25 });
+      const hoodEdge = M(softGeo, foldLight, 0, 61, 41, 5.8, 4.8, 3.6);
+      entranceFolds.push({ mesh: hoodEdge, x: 0, y: 61, z: 41, sx: 5.8, sy: 4.8, sz: 3.6, lift: 0.4 });
+      const clitoris = M(softGeo, innerFlesh, 0, 57, 44, 2.6, 3.4, 2.2);                     // small, clearly defined clitoris
+      entranceFolds.push({ mesh: clitoris, x: 0, y: 57, z: 44, sx: 2.6, sy: 3.4, sz: 2.2, lift: 0.5 });
+      const lowerFold = M(softGeo, outerFlesh, 0, 5, 38, 9, 5, 5);
+      entranceFolds.push({ mesh: lowerFold, x: 0, y: 5, z: 38, sx: 9, sy: 5, sz: 5, lift: -0.25 });                                               // lower commissure
       // Wet specular streaks trace the inner folds; droplets hang from the lower labia.
       const wet = new THREE.MeshBasicMaterial({ color: 0xffc0d3, transparent: true, opacity: 0.82, fog: false, toneMapped: false });
       const wetPink = new THREE.MeshBasicMaterial({ color: 0xff77a4, transparent: true, opacity: 0.9, fog: false, toneMapped: false });
@@ -3380,13 +3399,13 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
       const cloudMat = new THREE.MeshBasicMaterial({ color: 0xf08bc8, transparent: true, opacity: 0.62, depthWrite: false, fog: false, toneMapped: false });
       const cloudHi = new THREE.MeshBasicMaterial({ color: 0xffb8df, transparent: true, opacity: 0.68, depthWrite: false, fog: false, toneMapped: false });
       for (let i = 0; i < 10; i++) {
-        const a = i * Math.PI * 2 / 10, cx = Math.cos(a) * 65, cz = Math.sin(a) * 52;
+        const angle = i * Math.PI * 2 / 10, radius = 65;
         for (const [dx, dy, dz, sx, sy, sz, mat] of [[0, -2, 0, 18, 7, 13, cloudMat], [-8, 1, 1, 12, 8, 11, cloudHi], [8, 0, -2, 13, 7, 10, cloudMat]]) {
-          const puff = M(softGeo, mat, cx + dx, dy, cz + dz, sx, sy, sz);
-          cloudMotion.push({ mesh: puff, x: cx + dx, y: dy, z: cz + dz, sx, sy, sz, phase: i * 0.73 + dx * 0.04 + dz * 0.03, speed: 0.14 + (i % 3) * 0.012, drift: 1.2 + (i % 3) * 0.24, bob: 0.45 + (i % 2) * 0.12 });
+          const puff = M(softGeo, mat, Math.cos(angle) * radius + dx, dy, Math.sin(angle) * radius + dz, sx, sy, sz);
+          cloudMotion.push({ mesh: puff, angle, radius, radiusWobble: 1.5, puffX: dx, puffZ: dz, y: dy, sx, sy, sz, phase: i * 0.73 + dx * 0.04 + dz * 0.03, orbitSpeed: 0.012 + (i % 3) * 0.0015, bob: 0.2 });
         }
       }
-      palaceMotions.push({ clouds: cloudMotion, highlights: wetHighlights, drips: wetDrips });
+      palaceMotions.push({ clouds: cloudMotion, highlights: wetHighlights, drips: wetDrips, folds: entranceFolds, breathPhase: palaceMotions.length * 1.7 });
       // Masonry frame stones tie the living gate back into the castle wall.
       for (const side of [-1, 1]) M(bx2, deepStone, side * 27, 39, 31, 1.5, 72, 1.5);
     } else if (kind === 'house') {                     // crooked gothic keep: candlelit windows and an unmistakable spired silhouette
