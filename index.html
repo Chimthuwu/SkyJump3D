@@ -3259,10 +3259,10 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
       M(bx2, stone, 0, 77, -8, 72, 154, 58);
       M(bx2, lightStone, 0, 151, 22, 84, 12, 52);       // front parapet
       M(bx2, deepStone, 0, 78, 22, 82, 5, 7);           // inset lower course
-      // The front curtain wall is deliberately split around a real, open doorway.
-      M(bx2, lightStone, -28, 28, 25, 36, 56, 10);
-      M(bx2, lightStone, 28, 28, 25, 36, 56, 10);
-      M(bx2, stone, 0, 69, 25, 20, 26, 10);
+      // Leave a broad, tall opening in the front curtain wall for the living maw-gate.
+      M(bx2, lightStone, -31, 35, 25, 32, 70, 10);
+      M(bx2, lightStone, 31, 35, 25, 32, 70, 10);
+      M(bx2, stone, 0, 86, 25, 30, 28, 10);
       // Corner towers, crenellations and uneven spires give the landmark a clear castle silhouette.
       for (const [tx, tz, h] of [[-45, 22, 104], [45, 22, 104], [-34, -24, 136], [34, -24, 136]]) {
         M(cy2, stone, tx, h / 2, tz, 16, h, 16);
@@ -3284,29 +3284,44 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
         M(bx2, trim, x, 160, -28, 6, 8, 7);
       }
 
-      // A dark, pointed recess reads as a usable castle doorway; sculpted upper/lower lips form its arch.
+      // The entrance is a giant, open maw worked into the castle wall: dark throat, plush outer folds and a thick raised rim.
       const entry = new THREE.Shape();
-      entry.moveTo(-9, 0); entry.lineTo(-9, 24); entry.quadraticCurveTo(-8, 37, 0, 40);
-      entry.quadraticCurveTo(8, 37, 9, 24); entry.lineTo(9, 0); entry.closePath();
-      M(new THREE.ShapeGeometry(entry, 12), glow(0x1a0913), 0, 0, 31);
+      entry.moveTo(-15, 0); entry.lineTo(-15, 43); entry.quadraticCurveTo(-14, 62, 0, 68);
+      entry.quadraticCurveTo(14, 62, 15, 43); entry.lineTo(15, 0); entry.closePath();
+      M(new THREE.ShapeGeometry(entry, 16), glow(0x16050e), 0, 0, 31.2);
+      const throat = new THREE.Mesh(new THREE.PlaneGeometry(21, 54), glow(0x310b22));
+      throat.position.set(0, 31, 31.4); throat.userData.noCull = true; g.add(throat);
+      const mawFlesh = lamF(0xd78298, 0x67243a, 0.3), innerFlesh = lamF(0xf0a0b0, 0x7b2944, 0.28);
+      // Full, rounded side lips flank the walk-through opening like an enlarged version of the roaming Maw.
+      for (const side of [-1, 1]) {
+        M(softGeo, mawFlesh, side * 18, 34, 32, 13, 37, 8);
+        M(softGeo, innerFlesh, side * 11, 34, 38, 5.2, 31, 4.2);
+        M(softGeo, trim, side * 16, 6, 37, 8, 5, 4);
+      }
       const upperLip = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(-13, 1, 32), new THREE.Vector3(-12, 15, 33), new THREE.Vector3(-10, 30, 34),
-        new THREE.Vector3(-6, 40, 34), new THREE.Vector3(0, 44, 34), new THREE.Vector3(6, 40, 34),
-        new THREE.Vector3(10, 30, 34), new THREE.Vector3(12, 15, 33), new THREE.Vector3(13, 1, 32)
+        new THREE.Vector3(-19, 4, 36), new THREE.Vector3(-17, 25, 39), new THREE.Vector3(-14, 51, 39),
+        new THREE.Vector3(-9, 66, 38), new THREE.Vector3(0, 72, 37), new THREE.Vector3(9, 66, 38),
+        new THREE.Vector3(14, 51, 39), new THREE.Vector3(17, 25, 39), new THREE.Vector3(19, 4, 36)
       ]);
       const lowerLip = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(-13, 1, 32), new THREE.Vector3(-8, -1, 34), new THREE.Vector3(0, -2, 34),
-        new THREE.Vector3(8, -1, 34), new THREE.Vector3(13, 1, 32)
+        new THREE.Vector3(-19, 3, 36), new THREE.Vector3(-12, -1, 39), new THREE.Vector3(0, -3, 40),
+        new THREE.Vector3(12, -1, 39), new THREE.Vector3(19, 3, 36)
       ]);
-      for (const [curve, radius, material] of [[upperLip, 2.6, trim], [lowerLip, 2, lightStone]]) {
-        const lip = new THREE.Mesh(new THREE.TubeGeometry(curve, 32, radius, 8, false), material);
+      for (const [curve, radius, material] of [[upperLip, 5.2, mawFlesh], [lowerLip, 4.5, innerFlesh]]) {
+        const lip = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, radius, 10, false), material);
         lip.userData.noCull = true; g.add(lip);
       }
-      // Subtle vertical seams and warm rose accents make the entrance part of the masonry, not a floating emblem.
+      // Raised inner ridges echo the Maw's layered folds while framing, rather than blocking, the passage.
       for (const side of [-1, 1]) {
-        M(bx2, deepStone, side * 18, 31, 31, 1.2, 54, 1.2);
-        M(softGeo, trim, side * 13, 5, 32, 4.5, 3.2, 2.5);
+        const ridge = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(side * 8, 8, 40), new THREE.Vector3(side * 7, 25, 42),
+          new THREE.Vector3(side * 6, 43, 42), new THREE.Vector3(side * 8, 57, 40)
+        ]);
+        const fold = new THREE.Mesh(new THREE.TubeGeometry(ridge, 24, 1.5, 8, false), trim);
+        fold.userData.noCull = true; g.add(fold);
       }
+      // The lip-stones tie this living gate back into the castle masonry.
+      for (const side of [-1, 1]) M(bx2, deepStone, side * 23, 39, 31, 1.5, 72, 1.5);
     } else if (kind === 'house') {                     // crooked gothic keep: candlelit windows and an unmistakable spired silhouette
       const hb2 = lamF(0x171522, 0x100915, 0.52), rf2 = lamF(0x30243a, 0x180d20, 0.42);
       M(bx2, hb2, 0, 86, 0, 40, 172, 34);                 // narrow keep rising out of the fog
