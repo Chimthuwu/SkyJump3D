@@ -64,6 +64,9 @@
   body.nos-world::after{opacity:.5;background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.36) 0 1px,transparent 1px 3px),repeating-linear-gradient(90deg,rgba(255,0,80,.07) 0 1px,rgba(0,255,120,.05) 1px 2px,rgba(0,80,255,.08) 2px 3px);background-size:100% 3px,3px 100%;mask-image:none;mix-blend-mode:normal}
   #nosBar{display:none;position:fixed;left:0;right:0;top:0;height:16vh;pointer-events:none;z-index:1;background:linear-gradient(180deg,transparent 0,rgba(255,255,255,.09) 50%,transparent 100%);will-change:transform;transform:translateY(-20vh)}
   body.nos-world #nosBar{display:block;animation:nosRoll 6.5s linear infinite}
+  /* Retro parallax skyline layer (scrolled slowly) */
+  .nos-skyline{position:fixed;top:0;left:0;width:300vw;height:100vh;pointer-events:none;z-index:0;background:linear-gradient(180deg,rgba(255,63,200,.18) 0,rgba(54,246,255,.12) 50%,rgba(5,10,27,.9) 100%);animation:nosSky 40s linear infinite;will-change:transform}
+  body.nos-world .nos-skyline{display:block}
   body.nos-1::before{opacity:.75;background:radial-gradient(ellipse at 50% 46%,rgba(255,110,220,.05) 0 18%,rgba(60,8,90,.32) 52%,rgba(8,0,24,.93) 100%);animation:none}
   body.nos-2::before{opacity:.8;background:radial-gradient(ellipse at 50% 46%,rgba(170,200,255,.05) 0 16%,rgba(14,26,52,.42) 50%,rgba(2,4,14,.96) 100%);animation:none}
   body.nos-3::before{opacity:.8;background:radial-gradient(ellipse at 50% 46%,rgba(160,90,255,.07) 0 14%,rgba(24,6,70,.45) 48%,rgba(0,0,10,.97) 100%);animation:none}
@@ -88,6 +91,7 @@
   @keyframes gutBreath{from{filter:brightness(.78) saturate(1.1);transform:scale(1)}to{filter:brightness(1.08) saturate(1.35);transform:scale(1.025)}}
   @keyframes pulse{from{opacity:1}to{opacity:.55}}
   @keyframes nosRoll{from{transform:translateY(-20vh)}to{transform:translateY(120vh)}}
+  @keyframes nosSky{from{transform:translateX(0)}to{transform:translateX(-100%)}}
   @keyframes nosTear{0%{transform:translateX(0)}14%{transform:translateX(-14px) skewX(2deg)}28%{transform:translateX(9px)}43%{transform:translateX(-22px) skewX(-3deg)}57%{transform:translateX(6px)}71%{transform:translateX(-10px) skewX(1.5deg)}100%{transform:translateX(0)}}
   @keyframes horrorBreath{from{filter:brightness(.86) contrast(1.07);transform:scale(1)}to{filter:brightness(.62) contrast(1.25);transform:scale(1.018)}}
   @keyframes horrorGrain{0%{transform:translate(0,0)}50%{transform:translate(-1px,1px)}100%{transform:translate(1px,-1px)}}
@@ -231,6 +235,7 @@
 </style>
 </head>
 <body>
+<div class="nos-skyline"></div>
 <div id="gore"></div>
 <div id="flash"></div>
 <div id="dread"></div>
