@@ -31,6 +31,9 @@ const SRC = require('path').resolve(__dirname, '..', 'index.html');
   console.log('commons:', JSON.stringify(fp0));
   const M0 = await mid();
   console.log('mids initial:', JSON.stringify(M0, null, 1));
+  console.log('outrider lead-in chains (platforms seeded per site):', JSON.stringify(await evl(() => window.__ng.midLead())));
+  const outr = await evl(() => window.__ng.midLead());
+  if (!outr || outr.nest < 2 || outr.house < 2 || outr.shroom < 2) console.log('!! OUTRIDER SEED CHECK FAILED — lead chains empty');
 
   const runSite = async (site, expectKind) => {
     const gone = await evl(s => window.__ng.midsGo(s), site);
@@ -41,25 +44,41 @@ const SRC = require('path').resolve(__dirname, '..', 'index.html');
     console.log(site + ': arrive ->', JSON.stringify(st));
     if (st.missing) return null;
     // drive the pipeline: drop cooldowns (midsStep), kill one unit per pass, let the boss emerge
+    // headless frames advance ~0.25 s of game time per second with the 2x monuments up, and the garrison can maul the
+    // unprotected runner into the 'dead' state (which gates the site tick) — so stay alive, keep passes tight and many
     let bossSeen = false, guardKills = 0, tries = 0;
-    while (tries++ < 44) {
+    while (tries++ < 70) {
+      const stAlive = await evl(() => window.__ng.mv().st);
+      if (stAlive !== 'play') {
+        await evl(() => window.__ng.midRespawn());
+        await evl(s => window.__ng.midsGo(s), site);
+        await w(900);
+        continue;
+      }
       const st0 = (await mid()).sites.find(x => x.site === site);
-      if (st0.waves >= 3) {
+      if (st0.waves >= 3 && !st0.bossSpawned) {
         const k = await evl(s => window.__ng.midsKill(s), site);      // waves>=3: kill WITHOUT forcing cooldowns — the boss gate (zero live guards) then fires on the next tick
         if (k !== 'killed' && guardKills === 0) console.log('   pass' + tries + ': kill -> ' + k);
         else if (k === 'killed') guardKills++;
-        await w(4000);
-      } else {
-        await evl(s => window.__ng.midsStep(s), site);                // keep the garrison coming while waves < 3
+        await w(3500);
+      } else if (st0.bossSpawned) {
+        // post-boss: do NOT force cooldowns — midsStep zeroes waveCd and the summoner refills a guard the same tick,
+        // which starves the guard-first kill order of an empty tick and the boss is never reachable (hp never drops)
         const k = await evl(s => window.__ng.midsKill(s), site);
         if (k !== 'killed' && guardKills === 0) console.log('   pass' + tries + ': kill -> ' + k);
         else if (k === 'killed') guardKills++;
-        await w(5500);                                              // real wave cadence is 9 s (guardCd); 3.1 s per pass lets 2-3 waves develop across 30 passes
+        await w(3500);
+      } else {
+        await evl(s => window.__ng.midsStep(s), site);                // keep the garrison coming until waves == 3
+        const k = await evl(s => window.__ng.midsKill(s), site);
+        if (k !== 'killed' && guardKills === 0) console.log('   pass' + tries + ': kill -> ' + k);
+        else if (k === 'killed') guardKills++;
+        await w(4200);                                              // guardCd is 9 s of GAME time (~2.3 s real per game-second headless); tight passes still let waves develop
       }
       const st2 = (await mid()).sites.find(x => x.site === site);
       if (st2.bossSpawned && st2.bossHp !== null) bossSeen = true;
       if (st2.bossDead) break;
-      if (tries === 44 && !st2.bossDead) console.log(site + ': SLOW pipeline after 44 passes ->', JSON.stringify(st2));
+      if (tries === 66 && !st2.bossDead) console.log(site + ': SLOW pipeline after 66 passes ->', JSON.stringify(st2));
     }
     const after = await mid();
     return after;
@@ -74,7 +93,7 @@ const SRC = require('path').resolve(__dirname, '..', 'index.html');
   }
   // wild maw purge: force the spawn timer and watch for 4s — no new maw may appear
   if (nest && nest.mawPurged) {
-    await evl(() => { window.__ng.tp(); });
+    await evl(() => { window.__ng.commonsGo(); });                 // park somewhere neutral (tp() with no args would NaN pos.set)
     const before = await evl(() => window.__ng.midsStaff());
     await w(4000);
     const afterP = await evl(() => window.__ng.midsStaff());
@@ -97,6 +116,12 @@ const SRC = require('path').resolve(__dirname, '..', 'index.html');
     if (!s.bossDead || shroom.owned[9] !== true || shroom.bonusHearts < 6 || shroom.maxhp !== 11) console.log('!! SHROOM REWARD CHECK FAILED');
   }
 
+  for (const site of ['nest', 'house', 'shroom']) {
+    const route = await evl(s => window.__ng.midRoute(s), site);
+    if (!route || !route.interior || route.interior.height < 400 || !route.rooms.length || !route.hazards.length || route.secrets.length !== 1) {
+      console.log(`!! ${site.toUpperCase()} DUNGEON CONTENT CHECK FAILED`, JSON.stringify(route && { interior: route.interior, rooms: route.rooms, hazards: route.hazards, secrets: route.secrets }));
+    } else console.log(`${site.toUpperCase()} DUNGEON CONTENT PASS: ${route.interior.floors} storeys, ${route.rooms.length} rooms, ${route.hazards.length} hazards, ${route.secrets[0].name}`);
+  }
   console.log('runtime errors:', errors.length ? errors : 'none');
   await browser.close();
 })().catch(e => { console.error('MID TEST FAILED:', e.message); process.exit(1); });

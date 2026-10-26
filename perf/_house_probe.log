@@ -1,0 +1,59 @@
+enterPlay -> title
+midsGo(house) -> true
+pass1 kill -> killed | roster: [{"x":828,"y":568,"z":-630,"d":115,"g":"house","b":null,"hp":3,"v":"skeleton"}]
+pass2 kill -> killed | roster: []
+pass3 kill -> noTarget | roster: []
+pass4 kill -> noTarget | roster: [{"x":905,"y":680,"z":-719,"d":43,"g":"house","b":null,"hp":3,"v":"spider"}]
+pass5 kill -> killed | roster: []
+pass6 kill -> noTarget | roster: []
+pass7 kill -> noTarget | roster: []
+pass8 kill -> noTarget | roster: [{"x":932,"y":688,"z":-725,"d":41,"g":"house","b":null,"hp":2,"v":"pixelghost"}]
+pass9 kill -> killed | roster: []
+pass10 kill -> noTarget | roster: []
+final gates: {
+ "state": "play",
+ "paused": false,
+ "inInterior": false,
+ "netOn": false,
+ "host": true,
+ "pos": {
+  "x": 930.2,
+  "y": 560.6,
+  "z": -684
+ },
+ "sites": {
+  "nest": {
+   "x": 0,
+   "y": 556.8,
+   "z": 788,
+   "gen": 0,
+   "woken": false,
+   "waves": 0,
+   "guardCd": 6,
+   "bossSpawned": false,
+   "enemies": 2
+  },
+  "house": {
+   "x": 930.2,
+   "y": 560.6,
+   "z": -684,
+   "gen": 1,
+   "woken": true,
+   "waves": 2,
+   "guardCd": 1.55,
+   "bossSpawned": false,
+   "enemies": 0
+  },
+  "shroom": {
+   "x": -1042.5,
+   "y": 558,
+   "z": 321.2,
+   "gen": 2,
+   "woken": false,
+   "waves": 0,
+   "guardCd": 6,
+   "bossSpawned": false,
+   "enemies": 2
+  }
+ }
+}
