@@ -1,0 +1,61 @@
+enterPlay -> title
+commons: {"x":0,"y":568.5,"z":-210,"r":195,"kills":0,"quota":19,"done":false,"nodes":32,"outposts":0,"islets":0,"ledges":2,"bonusHearts":0,"maxhp":5,"inCommons":false}
+mids initial: {
+ "sites": [
+  {
+   "site": "nest",
+   "woken": false,
+   "waves": 0,
+   "guards": 2,
+   "bossSpawned": false,
+   "bossHp": null,
+   "bossDead": false
+  },
+  {
+   "site": "house",
+   "woken": false,
+   "waves": 0,
+   "guards": 2,
+   "bossSpawned": false,
+   "bossHp": null,
+   "bossDead": false
+  },
+  {
+   "site": "shroom",
+   "woken": false,
+   "waves": 0,
+   "guards": 2,
+   "bossSpawned": false,
+   "bossHp": null,
+   "bossDead": false
+  }
+ ],
+ "mawPurged": false,
+ "bonusHearts": 0,
+ "maxhp": 5,
+ "owned": [
+  true,
+  true,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false
+ ],
+ "midWins": {
+  "maw": false,
+  "nex": false
+ }
+}
+outrider lead-in chains (platforms seeded per site): {"nest":6,"house":6,"shroom":6}
+nest: arrive -> {"site":"nest","woken":true,"waves":0,"guards":2,"bossSpawned":false,"bossHp":null,"bossDead":false}
+NEST RESULT: {"site":"nest","woken":true,"waves":3,"guards":0,"bossSpawned":true,"bossHp":null,"bossDead":true} mawPurged: true hearts: 2 maxhp: 7 voidbeam owned: true
+maw purge gate: staffed maws before 0 after 4s 0 | PURGE OK (needs mawCd forced to fire: pass
+house: arrive -> {"site":"house","woken":true,"waves":0,"guards":2,"bossSpawned":false,"bossHp":null,"bossDead":false}
+HOUSE RESULT: {"site":"house","woken":true,"waves":3,"guards":0,"bossSpawned":true,"bossHp":null,"bossDead":true} hearts: 4 maxhp: 9 hexfire owned: true
+shroom: arrive -> {"site":"shroom","woken":true,"waves":0,"guards":2,"bossSpawned":false,"bossHp":null,"bossDead":false}
+SHROOM RESULT: {"site":"shroom","woken":true,"waves":3,"guards":0,"bossSpawned":true,"bossHp":null,"bossDead":true} hearts: 6 maxhp: 11 teaparty owned: true wins: {"maw":true,"nex":true,"shroom":true}
+runtime errors: none

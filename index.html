@@ -1039,9 +1039,14 @@ const WALKER_STATS = {
   cabinet:  { hp: 8, sp: 1.9, pts: 210, col: 0x2a1450 },      // a walking arcade cabinet: heavy, ground slam (gorilla AI)
   pixelghost:{ hp: 2, sp: 2.4, pts: 85, col: 0x7dff4a },      // blocky pixel ghost that hops at you (hop AI)
   popstar:  { hp: 5, sp: 2.5, pts: 160, col: 0x6a1090 },      // 80s synth lord: hangs back, then drops a bass-drop shockwave you have to jump (own AI)
+  cryptGhost:{ hp: 3, sp: 3.0, pts: 125, col: 0xa9e9ef },
+  zombie:   { hp: 5, sp: 1.8, pts: 135, col: 0x66834d },
+  sporeling:{ hp: 2, sp: 2.4, pts: 95,  col: 0xe65cff },
+  prismWraith:{ hp: 3, sp: 3.0, pts: 130, col: 0x49f2d2 },
+  capBrute: { hp: 7, sp: 1.9, pts: 190, col: 0xa946db },
 };
-// Rent's Due enemies borrow an existing AI branch in variantAI (mesh, stats and names stay their own)
-const AI_ALIAS = { notice: 'spider', bailiff: 'charger', collector: 'gunner', landlord: 'gorilla', tapehead: 'spider', crthead: 'gunner', cabinet: 'gorilla', pixelghost: 'kaomoji' };
+// Themed dungeon species borrow movement patterns while keeping their own models and stats.
+const AI_ALIAS = { notice: 'spider', bailiff: 'charger', collector: 'gunner', landlord: 'gorilla', tapehead: 'spider', crthead: 'gunner', cabinet: 'gorilla', pixelghost: 'kaomoji', cryptGhost: 'stalker', zombie: 'gorilla', sporeling: 'kaomoji', prismWraith: 'stalker', capBrute: 'gorilla' };
 const faceTex = {};
 const KAO_FACES = ['(*´ω｀*)', 'ヾ(＠⌒ー⌒＠)ノ', '((+_+))', '(◕‿◕)', 'ヽ(`Д´)ﾉ', '(╬ಠ益ಠ)', '(ಠ_ಠ)', '(¬_¬)', '(☉_☉)', '(⊙﹏⊙)'];
 function kaoTexture(face) {
@@ -1068,12 +1073,12 @@ function pentagramDecal(w, rot = 0) {      // a burning sigil lying flat on a su
 // reusing one geometry per spec cuts build time and GC churn. Enemy part geometries are never disposed anywhere, so sharing is safe.
 const geoCache = new Map();
 function geo(kind, ...a) { const k = kind + ':' + a.map(v => Math.round(v * 1000)).join(','); let out = geoCache.get(k); if (!out) geoCache.set(k, out = new THREE[kind](...a)); return out; }
-function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
+function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker', enemyZone = null) {
   const V = WALKER_STATS[variant] || WALKER_STATS.walker;
   if (variant === 'charger') scale *= 1.25;
-  const biomeName = plat && plat.zone ? plat.zone.name : null;
-  const biomeAccent = ({ Rave: 0xff3fc8, Beach: 0x36f6ff, Jungle: 0x91e85a, Psychedelic: 0xf13be8, Frozen: 0x91edff, Inferno: 0xff572b, Storm: 0x71aaff, Horror: 0xb20e35, Hellscape: 0xff2a10, Glitch: 0x39ff88, Kaomoji: 0xff8ad8, 'Alien Void': 0x7dff4a, Foreclosure: 0xffc040, Condemned: 0xa8d070, Collections: 0xff3030, 'Sunset Strip': 0xff3fc8, 'Tracking Error': 0xdfe8ff, 'Arcade Overdrive': 0x36f6ff })[biomeName] || 0x20dff0;
-  const biomeBody = { Rave: 0x2a0f5e, Beach: 0xe8704a, Jungle: 0x52783a, Frozen: 0x5f9caa, Inferno: 0x9a3b28, Storm: 0x455f91, Horror: 0x682638, Psychedelic: 0x713b91, Hellscape: 0x1a0808, Glitch: 0x0a3a20, Kaomoji: 0xffc8ee, Foreclosure: 0x4a3a2a, Condemned: 0x2c3a30, Collections: 0x3a0c10, 'Sunset Strip': 0x3a1466, 'Tracking Error': 0x2a3a58, 'Arcade Overdrive': 0x14104a };
+  const biomeName = (enemyZone || plat && plat.zone) ? (enemyZone || plat.zone).name : null;
+  const biomeAccent = ({ Rave: 0xff3fc8, Beach: 0x36f6ff, Jungle: 0x91e85a, Psychedelic: 0xf13be8, Frozen: 0x91edff, Inferno: 0xff572b, Storm: 0x71aaff, Horror: 0xb20e35, Hellscape: 0xff2a10, Glitch: 0x39ff88, Kaomoji: 0xff8ad8, 'Alien Void': 0x7dff4a, Foreclosure: 0xffc040, Condemned: 0xa8d070, Collections: 0xff3030, 'Sunset Strip': 0xff3fc8, 'Tracking Error': 0xdfe8ff, 'Arcade Overdrive': 0x36f6ff, HauntedHouse: 0xd7ae75, Shroom: 0xffedcf, FleshNest: 0xff668b })[biomeName] || 0x20dff0;
+  const biomeBody = { Rave: 0x2a0f5e, Beach: 0xe8704a, Jungle: 0x52783a, Frozen: 0x5f9caa, Inferno: 0x9a3b28, Storm: 0x455f91, Horror: 0x682638, Psychedelic: 0x713b91, Hellscape: 0x1a0808, Glitch: 0x0a3a20, Kaomoji: 0xffc8ee, Foreclosure: 0x4a3a2a, Condemned: 0x2c3a30, Collections: 0x3a0c10, 'Sunset Strip': 0x3a1466, 'Tracking Error': 0x2a3a58, 'Arcade Overdrive': 0x14104a, HauntedHouse: 0x282331, Shroom: 0x795744, FleshNest: 0xb56d7b };
   const mat = retroMaterial(new THREE.MeshLambertMaterial({ color: biomeBody[biomeName] || V.col }));
   const dark = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x14141c }));
   const steel = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x5a6578 }));
@@ -1170,6 +1175,56 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
     add(geo('BoxGeometry', 0.07, 0.9, 0.07), 0, 1.1, -0.05, bone);
     for (let i = 0; i < 5; i++) add(geo('BoxGeometry', 0.62 - i * 0.05, 0.06, 0.28), 0, 1.38 - i * 0.14, 0.02, bone);
     add(geo('BoxGeometry', 0.46, 0.14, 0.22), 0, 0.88, 0, bone);
+  } else if (variant === 'cryptGhost') { // Haunted House: spectral drifter with a hood, hollow eyes and a tapered ectoplasm tail
+    const veil = new THREE.MeshLambertMaterial({ color: 0xa6dfe0, transparent: true, opacity: 0.68, depthWrite: false });
+    const shadow = new THREE.MeshBasicMaterial({ color: 0x172536 });
+    const glow = new THREE.MeshBasicMaterial({ color: 0x9dffcf });
+    const body = add(geo('SphereGeometry', 0.53, 10, 8), 0, 1.28, 0, veil); body.scale.set(1, 1.22, 0.75);
+    const hood = add(geo('ConeGeometry', 0.55, 0.8, 8), 0, 1.95, -0.03, veil); hood.rotation.x = Math.PI;
+    const tail = add(geo('ConeGeometry', 0.5, 1.0, 7), 0, 0.48, -0.02, veil); tail.rotation.x = Math.PI;
+    for (const side of [-1, 1]) {
+      add(geo('SphereGeometry', 0.09, 6, 5), side * 0.19, 1.48, 0.39, shadow);
+      add(geo('SphereGeometry', 0.04, 5, 4), side * 0.19, 1.48, 0.43, glow);
+    }
+  } else if (variant === 'zombie') {     // Haunted House: ragged shambling corpse with torn sleeves, sickly skin and glowing wounds
+    const skin = new THREE.MeshLambertMaterial({ color: 0x77835a });
+    const cloth = new THREE.MeshLambertMaterial({ color: 0x282326 });
+    const wound = new THREE.MeshBasicMaterial({ color: 0xc92d4c });
+    const torso = add(geo('BoxGeometry', 0.88, 0.9, 0.48), 0, 0.95, 0, cloth); torso.rotation.z = -0.08;
+    const head = add(geo('SphereGeometry', 0.34, 8, 6), 0.08, 1.67, 0.06, skin); head.scale.set(0.9, 1.05, 0.9);
+    add(geo('BoxGeometry', 0.24, 0.12, 0.12), 0.1, 1.43, 0.35, wound);
+    for (const side of [-1, 1]) {
+      const arm = add(geo('BoxGeometry', 0.22, 0.8, 0.24), side * 0.63, 0.95, 0.05, skin); arm.rotation.z = side * -0.45;
+      add(geo('BoxGeometry', 0.1, 0.24, 0.26), side * 0.63, 0.48, 0.13, cloth);
+      add(geo('BoxGeometry', 0.22, 0.62, 0.23), side * 0.24, 0.32, 0, cloth);
+      add(geo('BoxGeometry', 0.06, 0.24, 0.05), side * 0.17, 1.08, 0.27, wound);
+      add(geo('SphereGeometry', 0.06, 5, 4), side * 0.06, 1.72, 0.35, wound);
+    }
+  } else if (variant === 'sporeling') { // Mushroom dungeon: hopping puffball with a spotted cap and a spore halo
+    const stalk = new THREE.MeshLambertMaterial({ color: 0xe7d4bd });
+    const cap = new THREE.MeshLambertMaterial({ color: 0xd94be8 });
+    const spots = new THREE.MeshBasicMaterial({ color: 0xffefb5 });
+    const body = add(geo('SphereGeometry', 0.55, 10, 8), 0, 0.7, 0, mat); body.scale.set(1.0, 0.9, 0.95);
+    const stem = add(geo('CylinderGeometry', 0.14, 0.2, 0.5, 7), 0, 1.25, 0, stalk);
+    const crown = add(geo('SphereGeometry', 0.58, 10, 7), 0, 1.62, 0, cap); crown.scale.set(1.25, 0.52, 1.1);
+    for (const [x, z] of [[-0.32, 0.18], [0.28, 0.3], [0, -0.34]]) add(geo('SphereGeometry', 0.11, 6, 5), x, 1.86, z, spots);
+    for (const side of [-1, 1]) { add(geo('SphereGeometry', 0.075, 5, 4), side * 0.2, 0.82, 0.46, spots); }
+    for (let i = 0; i < 4; i++) { const mote = add(geo('OctahedronGeometry', 0.1), Math.cos(i * Math.PI / 2) * 0.78, 1.35 + (i % 2) * 0.18, Math.sin(i * Math.PI / 2) * 0.78, i % 2 ? neonCyan : neonMag); mote.userData.spore = true; }
+  } else if (variant === 'prismWraith') { // Mushroom dungeon: faceted, color-shifting-looking phantom surrounded by crystals
+    const prism = new THREE.MeshBasicMaterial({ color: 0x59efd5 });
+    const core = add(geo('IcosahedronGeometry', 0.7, 1), 0, 1.0, 0, prism); core.scale.set(0.75, 1.35, 0.7);
+    add(geo('OctahedronGeometry', 0.32), 0, 1.94, 0, neonMag);
+    for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3, shard = add(geo('OctahedronGeometry', 0.2 + (i % 2) * 0.08), Math.cos(a) * 0.72, 0.9 + Math.sin(a * 2) * 0.4, Math.sin(a) * 0.72, i % 2 ? neonCyan : neonViolet); shard.rotation.set(a, a * 0.7, a * 0.3); }
+    const ring = add(geo('TorusGeometry', 0.8, 0.045, 5, 14), 0, 1.05, 0, neonMag); ring.rotation.x = Math.PI / 2;
+  } else if (variant === 'capBrute') { // Mushroom dungeon: heavy fungal guardian with a broad spotted cap and thick stalk limbs
+    const stalk = new THREE.MeshLambertMaterial({ color: 0xe3cdb2 });
+    const torso = add(geo('SphereGeometry', 0.72, 9, 7), 0, 0.95, 0, stalk); torso.scale.set(1.1, 1.25, 0.9);
+    const cap = add(geo('SphereGeometry', 0.7, 10, 7), 0, 1.88, 0, mat); cap.scale.set(1.5, 0.55, 1.25);
+    for (const side of [-1, 1]) {
+      const arm = add(geo('CylinderGeometry', 0.2, 0.28, 0.85, 7), side * 0.9, 0.86, 0, stalk); arm.rotation.z = side * -0.45;
+      add(geo('SphereGeometry', 0.1, 6, 5), side * 0.24, 1.0, 0.7, new THREE.MeshBasicMaterial({ color: 0xfff0b4 }));
+      const spot = add(geo('SphereGeometry', 0.15, 6, 5), side * 0.46, 2.08, 0.34, neonMag); spot.scale.set(1.2, 0.35, 0.8);
+    }
   } else if (variant === 'roach') {      // swarm insect: flat glossy shell, twitching antennae
     const shell = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x3a1c08 })), dk = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x120804 }));
     const body = add(geo('SphereGeometry', 0.5, 7, 5), 0, 0.28, 0, shell); body.scale.set(0.8, 0.45, 1.3);
@@ -1393,9 +1448,25 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
     add(geo('BoxGeometry', 0.34, 0.12, 0.42), -0.3, 0.06, 0.05);                               // boots
     add(geo('BoxGeometry', 0.34, 0.12, 0.42), 0.3, 0.06, 0.05);
     add(geo('BoxGeometry', 1.05, 0.85, 0.7), 0, 0.92, 0);                                     // torso
+    const nestFit = biomeName === 'FleshNest';
     const chest = add(geo('BoxGeometry', 0.78, 0.32, 0.12), 0, 1.0, 0.4, dark);               // chest plate
     chest.rotation.x = -0.12;
     add(geo('BoxGeometry', 0.3, 0.1, 0.04), 0, 0.99, 0.47, accent);                           // chest light
+    if (nestFit) {
+      // Lingerie-inspired costume over a covered body: satin cups, lace edging, corset belt and garter bands.
+      const satin = new THREE.MeshLambertMaterial({ color: 0x301226, emissive: 0x4d1632, emissiveIntensity: 0.25 });
+      const lace = new THREE.MeshBasicMaterial({ color: 0xff91b5 });
+      for (const side of [-1, 1]) {
+        const cup = add(geo('SphereGeometry', 0.21, 9, 7), side * 0.23, 1.12, 0.43, satin); cup.scale.set(1, 0.82, 0.5);
+        const trim = add(geo('TorusGeometry', 0.17, 0.025, 4, 10), side * 0.23, 1.1, 0.49, lace); trim.scale.set(1.15, 0.8, 0.7);
+        const strap = add(geo('BoxGeometry', 0.055, 0.34, 0.06), side * 0.35, 1.34, 0.35, lace); strap.rotation.z = side * -0.2;
+        const garter = add(geo('TorusGeometry', 0.19, 0.035, 4, 10), side * 0.3, 0.42, 0, lace); garter.rotation.x = Math.PI / 2;
+        const stocking = add(geo('BoxGeometry', 0.24, 0.23, 0.25), side * 0.3, 0.31, 0, satin);
+      }
+      add(geo('BoxGeometry', 0.12, 0.16, 0.1), 0, 1.04, 0.52, lace);
+      const corset = add(geo('BoxGeometry', 0.72, 0.16, 0.06), 0, 0.72, 0.37, satin);
+      for (let i = 0; i < 4; i++) add(geo('SphereGeometry', 0.025, 5, 4), 0, 0.68 + i * 0.035, 0.41, lace);
+    }
     add(geo('BoxGeometry', 0.34, 0.26, 0.32), -0.66, 1.06, 0, dark);                          // shoulders
     add(geo('BoxGeometry', 0.34, 0.26, 0.32), 0.66, 1.06, 0, dark);
     // EVA-style pylon horns perched on the shoulder caps (cyan walker, magenta gunner)
@@ -1481,10 +1552,29 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
     } else if (biomeName === 'Storm') {
       const halo = add(geo('TorusGeometry', 0.7, 0.035, 4, 14), 0, 1.68, -0.12, crestMat); halo.rotation.x = 1.15;
       for (const side of [-1, 1]) add(geo('OctahedronGeometry', 0.14), side * 0.52, 0.98, 0.42, crestMat);
-    } else if (biomeName === 'Horror') {
-      const mask = add(geo('BoxGeometry', 0.48, 0.28, 0.08), 0, 1.66, 0.38, new THREE.MeshLambertMaterial({ color: 0xd2c5b0 }));
-      for (const side of [-1, 1]) add(geo('SphereGeometry', 0.07, 5, 4), side * 0.15, 1.68, 0.45, new THREE.MeshBasicMaterial({ color: 0xff1537 }));
+    } else if (biomeName === 'Horror' || biomeName === 'HauntedHouse') {
+      const bone = new THREE.MeshLambertMaterial({ color: biomeName === 'HauntedHouse' ? 0xc9b99c : 0xd2c5b0 });
+      const mask = add(geo('BoxGeometry', 0.48, 0.28, 0.08), 0, 1.66, 0.38, bone);
+      for (const side of [-1, 1]) add(geo('SphereGeometry', 0.07, 5, 4), side * 0.15, 1.68, 0.45, new THREE.MeshBasicMaterial({ color: biomeName === 'HauntedHouse' ? 0xffc47a : 0xff1537 }));
       for (let rib = 0; rib < 3; rib++) add(geo('BoxGeometry', 0.72, 0.055, 0.055), 0, 0.75 - rib * 0.14, 0.44, crestMat);
+      if (biomeName === 'HauntedHouse') {
+        const hood = add(geo('ConeGeometry', 0.42, 0.7, 4), 0, 2.05, -0.02, new THREE.MeshLambertMaterial({ color: 0x211c2b })); hood.rotation.y = Math.PI / 4;
+        add(geo('TorusGeometry', 0.32, 0.035, 4, 10), 0, 2.02, 0, crestMat).rotation.x = Math.PI / 2;
+      }
+    } else if (biomeName === 'Shroom') {
+      const stalk = add(geo('CylinderGeometry', 0.08, 0.11, 0.34, 6), 0, 2.0, -0.08, new THREE.MeshLambertMaterial({ color: 0xe9d8b9 }));
+      const cap = add(geo('SphereGeometry', 0.38, 8, 5), 0, 2.18, -0.08, new THREE.MeshLambertMaterial({ color: 0xb9474f }));
+      cap.scale.set(1.25, 0.44, 1.1);
+      add(geo('SphereGeometry', 0.1, 5, 4), 0.12, 2.28, 0.02, new THREE.MeshBasicMaterial({ color: 0xffedcf }));
+      add(geo('TorusGeometry', 0.52, 0.035, 4, 10), 0, 0.96, 0.42, crestMat).rotation.x = Math.PI / 2;
+    } else if (biomeName === 'FleshNest') {
+      const tendrilMat = new THREE.MeshLambertMaterial({ color: 0x9d3e59 });
+      for (const side of [-1, 1]) {
+        const tendril = add(geo('CylinderGeometry', 0.035, 0.09, 0.78, 5), side * 0.55, 0.82, -0.25, tendrilMat);
+        tendril.rotation.z = side * -0.72;
+        add(geo('SphereGeometry', 0.12, 6, 4), side * 0.55, 1.32, -0.25, crestMat);
+      }
+      add(geo('TorusGeometry', 0.4, 0.06, 4, 10), 0, 0.95, 0.46, new THREE.MeshBasicMaterial({ color: 0xff668b }));
     } else {
       for (const side of [-1, 1]) add(geo('OctahedronGeometry', 0.22), side * 0.55, 1.15, 0.35, crestMat);
       const spiral = add(geo('TorusGeometry', 0.46, 0.045, 4, 12), 0, 1.42, -0.15, crestMat); spiral.rotation.set(0.7, 0.3, 0.25);
@@ -1517,7 +1607,7 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
   if (variant === 'dinosaur') { e.h = 2.7 * scale; e.r = 0.95 * scale; e.pounceCd = 1.4 + rand() * 1.2; e.pounceT = 0; }
   if (variant === 'stegosaurus') { e.h = 2.3 * scale; e.r = 1.25 * scale; e.slamCd = 1.5 + rand() * 2; e.slamWind = 0; }
   if (variant === 'frog') { e.h = 1.1 * scale; e.r = 0.6 * scale; e.hopT = rand() * 1.5; e.hopY = 0; }
-  if (variant === 'gorilla') { e.h = 2.5 * scale; e.r = 1.05 * scale; e.speed *= 0.9; e.growlCd = 1 + rand() * 2; e.slamCd = 2.5 + rand() * 2; e.slamWind = 0; }
+  if (variant === 'gorilla' || variant === 'zombie') { e.h = variant === 'zombie' ? 2.0 * scale : 2.5 * scale; e.r = variant === 'zombie' ? 0.72 * scale : 1.05 * scale; e.speed *= 0.9; e.growlCd = 1 + rand() * 2; e.slamCd = 2.5 + rand() * 2; e.slamWind = 0; }
   if (variant === 'stalker' || variant === 'stormWraith') { e.speed *= 1.25; e.h = 2.1 * scale; e.r = 0.72 * scale; }
   if (variant === 'frozenStalker') { e.speed *= 1.1; e.h = 2.2 * scale; e.r = 0.78 * scale; }
   if (variant === 'infernal') { e.h = 2.25 * scale; e.r = 0.82 * scale; }
@@ -1538,7 +1628,11 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
   if (variant === 'tapehead') { e.h = 1.5 * scale; e.r = 0.6 * scale; e.pounceCd = 1 + rand() * 1.5; e.pounceT = 0; }
   if (variant === 'crthead') { e.h = 2.0 * scale; e.r = 0.65 * scale; }
   if (variant === 'cabinet') { e.h = 2.6 * scale; e.r = 0.95 * scale; e.speed *= 0.9; e.growlCd = 1 + rand() * 2; e.slamCd = 2.5 + rand() * 2; e.slamWind = 0; }
-  if (variant === 'pixelghost') { e.h = 1.7 * scale; e.r = 0.65 * scale; e.hopT = rand() * 1.5; e.hopY = 0; }
+  if (variant === 'pixelghost' || variant === 'sporeling') { e.h = 1.7 * scale; e.r = 0.65 * scale; e.hopT = rand() * 1.5; e.hopY = 0; }
+  if (variant === 'cryptGhost') { e.h = 2.4 * scale; e.r = 0.62 * scale; }
+  if (variant === 'zombie') { e.h = 2.0 * scale; e.r = 0.72 * scale; }
+  if (variant === 'prismWraith') { e.h = 2.1 * scale; e.r = 0.7 * scale; }
+  if (variant === 'capBrute') { e.h = 2.5 * scale; e.r = 1.0 * scale; e.speed *= 0.9; e.growlCd = 1 + rand() * 2; e.slamCd = 2.5 + rand() * 2; e.slamWind = 0; }
   if (variant === 'popstar') { e.h = 2.3 * scale; e.r = 0.7 * scale; e.beatCd = 1.5 + rand() * 1.5; e.slamWind = 0; }
   if (variant === 'rider') { e.h = 1.5 * scale; e.r = 0.95 * scale; e.speed = 6.2; }
   if (isBoss) { e.h = Math.max(e.h, 2.2 * scale); e.r = Math.max(e.r, 0.95 * scale); }
@@ -1863,7 +1957,7 @@ function spawnBiomeEnemy(x, y, z, plat, zone, depth, scale = 1) {
   if (variant === 'roach' && !spawnBiomeEnemy.swarm) { spawnBiomeEnemy.swarm = true; for (let i = 0; i < 4; i++) spawnBiomeEnemy(x + (Math.random() - 0.5) * 3, y, z + (Math.random() - 0.5) * 3, plat, zone, depth, scale * 0.8); spawnBiomeEnemy.swarm = false; }
   if (variant === 'drone' || variant === 'bomber') { const e = makeDrone(x, y + 3, z, variant, zone); e.zone = zone || null; return e; }
   if (variant === 'ufo') { const e = makeUfo(x, y + 7, z); e.zone = zone || null; return e; }
-  const e = makeWalker(x, y, z, plat, scale, false, variant); e.zone = zone || null; return e;
+  const e = makeWalker(x, y, z, plat, scale, false, variant, zone); e.zone = zone || null; return e;
 }
 
 // ---------- biome evolution: enemies mutate into the current biome's species ----------
@@ -1998,9 +2092,9 @@ function addCheckpoint(x, y, z, zone) {
   }
   spawnOreVein(x - 2, y, z + 2, zone);                                          // checkpoints come with an ore vein too
 }
-function beacon(x, y, z, color) {           // light pillar so you can spot arenas from afar
-  const b = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 70, 8), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false }));
-  b.position.set(x, y + 35, z); scene.add(b); return b;
+function beacon(x, y, z, color) {           // compact pad marker; tall light pillars clutter the skyline
+  const b = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 2.5, 8), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false }));
+  b.position.set(x, y + 1.5, z); scene.add(b); return b;
 }
 // each arena type is a different challenge; returns the hub description + where enemies may stand
 function buildArena(type, cx, top, cz, zone) {
@@ -3113,7 +3207,10 @@ function buildCommons(launch, ux, uz, px, pz, homes) {
 //    wake THE NEXUS, a colossal horror eye hanging over the spire. Its death: +2 heart slots and the infinite HEXFIRE.
 // Everything is universal (solo / co-op / PvP): the structures build on every client; spawns and boss progress run
 // on the host, and guests see the units through the normal enemy-snapshot channels (enemy-kill server does the rest).
-const HORROR_KINDS = ['spider', 'skeleton', 'pixelghost'];
+const FLESH_ZONE = { name: 'FleshNest', plate: 0xff5aa0 };
+const NEST_KINDS = ['walker', 'gunner', 'shield'];
+const HORROR_KINDS = ['skeleton', 'cryptGhost', 'zombie'];
+const SHROOM_KINDS = ['sporeling', 'prismWraith', 'capBrute'];
 let midWins = { maw: false, nex: false };        // survives commons rebuilds (per level); re-fighting a boss re-grants nothing
 let midGen = 0;                                  // debug: which mid-site state instance is live right now
 function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
@@ -3146,51 +3243,388 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
     for (let retry = 0; retry < 2 && !ok; retry++) ok = connectFar(A, B);
     if (!ok) console.log('[mids] far causeway to', zone.name, 'found no clear line — the land still sits on its spoke past the skyline');
   };
-  const farMonument = (kind, gx, gz, gy) => {         // spawn-visible monument per far land: skyscraper scale, fog:false + noCull on every mesh so it reads from the descent shelf like the skyline towers do
+  const farMonument = (kind, gx, gz, gy) => {         // spawn-visible monument per far land: skyscraper scale (2x), fog:false + noCull on every mesh so it reads from the descent shelf like the skyline towers do
     const yaw = Math.atan2(CX - gx, CZ - gz);         // built facing the commons center so the money side is what spawn sees
-    const g = new THREE.Group(); g.position.set(gx, gy, gz); g.rotation.y = yaw; g.userData.noCull = true; scene.add(g);
+    const g = new THREE.Group(); g.position.set(gx, gy, gz); g.rotation.y = yaw; g.scale.setScalar(2); g.userData.noCull = true; scene.add(g);
     const M = (geo, mat, x, y, z, sx = 1, sy = 1, sz = 1, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.set(0, ry, rz); m.userData.noCull = true; g.add(m); return m; };
     const lamF = (col, e, ei = 0.5) => lam(col, { emissive: e, emissiveIntensity: ei, fog: false });
     const glow = col => new THREE.MeshBasicMaterial({ color: col, fog: false, toneMapped: false });
     const bx2 = new THREE.BoxGeometry(1, 1, 1), sp2 = new THREE.SphereGeometry(1, 9, 7), cy2 = new THREE.CylinderGeometry(1, 1, 1, 9), cn2 = new THREE.ConeGeometry(0.5, 1, 4);
-    if (kind === 'pussy') {                            // colossal standing labia: outer lips, inner lips, the glowing slit, hood + bead
-      M(bx2, lamF(0xb8395f, 0xb8395f, 0.45), -38, 95, 0, 34, 190, 50, 0, -0.07);   // outer lips
-      M(bx2, lamF(0xb8395f, 0xb8395f, 0.45), 38, 95, 0, 34, 190, 50, 0, 0.07);
-      M(sp2, lamF(0xb8395f, 0xb8395f, 0.45), -38, 192, 0, 26, 14, 40);
-      M(sp2, lamF(0xb8395f, 0xb8395f, 0.45), 38, 192, 0, 26, 14, 40);
-      M(bx2, lamF(0xff8ab5, 0xff4d8d, 0.9), -15, 78, -2, 15, 156, 44, 0, -0.05);   // inner lips
-      M(bx2, lamF(0xff8ab5, 0xff4d8d, 0.9), 15, 78, -2, 15, 156, 44, 0, 0.05);
-      M(bx2, glow(0xff1a5e), 0, 70, -6, 16, 140, 30);                             // the slit
-      M(sp2, lamF(0xffc1da, 0xff8ab5, 1.2), 0, 168, 2, 30, 16, 40);               // hood
-      M(sp2, glow(0xff4dff), 0, 152, 26, 9, 9, 9);                               // bead
-      M(sp2, lamF(0xc4557d, 0xc4557d, 0.4), 0, 6, 34, 62, 16, 46);                // pubic mound spilling forward
-    } else if (kind === 'house') {                     // colossal gothic mansion: body, hip roof, four spired towers, lit windows, arch glow
-      const hb2 = lamF(0x1a1430, 0x12081f, 0.7), rf2 = lamF(0x221240, 0x2a1440, 0.55);
-      M(bx2, hb2, 0, 40, 0, 70, 80, 50);
-      M(cn2, rf2, 0, 103, -4, 104, 46, 124, Math.PI / 4);
-      for (const [tx2, tz2, th] of [[-33, 20, 128], [33, 20, 128], [-33, -20, 96], [33, -20, 96]]) {
-        M(bx2, hb2, tx2, th / 2, tz2, 15, th, 15);
-        M(cn2, rf2, tx2, th + 21, tz2, 34, 42, 34, Math.PI / 4);
+    if (kind === 'pussy') {                            // fleshy gothic keep with its entrance built into the front façade
+      const stone = lamF(0x9f536c, 0x431526, 0.28), lightStone = lamF(0xc8798e, 0x572336, 0.25);
+      const deepStone = lamF(0x673247, 0x290c1b, 0.25), trim = lamF(0xe09aaa, 0x682a40, 0.22);
+      const softGeo = new THREE.SphereGeometry(1, 12, 9);
+      // Broad organic foundation, with a squared keep rising behind its curtain wall.
+      M(softGeo, stone, 0, 10, -2, 62, 18, 48);
+      M(bx2, stone, 0, 77, -8, 72, 154, 58);
+      M(bx2, lightStone, 0, 151, 22, 84, 12, 52);       // front parapet
+      M(bx2, deepStone, 0, 78, 22, 82, 5, 7);           // inset lower course
+      // The front curtain wall is deliberately split around a real, open doorway.
+      M(bx2, lightStone, -28, 28, 25, 36, 56, 10);
+      M(bx2, lightStone, 28, 28, 25, 36, 56, 10);
+      M(bx2, stone, 0, 69, 25, 20, 26, 10);
+      // Corner towers, crenellations and uneven spires give the landmark a clear castle silhouette.
+      for (const [tx, tz, h] of [[-45, 22, 104], [45, 22, 104], [-34, -24, 136], [34, -24, 136]]) {
+        M(cy2, stone, tx, h / 2, tz, 16, h, 16);
+        M(cy2, lightStone, tx, h - 4, tz, 18, 7, 18);
+        M(cn2, deepStone, tx, h + 17, tz, 25, 38, 25, Math.PI / 4);
+        for (let i = 0; i < 4; i++) {
+          const a = i * Math.PI / 2 + Math.PI / 4;
+          M(bx2, trim, tx + Math.cos(a) * 7, h + 5, tz + Math.sin(a) * 7, 4, 8, 4);
+        }
       }
-      for (let row = 0; row < 4; row++) for (let col = -2; col <= 2; col++) {
-        const lit = (row * 5 + col + 10) % 3 !== 0;
-        M(bx2, glow(lit ? ((row + col + 4) % 4 ? 0x39ff88 : 0xffb03a) : 0x0c0a16), col * 14, 16 + row * 17, 25.4, 6.5, 9, 1.6);
+      // Tall rear turrets break up the keep roof without obscuring the front entrance.
+      M(cy2, lightStone, -17, 183, -22, 12, 58, 12);
+      M(cy2, lightStone, 17, 183, -22, 12, 58, 12);
+      M(cn2, deepStone, -17, 217, -22, 22, 34, 22, Math.PI / 4);
+      M(cn2, deepStone, 17, 217, -22, 22, 34, 22, Math.PI / 4);
+      M(cn2, lightStone, 0, 202, -10, 28, 50, 28, Math.PI / 4);
+      for (let x = -34; x <= 34; x += 17) {
+        M(bx2, trim, x, 160, 24, 6, 8, 7);             // crenels along the front parapet
+        M(bx2, trim, x, 160, -28, 6, 8, 7);
       }
-      M(bx2, glow(0x25ffa8), 0, 12, 26, 13, 20, 2);        // the arch door glow
-      M(bx2, hb2, 0, 150, -10, 10, 60, 10);                // widow's-walk mast
-    } else {                                           // colossal neon shroom: fat stem, volva bulb, dome cap rimmed low, glow spots
-      const stem2 = lamF(0xcfc3e6, 0x8a72c8, 0.55);
-      M(cy2, stem2, 0, 45, 0, 14, 90, 14, 0, 0.05);
-      M(sp2, stem2, 0, 4, 0, 26, 14, 26);
-      const cap2 = lamF(0xff2f9e, 0xff1e8f, 1.1);
-      M(sp2, cap2, 0, 92, 2, 70, 40, 70);
-      M(sp2, cap2, 0, 88, 2, 74, 16, 74);
-      for (let i = 0; i < 6; i++) {                      // big pale spots on the dome
-        const a2 = i * 1.047;
-        M(sp2, glow(0xffe9f7), Math.cos(a2) * 58, 110 + (i % 3) * 5, Math.sin(a2) * 58, 8 + (i % 3) * 3, 5, 8 + (i % 3) * 3);
+
+      // A dark, pointed recess reads as a usable castle doorway; sculpted upper/lower lips form its arch.
+      const entry = new THREE.Shape();
+      entry.moveTo(-9, 0); entry.lineTo(-9, 24); entry.quadraticCurveTo(-8, 37, 0, 40);
+      entry.quadraticCurveTo(8, 37, 9, 24); entry.lineTo(9, 0); entry.closePath();
+      M(new THREE.ShapeGeometry(entry, 12), glow(0x1a0913), 0, 0, 31);
+      const upperLip = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-13, 1, 32), new THREE.Vector3(-12, 15, 33), new THREE.Vector3(-10, 30, 34),
+        new THREE.Vector3(-6, 40, 34), new THREE.Vector3(0, 44, 34), new THREE.Vector3(6, 40, 34),
+        new THREE.Vector3(10, 30, 34), new THREE.Vector3(12, 15, 33), new THREE.Vector3(13, 1, 32)
+      ]);
+      const lowerLip = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-13, 1, 32), new THREE.Vector3(-8, -1, 34), new THREE.Vector3(0, -2, 34),
+        new THREE.Vector3(8, -1, 34), new THREE.Vector3(13, 1, 32)
+      ]);
+      for (const [curve, radius, material] of [[upperLip, 2.6, trim], [lowerLip, 2, lightStone]]) {
+        const lip = new THREE.Mesh(new THREE.TubeGeometry(curve, 32, radius, 8, false), material);
+        lip.userData.noCull = true; g.add(lip);
       }
-      for (let i = 0; i < 5; i++) M(sp2, glow(0x24ffc8), Math.cos(i * 1.256 + 0.6) * 32, 114 + i * 2, Math.sin(i * 1.256 + 0.6) * 32, 3.5, 2.4, 3.5);
+      // Subtle vertical seams and warm rose accents make the entrance part of the masonry, not a floating emblem.
+      for (const side of [-1, 1]) {
+        M(bx2, deepStone, side * 18, 31, 31, 1.2, 54, 1.2);
+        M(softGeo, trim, side * 13, 5, 32, 4.5, 3.2, 2.5);
+      }
+    } else if (kind === 'house') {                     // crooked gothic keep: candlelit windows and an unmistakable spired silhouette
+      const hb2 = lamF(0x171522, 0x100915, 0.52), rf2 = lamF(0x30243a, 0x180d20, 0.42);
+      M(bx2, hb2, 0, 86, 0, 40, 172, 34);                 // narrow keep rising out of the fog
+      M(bx2, hb2, 0, 130, 0, 48, 18, 42);                 // projecting upper gallery
+      M(cn2, rf2, 0, 170, -3, 58, 52, 60, Math.PI / 4);   // steep central roof
+      for (const [tx2, tz2, th, lean] of [[-22, 13, 180, -0.08], [22, 13, 180, 0.08], [-22, -13, 146, 0.06], [22, -13, 146, -0.06]]) {
+        M(bx2, hb2, tx2, th / 2, tz2, 9, th, 9);
+        M(cn2, rf2, tx2, th + 21, tz2, 25, 42, 25, Math.PI / 4, lean);
+      }
+      // Deep-set lancet windows: most are dark, with a few warm candlelit panes.
+      for (let row = 0; row < 9; row++) for (let col = -1; col <= 1; col++) {
+        const lit = (row * 5 + col + 12) % 5 === 0 || (row === 6 && col === 0);
+        const pane = glow(lit ? (row % 2 ? 0xffc47a : 0xffe2a6) : 0x090a12);
+        const wy = 14 + row * 18, wx = col * 10;
+        for (const side of [-1, 1]) {
+          const wz = side * 17.4;
+          M(bx2, pane, wx, wy, wz, 4.4, 7, 1.8);
+          M(cn2, pane, wx, wy + 4.4, wz, 4.4, 2.8, 1.8);
+          M(bx2, hb2, wx, wy, wz + side * 1.1, 0.65, 7, 0.6); // stone mullion
+        }
+      }
+      // An old clock-face and a broken crown make the house read as a haunted landmark even through haze.
+      const clockFace = new THREE.Mesh(new THREE.CylinderGeometry(6.6, 6.6, 0.8, 12), glow(0x17131e));
+      clockFace.rotation.x = Math.PI / 2; clockFace.position.set(0, 145, 18.4); g.add(clockFace);
+      const clockRim = new THREE.Mesh(new THREE.TorusGeometry(6.8, 0.6, 5, 12), glow(0xd7ae75));
+      clockRim.rotation.x = Math.PI / 2; clockRim.position.set(0, 145, 19.1); g.add(clockRim);
+      M(bx2, glow(0xe7c98b), 0, 146, 19.5, 0.65, 4.8, 0.35); M(bx2, glow(0xe7c98b), 1.5, 145, 19.5, 3.2, 0.65, 0.35);
+      M(bx2, glow(0xffc47a), 0, 12, 23, 10, 17, 2);         // candlelit front door
+      M(bx2, hb2, 0, 224, -10, 8, 36, 8);                   // widow's-walk mast
+      // Low, drifting smog veils the exact shape; the uneven spires still read as a spooky silhouette at range.
+      for (let band = 0; band < 4; band++) for (let i = 0; i < 5; i++) {
+        const a = i * Math.PI * 2 / 5 + band * 0.57, r = 43 + (i % 2) * 13;
+        const mist = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x78847e, transparent: true, opacity: 0.22, depthWrite: false, fog: false }));
+        mist.position.set(Math.cos(a) * r, 36 + band * 42 + (i % 3) * 9, Math.sin(a) * r);
+        mist.scale.set(76 + (i % 3) * 18, 42 + (i % 2) * 16, 1); mist.userData.noCull = true; g.add(mist);
+      }
+    } else {                                           // fairytale mushroom: ivory gills, a russet cap, and cream spots
+      const stem2 = lamF(0xe8d8bb, 0x65513c, 0.24), cap2 = lamF(0xb9474f, 0x5a1727, 0.28);
+      const capY = 220, capRadius = 82, capHeight = 48;
+      M(cy2, stem2, 0, 110, 0, 18, 220, 18, 0, 0.025);   // skyscraper-tall ivory stalk
+      M(sp2, stem2, 0, 8, 0, 34, 18, 34);                 // broad, rooted base
+      const capGeo = new THREE.SphereGeometry(1, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+      M(capGeo, cap2, 0, capY, 0, capRadius, capHeight, capRadius);  // broad umbrella crown
+      const gillGeo = new THREE.SphereGeometry(1, 18, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+      M(gillGeo, lamF(0xe6cfae, 0x5c3d37, 0.2), 0, capY, 0, capRadius - 5, 10, capRadius - 5);
+      const gillRim = new THREE.Mesh(new THREE.TorusGeometry(capRadius - 6, 2, 5, 24), lamF(0xf0dfc1, 0x735340, 0.18));
+      gillRim.rotation.x = Math.PI / 2; gillRim.position.set(0, capY, 0); g.add(gillRim);
+      for (let i = 0; i < 9; i++) {
+        const a = i * Math.PI * 2 / 9, r = i % 2 ? 43 : 27, x = Math.cos(a) * r, z = Math.sin(a) * r;
+        const y = capY + capHeight * Math.sqrt(1 - (r * r) / (capRadius * capRadius));
+        M(sp2, glow(0xffedcf), x, y, z, i % 3 === 0 ? 9 : 6.5, 3.4, i % 3 === 0 ? 8 : 6.5);
+      }
+      for (const y of [92, 168]) {
+        const band = new THREE.Mesh(new THREE.TorusGeometry(18.4 + (y === 92 ? 0.8 : 0), 1.5, 5, 18), lamF(0xf3dfbf, 0x705045, 0.18));
+        band.position.set(0, y, 0); g.add(band);
+      }
     }
+  };
+  const seedLeadChain = (key, sx, sz) => {               // THE OUTRIDERS: the dungeon garrison also holds the causeway platforms leading up to the site — not just the boss land itself
+    const cn = commons || { x: CX, z: CZ };
+    const dx = cn.x - sx, dz = cn.z - sz, dl = Math.hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl;
+    const lead = solids.filter(q => q.cx !== undefined && !q.bounce && !q.arena && !q.interior && !q.sp && !q.grp
+      && Math.hypot(q.cx - sx, q.cz - sz) < 240                                                                          // within the site's visibility radius
+      && ((q.cx - sx) * ux + (q.cz - sz) * uz) / Math.max(10, Math.hypot(q.cx - sx, q.cz - sz)) > 0.5)                   // roughly between the site and the commons (the lead-in arc)
+      .sort((a, b) => Math.hypot(b.cx - sx, b.cz - sz) - Math.hypot(a.cx - sx, a.cz - sz)).slice(0, 6);                  // farthest (nearest the commons) first: the approach is covered end to end
+    if (sites[key]) sites[key].lead = lead;
+    return lead;
+  };
+  const outriderFor = (key, sl) => {                     // the same unit kinds as the site garrison, stationed on a lead-in platform
+    if (!sl) return null;
+    const cx0 = Number.isFinite(sl.cx) ? sl.cx : Number.isFinite(sl.x) ? sl.x : null;
+    const cz0 = Number.isFinite(sl.cz) ? sl.cz : Number.isFinite(sl.z) ? sl.z : null;
+    if (cx0 === null || cz0 === null || !Number.isFinite(sl.top)) return null;
+    const a = rand() * 6.283, r = 2 + rand() * 3;
+    if (key === 'nest') return spawnNestEnemy(cx0 + Math.cos(a) * r, sl.top + 0.4, cz0 + Math.sin(a) * r, sl);
+    if (key === 'shroom') { const e = spawnBiomeEnemy(cx0 + Math.cos(a) * r, sl.top + 0.3, cz0 + Math.sin(a) * r, sl, sl.zone || PSY_ZONE, 1, 1); if (e) { e.midGuard = 'shroom'; e.neverDespawn = true; } return e; }
+    const e = makeWalker(cx0 + Math.cos(a) * r, sl.top + 0.4, cz0 + Math.sin(a) * r, sl, 1, false, HORROR_KINDS[(rand() * HORROR_KINDS.length) | 0]);
+    e.midGuard = 'house'; e.neverDespawn = true; return e;
+  };
+  const farDungeon = (key, site, mon, zone, col, deckLocal, botLocal, discR) => {   // THE DEEP RUN: a climbable spiral of hop-steps winds up the outside of the monument to a door deck,
+    const sn = sites[key]; if (!sn || !mon) return;                                 // then a full interior descent of hop-discs drops to the boss vault at the very bottom
+    const gx = mon.x, gz = mon.z, base = mon.base;
+    const deckY = base + deckLocal * 2, botY = base + botLocal;                      // monuments are built at 2x scale
+    sn.shaft = []; sn.slabs = sn.slabs || []; sn.bot = null;
+    sn.rooms = []; sn.hazards = []; sn.secrets = [];
+    // EXTERIOR STAIR: hop-up steps (~3.6 m each) spiral the monument from the arena side up to the deck; rails connect them, dash pads refuel the climb
+    const r0 = Math.hypot(site.x - gx, site.z - gz), a0 = Math.atan2(site.z - gz, site.x - gx);
+    const climbGuide = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, Math.max(1, deckY - botY), 6), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false }));
+    climbGuide.position.set(gx, (deckY + botY) / 2, gz); climbGuide.userData.noCull = true; scene.add(climbGuide);
+    const vaultGuide = beacon(gx, botY + 1, gz, col); vaultGuide.scale.set(0.45, 0.45, 0.45); vaultGuide.material.opacity = 0.42; vaultGuide.userData.noCull = true;
+  const routeMat = new THREE.MeshBasicMaterial({ color: col, fog: false, transparent: true, opacity: 0.82, depthWrite: false, blending: THREE.AdditiveBlending });
+  const routeDot = new THREE.SphereGeometry(0.72, 7, 5);
+  const pathCue = (x, y, z, label, size = 1) => {
+    const dot = new THREE.Mesh(routeDot, routeMat); dot.position.set(x, y, z); dot.scale.setScalar(size); dot.userData.noCull = true; scene.add(dot);
+    const tag = makeLabel(label); tag.position.set(x, y + 2.8, z); tag.scale.set(8.5, 2.1, 1); tag.userData.noCull = true; scene.add(tag);
+    return dot;
+  };
+  const routeHeading = makeLabel(key === 'nest' ? 'GIANT NEST · FOLLOW THE GLOW TO THE VAULT' : key === 'house' ? 'HAUNTED KEEP · CLIMB THE SPIRE, DESCEND INSIDE' : 'GRAND SHROOM · CLIMB THE STEM, DESCEND WITHIN');
+  routeHeading.position.set(site.x, site.y + 20, site.z); routeHeading.scale.set(20, 4.6, 1); routeHeading.userData.noCull = true; scene.add(routeHeading);
+    const baseR = Math.max(r0 + 40, discR + 30), endR = discR + 16;
+    const steps = Math.max(24, Math.min(140, Math.round((deckY - site.y) / 3.6)));
+    let px = site.x, py = site.y + 3.2, pz = site.z;
+    for (let k = 1; k <= steps; k++) {
+      const t = k / steps, a = a0 + t * 6.0, rr = baseR + (endR - baseR) * t;        const sx = gx + Math.cos(a) * rr, sz = gz + Math.sin(a) * rr, sy = site.y + 3.2 + (deckY - site.y - 3.2) * t;
+      if (blocked(sx, sy, sz, 3.6)) continue;
+      addSlab(sx, sy, sz, 3.6, 3.6, 1.4, zone, true);
+
+      addRail(px, pz, py + 1.35, sx, sz, col, sy + 1.35, false);
+      if (k % 7 === 1) addDashPad(px, py, pz, sx - px, sz - pz);        if (k % 16 === 8) {
+          const sign = makeLabel(key === 'house' ? 'GOTHIC KEEP · CLIMB ↑' : key === 'nest' ? 'GIANT PUSSY · CLIMB ↑' : 'GRAND SHROOM · CLIMB ↑');
+          sign.position.set(sx, sy + 7, sz); sign.scale.set(10, 2.5, 1); sign.userData.noCull = true; scene.add(sign);
+        }
+        if (k % 8 === 1) pathCue(sx, sy + 1.8, sz, 'CLIMB ↑', 1.2);
+
+      px = sx; py = sy; pz = sz;
+    }
+    // DECK / DOOR: a roomy sill at the very top — walk inward and you are inside the monument
+    const deckR = discR + 12;
+    sn.deck = { x: gx, y: deckY, z: gz, top: deckY };
+    if (!blocked(gx, deckY, gz, deckR)) {
+      const dk = addSlab(gx, deckY, gz, deckR, deckR, 2.2, zone, true);
+      sn.slabs.push(dk);
+      addRail(px, pz, py + 1.35, gx, gz, col, deckY + 1.35, false);
+      const dlbl = makeLabel(key === 'nest' ? 'ENTER THE DEEP HEAT · DESCEND ↓' : key === 'house' ? 'HAUNTED HOUSE · ENTER HERE · DOWN ↓' : 'RABBIT STEM · DESCEND ↓');
+      dlbl.position.set(gx, deckY + 6, gz); dlbl.scale.set(13, 3.2, 1); dlbl.userData.noCull = true; scene.add(dlbl);
+      pathCue(gx, deckY + 2.2, gz, 'ENTRY · DOWN ↓', 1.5);
+      var prev = { x: gx, z: gz, y: deckY };
+    } else var prev = { x: px, z: pz, y: py };
+    // INTERIOR DESCENT: a broad, walkable spiral of shallow drops, winding through every lower level to the vault
+    // The interior is a genuine multi-storey route, not a single drop: broad landings
+    // repeat every 4.5 m so the descent remains traversable, with a full hall and side
+    // chambers every six landings. The tallest keep now contains dozens of connected levels.
+    let cy = deckY - 4.5, rung = 0;
+    while (cy > botY + 4.5) {
+      const a = a0 + rung * 0.38, rr = rung % 4 < 2 ? discR * 0.72 : discR * 0.94;
+      const dx = gx + Math.cos(a) * rr, dz = gz + Math.sin(a) * rr, dy = Math.max(botY + 4.5, cy - 4.5);
+      if (!blocked(dx, dy, dz, discR * 0.6)) {
+        const grandHall = rung % 6 === 0, hallR = discR + (grandHall ? 8 : 0);
+        const sl = addSlab(dx, dy, dz, hallR, hallR, 1.6, zone, true);
+        if (prev) addRail(prev.x, prev.z, prev.y + 1.35, dx, dz, col, dy + 1.35, false);
+        sn.slabs.push(sl); sn.shaft.push({ x: dx, z: dz, y: dy, top: dy, slab: sl });
+        if (grandHall) {
+          // Side chambers open directly off each grand landing; their overlapping thresholds
+          // keep both wings walkable from the central stairwell.
+          const roomCenters = [];
+          for (const side of [-1, 1]) {
+            const wingA = a + side * Math.PI / 2, wingR = hallR * 0.68;
+            const wx = dx + Math.cos(wingA) * wingR, wz = dz + Math.sin(wingA) * wingR;
+            const wing = addSlab(wx, dy, wz, discR * 0.48, discR * 0.48, 1.6, zone, true);
+            sn.slabs.push(wing); roomCenters.push({ x: wx, z: wz, side });
+          }
+          const roomNames = key === 'house' ? ['CANDLE GALLERY', 'WIDOWS’ ARCHIVE']
+            : key === 'nest' ? ['RIBCAGE CHAPEL', 'BROOD CHAMBER'] : ['MOONCAP GALLERY', 'MAD TEA PARLOUR'];
+          for (let ri = 0; ri < roomCenters.length; ri++) {
+            const room = roomCenters[ri], roomName = roomNames[ri];
+            sn.rooms.push({ name: roomName, x: room.x, y: dy, z: room.z, floor: Math.max(1, Math.ceil((deckY - dy) / 30)) });
+            const detailMat = lam(key === 'house' ? 0x4a3a4c : key === 'nest' ? 0xb34668 : 0xc9a981,
+              { emissive: zone.plate, emissiveIntensity: 0.18 });
+            if (key === 'house') {
+              const tomb = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.2, 2.8), detailMat);
+              tomb.position.set(room.x, dy + 0.7, room.z); tomb.userData.noCull = true; scene.add(tomb);
+              const cross = new THREE.Mesh(new THREE.BoxGeometry(0.35, 3.8, 0.35), detailMat);
+              cross.position.set(room.x, dy + 2.8, room.z + 1.8); cross.userData.noCull = true; scene.add(cross);
+              const arm = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.35, 0.35), detailMat);
+              arm.position.set(room.x, dy + 3.1, room.z + 1.8); arm.userData.noCull = true; scene.add(arm);
+            } else if (key === 'nest') {
+              const cocoon = new THREE.Mesh(new THREE.SphereGeometry(2.1, 9, 7), detailMat);
+              cocoon.scale.set(1.1, 1.45, 0.9); cocoon.position.set(room.x, dy + 3, room.z); cocoon.userData.noCull = true; scene.add(cocoon);
+              for (let rib = -1; rib <= 1; rib++) {
+                const bone = new THREE.Mesh(new THREE.TorusGeometry(2.1 + Math.abs(rib) * 0.5, 0.22, 5, 12, Math.PI), detailMat);
+                bone.rotation.z = Math.PI / 2; bone.position.set(room.x + rib * 1.15, dy + 3.2, room.z); bone.userData.noCull = true; scene.add(bone);
+              }
+            } else {
+              const cup = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.35, 2.5, 10, 1, true), detailMat);
+              cup.position.set(room.x, dy + 1.5, room.z); cup.userData.noCull = true; scene.add(cup);
+              const saucer = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.28, 5, 12), detailMat);
+              saucer.rotation.x = Math.PI / 2; saucer.position.set(room.x, dy + 0.35, room.z); saucer.userData.noCull = true; scene.add(saucer);
+              const steam = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.12, 5, 10), new THREE.MeshBasicMaterial({ color: 0xffedcf, transparent: true, opacity: 0.75 }));
+              steam.position.set(room.x, dy + 3.6, room.z); steam.userData.noCull = true; scene.add(steam);
+            }
+          }
+          // One room in every third hall is trapped. The inlaid warning sigil matches the
+          // site theme; the pulse is avoidable by crossing the opposite wing or timing a dash.
+          if (rung % 18 === 0) {
+            const room = roomCenters[0], hazardColor = key === 'house' ? 0x9dff3a : key === 'nest' ? 0xff416f : 0x47f3c2;
+            const hazardMat = new THREE.MeshBasicMaterial({ color: hazardColor, transparent: true, opacity: 0.55, toneMapped: false });
+            const sigil = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.32, 5, 16), hazardMat);
+            sigil.rotation.x = Math.PI / 2; sigil.position.set(room.x, dy + 0.18, room.z); sigil.userData.noCull = true; scene.add(sigil);
+            const core = new THREE.Mesh(new THREE.CircleGeometry(3.45, 10), new THREE.MeshBasicMaterial({ color: hazardColor, transparent: true, opacity: 0.18, side: THREE.DoubleSide, toneMapped: false }));
+            core.rotation.x = -Math.PI / 2; core.position.set(room.x, dy + 0.12, room.z); core.userData.noCull = true; scene.add(core);
+            let hazardName = key === 'house' ? 'CURSED CANDLE RUNE' : key === 'nest' ? 'THORN-BLOOM PATCH' : 'SPORE VENT';
+            if (key === 'nest') for (let thorn = 0; thorn < 5; thorn++) {
+              const angle = thorn * Math.PI * 2 / 5, spike = new THREE.Mesh(new THREE.ConeGeometry(0.38, 1.8, 5), hazardMat);
+              spike.position.set(room.x + Math.cos(angle) * 2.6, dy + 1, room.z + Math.sin(angle) * 2.6); spike.userData.noCull = true; scene.add(spike);
+            }
+            if (key === 'shroom') for (let puff = 0; puff < 3; puff++) {
+              const vent = new THREE.Mesh(new THREE.SphereGeometry(0.65, 7, 5), hazardMat);
+              vent.position.set(room.x + (puff - 1) * 1.8, dy + 0.7, room.z + (puff % 2 ? 0.7 : -0.7)); vent.userData.noCull = true; scene.add(vent);
+            }
+            sn.hazards.push({ name: hazardName, x: room.x, y: dy, z: room.z, radius: 4.5, cooldown: 0, sigil, core });
+          }
+          // A single late-floor cache is tucked into the other wing. It is optional, off
+          // the main spiral, and doubles as the dungeon's hidden-secret completion reward.
+          if (!sn.secrets.length && (deckY - dy) / Math.max(1, deckY - botY) > 0.84) {
+            const room = roomCenters[1], chestMat = lam(key === 'house' ? 0x28202d : key === 'nest' ? 0x61243a : 0x765438,
+              { emissive: zone.plate, emissiveIntensity: 0.24 });
+            const chest = new THREE.Group();
+            const box = new THREE.Mesh(new THREE.BoxGeometry(2.7, 1.7, 1.8), chestMat); box.position.y = 0.9; chest.add(box);
+            const lid = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.42, 2), chestMat); lid.position.set(0, 1.95, 0); chest.add(lid);
+            const jewel = new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 0), new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffd48a : key === 'nest' ? 0xff668b : 0xf7e4a7, toneMapped: false }));
+            jewel.position.set(0, 2.8, 0); chest.add(jewel); chest.position.set(room.x, dy, room.z); chest.userData.noCull = true; scene.add(chest);
+            const secret = { name: key === 'house' ? 'WIDOW’S LAST WILL' : key === 'nest' ? 'HEART OF THE BROOD' : 'THE WHITE QUEEN’S TEACUP', x: room.x, y: dy + 2.8, z: room.z, found: false };
+            sn.secrets.push(secret); items.push({ mesh: chest, type: 'dungeonSecret', taken: false, secretLabel: secret.name, secret });
+            secret.pickup = items[items.length - 1];
+          }
+          const pillarMat = lam(zone.plate, { emissive: zone.plate, emissiveIntensity: 0.22 });
+          for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+            const pillar = new THREE.Mesh(new THREE.BoxGeometry(1.8, 12, 1.8), pillarMat);
+            pillar.position.set(dx + sx * (hallR - 2), dy + 6, dz + sz * (hallR - 2));
+            pillar.userData.noCull = true; scene.add(pillar);
+          }
+        }
+        if (rung % 3 === 0) {
+          const floor = Math.max(1, Math.ceil((deckY - dy) / 30));
+          pathCue(dx, dy + 1.8, dz, `LEVEL ${floor} · DOWN ↓`, 1.15);
+        }
+        if (rung % 6 === 3) {
+          const floor = Math.max(1, Math.ceil((deckY - dy) / 30));
+          const sign = makeLabel(`${key === 'house' ? 'HOUSE' : key === 'nest' ? 'NEST' : 'SHROOM'} LEVEL ${floor} · DOWN ↓`);
+          sign.position.set(dx + Math.cos(a) * (discR + 2), dy + 4, dz + Math.sin(a) * (discR + 2));
+          sign.scale.set(8, 2, 1); sign.userData.noCull = true; scene.add(sign);
+        }
+        prev = { x: dx, z: dz, y: dy };
+      }
+      cy = dy; rung++;
+    }
+    // THE VAULT: boss arena plate at the very bottom, glowing rim + name
+    // The last spiral platforms intentionally surround the vault footprint; they are the
+    // stairwell above it, not an obstruction. Place the boss floor unconditionally so
+    // every dungeon route has a real bottom landing even when the final turn overlaps it.
+    {
+      const v = addSlab(gx, botY, gz, discR + 2, discR + 2, 2.4, zone, true);
+      sn.slabs.push(v); sn.bot = { x: gx, y: botY + 1.2, z: gz };
+      if (prev && (prev.x !== gx || prev.z !== gz)) addRail(prev.x, prev.z, prev.y + 1.35, gx, gz, col, botY + 1.35, false);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(discR + 2.4, 0.5, 6, 22), new THREE.MeshBasicMaterial({ color: col, fog: false, toneMapped: false }));
+      rim.rotation.x = Math.PI / 2; rim.position.set(gx, botY + 1.4, gz); rim.userData.noCull = true; scene.add(rim);
+      const vl = makeLabel(key === 'nest' ? 'LOWEST LEVEL · VAULT OF THE DEEP HEAT' : key === 'house' ? 'LOWEST LEVEL · NEXUS CRYPT' : 'LOWEST LEVEL · CHESHIRE PARLOUR');
+      vl.position.set(gx, botY + 9, gz); vl.scale.set(15, 3.4, 1); scene.add(vl);
+      pathCue(gx, botY + 2.2, gz, key === 'house' ? 'NEXUS CRYPT' : 'BOSS VAULT', 1.6);
+      vl.userData.noCull = true;
+    }
+
+    // Wrap the route in an actual skyscraper-scale dungeon shell. Solid perimeter walls
+    // have a permanent front doorway; the broad interior landings and side chambers all
+    // remain inside the walls, so the spiral is an explorable building rather than stairs
+    // floating in open air. Distinct materials keep each landmark's interior on-theme.
+    const shellHalf = discR * 2 + 21, shellThickness = 1.8, shellBand = 28;
+    const shellBottom = botY, shellTop = deckY + 14;
+    const shellMat = lam(key === 'house' ? 0x191520 : key === 'shroom' ? 0x694c40 : 0x421b30,
+      { emissive: key === 'house' ? 0x120b19 : key === 'shroom' ? 0x28120e : 0x220813, emissiveIntensity: 0.4 });
+    const paneMat = new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffc47a : key === 'shroom' ? 0xf4d8a4 : 0xff668b, transparent: true, opacity: 0.78, fog: false, toneMapped: false });
+    const addDungeonWall = (x0, x1, z0, z1, y0, y1) => {
+      addSolid(x0, x1, y0, y1, z0, z1);
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), shellMat);
+      mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); mesh.userData.noCull = true; scene.add(mesh);
+    };
+    let shellFloors = 0;
+    const doorOnX = Math.abs(site.x - gx) > Math.abs(site.z - gz);
+    const doorSide = (doorOnX ? site.x - gx : site.z - gz) < 0 ? -1 : 1;
+    for (let floorY = shellBottom; floorY < shellTop; floorY += shellBand) {
+      const ceilY = Math.min(shellTop, floorY + shellBand), half = shellHalf, t = shellThickness, doorHalf = 9;
+      // The open side faces the outside stair, making the ground-level portal easy to find.
+      if (doorOnX) {
+        if (doorSide < 0) {
+          addDungeonWall(gx - half, gx - half + t, gz - half, gz - doorHalf, floorY, ceilY);
+          addDungeonWall(gx - half, gx - half + t, gz + doorHalf, gz + half, floorY, ceilY);
+          addDungeonWall(gx + half - t, gx + half, gz - half, gz + half, floorY, ceilY);
+        } else {
+          addDungeonWall(gx + half - t, gx + half, gz - half, gz - doorHalf, floorY, ceilY);
+          addDungeonWall(gx + half - t, gx + half, gz + doorHalf, gz + half, floorY, ceilY);
+          addDungeonWall(gx - half, gx - half + t, gz - half, gz + half, floorY, ceilY);
+        }
+        addDungeonWall(gx - half, gx + half, gz - half, gz - half + t, floorY, ceilY);
+        addDungeonWall(gx - half, gx + half, gz + half - t, gz + half, floorY, ceilY);
+      } else {
+        addDungeonWall(gx - half, gx - half + t, gz - half, gz + half, floorY, ceilY);
+        addDungeonWall(gx + half - t, gx + half, gz - half, gz + half, floorY, ceilY);
+        if (doorSide < 0) {
+          addDungeonWall(gx - half, gx - doorHalf, gz - half, gz - half + t, floorY, ceilY);
+          addDungeonWall(gx + doorHalf, gx + half, gz - half, gz - half + t, floorY, ceilY);
+          addDungeonWall(gx - half, gx + half, gz + half - t, gz + half, floorY, ceilY);
+        } else {
+          addDungeonWall(gx - half, gx - doorHalf, gz + half - t, gz + half, floorY, ceilY);
+          addDungeonWall(gx + doorHalf, gx + half, gz + half - t, gz + half, floorY, ceilY);
+          addDungeonWall(gx - half, gx + half, gz - half, gz - half + t, floorY, ceilY);
+        }
+      }
+      shellFloors++;
+      const paneY = floorY + Math.min(14, (ceilY - floorY) * 0.58);
+      for (const side of [-1, 1]) for (const offset of [-14, 0, 14]) {
+        if (side === doorSide && offset === 0) continue;
+        const pane = new THREE.Mesh(new THREE.BoxGeometry(0.28, 7, 3.4), paneMat);
+        pane.position.set(gx + side * (half + 0.12), paneY, gz + offset); pane.userData.noCull = true; scene.add(pane);
+      }
+      for (const side of [-1, 1]) for (const offset of [-14, 14]) {
+        const pane = new THREE.Mesh(new THREE.BoxGeometry(3.4, 7, 0.28), paneMat);
+        pane.position.set(gx + offset, paneY, gz + side * (half + 0.12)); pane.userData.noCull = true; scene.add(pane);
+      }
+      // Vertical corner ribs emphasize the height and reinforce the gothic / storybook silhouette.
+      const ribMat = lam(key === 'house' ? 0x554055 : key === 'shroom' ? 0xd8b88a : 0xc34a70,
+        { emissive: zone.plate, emissiveIntensity: 0.32 });
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const rib = new THREE.Mesh(new THREE.BoxGeometry(2.2, ceilY - floorY, 2.2), ribMat);
+        rib.position.set(gx + sx * (half - 1), (ceilY + floorY) / 2, gz + sz * (half - 1));
+        rib.userData.noCull = true; scene.add(rib);
+      }
+    }
+    sn.interior = { x: gx, z: gz, bottom: shellBottom, top: shellTop, floors: shellFloors, width: shellHalf * 2, height: shellTop - shellBottom, entry: { x: gx, y: deckY, z: gz }, doorOnX, doorSide };
   };
   // ---- site 1: THE GIANT PUSSY (flesh nest + ball-chair arena) ----
   // Adaptive placement: try several arena radii/drops, then build the chain BACK from whichever arena found air.
@@ -3204,8 +3638,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
     for (const [ra, drop] of [[58, -11.2], [66, -9.4], [70, -12.6], [50, -13]]) {
       const ax = X0 + nx * ra, az = Z0 + nz * ra, ay = y0 + drop;
       if (!blocked(ax, ay, az, 13)) {
-        arenaSite = { x: ax, z: az, y: ay, ra };
-        addSlab(ax, ay, az, 13, 13, 2.6, FP, true);
+        arenaSite = { x: ax, z: az, y: ay, ra, sl: addSlab(ax, ay, az, 13, 13, 2.6, FP, true) };
         break;
       }
     }
@@ -3216,7 +3649,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
         const sx = X0 + nx * (13 + k * 11), sz = Z0 + nz * (13 + k * 11), sy = y0 - 3.4 * k;
         if (blocked(sx, sy, sz, 4.4)) continue;
         const sl = addSlab(sx, sy, sz, 4.4, 4.4, 2, FP, true);
-        steps.push({ x: sx, z: sz, y: sy });
+        steps.push({ x: sx, z: sz, y: sy, sl });
       }
       // rails + dash pads: ring node -> terraces -> arena (skip any blocked terrace)
       let A = { x: X0, z: Z0, y: y0 };
@@ -3229,9 +3662,14 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
       }
       const lbl = makeLabel('THE GIANT PUSSY'); lbl.position.set(ax, ay + 9, az); lbl.scale.set(13, 3.25, 1); scene.add(lbl);
       const nb = beacon(ax, ay + 1, az, 0xff5aa0);
-      if (AN.far) { nb.material.fog = false; nb.userData.noCull = true; farMonument('pussy', ax + nz * 46, az - nx * 46, ay - 34); }   // spawn-visible giant monument
-      sites.nest = { x: ax, z: az, y: ay };
+      sites.nest = { x: ax, z: az, y: ay, slabs: [...steps.map(t => t.sl), arenaSite.sl].filter(Boolean) };   // the whole approach chain — guards roam these too
+      if (AN.far) {
+        nb.material.fog = false; nb.userData.noCull = true;
+        farMonument('pussy', ax + nz * 46, az - nx * 46, ay - 34);   // spawn-visible giant monument
+        farDungeon('nest', { x: ax, z: az, y: ay }, { x: ax + nz * 46, z: az - nx * 46, base: ay - 34 }, FP, 0xff5aa0, 200, -100, 13);
+      }
       if (AN.far) connectMid(nestNode, X0, Z0, y0, FP, 9, 9);        // THE JOURNEY: full causeway from the ring to this land
+      seedLeadChain('nest', ax, az);
     }
   }
   // ---- site 2: THE HAUNTED NEXUS HOUSE (massive gothic spire + horror garrison) ----
@@ -3239,30 +3677,86 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
     const AH = farAnchor(houseNode, 'house');
     const nx = Math.cos(AH.a), nz = Math.sin(AH.a);
     const X0 = AH.X0, Z0 = AH.Z0, y0 = AH.y0;
-    const FHT = { name: 'HauntedHouse', desc: 'the halls are awake — walk soft', top: '#050a08', mid: '#0c1712', bot: '#123020', fog: 0x081410, hemi: 0.75, hemiCol: 0xa8ffc8, sun: 0.8, sunCol: 0x66ff9a, cloud: 0x0e1a14, plate: 0x7dff4a, weather: 'none' };
+    const FHT = { name: 'HauntedHouse', desc: 'the halls are awake — walk soft', top: '#05070c', mid: '#111722', bot: '#242b31', fog: 0x20262c, hemi: 0.48, hemiCol: 0x879293, sun: 0.28, sunCol: 0xc4a77a, cloud: 0x4b5558, plate: 0xc6a16d, weather: 'none' };
     if (AH.far) addSlab(X0, y0, Z0, 9, 9, 2.4, FHT, true);          // far land: the causeway's landing rim pad
     let hx = X0 + nx * 34, hz = Z0 + nz * 34, hy = y0 - 7.5;          // house base sits in the mid band
     if (blocked(hx, hy, hz, 17)) { hx += nx * 16; hz += nz * 16; }
     if (!blocked(hx, hy, hz, 17)) {
-      const wallMat = lam(0x241a33), roofMat = new THREE.MeshBasicMaterial({ color: 0x9dff3a, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
+      const wallMat = lam(0x10101d), roofMat = new THREE.MeshBasicMaterial({ color: 0x9dff3a, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
       const winMat = new THREE.MeshBasicMaterial({ color: 0x20ff8a, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false });
       const winMat2 = new THREE.MeshLambertMaterial({ color: 0x153024, emissive: 0x0d3a24, emissiveIntensity: 0.8 });
       const land = addSlab(hx, hy, hz, 17, 12, 2.8, FHT, true);        // 34 x 24 haunted ground
       const wall = (x0, x1, z0, z1, tall) => { const s = addSolid(x0, x1, hy, hy + tall, z0, z1); const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, tall, z1 - z0), wallMat); m.position.set((x0 + x1) / 2, hy + tall / 2, (z0 + z1) / 2); scene.add(m); return s; };
       wall(hx - 17, hx - 11, hz - 12, hz + 12, 26); wall(hx + 11, hx + 17, hz - 12, hz + 12, 26);   // side walls
-      wall(hx - 17, hx + 17, hz + 10, hz + 12, 26); wall(hx - 17, hx + 17, hz - 12, hz - 10, 26);   // back + full-height front walls
-      wall(hx - 3, hx + 3, hz - 12, hz - 10, 9);                                                     // the gate lintels above the door gap
-      const f1 = addSlab(hx, hy + 8.2, hz, 16, 11, 1.5, FHT, true);     // interior floors (the garrison hunts these)
-      const f2 = addSlab(hx, hy + 16.4, hz, 15, 10, 1.5, FHT, true);
+      // Make the entry face read unmistakably from the approach: a pointed, double-height portal with an emerald outline.
+      const doorGlow = new THREE.MeshBasicMaterial({ color: 0x2cff9a, transparent: true, opacity: 0.88, blending: THREE.AdditiveBlending, depthWrite: false });
+      const portal = new THREE.Group(); portal.position.set(hx, hy, hz - 10.2); scene.add(portal);
+      const archL = new THREE.Mesh(new THREE.BoxGeometry(0.7, 12, 0.7), doorGlow); archL.position.set(-4.3, 6, 0.2); portal.add(archL);
+      const archR = archL.clone(); archR.position.x = 4.3; portal.add(archR);
+      const archTop = new THREE.Mesh(new THREE.BoxGeometry(9.3, 0.7, 0.7), doorGlow); archTop.position.set(0, 12, 0.2); portal.add(archTop);
+      const doorPeak = new THREE.Mesh(new THREE.ConeGeometry(5.2, 7, 4), doorGlow); doorPeak.position.set(0, 16, 0); doorPeak.rotation.y = Math.PI / 4; portal.add(doorPeak);
+      for (const y of [4.5, 8, 11]) {
+        const slit = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.35, 0.35), doorGlow); slit.position.set(0, y, 0.45); portal.add(slit);
+      }
+      for (const [tx, tz, ht] of [[-14, -9, 42], [14, -9, 42], [-14, 9, 36], [14, 9, 36]]) {
+        const tower = new THREE.Mesh(new THREE.BoxGeometry(5, ht, 5), wallMat); tower.position.set(hx + tx, hy + ht / 2, hz + tz); scene.add(tower);
+        const peak = new THREE.Mesh(new THREE.ConeGeometry(4.2, 12, 4), roofMat); peak.position.set(hx + tx, hy + ht + 6, hz + tz); peak.rotation.y = Math.PI / 4; scene.add(peak);
+      }
+      const crown = new THREE.Mesh(new THREE.ConeGeometry(15, 16, 4), roofMat); crown.position.set(hx, hy + 35, hz); crown.rotation.y = Math.PI / 4; scene.add(crown);
+      wall(hx - 17, hx + 17, hz + 10, hz + 12, 26);                                                   // back wall
+      wall(hx - 17, hx - 3, hz - 12, hz - 10, 26); wall(hx + 3, hx + 17, hz - 12, hz - 10, 26);    // front wall leaves a real doorway
+      wall(hx - 3, hx + 3, hz - 12, hz - 10, 9);                                                       // gate lintel above the door gap
+      const stairX = hx - 8, stairZ0 = hz - 5.8, stairZ1 = hz + 4.35;
+      const f1 = [
+        addSlab(hx - 14.5, hy + 8.2, hz, 1.5, 11, 1.5, FHT, true),
+        addSlab(hx + 6.5, hy + 8.2, hz, 9.5, 11, 1.5, FHT, true),
+        addSlab(hx - 8, hy + 8.2, hz - 9.5, 5, 1.5, 1.5, FHT, true),
+        addSlab(hx - 8, hy + 8.2, hz + 9.5, 5, 1.5, 1.5, FHT, true),
+        addSlab(hx - 5.5, hy + 8.2, hz + 4.35, 2.8, 1.25, 1.5, FHT, true),
+      ];
+      const f2 = [
+        addSlab(hx - 14, hy + 16.4, hz, 1, 10, 1.5, FHT, true),
+        addSlab(hx + 6, hy + 16.4, hz, 9, 10, 1.5, FHT, true),
+        addSlab(hx - 8, hy + 16.4, hz - 9, 5, 1, 1.5, FHT, true),
+        addSlab(hx - 8, hy + 16.4, hz + 9, 5, 1, 1.5, FHT, true),
+        addSlab(hx - 5.5, hy + 16.4, hz - 5.8, 2.8, 1.25, 1.5, FHT, true),
+      ];
+      const stairCount = 12, stairRuns = [[], [], []], stairSlabs = [];
+      for (let i = 0; i < stairCount; i++) {
+        const t = i / (stairCount - 1), z = stairZ0 + (stairZ1 - stairZ0) * t, y = hy + (i + 1) * (8.2 / stairCount);
+        const sl = addSlab(stairX, y, z, 1.8, 0.54, 0.7, FHT, true); stairSlabs.push(sl); stairRuns[0].push(sl);
+      }
+      for (let i = 0; i < stairCount; i++) {
+        const t = i / (stairCount - 1), z = stairZ1 + (stairZ0 - stairZ1) * t, y = hy + 8.2 + (i + 1) * (8.2 / stairCount);
+        const sl = addSlab(stairX, y, z, 1.8, 0.54, 0.7, FHT, true); stairSlabs.push(sl); stairRuns[1].push(sl);
+      }
+      for (let i = 0; i < stairCount; i++) {
+        const t = i / (stairCount - 1), x = stairX + (hx - 3.5 - stairX) * t, z = stairZ0 + (hz - stairZ0) * t;
+        const y = hy + 16.4 + (i + 1) * (8.4 / stairCount);
+        const sl = addSlab(x, y, z, 1.15, 0.54, 0.7, FHT, true); stairSlabs.push(sl); stairRuns[2].push(sl);
+      }
+      for (const side of [-1, 1]) {
+        addRail(stairX + side * 2.25, stairZ0 - 0.5, hy + 2.1, stairX + side * 2.25, stairZ1 + 0.5, 0x9dff3a, hy + 10.1, false);
+        addRail(stairX + side * 2.25, stairZ1 + 0.5, hy + 10.3, stairX + side * 2.25, stairZ0 - 0.5, 0x9dff3a, hy + 18.3, false);
+      }
+      // The split landings leave a clear stairwell through each floor, all the way to the spire.
       for (const sz of [hz - 11.1, hz + 11.1]) for (const wx of [-10, -5, 5, 10]) {
-        const w = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.6, 0.3), winMat); w.position.set(hx + wx, hy + 4.5, sz); scene.add(w);
-        const w2 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.6, 0.3), winMat2); w2.position.set(hx + wx, hy + 12.7, sz); scene.add(w2);
+        for (const [row, wy] of [[0, 4.5], [1, 12.7], [2, 20.9]]) {
+          const warm = (row + Math.abs(wx / 5)) % 3 === 0;
+          const w = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.6, 0.3), warm ? winMat : winMat2); w.position.set(hx + wx, hy + wy, sz); scene.add(w);
+        }
       }
       const spire = addSlab(hx, hy + 24.8, hz, 5.5, 5.5, 1.6, FHT, true);   // SPIRE: the Nexus hangs over this floor
       for (const sx2 of [-4.8, 4.8]) for (const sz2 of [-4.8, 4.8]) { const p = new THREE.Mesh(new THREE.BoxGeometry(1.1, 10, 1.1), wallMat); p.position.set(hx + sx2, hy + 29.6, hz + sz2); scene.add(p); }
       const pyra = new THREE.Mesh(new THREE.ConeGeometry(7, 7, 4), lam(0x1a1226)); pyra.position.set(hx, hy + 37, hz); pyra.rotation.y = Math.PI / 4; scene.add(pyra);
       const eyeRing = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.16, 4, 20), new THREE.MeshBasicMaterial({ color: 0x9dff3a, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }));
       eyeRing.position.set(hx, hy + 33.5, hz); scene.add(eyeRing);
+      const entryTag = makeLabel('ENTER · DESCEND TO THE NEXUS'); entryTag.position.set(hx, hy + 19, hz - 15); entryTag.scale.set(10, 2.5, 1); scene.add(entryTag);
+      for (const [wx, wy] of [[-11, 5], [11, 5], [-11, 13], [11, 13]]) {
+        const sill = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.55, 0.8), doorGlow); sill.position.set(hx + wx, hy + wy, hz - 12.2); scene.add(sill);
+      }
+      const glyph = new THREE.Mesh(new THREE.SphereGeometry(1.1, 8, 6), new THREE.MeshBasicMaterial({ color: 0x9dff3a, fog: false, blending: THREE.AdditiveBlending }));
+      glyph.position.set(hx, hy + 22, hz); scene.add(glyph);
       const webM = new THREE.MeshLambertMaterial({ color: 0xcfd8e8, transparent: true, opacity: 0.22 });
       for (let i = 0; i < 4; i++) { const w = new THREE.Mesh(new THREE.BoxGeometry(7, 0.12, 4), webM); w.position.set(hx + (i % 2 ? 9 : -9), hy + 5 + i * 1.6, hz + (i < 2 ? 15.4 : -15.4)); w.rotation.z = i % 2 ? -0.35 : 0.35; scene.add(w); }
       const candM = new THREE.MeshBasicMaterial({ color: 0xffc46a, transparent: true, opacity: 0.85 });
@@ -3282,9 +3776,20 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
       if (steps.length) { const l2 = steps[steps.length - 1]; addRail(l2.x, l2.z, l2.y + 1.35, hx - nx * 18, hz - nz * 18, 0x9dff3a, hy + 1.35, false); addDashPad(l2.x, l2.y, l2.z, nx, nz); }
       const lbl = makeLabel('THE HAUNTED NEXUS HOUSE'); lbl.position.set(hx, hy + 42, hz); lbl.scale.set(14, 3.5, 1); scene.add(lbl);
       const hb = beacon(hx, hy + 1, hz, 0x7dff4a);
-      if (AH.far) { hb.material.fog = false; hb.userData.noCull = true; farMonument('house', hx + nz * 60, hz - nx * 60, hy + 2); }   // spawn-visible giant monument
-      sites.house = { x: hx, z: hz, y: hy, slabs: [land, f1, f2, spire] };
+      const routeSurface = sl => ({ x: sl.cx, y: sl.top, z: sl.cz, hw: sl.hw, hd: sl.hd });
+      const route = {
+        entry: { x: hx, y: hy, z: hz - 14 }, ground: routeSurface(land),
+        floor1: f1.map(routeSurface), floor2: f2.map(routeSurface), spire: routeSurface(spire),
+        stairs: stairRuns.map(run => run.map(routeSurface)),
+      };
+      sites.house = { x: hx, z: hz, y: hy, route, slabs: [land, ...f1, ...f2, ...stairSlabs, spire, ...steps.map(t => t.slab)].filter(Boolean) };   // garrison roams the approach steps and accessible halls too
+      if (AH.far) {
+        hb.material.fog = false; hb.userData.noCull = true;
+        farMonument('house', hx + nz * 60, hz - nx * 60, hy + 2);   // spawn-visible giant monument
+        farDungeon('house', { x: hx, z: hz, y: hy }, { x: hx + nz * 60, z: hz - nx * 60, base: hy + 2 }, FHT, 0x9dff3a, 180, -100, 16);
+      }
       if (AH.far) connectMid(houseNode, X0, Z0, y0, FHT, 9, 9);      // THE JOURNEY: full causeway from the ring to this land
+      seedLeadChain('house', hx, hz);
     }
   }
   // ---- site 3: THE GRAND SHROOM (psychedelic wonderland stalk + cap, Alice easter eggs) ----
@@ -3292,7 +3797,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
     const AS = farAnchor(shroomNode, 'shroom');
     const nx = Math.cos(AS.a), nz = Math.sin(AS.a);
     const X0 = AS.X0, Z0 = AS.Z0, y0 = AS.y0;
-    const FSH = { name: 'Shroom', desc: 'wonderland stares back', top: '#0a0212', mid: '#200a2e', bot: '#33104a', fog: 0x16041e, hemi: 0.8, hemiCol: 0xe8a0ff, sun: 1.0, sunCol: 0xd86aff, cloud: 0x240a30, plate: 0xf13be8, weather: 'none' };
+    const FSH = { name: 'Shroom', desc: 'a storybook cap hides a strange little court', top: '#130b16', mid: '#392630', bot: '#71634d', fog: 0x55453d, hemi: 0.78, hemiCol: 0xe5d5b6, sun: 0.62, sunCol: 0xf0c989, cloud: 0x94826b, plate: 0xd8b88a, weather: 'none' };
     if (AS.far) addSlab(X0, y0, Z0, 9, 9, 2.4, FSH, true);          // far land: the causeway's landing rim pad
     // a spiral rabbit-hole of glowing cap-discs winding DOWN from the rim to the cap arena (down = into wonderland)
     const discs = [];
@@ -3327,9 +3832,14 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
       for (let i = 0; i < eggLbls.length; i++) { const el2 = makeLabel(eggLbls[i]); el2.position.set(mx + Math.cos(i * 1.256 + 0.5) * 13, my + 1.6 + (i % 2) * 2.4, mz + Math.sin(i * 1.256 + 0.5) * 13); el2.scale.set(7, 1.75, 1); scene.add(el2); }
       const shroomLbl = makeLabel('THE GRAND SHROOM'); shroomLbl.position.set(mx, my + 12, mz); shroomLbl.scale.set(13, 3.25, 1); scene.add(shroomLbl);
       const sb = beacon(mx, my + 1, mz, 0xf13be8);
-      if (AS.far) { sb.material.fog = false; sb.userData.noCull = true; farMonument('shroom', mx + nz * 54, mz - nx * 54, my - 22); }   // spawn-visible giant monument
-      sites.shroom = { x: mx, z: mz, y: my, slabs: [cap, ...discs.map(d => d.slab)] };
+      sites.shroom = { x: mx, z: mz, y: my, slabs: [cap, ...discs.map(d => d.slab)] };   // the cap-disc approach already carries the garrison
+      if (AS.far) {
+        sb.material.fog = false; sb.userData.noCull = true;
+        farMonument('shroom', mx + nz * 54, mz - nx * 54, my - 22);   // spawn-visible giant monument
+        farDungeon('shroom', { x: mx, z: mz, y: my }, { x: mx + nz * 54, z: mz - nx * 54, base: my - 22 }, FSH, 0xf13be8, 220, -100, 15);
+      }
       if (AS.far) connectMid(shroomNode, X0, Z0, y0, FSH, 9, 9);     // THE JOURNEY: full causeway from the ring to this land
+      seedLeadChain('shroom', mx, mz);
     } else console.log('[mids] shroom cap blocked at every outward nudge — site skipped this build');
   }
   commons.mid = {
@@ -3338,54 +3848,87 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
     shroom: sites.shroom ? { ...sites.shroom, woken: false, waves: 0, guardCd: 6, bossSpawned: false, bossDead: false, gen: midGen++ } : null,
   };
   for (const k of ['nest', 'house', 'shroom']) if (commons.mid[k]) commons.mid[k].key = k;
+  for (const k of ['nest', 'house', 'shroom']) {                   // seat the outrider platoon on the lead-in platforms the moment the world exists
+    const s2 = commons.mid[k]; const lead = s2 && s2.lead ? s2.lead : [];
+    if (lead.length < 2) continue;
+    try { outriderFor(k, lead[0]); outriderFor(k, lead[(lead.length / 2) | 0]); } catch (err) { console.warn('[mids] outrider seed failed for', k, err); }
+  }
   {                                  // the far lands live past the stock world edge: widen the bounds like the other far builders do
     let farD = 0;
     for (const k of ['nest', 'house', 'shroom']) if (commons.mid[k]) farD = Math.max(farD, Math.hypot(commons.mid[k].x, commons.mid[k].z));
     if (farD) { WORLD_R = Math.max(WORLD_R, farD + 320); camera.far = Math.max(camera.far, (farD + 400) * 1.7); camera.updateProjectionMatrix(); }
   }
 }
-function spawnNestGuard() {
-  const n = commons.mid.nest, a = rand() * 6.283;
-  const e = makeMaw(n.x + Math.cos(a) * 9, n.y + 11 + rand() * 2, n.z + Math.sin(a) * 9);
-  e.pts = 260; e.midGuard = 'nest'; e.eyeLift = 4; e.neverDespawn = true;
-  toast('A MAW CRAWLS OUT OF THE GIANT PUSSY', 2100); return e;
+function spawnNestEnemy(x, y, z, plat = null) {
+  const surface = { minx: plat ? plat.minx : x - 8, maxx: plat ? plat.maxx : x + 8, minz: plat ? plat.minz : z - 8, maxz: plat ? plat.maxz : z + 8, zone: FLESH_ZONE };
+  const kind = NEST_KINDS[(rand() * NEST_KINDS.length) | 0];
+  const e = makeWalker(x, y, z, surface, 1, false, kind);
+  e.zone = FLESH_ZONE; e.pts = 140; e.midGuard = 'nest'; e.neverDespawn = true;
+  return e;
 }
-const PSY_ZONE = { name: 'Psychedelic', plate: 0xf13be8 };   // a stand-in zone so the shroom garrison dresses in psychedelic kit
+function spawnNestGuard() {
+  const n = commons.mid.nest;
+  const pool = [...(n.lead || []), ...(n.slabs || []), ...(n.shaft || [])];
+  const spot = pool.length ? pool[((n.waves || 1) - 1) % pool.length] : null;
+  const off = () => (rand() - 0.5) * 7;
+  const sx = spot ? (Number.isFinite(spot.x) ? spot.x : Number.isFinite(spot.cx) ? spot.cx : n.x) : n.x + Math.cos(rand() * 6.283) * 9;
+  const sz = spot ? (Number.isFinite(spot.z) ? spot.z : Number.isFinite(spot.cz) ? spot.cz : n.z) : n.z + Math.sin(rand() * 6.283) * 9;
+  const sy = spot ? (Number.isFinite(spot.top) ? spot.top : Number.isFinite(spot.y) ? spot.y : n.y + 1) : n.y + 1;
+  return spawnNestEnemy(sx + off(), sy + 0.4, sz + off(), spot && (spot.slab || spot));
+}
+const PSY_ZONE = { name: 'Shroom', plate: 0xd8b88a };   // the storybook biome palette also applies to every wandering shroom creature
 function spawnPsycUnit(s) {
-  const sl = (s.slabs || [])[((rand() * (s.slabs.length || 1)) | 0)] || null;
-  const a = rand() * 6.283, r = 6 + rand() * 6;
-  const e = spawnBiomeEnemy(s.x + Math.cos(a) * r, (sl ? sl.top : s.y) + 0.3, s.z + Math.sin(a) * r, sl, PSY_ZONE, 1, 1);
-  if (e) { e.midGuard = 'shroom'; e.neverDespawn = true; }
+  const spot = s.shaft && s.shaft.length && rand() < 0.7 ? s.shaft[(rand() * s.shaft.length) | 0] : null;
+  const slPool = [...(s.lead || []), ...(s.slabs || [])];
+  const sl = spot ? spot.slab : (slPool.length ? slPool[(rand() * slPool.length) | 0] : null);
+  // centre of the chosen surface, whatever shape it is (rung objects carry x/z, slabs carry cx/cz); malformed -> site centre rather than NaN
+  const cx0 = spot ? (Number.isFinite(spot.x) ? spot.x : Number.isFinite(spot.cx) ? spot.cx : s.x) : s.x;
+  const cz0 = spot ? (Number.isFinite(spot.z) ? spot.z : Number.isFinite(spot.cz) ? spot.cz : s.z) : s.z;
+  const cy0 = spot ? (Number.isFinite(spot.top) ? spot.top : Number.isFinite(spot.y) ? spot.y : s.y) : (sl ? sl.top : s.y);
+  const a = rand() * 6.283, r = 4 + rand() * 5;
+  const kind = SHROOM_KINDS[(rand() * SHROOM_KINDS.length) | 0];
+  const ex = cx0 + Math.cos(a) * r, ez = cz0 + Math.sin(a) * r;
+  const surface = { minx: sl ? sl.minx : ex - 8, maxx: sl ? sl.maxx : ex + 8, minz: sl ? sl.minz : ez - 8, maxz: sl ? sl.maxz : ez + 8, zone: PSY_ZONE };
+  const e = makeWalker(ex, cy0 + 0.3, ez, surface, 1, false, kind);
+  if (e) { e.zone = PSY_ZONE; e.midGuard = 'shroom'; e.neverDespawn = true; }
   return e;
 }
 function spawnHorror(s) {
-  const sl = (s.slabs || [])[((rand() * (s.slabs.length || 1)) | 0)] || null;
-  const e = makeWalker(s.x + (rand() - 0.5) * 10, (sl ? sl.top : s.y) + 0.4, s.z + (rand() - 0.5) * 8, sl, 1, false, HORROR_KINDS[(rand() * HORROR_KINDS.length) | 0]);
-  e.midGuard = 'house'; e.neverDespawn = true; return e;      // tagged to the SITE key: the tick counts/culls house guards by this
+  const spot = s.shaft && s.shaft.length && rand() < 0.7 ? s.shaft[(rand() * s.shaft.length) | 0] : null;
+  const slPool = [...(s.lead || []), ...(s.slabs || [])];
+  const sl = spot ? spot.slab : (slPool.length ? slPool[(rand() * slPool.length) | 0] : null);
+  // rung objects carry x/z, slab rects carry cx/cz — resolve either, fallback to the site centre instead of NaN
+  const x3 = spot && Number.isFinite(spot.x) ? spot.x + (rand() - 0.5) * 10 : s.x + (rand() - 0.5) * 10;
+  const z3 = spot && Number.isFinite(spot.z) ? spot.z + (rand() - 0.5) * 10 : s.z + (rand() - 0.5) * 8;
+  const y3 = spot && Number.isFinite(spot.top) ? spot.top : spot && Number.isFinite(spot.y) ? spot.y : sl ? sl.top : s.y;
+  const houseZone = { name: 'HauntedHouse', plate: 0x7dff4a };
+  const surface = { minx: sl ? sl.minx : x3 - 8, maxx: sl ? sl.maxx : x3 + 8, minz: sl ? sl.minz : z3 - 8, maxz: sl ? sl.maxz : z3 + 8, zone: houseZone };
+  const e = makeWalker(x3, y3 + 0.4, z3, surface, 1, false, HORROR_KINDS[(rand() * HORROR_KINDS.length) | 0]);
+  e.midGuard = 'house'; e.neverDespawn = true; return e;      // skeleton, ghost and zombie garrison
 }
 function spawnNestBoss() {
-  const n = commons.mid.nest;
-  const e = makeMaw(n.x, n.y + 16, n.z);
+  const n = commons.mid.nest, R = n.bot || n;
+  const e = makeMaw(R.x, R.y + 14, R.z);
   e.bodyScale = 2.6; e.mesh.scale.setScalar(2.6);
   e.hp = e.maxhp = 64; e.r = 3.6; e.h = 13; e.pts = 3000;
   e.mawBoss = true; e.midBoss = 'maw'; e.mawEat = 5.5; e.neverDespawn = true;
-  toast('THE MOTHER MAW AWAKENS IN THE GIANT PUSSY — KILL HER FOR +2 HEARTS, HER VOIDBEAM, AND A WORLD PURGE ON MAWS', 4600); shockRing({ x: e.x, y: e.cy, z: e.z }, 30, 0xff5aa0); try { dreadSting(0.6); } catch (_) {} shake = Math.max(shake, 0.8);
+  toast('THE MOTHER MAW WAITS IN THE VAULT OF THE DEEP HEAT, AT HER VERY BOTTOM — DESCEND AND KILL HER FOR +2 HEARTS, HER VOIDBEAM, AND A WORLD PURGE ON MAWS', 4600); shockRing({ x: e.x, y: e.cy, z: e.z }, 30, 0xff5aa0); try { dreadSting(0.6); } catch (_) {} shake = Math.max(shake, 0.8);
 }
 function spawnNexusBoss() {
-  const h = commons.mid.house;
-  const e = makeDrone(h.x, h.y + 30, h.z, 'drone', null);
+  const h = commons.mid.house, R = h.bot || h;
+  const e = makeDrone(R.x, R.y + 8, R.z, 'drone', null);
   e.mesh.scale.setScalar(3.2);
   e.hp = e.maxhp = 70; e.r = 2.4; e.h = 3.2; e.pts = 3000;
   e.nexusBoss = true; e.midBoss = 'nex'; e.neverDespawn = true; e.waveCd = 6; e.accent = 0x9dff3a;
-  toast('THE NEXUS OPENS ITS EYE OVER THE SPIRE — KILL IT FOR +2 HEARTS AND THE HEXFIRE', 4600); shockRing({ x: h.x, y: h.y + 30, z: h.z }, 30, 0x9dff3a); try { dreadSting(0.6); } catch (_) {} shake = Math.max(shake, 0.8);
+  toast('THE NEXUS OPENS ITS EYE IN THE CRYPT, THE DEEPEST FLOOR OF THE HALLS — KILL IT FOR +2 HEARTS AND THE HEXFIRE', 4600); shockRing({ x: R.x, y: R.y + 8, z: R.z }, 30, 0x9dff3a); try { dreadSting(0.6); } catch (_) {} shake = Math.max(shake, 0.8);
 }
 function spawnCheshireBoss() {
-  const s = commons.mid.shroom;
-  const e = makeDrone(s.x, s.y + 9, s.z, 'drone', PSY_ZONE);
+  const s = commons.mid.shroom, R = s.bot || s;
+  const e = makeDrone(R.x, R.y + 7, R.z, 'drone', PSY_ZONE);
   e.mesh.scale.setScalar(3.0);
   e.hp = e.maxhp = 66; e.r = 2.3; e.h = 3.2; e.pts = 3000;
   e.cheshireBoss = true; e.midBoss = 'shroom'; e.neverDespawn = true; e.waveCd = 6; e.accent = 0xc86aff;
-  toast('THE CHESHIRE GLASS GRINS OVER THE GRAND SHROOM — IT WON\'T FADE UNTIL IT\'S DEAD. +2 HEARTS, +TEAPARTY', 4600); shockRing({ x: s.x, y: s.y + 9, z: s.z }, 30, 0xc86aff); try { dreadSting(0.6); } catch (_) {} shake = Math.max(shake, 0.8);
+  toast('THE CHESHIRE GLASS GRINS IN THE PARLOUR BENEATH THE CAP — CLIMB THE STEM, DESCEND THE RUNGS. +2 HEARTS, +TEAPARTY', 4600); shockRing({ x: R.x, y: R.y + 7, z: R.z }, 30, 0xc86aff); try { dreadSting(0.6); } catch (_) {} shake = Math.max(shake, 0.8);
 }
 function grantMidBossReward(which) {
   if (!commons || !commons.mid) return;
@@ -3408,11 +3951,28 @@ function grantMidBossReward(which) {
 // host-side driver: proximity reveals the site, 3 guard waves each, then the boss; the Nexus keeps summoning while it lives
 const MID_SITE_KEY = { nest: 'maw', house: 'nex', shroom: 'shroom' };
 function commonsMidTick(dt) {
-  if (!commons || !commons.mid || state !== 'play' || paused || inInterior) return;
+  if (!commons || !commons.mid || state !== 'play' || paused) return;
   if (net.on && !net.host) return;
   for (const key of ['nest', 'house', 'shroom']) {
     const s = commons.mid[key];
-    if (!s || s.bossDead || midWins[MID_SITE_KEY[key]]) continue;
+    if (!s) continue;
+    const dungeon = s.interior;
+    const insideDungeon = !!dungeon && Math.abs(pos.x - dungeon.x) < dungeon.width / 2 && Math.abs(pos.z - dungeon.z) < dungeon.width / 2 && pos.y > dungeon.bottom && pos.y < dungeon.top;
+    for (const hazard of s.hazards || []) {
+      hazard.cooldown = Math.max(0, hazard.cooldown - dt);
+      const insideHazard = insideDungeon && Math.abs(pos.y - hazard.y) < 2.8 && Math.hypot(pos.x - hazard.x, pos.z - hazard.z) < hazard.radius;
+      if (insideHazard && hazard.cooldown <= 0) {
+        hazard.cooldown = 1.2;
+        const color = key === 'house' ? 0x9dff3a : key === 'nest' ? 0xff416f : 0x47f3c2;
+        hazard.sigil.material.opacity = 0.95; hazard.core.material.opacity = 0.42;
+        shockRing({ x: hazard.x, y: hazard.y + 0.3, z: hazard.z }, hazard.radius, color);
+          if (state === 'play') hurt(1, hazard.x, hazard.z);
+      }
+      hazard.sigil.material.opacity = insideHazard ? 0.95 : 0.38;
+      hazard.core.material.opacity = insideHazard ? 0.42 : 0.12;
+    }
+    if (s.bossDead || midWins[MID_SITE_KEY[key]]) continue;
+    if (insideDungeon || inInterior) continue;
     const d = Math.hypot(pos.x - s.x, pos.z - s.z);
     if (!s.woken && d < 60 && Math.abs(pos.y - s.y) < 40) {
       s.woken = true;
@@ -8060,12 +8620,15 @@ const ZONES = [   // beauty pass: lifted fog density, stronger suns, richer mid-
   { name: 'Horror',      desc: 'the fog remembers every death - the dead are listening', top: '#0a0310', mid: '#33101e', bot: '#8e1c2e', fog: 0x43101e, hemi: 0.4, hemiCol: 0x9c3050, sun: 0.3, sunCol: 0xd84560, cloud: 0x2c1420, plate: 0xb83550, weather: 'ash' },
 ];
 const BIOME_ENEMIES = {
-  Psychedelic: ['gunner', 'gunner', 'shield', 'walker', 'drone'],
+  Psychedelic: ['sporeling', 'sporeling', 'prismWraith', 'capBrute', 'prismWraith'],
   Jungle: ['dinosaur', 'gorilla', 'stegosaurus', 'frog', 'frog', 'charger'],
   Frozen: ['frozenStalker', 'frozenStalker', 'shield', 'walker', 'drone'],
   Inferno: ['infernal', 'infernal', 'charger', 'gunner', 'bomber'],
   Storm: ['stormWraith', 'stormWraith', 'gunner', 'shield', 'drone'],
-  Horror: ['stalker', 'skeleton', 'skeleton', 'spider', 'spider', 'roach', 'roach', 'charger', 'shield'],
+  Horror: ['stalker', 'skeleton', 'skeleton', 'spider', 'spider', 'cryptGhost', 'zombie', 'roach', 'charger', 'shield'],
+  HauntedHouse: ['skeleton', 'skeleton', 'cryptGhost', 'zombie', 'zombie', 'spider'],
+  Shroom: ['sporeling', 'sporeling', 'prismWraith', 'prismWraith', 'capBrute', 'capBrute'],
+  FleshNest: ['walker', 'walker', 'gunner', 'shield', 'charger'],
   Hellscape: ['demon', 'demon', 'infernal', 'infernal', 'charger', 'bomber', 'skeleton'],
   Glitch: ['glitchling', 'glitchling', 'glitchling', 'gunner', 'drone', 'stalker'],
   Kaomoji: ['kaomoji', 'kaomoji', 'kaomoji', 'kaomoji', 'gunner', 'drone'],
@@ -8098,6 +8661,7 @@ const zoneByName = nm => ZONES.find(z => z.name === nm) || DEPTH_ZONES[nm.toLowe
 Object.assign(BIOME_ENEMIES, {
   Caverns: ['spider', 'spider', 'roach', 'roach', 'skeleton', 'stalker', 'charger'],
   Psychosis: ['demon', 'glitchling', 'glitchling', 'stalker', 'skeleton', 'spider', 'roach', 'infernal'],
+  Shroom: ['sporeling', 'sporeling', 'prismWraith', 'prismWraith', 'capBrute', 'capBrute'],
   Foreclosure: ['notice', 'notice', 'notice', 'bailiff', 'collector', 'walker', 'drone'],
   Condemned: ['notice', 'bailiff', 'bailiff', 'collector', 'roach', 'roach', 'skeleton', 'landlord'],
   Collections: ['collector', 'collector', 'loanshark', 'loanshark', 'landlord', 'bailiff', 'demon', 'bomber'],
@@ -8348,10 +8912,6 @@ function drawSky() {
   const css = c => '#' + tmpC.copy(c).lerp(white, flash * 0.6).lerp(SPACE_BLACK, spaceNow).getHexString();
   g.addColorStop(0, css(env.top)); g.addColorStop(0.6, css(env.mid)); g.addColorStop(1, css(env.bot));
   x.fillStyle = g; x.fillRect(0, 0, 2, 256);
-  if (!themeZones()) {
-    x.fillStyle = 'rgba(120,210,255,.22)';
-    for (let y = 168; y < 256; y += 10) { const w = 0.15 + ((y * 17) % 7) / 10; x.fillRect(0, y, 2, w); }
-  }
   if (rentOn()) {
     x.fillStyle = 'rgba(35,12,5,.92)';
     for (let i = 0; i < 34; i++) { const bw = 18 + i % 5 * 7, bh = 16 + (i * 17 % 55), bx = (i * 71) % 1024; x.fillRect(bx, 256 - bh, bw, bh); }
@@ -8950,7 +9510,9 @@ function walker(e, dt, t, pre) {
   }
   if (active && (e.variant === 'gunner' || e.variant === 'alien' || e.variant === 'collector' || e.variant === 'crthead' || e.variant === 'popstar' || e.bossRole === 'crthead' || e.bossRole === 'popstar' || e.variant === 'shield' || e.bossRole === 'gunner' || e.bossRole === 'collector' || e.bossRole === 'shield' || ((e.variant === 'charger' || e.variant === 'bailiff') && e.charge <= 0) || ((e.bossRole === 'charger' || e.bossRole === 'bailiff') && e.charge <= 0))) e.mesh.rotation.y = Math.atan2(dxp, dzp);
   else if (moving) e.mesh.rotation.y = Math.atan2(dx, dz);
-  e.mesh.position.set(e.x, e.y + (e.variant === 'frog' || e.variant === 'kaomoji' || e.variant === 'pixelghost' ? (e.hopY || 0) : moving ? Math.abs(Math.sin(t * 9)) * 0.08 : 0), e.z);
+  const bob = e.variant === 'frog' || e.variant === 'kaomoji' || e.variant === 'pixelghost' || e.variant === 'sporeling'
+    ? (e.hopY || 0) : e.variant === 'cryptGhost' || e.variant === 'prismWraith' ? 0.25 + Math.sin(t * 2.4 + e.ph) * 0.18 : moving ? Math.abs(Math.sin(t * 9)) * 0.08 : 0;
+  e.mesh.position.set(e.x, e.y + bob, e.z);
   if (e.variant === 'glitchling') {
     const gt = (t * 14) | 0;
     if (gt !== e.gt) { e.gt = gt; for (const c of e.mesh.children) if (c.userData.gl) { c.position.x += (Math.random() - 0.5) * 0.5; c.position.y = Math.max(0.2, c.position.y + (Math.random() - 0.5) * 0.6); c.position.x *= 0.8; c.rotation.set(Math.random() * 3, Math.random() * 3, 0); } e.mesh.visible = Math.random() > 0.08; }
@@ -9011,8 +9573,7 @@ function updateItems(dt) {
       continue;
     }
     if (it.taken || (it.type === 'dataCore' && !it.mesh.visible)) continue;
-    { const q = it.mesh.position; if (Math.abs(q.x - pos.x) > 90 || Math.abs(q.z - pos.z) > 90) continue; }      // far pickups neither spin nor get tested
-    it.mesh.rotation.y += dt * 3;
+    { const q = it.mesh.position; if (Math.abs(q.x - pos.x) > 90 || Math.abs(q.z - pos.z) > 90) continue; }      // far pickups neither spin nor get tested      it.mesh.rotation.y += dt * 3;
     if (state !== 'play') continue;
     const m = it.mesh.position;
     if (Math.hypot(pos.x - m.x, pos.y + 0.9 - m.y, pos.z - m.z) < 2.2) {
@@ -9022,6 +9583,15 @@ function updateItems(dt) {
         if (!activeMission || activeMission.id !== it.missionId || activeMission.state !== 'active') continue;
         it.taken = true; it.mesh.visible = false; sfx.coin(); toast('DATA CORE SECURED — RETURN TO BASE', 1700);
         missionSetReady(activeMission);
+        continue;
+      }
+      if (it.type === 'dungeonSecret') {
+        it.taken = true; it.mesh.removeFromParent();
+        if (it.secret) it.secret.found = true;
+        score += 500; grantAvailableAmmo();
+        if (health < MAXHP) health++;
+        sfx.coin(); shockRing({ x: m.x, y: m.y + 1.5, z: m.z }, 7, activeZ && activeZ.plate || 0xffd48a);
+        toast(`SECRET FOUND: ${it.secretLabel} · +500 SCORE`, 2600);
         continue;
       }
       if (it.type === 'ore') {                                        // MINECRAFT: walk into the cube to chip it
@@ -11827,11 +12397,20 @@ window.__ng.linkGraph = () => linkGraphFn ? linkGraphFn() : null;  window.__ng.c
   // MID-BAND dev hooks: mids() state, midsGo(site) teleport, midsKill(site) kill one unit of that site's roster (guard first), midsSteps(site) force the wave pipeline
   window.__ng.mids = () => !commons || !commons.mid ? null : ({ sites: ['nest', 'house', 'shroom'].map(k => { const s = commons.mid[k]; const boss = s && enemies.find(u => !u.dead && u.midBoss === MID_SITE_KEY[k]); const guards = s ? enemies.filter(u => !u.dead && u.midGuard === k).length : 0; return s ? { site: k, woken: !!s.woken, waves: s.waves, guards, bossSpawned: !!s.bossSpawned, bossHp: boss ? +boss.hp.toFixed(1) : null, bossDead: !!s.bossDead } : { site: k, missing: true }; }), mawPurged: !!(commons.mid.nest && commons.mid.nest.bossDead), bonusHearts, maxhp: MAXHP, owned: weaponOwned.slice(), midWins: { ...midWins } });
   window.__ng.midsGo = site => { const k = { nest: 'nest', house: 'house', shroom: 'shroom' }[site]; const s = commons && commons.mid && commons.mid[k]; if (!s) return false; pos.set(s.x, s.y + 2.2, s.z); vel.set(0, 0, 0); onGround = false; return true; };
-  window.__ng.midsKill = site => { const s = commons && commons.mid && commons.mid[site]; if (!s || s.bossDead) return 'nosite'; const key = MID_SITE_KEY[site]; const near = u => Math.hypot(u.x - s.x, u.z - s.z) < 120; const order = site === 'nest' ? [u => !u.dead && u.midBoss === 'maw' && near(u), u => !u.dead && u.midGuard === 'nest' && near(u)] : [u => !u.dead && u.midGuard === site && near(u), u => !u.dead && u.midBoss === key && near(u)]; for (const p of order) { const u = enemies.find(p); if (u) { damageEnemy(u, 99999, 'pound'); return 'killed'; } } return 'noTarget'; };
+  window.__ng.midsKill = site => { const s = commons && commons.mid && commons.mid[site]; if (!s || s.bossDead) return 'nosite'; const key = MID_SITE_KEY[site]; const near = u => Math.hypot(u.x - s.x, u.z - s.z) < 120 || (s.lead || []).some(q => { const qx = Number.isFinite(q.cx) ? q.cx : q.x, qz = Number.isFinite(q.cz) ? q.cz : q.z; return Number.isFinite(qx) && Math.hypot(u.x - qx, u.z - qz) < 26; });   // site field + the outrider lead-in platforms (they sit up to ~240 m out on the causeway)
+  const order = site === 'nest' ? [u => !u.dead && u.midBoss === 'maw' && near(u), u => !u.dead && u.midGuard === 'nest' && near(u)] : [u => !u.dead && u.midGuard === site && near(u), u => !u.dead && u.midBoss === key && near(u)]; for (const p of order) { const u = enemies.find(p); if (u) { damageEnemy(u, 99999, 'pound'); return 'killed'; } } return 'noTarget'; };
   window.__ng.midsStaff = () => ({ mawCount: enemies.filter(e => e.variant === 'maw' && !e.dead).length });
+  window.__ng.midRespawn = () => { if (state === 'dead') respawn(); };   // dev/tests: undo the maw-mauled 'dead' state so the site tick resumes
+  window.__ng.midLead = () => !commons || !commons.mid ? null : Object.fromEntries(['nest', 'house', 'shroom'].map(k => [k, commons.mid[k] && commons.mid[k].lead ? commons.mid[k].lead.length : 0]));
   window.__ng.midsStep = site => { const s = commons && commons.mid && commons.mid[site]; if (!s) return false; s.waveCd = 0; s.woken = true; return true; };   // dev/test: wake the site and let its summoner keep up, but leave guardCd alone (zeroing it re-spawns a guard the same tick the boss needs an empty field)
   window.__ng.midsDbg = () => ({ state, paused: !!paused, inInterior: !!inInterior, pos: [+pos.x.toFixed(1), +pos.y.toFixed(1), +pos.z.toFixed(1)], velY: +vel.y.toFixed(2), mid: commons && commons.mid ? Object.fromEntries(['nest', 'house', 'shroom'].map(k => { const s = commons.mid[k]; return [k, s ? { x: Math.round(s.x), z: Math.round(s.z), y: Math.round(s.y), woken: !!s.woken, guardCd: +(+s.guardCd).toFixed(2), waves: s.waves, bossSpawned: !!s.bossSpawned, bossDead: !!s.bossDead } : null]; })) : null, guards: enemies.filter(u => !u.dead && u.midGuard).map(u => `${u.midGuard}@${Math.round(u.x)},${Math.round(u.y)},${Math.round(u.z)}`) });
   window.__ng.midsGates = () => ({ state, paused: !!paused, inInterior: !!inInterior, netOn: net.on, host: net.host, pos: { x: +pos.x.toFixed(1), y: +pos.y.toFixed(1), z: +pos.z.toFixed(1) }, sites: commons && commons.mid ? Object.fromEntries(['nest', 'house', 'shroom'].map(k => { const s = commons.mid[k]; return [k, s ? { x: +s.x.toFixed(1), y: +s.y.toFixed(1), z: +s.z.toFixed(1), gen: s.gen, woken: !!s.woken, waves: s.waves, guardCd: +s.guardCd.toFixed(2), bossSpawned: !!s.bossSpawned, enemies: enemies.filter(u => !u.dead && u.midGuard === k).length } : null]; })) : null });
+  window.__ng.midRoute = site => {
+    const s = commons && commons.mid && commons.mid[site]; if (!s) return null;
+    const surface = q => q && { x: q.x, y: q.y, z: q.z, hw: q.hw, hd: q.hd };
+    const route = s.route && { entry: surface(s.route.entry), ground: surface(s.route.ground), floor1: s.route.floor1.map(surface), floor2: s.route.floor2.map(surface), spire: surface(s.route.spire), stairs: s.route.stairs.map(run => run.map(surface)) };
+    return { site: { x: s.x, y: s.y, z: s.z }, route, deck: surface(s.deck), shaft: (s.shaft || []).map(surface), bot: surface(s.bot), interior: s.interior || null, rooms: (s.rooms || []).map(({ name, x, y, z, floor }) => ({ name, x, y, z, floor })), hazards: (s.hazards || []).map(({ name, x, y, z, radius, cooldown }) => ({ name, x, y, z, radius, cooldown })), secrets: (s.secrets || []).map(({ name, x, y, z, found }) => ({ name, x, y, z, found })) };
+  };
   window.__ng.enterPlay = () => { if (state !== 'play') LEVELS[0].startFn(); return state; };
   window.__ng.midsRoster = () => commons && commons.mid ? Object.fromEntries(['nest', 'house', 'shroom'].map(k => { const s = commons.mid[k]; return [k, s ? enemies.filter(u => !u.dead && (u.midGuard === k || u.midBoss === MID_SITE_KEY[k])).map(u => ({ x: +u.x.toFixed(0), y: +u.y.toFixed(0), z: +u.z.toFixed(0), d: +Math.hypot(u.x - s.x, u.z - s.z).toFixed(0), g: u.midGuard || null, b: u.midBoss || null, hp: u.hp, v: u.variant || u.kind || '?' })) : null]; })) : null;
   window.__ng.probeHitPeer = () => {                             // dev: run hitPeer with a stubbed socket; returns 'sent' or 'blocked'
