@@ -2061,7 +2061,7 @@ function* buildPlanetLegGen(i) {
   const R = missionRandom(((levelSeed | 0) ^ (0x9100 + i * 977)) | 0), LANES = 3, PER = spec.per, r0 = 60, rise = 0.34, SEGS = 4;
   const segZones = spec.biomes.map(nm => ({ ...ZONES.find(z => z.name === nm), sky: 0.85 }));
   const zoneAt = idx => segZones[Math.min(SEGS - 1, Math.floor(idx / PER * SEGS))];
-  const cap = Math.ceil(LANES * PER / SEGS * 1.25) + 60, all = [];
+  const cap = Math.ceil(LANES * PER / SEGS * 1.9) + 80, all = [];
   const amp = [24, 32, 38], freq = [0.0105, 0.0085, 0.0125], ph = [0.4 + i, 2.3, 4.4 + i * 0.7];
   const env2 = t => Math.min(1, t / 0.04, (1 - t) / 0.06);
   const redM = new THREE.MeshBasicMaterial({ color: 0xff1414, toneMapped: false }), blackM = lam(0x07030a), bodyM = lam(0x232a40);
@@ -2106,6 +2106,15 @@ function* buildPlanetLegGen(i) {
         makeSpecial(sl, kind, { ph: R() * 6.28, period: kind === 'piston' ? 2.4 + R() * 1.4 : 3.6 + R() * 2.4, amp: kind === 'orbit' ? 5 + R() * 3 : kind === 'piston' ? 3.5 + R() * 2.5 : 4.5 + R() * 3, lift: R() < 0.3, px, pz });
       } else sl = addStatic(x, y, z, hw, hd, shape, seg);
       all.push({ x, y, z, L, n });
+      // UNDER-TIER: every other static step drops a stepping stone 20-30 m below the lane (shared with the moon route's weave)
+      if (!kind && n % 2 === 0) {
+        const y2 = y - 20 - R() * 10, spot2 = freeSpot(x + px * (R() - 0.5) * 14, z + pz * (R() - 0.5) * 14, y2);
+        if (spot2) {
+          addStatic(spot2[0], y2, spot2[1], 1.7 + R() * 1.1, 1.7 + R() * 1.1, R() < 0.2 ? 'disc' : 'box', seg);
+          all.push({ x: spot2[0], y: y2, z: spot2[1], L: -1, n });
+          if (n % 50 === 10) coin(spot2[0], y2 + 1.2, spot2[1], Z);
+        }
+      }
       if (n % 5 === 2) coin(x, y + 1.2, z, Z);
       if (n % 70 === 35) { heart(x + 1, y + 1.3, z); ammoBox(x - 1.5, y + 0.8, z); }
       if (n % 36 === 18 && L === 1) addCheckpoint(x, y, z, Z);
@@ -2318,7 +2327,7 @@ function createTIEfighter() {
   // static platform batches: [shape][colour] -> instanced body + plate
   const bodyMat = lam(0x232a40), plateCols = [0x7dff4a, 0xff3fc8, 0x36f6ff], plateMats = plateCols.map(c => new THREE.MeshBasicMaterial({ color: c }));
   const shapes = { box: new THREE.BoxGeometry(1, 1, 1), disc: unitDiscGeo };
-  const need = { box: LANES * PER, disc: LANES * PER };
+  const need = { box: Math.ceil(LANES * PER * 1.6), disc: Math.ceil(LANES * PER * 1.6) };   // bulked for the under tier
   const batches = {};
   for (const sh of ['box', 'disc']) {
     batches[sh] = { body: new THREE.InstancedMesh(shapes[sh], bodyMat, need[sh]), plate: plateMats.map(m => new THREE.InstancedMesh(shapes[sh], m, need[sh])), nb: 0, np: [0, 0, 0] };
@@ -2359,6 +2368,15 @@ function createTIEfighter() {
       } else sl = addStatic(x, y, z, hw, hd, shape, (L + i) % 3);
       all.push({ x, y, z, L, i });
       if (!prev) { /* first of the lane */ }
+      // UNDER-TIER: every other static step drops a stepping stone 20-30 m below the lane — the open sky under the weave gets real footing
+      if (!kind && i % 2 === 0) {
+        const y2 = y - 20 - R() * 10, spot2 = freeSpot(x + px * (R() - 0.5) * 14, z + pz * (R() - 0.5) * 14, y2);
+        if (spot2) {
+          const su2 = addStatic(spot2[0], y2, spot2[1], 1.7 + R() * 1.1, 1.7 + R() * 1.1, R() < 0.2 ? 'disc' : 'box', (L + i * 3) % 3);
+          all.push({ x: spot2[0], y: y2, z: spot2[1], L: -1, i });
+          if (i % 50 === 10) coin(spot2[0], y2 + 1.2, spot2[1], Z);
+        }
+      }
       if (i % 5 === 2) coin(x, y + 1.2, z, Z);
       if (i % 90 === 45) { heart(x + 1, y + 1.3, z); ammoBox(x - 1.5, y + 0.8, z); }
       if (i % 40 === 20 && L === 1) addCheckpoint(x, y, z, Z);
@@ -6818,8 +6836,9 @@ function hitTarget(sol) {
 const growers = []; let growCd = 0;
 function spontaneousArena(sol, force = false) {
   if (sol.grown || sol.sp || sol.grp || sol.moon || sol.arena || sol.checkpoint || sol.bounce || sol.ground || sol.egg || sol.road || sol.bossArena || sol.targetR !== undefined || sol.cx === undefined) return;
-  if (!force && (growCd > 0 || Math.random() > 0.12 || spaceK(pos.y) > 0.3 || sol.hw > 12)) return;
-  sol.grown = true; growCd = 12;
+  const inC = !force && inCommons(pos.x, pos.y, pos.z);   // the commons loves these: strong boost to ambush odds there, small cooldown
+  if (!force && (growCd > 0 || Math.random() > (inC ? 0.45 : 0.12) || spaceK(pos.y) > 0.3 || sol.hw > 12)) return;
+  sol.grown = true; growCd = inC ? 6 : 12;
   const top = sol.maxy, cx = sol.cx, cz = sol.cz, hw0 = sol.hw, hd0 = sol.hd, hwT = Math.max(hw0 + 8, 15), hdT = Math.max(hd0 + 8, 15);
   const ext = addSolid(cx - hw0, cx + hw0, top - 1.2, top, cz - hd0, cz + hd0); Object.assign(ext, { cx, cz, top, hw: hw0, hd: hd0, zone: sol.zone, grown: true });
   const g = { ext, cx, cz, top, hw0, hd0, hwT, hdT, t: 0, spawned: false, foes: [], done: false };
@@ -11424,6 +11443,17 @@ window.__ng.linkGraph = () => linkGraphFn ? linkGraphFn() : null;  window.__ng.c
   window.__ng.midsGates = () => ({ state, paused: !!paused, inInterior: !!inInterior, netOn: net.on, host: net.host, pos: { x: +pos.x.toFixed(1), y: +pos.y.toFixed(1), z: +pos.z.toFixed(1) }, sites: commons && commons.mid ? Object.fromEntries(['nest', 'house', 'shroom'].map(k => { const s = commons.mid[k]; return [k, s ? { x: +s.x.toFixed(1), y: +s.y.toFixed(1), z: +s.z.toFixed(1), gen: s.gen, woken: !!s.woken, waves: s.waves, guardCd: +s.guardCd.toFixed(2), bossSpawned: !!s.bossSpawned, enemies: enemies.filter(u => !u.dead && u.midGuard === k).length } : null]; })) : null });
   window.__ng.enterPlay = () => { if (state !== 'play') LEVELS[0].startFn(); return state; };
   window.__ng.midsRoster = () => commons && commons.mid ? Object.fromEntries(['nest', 'house', 'shroom'].map(k => { const s = commons.mid[k]; return [k, s ? enemies.filter(u => !u.dead && (u.midGuard === k || u.midBoss === MID_SITE_KEY[k])).map(u => ({ x: +u.x.toFixed(0), y: +u.y.toFixed(0), z: +u.z.toFixed(0), d: +Math.hypot(u.x - s.x, u.z - s.z).toFixed(0), g: u.midGuard || null, b: u.midBoss || null, hp: u.hp, v: u.variant || u.kind || '?' })) : null]; })) : null;
+  window.__ng.midsTrace = site => new Promise(res => {          // dev: force guardCd=0 and sample it live for 1.2 s to see who owns the cooldown
+    const s = commons && commons.mid && commons.mid[site];
+    if (!s) return res('nosite');
+    s.guardCd = 0;
+    const out = ['write gen' + s.gen];
+    const t0 = performance.now();
+    const id = setInterval(() => {
+      out.push((performance.now() - t0).toFixed(0) + 'ms cd' + s.guardCd.toFixed(2) + ' w' + s.waves + ' e' + enemies.filter(u => !u.dead && u.midGuard === site).length);
+      if (performance.now() - t0 > 1200) { clearInterval(id); res(out.join(' | ')); }
+    }, 150);
+  });
 window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.plateInfo = () => platforms.slice(0, 3).map(p => ({ top: p.top, y: p.plate && p.plate.position.y, vis: p.plate && p.plate.visible, col: p.plate && p.plate.material.color.getHex(), em: p.plate && p.plate.material.emissive.getHex(), ei: p.plate && p.plate.material.emissiveIntensity, po: p.plate && p.plate.material.polygonOffset, par: p.plate && p.plate.parent && p.plate.parent.type, h: p.plate && p.plate.geometry.parameters.height })); window.__ng.towerWindows = () => buildingHubs.flatMap(h => h.windows || []).map(w => ({ x: w.x, y: w.y, z: w.z, nx: w.nx, nz: w.nz })); window.__ng.netState = () => ({ on: net.on, room: net.room, peers: net.peers.size, slot: net.slot }); window.__ng.pvpShot = () => { let r = 'nopeer'; eachPeer(p => { const o = new THREE.Vector3(pos.x, pos.y + 1.4, pos.z), d = new THREE.Vector3(p.pos.x - pos.x, p.pos.y + 1 - o.y, p.pos.z - pos.z).normalize(), h = castRay(o, d, 60); r = (h.peer ? 'hit' : 'miss') + JSON.stringify({ me: [pos.x, pos.y, pos.z].map(v => +v.toFixed(1)), peer: [p.pos.x, p.pos.y, p.pos.z].map(v => +v.toFixed(1)), t: +h.t.toFixed(2), wall: !!h.hit, alive: p.alive }); if (h.peer) hitPeer(h.peer, 1); }); return r; }; window.__ng.health = () => health; window.__ng.setCull = r => { CULL_R = r; };
 window.__ng.lvl = () => lvl;
 window.__ng.cull = () => ({ tracked: cull.list.length, hidden: cull.hidden, children: lvl.children.length, solids: solids.length, platforms: platforms.length, specials: specials.length, enemies: enemies.length, items: items.length, props: props.length });

@@ -23,11 +23,14 @@ const SRC = require('path').resolve(__dirname, '..', 'index.html');
   console.log('midsGo(nest):', where);
   await w(700);
 
-  for (let pass = 1; pass <= 6; pass++) {
-    if (pass % 2 === 1) { console.log('midsStep ->', await evl(() => window.__ng.midsStep('nest')), '| midsKill ->', await evl(() => window.__ng.midsKill('nest'))); }
-    await w(3000);
+  for (let pass = 1; pass <= 10; pass++) {
+    const st = (await gates()).sites.nest;
+    if (st.waves >= 3) {
+      if (!st.bossSpawned) console.log('pass' + pass + ': waves>=3 -> kill (' + (await evl(() => window.__ng.midsKill('nest'))) + '):', JSON.stringify(await evl(() => window.__ng.midsGates().sites.nest)));
+    } else if (pass % 2 === 1) console.log('pass' + pass + ': step+kill (' + (await evl(() => window.__ng.midsStep('nest')), await evl(() => window.__ng.midsKill('nest'))) + ');', JSON.stringify(st));
+    await w(2500);
     const gs = await gates();
-    console.log('t+' + pass * 3 + 's nest gates:', JSON.stringify(gs.sites.nest), 'roster:', JSON.stringify(await evl(() => window.__ng.midsRoster().nest)), 'me:', JSON.stringify(gs.pos), 'interior:', gs.inInterior, 'paused:', gs.paused, 'state:', gs.state);
+    console.log('pass' + pass + ' end:', JSON.stringify(gs.sites.nest), 'roster n=' + (await evl(() => window.__ng.midsRoster().nest)).length, 'state:', gs.state);
   }
   await browser.close();
 })().catch(e => { console.error('PROBE FAILED:', e.message); process.exit(1); });
