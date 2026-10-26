@@ -17,8 +17,8 @@ city and work your way down (or up) through floating platforms, rooftops, arenas
 - **Weapons (1–7):** Blade, Laser, Scatter, Plasma, Railgun, Beam, Arc. Empty weapons auto-switch to one with ammo.
 - **Beyond the sky:** a skyway to the Moon, then the **Alien Void** — ~900 mixed platforms (moving, orbiting, crumbling, thin beams),
   drifting space cities underneath, alien troops and UFOs — leading to Mars.
-- **Warp gates:** hidden until you discover them by landing on their platform.
-- **Co-op:** up to 6 players. On the public site, MULTIPLAYER -> HOST A GAME works out of the box through the online Cloudflare relay (just share the invite link). For LAN / Tailscale, run the small Node relay in `server/`.
+- **Warp gates:** hidden until you discover them by landing on their platform.- **Co-op:** up to 6 players. On the public site, MULTIPLAYER -> HOST A GAME works out of the box through the online Cloudflare relay (just share the invite link). For LAN / Tailscale, run the small Node relay in `server/`.
+- **Room modes (host picks):** on the host screen toggle **COOP** (teammates can never hurt each other, even with bullets/beams) or **PVP** (classic free-for-all friendly fire). The choice is room-wide: it syncs to everyone already connected and applies to late joiners. Toggle with the button, **C**, or **RB**.
 
 ## Controls
 
@@ -55,6 +55,7 @@ Works in any browser with a controller connected — no mapping app needed.
 | A | confirm / start (also ENTER) — starts the selected level from level select |
 | B / Back | back (main ← level select/multiplayer, multiplayer ← host/join) — also un-pause during play |
 | X / Y (multiplayer screen) | open host / join directly (same as the buttons) — room codes still need the keyboard |
+| C / RB (host screen) | toggle the room mode PVP <-> COOP |
 | Start | pause (ENTER on the title screen) |
 | `[` / `]` on the keyboard | look-sensitivity down / up (30%–300%) |
 | `I` on the keyboard | invert right-stick Y on/off |
