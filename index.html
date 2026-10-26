@@ -393,7 +393,9 @@ const themeZones = () => rentOn() ? RENT_ZONES : nosOn() ? NOS_ZONES : gutOn() ?
 const setLevelDefById = id => { levelDef = LEVEL_DEFS[id] || LEVEL_DEFS.descent; };      // net: adopt the host's selected level definition
 const TH = 16;           // tower half-width
 const RAD = 28;           // spiral radius
-const MAXHP = 5;
+let MAXHP = 5, bonusHearts = 0;              // extra slots are earned by securing THE COMMONS (capped below)
+const MAX_BONUS_HEARTS = 3;
+let commons = null;                          // the shared launch-pad ring + purge contract, rebuilt with each level
 const GRAV = 30, TERM = 50;
 const JUMP = 11.5, JUMP2 = 10, RUN = 9;
 const PH = 1.8, PW = 0.45;            // player height / half-width
@@ -2880,6 +2882,182 @@ function buildSkyway(hubs) {
                       : { ux, uz, x: ux * moonR, y: topY + 3, z: uz * moonR, col: [ux * colR, baseY, uz * colR], top: topY, loop };   // mirrors the old mx/y pairs without depending on the block-scoped consts
   return keepOut;
 }
+// ---------- THE COMMONS: the shared hub between every home tower and the moon ----------
+// A horizontal grind-ring around the launch pad, four outposts with salvage spurs, two named descent ledges and a purge
+// contract: clear enough hostiles inside the commons and the city grants a permanent extra heart slot for this run.
+// It is built AFTER the universe links so it never walls off a home's approach chain (any ring stone that lands on an
+// existing route is simply skipped, which leaves a natural opening for that route).
+function grantHeartSlot() {
+  if (bonusHearts >= MAX_BONUS_HEARTS) { health = MAXHP; return false; }
+  bonusHearts++; MAXHP++; health = MAXHP; return true;
+}
+function inCommons(x, y, z) {
+  if (!commons) return false;
+  return y >= commons.y - 90 && y <= commons.y + 125 && Math.hypot(x - commons.x, z - commons.z) < commons.r;
+}
+function commonsKill(e) {
+  if (!commons || commons.done || e.commonsCounted) return;
+  if (!inCommons(e.x, e.y, e.z)) return;
+  e.commonsCounted = true; commons.kills++;
+  if (commons.kills >= commons.quota) completeCommons();
+  else if (commons.kills % 5 === 0) toast(`COMMONS PURGE ${commons.kills}/${commons.quota}`, 1200);
+}
+function completeCommons() {
+  if (!commons || commons.done) return;
+  commons.done = true;
+  const got = grantHeartSlot();
+  score += 1500;
+  if (commons.beacon) { commons.beacon.material.color.setHex(0xffd23a); commons.beacon.material.opacity = 0.5; }
+  toast(got ? `THE COMMONS SECURED — +1 HEART SLOT (${MAXHP} TOTAL)` : 'THE COMMONS SECURED — MAX HEART SLOTS', 4200);
+  shockRing({ x: commons.x, y: commons.y + 2, z: commons.z }, 70, 0x7dff4a);
+  shake = Math.max(shake, 0.6);
+  try { sfx.bullseye(6); } catch (_) { try { sfx.kill(); } catch (__) {} }
+  const x = commons.x + 6, z = commons.z - 6, y = commons.y;
+  heart(x, y + 1.2, z); ammoBox(x + 2.5, y + 0.8, z + 2.5);
+  for (let i = 0; i < 8; i++) coin(x + Math.cos(i * 0.785) * 4, y + 1.2, z + Math.sin(i * 0.785) * 4, null);
+}
+function spawnCommonsWave(n) {
+  if (!commons) return;
+  const pads = commons.outposts.concat(commons.islets, commons.ledges).filter(p => p && p.slab);
+  if (!pads.length) return;
+  for (let i = 0; i < n; i++) {
+    const p = pads[(Math.random() * pads.length) | 0];
+    const a = Math.random() * 6.283, r = Math.random() * Math.max(1, (p.hw || 4) - 2.2);
+    if (i % 3 === 2) {                                   // air cover: every third hostile is a watcher eye over the ring
+      try { const e = makeDrone(p.x + Math.cos(a) * r, p.y + 6 + Math.random() * 3, p.z + Math.sin(a) * r, 'drone', null); e.commonsGuard = true; continue; } catch (_) {}
+    }
+    try { const e = spawnBiomeEnemy(p.x + Math.cos(a) * r, p.y, p.z + Math.sin(a) * r, p.slab, null, 0.28, 1); if (e) e.commonsGuard = true; } catch (_) {}
+  }
+}
+function commonsTick(dt) {
+  if (!commons || state !== 'play' || paused || inInterior || commons.done) return;
+  if (net.on && !net.host) return;
+  const near = Math.hypot(pos.x - commons.x, pos.z - commons.z) < 170 && Math.abs(pos.y - commons.y) < 95;
+  if (!commons.announced && near) {
+    commons.announced = true;
+    toast(`THE COMMONS: PURGE ${commons.quota} HOSTILES AROUND THE LAUNCH RING FOR +1 HEART SLOT`, 4200);
+  }
+  commons.spawnCd -= dt;
+  if (!near || commons.spawnCd > 0) return;
+  commons.spawnCd = 5.5;
+  // Count only the guards this ring posted. Counting EVERY enemy inside the commons volume meant the dozens of
+  // city hostiles already on the approach platforms satisfied the cap before the first wave, so the garrison never woke.
+  let alive = 0; for (const e of enemies) if (!e.dead && e.commonsGuard && inCommons(e.x, e.y, e.z)) alive++;
+  const cap = 12 + Math.min(8, (level - 1) * 2);          // the ring gets busier as the run climbs
+  if (alive >= cap) return;
+  const first = !commons.garrisoned; commons.garrisoned = true;
+  spawnCommonsWave(first ? 6 : 3);
+  if (first) toast('THE COMMONS GARRISON IS AWAKE', 1600);
+}
+function buildCommons(launch, ux, uz, px, pz, homes) {
+  commons = null;
+  if (!launch) return;
+  const CX = launch.x, CZ = launch.z, CY = launch.top + 0.45, R = 64, N = 40, ringY = CY + 0.35;
+  const nodes = [], outposts = [], islets = [], ledges = [];
+  const gateA = (homes || []).map(h => Math.atan2(h.z - CZ, h.x - CX));
+  const outA = [Math.PI / 4, Math.PI * 3 / 4, Math.PI * 5 / 4, Math.PI * 7 / 4];
+  const ad = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+  const nearA = (a, list, w) => list.some(v => ad(a, v) < w);
+  for (let i = 0; i < N; i++) {
+    const a = i / N * Math.PI * 2;
+    const gate = nearA(a, gateA, 0.09), outpost = !gate && nearA(a, outA, 0.10);
+    const hw = gate ? 5.0 : outpost ? 5.6 : 3.5;
+    const x = CX + Math.cos(a) * R, z = CZ + Math.sin(a) * R, y = ringY + Math.sin(a * 3 + 0.7) * 1.05;
+    if (blocked(x, y, z, hw, hw)) continue;                   // an existing route owns this spot: keep the opening
+    const slab = addSlab(x, y, z, hw, hw, gate || outpost ? 2.4 : 1.8, null, true); slab.commons = true;
+    const n = { x, z, y, a, gate, outpost, hw, slab };
+    nodes.push(n); if (outpost) outposts.push(n);
+    if (gate) {                                              // six home gates: an arch and a grind line back to the pad
+      const gx = Math.cos(a), gz = Math.sin(a), tx = -gz, tz = gx, col = 0x7dff4a;
+      for (const sd of [-1, 1]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.45, 6, 0.45), lam(0x1a2236));
+        post.position.set(x + tx * sd * (hw - 0.7), y + 3, z + tz * sd * (hw - 0.7)); scene.add(post);
+        const tip = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), new THREE.MeshBasicMaterial({ color: col }));
+        tip.position.set(x + tx * sd * (hw - 0.7), y + 6.1, z + tz * sd * (hw - 0.7)); scene.add(tip);
+      }
+      const arch = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, hw * 2), new THREE.MeshBasicMaterial({ color: col }));
+      arch.position.set(x, y + 5.6, z); arch.rotation.y = Math.atan2(tx, tz); scene.add(arch);
+      addRail(CX + gx * 10, CZ + gz * 10, CY + 1.35, x, z, col, y + 1.35, false);
+      addDashPad(x - gx * 2.2, y, z - gz * 2.2, -gx, -gz);
+      const gl = makeLabel('HOME GATE'); gl.position.set(x, y + 8.2, z); gl.scale.set(7, 1.75, 1); scene.add(gl);
+    }
+  }
+  const ord = nodes.slice().sort((p, q) => p.a - q.a);       // the loop: rail across every gap, dash pads on alternating stones
+  for (let i = 0; i < ord.length; i++) {
+    const A = ord[i], B = ord[(i + 1) % ord.length], gap = Math.hypot(A.x - B.x, A.z - B.z);
+    if (gap > 3 && gap < 26) addRail(A.x, A.z, A.y + 1.35, B.x, B.z, i % 2 ? 0x36f6ff : 0x7dff4a, B.y + 1.35, false);
+    if (i % 3 === 0) { const dx = B.x - A.x, dz = B.z - A.z, d = Math.hypot(dx, dz) || 1; addDashPad(A.x, A.y, A.z, dx / d, dz / d); }
+  }
+  for (const o of outposts) {                                // outposts + salvage spurs: caches and a landing for the purge
+    const nx = Math.cos(o.a), nz = Math.sin(o.a), tx = -nz, tz = nx;
+    heart(o.x + tx * 3.2, o.y + 1.2, o.z + tz * 3.2);
+    ammoBox(o.x - tx * 3.2, o.y + 0.8, o.z - tz * 3.2);
+    for (let c = 0; c < 4; c++) coin(o.x + Math.cos(c * 1.57 + 0.4) * 4.2, o.y + 1.2, o.z + Math.sin(c * 1.57 + 0.4) * 4.2, null);
+    const lb = makeLabel('COMMONS OUTPOST'); lb.position.set(o.x, o.y + 6.2, o.z); lb.scale.set(9, 2.25, 1); scene.add(lb);
+    let prev = o;
+    for (let k = 1; k <= 3; k++) {
+      const rr = R + k * 13, x = CX + nx * rr, z = CZ + nz * rr, yy = o.y - k * 2.4 + Math.sin(k * 1.7) * 0.8;
+      if (blocked(x, yy, z, 4.2)) break;
+      const sl = addSlab(x, yy, z, 4.2, 4.2, 1.8, null, true); sl.commons = true;
+      addRail(prev.x, prev.z, prev.y + 1.35, x, z, 0xffd23a, yy + 1.35, false);
+      if (k === 1) addDashPad(prev.x, prev.y, prev.z, nx, nz);
+      prev = { x, z, y: yy, hw: 4.2, slab: sl };
+      if (k === 3) {
+        heart(x, yy + 1.2, z); ammoBox(x + 2.2, yy + 0.8, z - 2.2);
+        for (let c = 0; c < 5; c++) coin(x + Math.cos(c * 1.256) * 3.2, yy + 1.2, z + Math.sin(c * 1.256) * 3.2, null);
+        const lb2 = makeLabel('SALVAGE CACHE'); lb2.position.set(x, yy + 5.2, z); lb2.scale.set(8, 2, 1); scene.add(lb2);
+        islets.push({ x, z, y: yy, hw: 4.2, slab: sl });
+      }
+    }
+  }
+  // THE DESCENT SHELF: a stepped run down the skyway face to LEDGE 0 and LEDGE -1, with a trampoline home.
+  // This is the "spawn down to the first platforms" band the launch pad used to have nothing in.
+  const ma = Math.atan2(uz, ux);
+  let prev = nodes.slice().sort((p, q) => ad(p.a, ma) - ad(q.a, ma))[0];
+  if (prev) {
+    const nx = Math.cos(prev.a), nz = Math.sin(prev.a);
+    for (let k = 1; k <= 6; k++) {
+      const rr = R + k * 15, x = CX + nx * rr, z = CZ + nz * rr, yy = prev.y - 3.6;
+      const big = k === 4 || k === 6, hw = big ? 8.4 : 5.2;
+      if (blocked(x, yy, z, hw)) break;
+      const sl = addSlab(x, yy, z, hw, hw, big ? 2.6 : 2, null, true); sl.commons = true;
+      addRail(prev.x, prev.z, prev.y + 1.35, x, z, big ? 0xffd23a : 0xff8a3d, yy + 1.35, false);
+      addDashPad(prev.x, prev.y, prev.z, nx, nz);
+      if (big) {
+        const y = yy;
+        heart(x - 3, y + 1.2, z + 3); ammoBox(x + 3, y + 0.8, z - 3);
+        for (let c = 0; c < 6; c++) coin(x + Math.cos(c * 1.047) * 5.5, y + 1.2, z + Math.sin(c * 1.047) * 5.5, null);
+        const lb = makeLabel(k === 4 ? 'COMMONS · LEDGE 0' : 'COMMONS · LEDGE -1');
+        lb.position.set(x, y + 7, z); lb.scale.set(11, 2.75, 1); scene.add(lb);
+        ledges.push({ x, z, y, hw, slab: sl });
+        if (k === 6) {                                      // gold beacon + launch back to the ring
+          beacon(x, y + 1, z, 0xffd23a);
+          const bx = x + nx * 3.5, bz = z + nz * 3.5;
+          const bp = addSolid(bx - 2.5, bx + 2.5, y, y + 0.4, bz - 2.5, bz + 2.5); bp.bounce = true; bp.boost = Math.sqrt(2 * GRAV * 34);
+          const bm = new THREE.Mesh(new THREE.BoxGeometry(5, 0.4, 5), new THREE.MeshBasicMaterial({ color: 0xff3fc8 }));
+          bm.position.set(bx, y + 0.2, bz); scene.add(bm);
+          const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 34, 8), new THREE.MeshBasicMaterial({ color: 0xff3fc8, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false }));
+          beam.position.set(bx, y + 17, bz); scene.add(beam);
+        }
+      }
+      prev = { x, z, y: yy, hw, slab: sl };
+    }
+  }
+  // the contract board, the beacon, and the live state the HUD/combat code reads
+  commons = {
+    x: CX, z: CZ, y: CY, r: 195,
+    nodes, outposts, islets, ledges,
+    kills: 0, quota: 16 + level * 3, done: false, garrisoned: false, announced: false, spawnCd: 1.5,
+    beacon: null,
+  };
+  commons.beacon = beacon(CX + ux * 10, CY + 1, CZ + uz * 10, 0x7dff4a);
+  const padLbl = makeLabel('THE COMMONS'); padLbl.position.set(CX + ux * 10, CY + 15, CZ + uz * 10); padLbl.scale.set(13, 3.25, 1); scene.add(padLbl);
+  const board = new THREE.Group();
+  const post = new THREE.Mesh(new THREE.BoxGeometry(0.4, 3.2, 0.4), lam(0x1a2236)); post.position.y = 1.6; board.add(post);
+  const scr = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.1, 0.22), new THREE.MeshBasicMaterial({ color: 0x7dff4a })); scr.position.set(0, 2.8, 0.12); board.add(scr);
+  board.position.set(CX + px * 12, CY, CZ + pz * 12); board.rotation.y = Math.atan2(px, pz); scene.add(board);
+  const boardLbl = makeLabel('COMMONS CONTRACT'); boardLbl.position.set(CX + px * 12, CY + 4.8, CZ + pz * 12); boardLbl.scale.set(8, 2, 1); scene.add(boardLbl);
+}
 // A chain of floating platforms from hub A to hub B. Heights wander (level runs, climbs, drops) so the player goes UP as well as down,
 // and a chain may climb from a lower hub to a higher one. Chains leaving an arena stay LOCKED (ghost outlines) until its Guardian dies.
 // HIGHWAYS: a continuous, wide, neon-striped road between two hubs, built for the bike and buggy. Only for downhill links (roads can't climb).
@@ -3308,6 +3486,10 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     if (solids.length + reserved.length > before) made++;
   }
   buildUniverseLinks(hubs);                          // far bridges between the six universes + the shared skyway
+  if (moonInfo && !moonInfo.moonless) {              // THE COMMONS: a horizontal ring + contract around the launch pad
+    const launch = hubs.find(h => h.kind === 'launch');
+    if (launch) buildCommons(launch, moonInfo.ux, moonInfo.uz, -moonInfo.uz, moonInfo.ux, activeStartHubs());
+  }
   buildBranches(hubs);
   buildHubPortalLoop(hubs);
   spawnStreetRiders(hubs);                           // rider chase packs on rooftops
@@ -5365,6 +5547,7 @@ function buildLevel() {
   syncStartLayout(sixTowerLayout); checkpoint = { ...start };
   seed = 11 + level * 97 + (rentOn() ? 5003 : nosOn() ? 8009 : gutOn() ? 11003 : arenaOn() ? 13337 : 0); gutVeins = 0; levelSeed = seed;      // each level family gets its own layout seed; the default level's seed is unchanged
   arenaResetBuild();                                                            // THE ARENAS: clear chamber state before the body rebuilds it
+  commons = null;                                                               // THE COMMONS: rebuilt by buildNetwork for the default level
   rentDueT = rentPeriod() * 0.55; rentWave = 0;                          // the clock starts half-run: you have no grace period
   const sceneAdd = scene.add;
   scene.add = o => lvl.add(o);           // route this function's scene.add calls into the level group
@@ -6115,6 +6298,26 @@ let camYaw = -Math.PI / 2, camPitch = 0.45, shake = 0;
 const keys = {};
 let jumpPress = false, poundPress = false, atkPress = false;
 
+// ---------- gamepad (handhelds: Steam Deck / ROG Ally / Legion Go / controllers) ----------
+// Polled every frame. Sticks and buttons are translated into the SAME surfaces the keyboard and
+// mouse handlers use (the `keys` map, camYaw/camPitch, jumpPress/poundPress, atkPress/mouseHeld/aiming
+// and direct interact/weapon/pause calls), so gameplay code needs no per-system changes.
+const kbdKeys = {};                                        // what the PHYSICAL keyboard holds; gamepad ORs with it so real keys never get stomped
+const GP_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'Space', 'KeyQ'];
+let gpLast = 0, gpSeen = false;
+const gpPrev = {};                                         // previous frame's button state, for edge detection
+function gpDead(v, dz = 0.22) {
+  const a = Math.abs(v);
+  if (a <= dz) return 0;
+  return (v / a) * ((a - dz) / (1 - dz));                  // keep direction, rescale so full tilt = full speed
+}
+function gpBtn(gp, i, th = 0.5) { const b = gp.buttons[i]; return !!b && (b.pressed || b.value > th); }
+function gpEdge(gp, i) {
+  const v = gpBtn(gp, i), was = !!gpPrev['b' + i];
+  gpPrev['b' + i] = v;
+  return v && !was;
+}
+
 function showMsg(title, body, sub) {
   $('msg').innerHTML = title ? `<h1>${title}</h1><p>${body || ''}</p><p><b>${sub || ''}</b></p>` : '';
 }
@@ -6356,7 +6559,7 @@ addEventListener('keydown', e => {
     return;
   }
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
-  const fresh = !keys[e.code]; keys[e.code] = true;
+  const fresh = !keys[e.code]; keys[e.code] = true; kbdKeys[e.code] = true;
   if (!fresh) return;
   if (e.code === 'Escape') { if (guideDialogOpen) { closeGuideDialog(); return; } if (state === 'title') return menuKey(e); if (state !== 'title' && (!paused || performance.now() - pausedAt > 250)) setPaused(!paused); return; }
   if (e.code === 'F2') { e.preventDefault(); PERF.toggle(); return; }
@@ -6390,8 +6593,63 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyG') { goreOn = !goreOn; decalMesh.visible = goreOn; toast(goreOn ? 'Gore on' : 'Gore off', 900); }
   if (e.code === 'KeyH' && state !== 'title') { schizoOn = !schizoOn; document.body.classList.toggle('schizo', schizoOn); toast(schizoOn ? 'the voices are back' : 'silence', 1400); }
 });
-addEventListener('keyup', e => { keys[e.code] = false; });
-addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+addEventListener('keyup', e => { keys[e.code] = false; kbdKeys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; for (const k in kbdKeys) kbdKeys[k] = false; });
+
+function gamepadTick(nowMs) {
+  let gp = null;
+  try { const pads = navigator.getGamepads ? navigator.getGamepads() : []; for (const p of pads) if (p && p.connected) { gp = p; break; } } catch (_) {}
+  if (!gp) { for (const k of GP_KEYS) keys[k] = kbdKeys[k]; gpSeen = false; for (const k in gpPrev) gpPrev[k] = false; gpLast = nowMs; return; }
+  // Left stick -> movement keys (deadzoned); L3 (stick click) = sprint / vehicle boost.
+  // The gamepad OWNS these keys each frame: value = physical-keyboard-held (OR) stick-held. Nothing latches.
+  const ax = gp.axes || [];
+  const lx = gpDead(ax[0] || 0), ly = gpDead(ax[1] || 0);
+  const gpWant = {};
+  gpWant.KeyW = ly < 0; gpWant.KeyS = ly > 0;
+  gpWant.KeyA = lx < 0; gpWant.KeyD = lx > 0;
+  gpWant.ShiftLeft = gpBtn(gp, 10);      // L3 (stick click) = sprint / vehicle boost
+  gpWant.KeyQ = gpBtn(gp, 4);            // LB held = grapple reel (same as hold-Q)
+  gpWant.Space = gpBtn(gp, 0);           // held-A = glide too (held-Space is glide on keyboard)
+  for (const k of GP_KEYS) keys[k] = kbdKeys[k] || !!gpWant[k];
+  // Right stick -> camera (same clamps as the mouse handler; full tilt ~ 240 deg/s yaw).
+  const gdt = Math.min(Math.max((nowMs - gpLast) / 1000, 0), 0.05); gpLast = nowMs;
+  const playing = state === 'play' && !paused && !guideDialogOpen;
+  if (playing) {
+    const rx = gpDead(ax[2] || 0), ry = gpDead(ax[3] || 0);
+    if (rx || ry) {
+      camYaw -= rx * 4.2 * gdt;
+      camPitch = clamp(camPitch + ry * 2.4 * gdt, -0.15, 1.3);
+      fpPitch = clamp(fpPitch - ry * 2.4 * gdt, -1.45, 1.45);
+    }
+  }
+  if (!gpSeen) {
+    gpSeen = true;
+    toast('Gamepad: left stick move · right stick look · A jump · B ground pound · X use/interact · RT fire · LT aim · RB weapons · LB grapple · L3 sprint/boost · Y view · Start pause', 7000);
+  }
+  if (!playing) {
+    if (gpEdge(gp, 9)) {                                   // Start button: menus
+      if (state === 'title') menuKey({ code: 'Enter' });
+      else if (!guideDialogOpen && (!paused || performance.now() - pausedAt > 250)) setPaused(!paused);
+    }
+    mouseHeld = false; aiming = false; gpPrev.rt = false;  // don't carry a held trigger through a pause
+    return;
+  }
+  // RT fire (held) / LT aim (held)
+  if (gpBtn(gp, 7, 0.1)) { if (!gpPrev.rt) atkPress = true; gpPrev.rt = true; mouseHeld = true; } else { gpPrev.rt = false; mouseHeld = false; }
+  aiming = gpBtn(gp, 6);
+  if (gpEdge(gp, 0)) { jumpPress = true; if (grapple.on) grapple.cutReq = true; }        // A = jump / double-jump / glide
+  if (gpEdge(gp, 1)) poundPress = true;                                                 // B = ground pound
+  if (gpEdge(gp, 2)) {                                                                  // X = interact (KeyE semantics)
+    eUsedProp = false;
+    if (warp.near) { eUsedProp = true; warpGo(); }
+    else if (hintNpc && !hintProp && !onVehicle) { eUsedProp = true; openGuideDialog(); }
+    else if (hintProp || onVehicle) { eUsedProp = true; useProp(); }
+    else if (hotbarSel === 1) placeBlock();
+  }
+  if (gpEdge(gp, 3)) { fpv = !fpv; toast(fpv ? 'First-person view' : 'Third-person view', 900); }   // Y = view
+  if (gpEdge(gp, 5)) cycleWeapon(1);                                                    // RB = next weapon
+  if (gpEdge(gp, 4) && !(warp.near && keys.KeyQ)) { if (warp.near) warpCycle(); else grappleFire(); }  // LB tap = grapple (warp menu wins, like Q)
+}
 // Camera look: works with pointer lock AND as a delta fallback when the lock fails
 // (fullscreen transitions, Esc, browser rate-limiting...). movementX/Y when locked,
 // clientX/Y deltas when unlocked — so the camera ALWAYS turns when the mouse turns.
@@ -6483,7 +6741,7 @@ function damageEnemy(e, dmg, kind = 'hit') {
   if (!tick) burst(new THREE.Vector3(e.x, e.y + e.h / 2, e.z), 0xffe08a, 4);
   bloodBurst(new THREE.Vector3(e.x, e.y + e.h / 2, e.z), tick ? 3 : 26, 1.1); if (!tick || Math.random() < 0.2) splatter(e.x, e.y + 0.5, e.z, 3, 1, 0.5);
   if (e.hp <= 0) {
-    e.dead = true; if (kind !== 'net') missionEnemyKilled(e); e.mesh.removeFromParent(); if (e.warn) e.warn.visible = false;   // a guest's hit never advances the host's private contract
+    e.dead = true; if (kind !== 'net') missionEnemyKilled(e); if (!net.on || net.host) commonsKill(e); e.mesh.removeFromParent(); if (e.warn) e.warn.visible = false;   // a guest's hit never advances the host's private contract
     if (net.on && net.host) netSend({ t: 'kill', i: enemies.indexOf(e) });
     spawnOreVein(e.x, e.y, e.z, Math.random() < 0.3 ? activeZ : null);      // enemies drop veins, Minecraft-ish
     enemyGore(e); shake = Math.max(shake, e.boss ? 1.2 : 0.5);
@@ -7735,7 +7993,7 @@ function updateEnv(dt, cp) {
   updateDreadWatcher(dt, cp);
   warpTick(dt);
   zoneFxTick(dt);
-  mawTick(dt); ambientPopTick(dt);
+  mawTick(dt); ambientPopTick(dt); commonsTick(dt);
   if (trick.t > 0) trick.t = Math.max(0, trick.t - dt);
 }
 // gameplay side-effects of the active zone / the surface underfoot
@@ -9446,6 +9704,8 @@ function updateVisuals(dt) {
     `<div class="rt-line">COINS <b>${base.credits}</b> &nbsp; BANANAS <b>${base.bananas}</b></div>` +
     `<div class="rt-line">BEST <b>${Math.max(best.score, score)}</b> (L${best.level})</div>` +
     (curPN !== null && ladderTop ? `<div class="rt-line" style="color:${curPN < 0 ? '#ff5a7a' : '#ffd23a'}">PLATFORM <b>#${curPN}</b></div>` : '') +
+    (commons && !commons.done ? `<div class="rt-line" style="color:#7dff4a">COMMONS <b>${Math.min(commons.kills, commons.quota)}/${commons.quota}</b> · +1 HEART</div>` : '') +
+    (commons && commons.done ? `<div class="rt-line" style="color:#ffd23a">COMMONS SECURED</div>` : '') +
     `<div class="rt-wpn">${wpn}</div>`;
   if (hudHtml !== updateVisuals._hud) { updateVisuals._hud = hudHtml; $('hud').innerHTML = hudHtml; }      // no DOM rebuild unless the HUD text actually changed
   const bb = $('bossbar');
@@ -11164,6 +11424,9 @@ res ${outputWidth}x${outputHeight} @${adaptRes.scale.toFixed(2)}x  ${retroPreset
   },
 };
 window.__ng.linkGraph = () => linkGraphFn ? linkGraphFn() : null;
+window.__ng.commons = () => commons ? ({ x: +commons.x.toFixed(1), y: +commons.y.toFixed(1), z: +commons.z.toFixed(1), r: commons.r, kills: commons.kills, quota: commons.quota, done: commons.done, nodes: commons.nodes.length, outposts: commons.outposts.length, islets: commons.islets.length, ledges: commons.ledges.length, bonusHearts, maxhp: MAXHP, inCommons: inCommons(pos.x, pos.y, pos.z) }) : null;
+window.__ng.commonsGo = () => { if (!commons) return false; pos.set(commons.x + 20, commons.y + 2, commons.z); vel.set(0, 0, 0); return true; };
+window.__ng.commonsKillAll = () => { let n = 0; for (const e of enemies) if (!e.dead && inCommons(e.x, e.y, e.z)) { damageEnemy(e, 99999, 'pound'); n++; } return n; };
 window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.plateInfo = () => platforms.slice(0, 3).map(p => ({ top: p.top, y: p.plate && p.plate.position.y, vis: p.plate && p.plate.visible, col: p.plate && p.plate.material.color.getHex(), em: p.plate && p.plate.material.emissive.getHex(), ei: p.plate && p.plate.material.emissiveIntensity, po: p.plate && p.plate.material.polygonOffset, par: p.plate && p.plate.parent && p.plate.parent.type, h: p.plate && p.plate.geometry.parameters.height })); window.__ng.towerWindows = () => buildingHubs.flatMap(h => h.windows || []).map(w => ({ x: w.x, y: w.y, z: w.z, nx: w.nx, nz: w.nz })); window.__ng.netState = () => ({ on: net.on, room: net.room, peers: net.peers.size, slot: net.slot }); window.__ng.pvpShot = () => { let r = 'nopeer'; eachPeer(p => { const o = new THREE.Vector3(pos.x, pos.y + 1.4, pos.z), d = new THREE.Vector3(p.pos.x - pos.x, p.pos.y + 1 - o.y, p.pos.z - pos.z).normalize(), h = castRay(o, d, 60); r = (h.peer ? 'hit' : 'miss') + JSON.stringify({ me: [pos.x, pos.y, pos.z].map(v => +v.toFixed(1)), peer: [p.pos.x, p.pos.y, p.pos.z].map(v => +v.toFixed(1)), t: +h.t.toFixed(2), wall: !!h.hit, alive: p.alive }); if (h.peer) hitPeer(h.peer, 1); }); return r; }; window.__ng.health = () => health; window.__ng.setCull = r => { CULL_R = r; };
 window.__ng.lvl = () => lvl;
 window.__ng.cull = () => ({ tracked: cull.list.length, hidden: cull.hidden, children: lvl.children.length, solids: solids.length, platforms: platforms.length, specials: specials.length, enemies: enemies.length, items: items.length, props: props.length });
@@ -11191,6 +11454,7 @@ let last = performance.now();
 renderer.setAnimationLoop(now => {
   adaptiveTick(now - last);
   const P = PERF.enabled; if (P) { renderer.info.reset(); PERF.frame(now); PERF.lapStart(); }
+  gamepadTick(now);
   const dt = paused ? 0 : Math.min((now - last) / 1000, 0.05); last = now;
   if (paused) { /* frozen: the ESC menu is open */ }
   else if (state === 'play') { playerUpdate(dt); if (P) PERF.lap('player'); updateEnemies(dt); if (P) PERF.lap('enemies'); updateShots(dt); if (P) PERF.lap('shots'); }
