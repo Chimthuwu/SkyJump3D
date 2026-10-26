@@ -3213,6 +3213,29 @@ const HORROR_KINDS = ['skeleton', 'cryptGhost', 'zombie'];
 const SHROOM_KINDS = ['sporeling', 'prismWraith', 'capBrute'];
 let midWins = { maw: false, nex: false };        // survives commons rebuilds (per level); re-fighting a boss re-grants nothing
 let midGen = 0;                                  // debug: which mid-site state instance is live right now
+const palaceMotions = [];
+let palaceMotionClock = 0;
+function updatePalaceMotion(dt) {
+  palaceMotionClock += dt;
+  const t = palaceMotionClock;
+  for (const palace of palaceMotions) {
+    for (const c of palace.clouds) {
+      const w = t * c.speed + c.phase;
+      c.mesh.position.set(c.x + Math.sin(w) * c.drift, c.y + Math.sin(w * 0.72) * c.bob, c.z + Math.cos(w * 0.8) * c.drift * 0.45);
+      const pulse = 1 + Math.sin(w * 0.65) * 0.018;
+      c.mesh.scale.set(c.sx * pulse, c.sy * pulse, c.sz * pulse);
+    }
+    for (const h of palace.highlights) {
+      const pulse = 1 + Math.sin(t * 1.35 + h.phase) * 0.07;
+      h.mesh.scale.set(h.sx * pulse, h.sy * pulse, h.sz * pulse);
+    }
+    for (const d of palace.drips) {
+      const sway = Math.sin(t * 1.1 + d.phase) * 0.035;
+      d.mesh.rotation.z = d.rz + sway;
+      d.mesh.position.y = d.y + Math.sin(t * 1.4 + d.phase) * 0.18;
+    }
+  }
+}
 function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
   if (!commons) return;
   const sites = {};
@@ -3251,6 +3274,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
     const glow = col => new THREE.MeshBasicMaterial({ color: col, fog: false, toneMapped: false });
     const bx2 = new THREE.BoxGeometry(1, 1, 1), sp2 = new THREE.SphereGeometry(1, 9, 7), cy2 = new THREE.CylinderGeometry(1, 1, 1, 9), cn2 = new THREE.ConeGeometry(0.5, 1, 4);
     if (kind === 'pussy') {                            // fleshy gothic keep with its entrance built into the front façade
+      const cloudMotion = [], wetHighlights = [], wetDrips = [];
       const stone = lamF(0x9f536c, 0x431526, 0.28), lightStone = lamF(0xc8798e, 0x572336, 0.25);   // castle stonework back to its own palette
       const deepStone = lamF(0x673247, 0x290c1b, 0.25), trim = lamF(0xe09aaa, 0x682a40, 0.22);
       const softGeo = new THREE.SphereGeometry(1, 12, 9);
@@ -3284,35 +3308,85 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
         M(bx2, trim, x, 160, -28, 6, 8, 7);
       }
 
-      // THE GATE ITSELF: a giant, lifelike vulva built into the façade — plump outer lips, inner folds, a hood, and a parted glowing cleft the player walks through.
-      const entry = new THREE.Shape();                   // dark interior behind the opening
-      entry.moveTo(-10, 0); entry.lineTo(-10, 58); entry.quadraticCurveTo(-9, 74, 0, 80);
-      entry.quadraticCurveTo(9, 74, 10, 58); entry.lineTo(10, 0); entry.closePath();
-      M(new THREE.ShapeGeometry(entry, 16), glow(0x16050e), 0, 0, 31);
-      const cleft = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 50), new THREE.MeshBasicMaterial({ color: 0xff3a8a, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-      cleft.position.set(0, 30, 31.6); cleft.userData.noCull = true; g.add(cleft);        // warm glowing slit deep in the passable cake
-      // Keep the castle masonry on its original palette. Use self-lit colors for the gate so low night lighting cannot crush them toward black/red.
-      const mawFlesh = glow(0xf8e3d2);                  // pale warm outer flesh, kept separate from the castle stone
-      const innerFlesh = glow(0xff5277);                // vivid red-pink inner lips, echoing the MAW without dark emissive shading
-      const hoodFlesh = glow(0xf8e3d2);
+      // THE GATE: sculpted external anatomy, modeled as a framed entrance rather than a single pale oval.
+      const opening = new THREE.Shape();
+      opening.moveTo(-8, 0); opening.lineTo(-8, 47); opening.quadraticCurveTo(-7, 62, 0, 66);
+      opening.quadraticCurveTo(7, 62, 8, 47); opening.lineTo(8, 0); opening.closePath();
+      M(new THREE.ShapeGeometry(opening, 16), glow(0x170714), 0, 0, 31.5);
+      const outerFlesh = glow(0xe9a58c);                 // warm, natural outer skin, not castle stone
+      const innerFlesh = glow(0xf05a7e);                 // saturated pink-red reserved for the labia
+      const foldLight = glow(0xffb2c3), hoodMat = glow(0xe9a58c);
+      const cleftMat = glow(0x520d2b);
+      const cleft = M(new THREE.SphereGeometry(1, 16, 12), cleftMat, 0, 34, 41, 3.4, 27, 1.4);   // dark, readable central cleft
+      cleft.userData.noCull = true;
+      // Outer labia: two broad, softly rounded folds, parted around the doorway.
       for (const side of [-1, 1]) {
-        M(softGeo, mawFlesh, side * 16.5, 36, 33, 16, 42, 13, 0, -side * 0.12);          // plump outer lip, top leaning outward like the real thing
-        M(softGeo, innerFlesh, side * 7.5, 34, 37, 5.5, 34, 5);                          // thinner inner lip just inside the cake
-        M(softGeo, hoodFlesh, side * 13, 8, 36, 10, 7, 7);                               // rounded base swell
-        for (let k = 0; k < 6; k++) M(softGeo, innerFlesh, side * (21 + 1.4 * Math.sin(k * 1.3)), 12 + k * 11, 35 - k * 0.4, 3.4, 5, 3.2);   // ruffled outer edge — echoes the roaming Maw's folds
+        M(softGeo, outerFlesh, side * 14.2, 36, 34, 11.2, 32, 7.2, 0, -side * 0.12);
+        M(softGeo, innerFlesh, side * 6.2, 34, 40, 4.1, 25, 3.8, 0, side * 0.06);          // distinct inner labium
+        // Fine raised crease on each outer fold, giving the lips a rounded, sculpted edge.
+        const crease = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(side * 22, 8, 38), new THREE.Vector3(side * 23, 25, 40),
+          new THREE.Vector3(side * 22, 45, 40), new THREE.Vector3(side * 18, 61, 38)
+        ]);
+        const creaseMesh = new THREE.Mesh(new THREE.TubeGeometry(crease, 24, 0.85, 7, false), foldLight);
+        creaseMesh.userData.noCull = true; g.add(creaseMesh);
       }
-      M(softGeo, hoodFlesh, 0, 76, 30, 25, 15, 12);                                      // hood / mons crowning the gate
-      M(softGeo, hoodFlesh, 0, 62, 38, 9, 6, 6);                                         // hood fold dipping toward the cake
-      M(softGeo, innerFlesh, 0, 2, 36, 8, 5, 6);                                         // lower fourchette swell
-      // Slime dripping from the lips and lower fold — the same wet strands the roaming Maw wears.
-      const dripMat = new THREE.MeshBasicMaterial({ color: 0xff8ad8, transparent: true, opacity: 0.8, fog: false, toneMapped: false });   // the MAW's own strand pink
-      for (const side of [-1, 1]) for (let k = 0; k < 3; k++) {
-        const x = side * (5 + k * 2.7), top = 15 - k * 2.2, len = 4.5 + (k % 2) * 3.2, zf = 39 + k * 0.6;
-        const strand = new THREE.Mesh(new THREE.CylinderGeometry(0.5 - k * 0.09, 0.16, len, 6).translate(0, -len / 2, 0), dripMat);
-        strand.position.set(x, top, zf); strand.userData.noCull = true; g.add(strand);
-        M(sp2, dripMat, x, top - len - 0.35, zf, 0.75, 1.1, 0.75);                        // the hanging drop, about to fall
+      // Hood and clitoral glans are separate forms above the cleft, not another blob on the doorway.
+      M(softGeo, hoodMat, 0, 69, 34, 15, 9, 7);                                              // mons / clitoral hood
+      M(softGeo, foldLight, 0, 61, 41, 5.8, 4.8, 3.6);                                        // hood edge
+      M(softGeo, innerFlesh, 0, 57, 44, 2.6, 3.4, 2.2);                                       // small, clearly defined clitoris
+      M(softGeo, outerFlesh, 0, 5, 38, 9, 5, 5);                                               // lower commissure
+      // Wet specular streaks trace the inner folds; droplets hang from the lower labia.
+      const wet = new THREE.MeshBasicMaterial({ color: 0xffc0d3, transparent: true, opacity: 0.82, fog: false, toneMapped: false });
+      const wetPink = new THREE.MeshBasicMaterial({ color: 0xff77a4, transparent: true, opacity: 0.9, fog: false, toneMapped: false });
+      for (const side of [-1, 1]) {
+        const glint = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(side * 8.5, 12, 44), new THREE.Vector3(side * 7.8, 25, 44.5),
+          new THREE.Vector3(side * 7.2, 39, 44.3), new THREE.Vector3(side * 7.8, 50, 42)
+        ]);
+        const shine = new THREE.Mesh(new THREE.TubeGeometry(glint, 24, 0.65, 6, false), wet);
+        shine.userData.noCull = true; g.add(shine);
+        wetHighlights.push({ mesh: shine, sx: 1, sy: 1, sz: 1, phase: side * 0.8 });
       }
-      M(sp2, dripMat, 0, -2.6, 37, 1.0, 1.5, 1.0);                                        // fat drop welling up under the fourchette
+      for (const [x, top, len] of [[-5.2, 13, 7], [1.8, 10, 10], [5.6, 14, 5.5]]) {
+        const drip = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.07, len, 7).translate(0, -len / 2, 0), wetPink);
+        drip.position.set(x, top, 43); drip.userData.noCull = true; g.add(drip);
+        wetDrips.push({ mesh: drip, x, y: top, rz: 0, phase: top * 0.17 });
+        const droplet = M(sp2, wetPink, x, top - len - 0.25, 43, 0.48, 0.72, 0.48);
+        wetHighlights.push({ mesh: droplet, sx: 0.48, sy: 0.72, sz: 0.48, phase: top * 0.11 });
+      }
+      // Small wet highlights catch the light across the hood and outer folds.
+      for (const [x, y, z, sx, sy, sz] of [[-4, 65, 47, 0.65, 0.42, 0.35], [3, 64, 47, 0.5, 0.35, 0.3], [-20, 34, 40, 0.55, 0.35, 0.28], [20, 44, 40, 0.55, 0.35, 0.28]]) {
+        const highlight = M(sp2, wet, x, y, z, sx, sy, sz);
+        wetHighlights.push({ mesh: highlight, sx, sy, sz, phase: x * 0.13 + y * 0.07 });
+      }
+
+      // Feminine detailing on the existing castle: rose-window rosette, curved cornices and slim blush banners.
+      const blush = glow(0xf07ea6), paleGold = glow(0xf2d29a);
+      const roseRing = new THREE.Mesh(new THREE.TorusGeometry(9, 1.1, 6, 20), blush); roseRing.position.set(0, 119, 22.2); g.add(roseRing);
+      const roseInner = new THREE.Mesh(new THREE.TorusGeometry(4.3, 0.65, 5, 16), paleGold); roseInner.position.set(0, 119, 22.6); g.add(roseInner);
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        M(cn2, blush, Math.cos(a) * 6.2, 119 + Math.sin(a) * 6.2, 22.8, 3.2, 4.6, 3.2, 0, 0);
+      }
+      const cornice = new THREE.Mesh(new THREE.TorusGeometry(40, 1.15, 5, 32, Math.PI), blush);
+      cornice.rotation.z = Math.PI; cornice.position.set(0, 145, 25); g.add(cornice);
+      for (const side of [-1, 1]) {
+        M(bx2, blush, side * 46, 83, 31, 2.2, 28, 1.2);                                      // narrow hanging banner on each front tower
+        M(cn2, paleGold, side * 46, 66, 31.8, 3, 6, 3, Math.PI, 0);
+      }
+
+      // A soft pink cloudbank cradles the foundation without recoloring or reshaping the castle.
+      const cloudMat = new THREE.MeshBasicMaterial({ color: 0xf08bc8, transparent: true, opacity: 0.62, depthWrite: false, fog: false, toneMapped: false });
+      const cloudHi = new THREE.MeshBasicMaterial({ color: 0xffb8df, transparent: true, opacity: 0.68, depthWrite: false, fog: false, toneMapped: false });
+      for (let i = 0; i < 10; i++) {
+        const a = i * Math.PI * 2 / 10, cx = Math.cos(a) * 65, cz = Math.sin(a) * 52;
+        for (const [dx, dy, dz, sx, sy, sz, mat] of [[0, -2, 0, 18, 7, 13, cloudMat], [-8, 1, 1, 12, 8, 11, cloudHi], [8, 0, -2, 13, 7, 10, cloudMat]]) {
+          const puff = M(softGeo, mat, cx + dx, dy, cz + dz, sx, sy, sz);
+          cloudMotion.push({ mesh: puff, x: cx + dx, y: dy, z: cz + dz, sx, sy, sz, phase: i * 0.73 + dx * 0.04 + dz * 0.03, speed: 0.14 + (i % 3) * 0.012, drift: 1.2 + (i % 3) * 0.24, bob: 0.45 + (i % 2) * 0.12 });
+        }
+      }
+      palaceMotions.push({ clouds: cloudMotion, highlights: wetHighlights, drips: wetDrips });
       // Masonry frame stones tie the living gate back into the castle wall.
       for (const side of [-1, 1]) M(bx2, deepStone, side * 27, 39, 31, 1.5, 72, 1.5);
     } else if (kind === 'house') {                     // crooked gothic keep: candlelit windows and an unmistakable spired silhouette
@@ -6456,6 +6530,7 @@ function buildLevel() {
   seed = 11 + level * 97 + (rentOn() ? 5003 : nosOn() ? 8009 : gutOn() ? 11003 : arenaOn() ? 13337 : 0); gutVeins = 0; levelSeed = seed;      // each level family gets its own layout seed; the default level's seed is unchanged
   arenaResetBuild();                                                            // THE ARENAS: clear chamber state before the body rebuilds it
   commons = null;                                                               // THE COMMONS: rebuilt by buildNetwork for the default level
+  palaceMotions.length = 0; palaceMotionClock = 0;
   rentDueT = rentPeriod() * 0.55; rentWave = 0;                          // the clock starts half-run: you have no grace period
   const sceneAdd = scene.add;
   scene.add = o => lvl.add(o);           // route this function's scene.add calls into the level group
@@ -12474,7 +12549,7 @@ renderer.setAnimationLoop(now => {
   else if (state === 'play') { playerUpdate(dt); if (P) PERF.lap('player'); updateEnemies(dt); if (P) PERF.lap('enemies'); updateShots(dt); if (P) PERF.lap('shots'); }
   else if (state === 'dead') { deadT -= dt; if (deadT <= 0) respawn(); if (net.on) { updateEnemies(dt); updateShots(dt); } }
   else if (state === 'clear') { updateEnemies(dt); clearT -= dt; if (clearT <= 0) nextLevel(); }
-  updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); if (rentOn()) rentClockTick(dt); if (nosOn()) { nosPipeTick(dt); nosEggTick(dt); } evolveTick(dt); updateGrowers(dt); updateRoofArenas(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); goreFadeTick(dt); updateClouds(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
+  updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); if (rentOn()) rentClockTick(dt); if (nosOn()) { nosPipeTick(dt); nosEggTick(dt); } evolveTick(dt); updateGrowers(dt); updateRoofArenas(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); goreFadeTick(dt); updateClouds(dt); updatePalaceMotion(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
   updateVisuals(dt); setHint(); if (P) PERF.lap('visuals+hud');
   if (guideDialogOpen && state !== 'play') closeGuideDialog(false);
   netTick(dt); updatePeers(dt); debugTick(dt); if (P) PERF.lap('net+peers+debug');
