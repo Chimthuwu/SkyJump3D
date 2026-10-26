@@ -51,7 +51,15 @@ Works in any browser with a controller connected — no mapping app needed.
 | RT | fire · LT aim down sights |
 | RB | next weapon · LB grapple (hold to reel; also picks warp destinations) |
 | L3 (stick click) | sprint, or boost on a vehicle |
+| D-pad or left stick | browse the menus (also arrow keys) on all title screens: main, level select, multiplayer, host, join |
+| A | confirm / start (also ENTER) — starts the selected level from level select |
+| B / Back | back (main ← level select/multiplayer, multiplayer ← host/join) — also un-pause during play |
+| X / Y (multiplayer screen) | open host / join directly (same as the buttons) — room codes still need the keyboard |
 | Start | pause (ENTER on the title screen) |
+| `[` / `]` on the keyboard | look-sensitivity down / up (30%–300%) |
+| `I` on the keyboard | invert right-stick Y on/off |
+
+Sensitivity and invert-Y are saved in localStorage, so a handheld remembers its settings between plays.
 
 ## Run it
 
