@@ -48,18 +48,18 @@ const SRC = require('path').resolve(__dirname, '..', 'index.html');
         const k = await evl(s => window.__ng.midsKill(s), site);      // waves>=3: kill WITHOUT forcing cooldowns — the boss gate (zero live guards) then fires on the next tick
         if (k !== 'killed' && guardKills === 0) console.log('   pass' + tries + ': kill -> ' + k);
         else if (k === 'killed') guardKills++;
-        await w(1800);
+        await w(4000);
       } else {
         await evl(s => window.__ng.midsStep(s), site);                // keep the garrison coming while waves < 3
         const k = await evl(s => window.__ng.midsKill(s), site);
         if (k !== 'killed' && guardKills === 0) console.log('   pass' + tries + ': kill -> ' + k);
         else if (k === 'killed') guardKills++;
-        await w(3100);                                              // real wave cadence is 9 s (guardCd); 3.1 s per pass lets 2-3 waves develop across 30 passes
+        await w(5500);                                              // real wave cadence is 9 s (guardCd); 3.1 s per pass lets 2-3 waves develop across 30 passes
       }
       const st2 = (await mid()).sites.find(x => x.site === site);
       if (st2.bossSpawned && st2.bossHp !== null) bossSeen = true;
       if (st2.bossDead) break;
-      if (tries === 22 && !st2.bossDead) console.log(site + ': SLOW pipeline after 22 passes ->', JSON.stringify(st2));
+      if (tries === 44 && !st2.bossDead) console.log(site + ': SLOW pipeline after 44 passes ->', JSON.stringify(st2));
     }
     const after = await mid();
     return after;
