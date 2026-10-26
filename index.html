@@ -393,8 +393,8 @@ const themeZones = () => rentOn() ? RENT_ZONES : nosOn() ? NOS_ZONES : gutOn() ?
 const setLevelDefById = id => { levelDef = LEVEL_DEFS[id] || LEVEL_DEFS.descent; };      // net: adopt the host's selected level definition
 const TH = 16;           // tower half-width
 const RAD = 28;           // spiral radius
-let MAXHP = 5, bonusHearts = 0;              // extra slots are earned by securing THE COMMONS (capped below)
-const MAX_BONUS_HEARTS = 3;
+let MAXHP = 5, bonusHearts = 0;              // extra slots are earned by securing THE COMMONS and the MID-BAND bosses (capped below)
+const MAX_BONUS_HEARTS = 7;                  // commons +1, each mid-band boss +2: full completion grants +5 bonus hearts (10 total)
 let commons = null;                          // the shared launch-pad ring + purge contract, rebuilt with each level
 const GRAV = 30, TERM = 50;
 const JUMP = 11.5, JUMP2 = 10, RUN = 9;
@@ -407,7 +407,7 @@ let seed = 11, levelSeed = 11;
 const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 function missionRandom(initial) { let a = initial | 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const $ = id => document.getElementById(id);
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const clamp = (v, a, b) => (v <= v ? Math.max(a, Math.min(b, v)) : a);   // NaN fails both compares -> falls back to a
 
 // ---------- renderer / scene ----------
 let RETRO_WIDTH = 320;
@@ -1063,6 +1063,10 @@ function pentagramDecal(w, rot = 0) {      // a burning sigil lying flat on a su
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshBasicMaterial({ map: pentagramTex(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
   m.rotation.x = -Math.PI / 2; m.rotation.z = rot; return m;
 }
+// PERF: shared enemy-primitive cache — enemy bodies (1000+ builds/level) construct dozens of identical Box/Sphere/Cone specs;
+// reusing one geometry per spec cuts build time and GC churn. Enemy part geometries are never disposed anywhere, so sharing is safe.
+const geoCache = new Map();
+function geo(kind, ...a) { const k = kind + ':' + a.map(v => Math.round(v * 1000)).join(','); let out = geoCache.get(k); if (!out) geoCache.set(k, out = new THREE[kind](...a)); return out; }
 function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
   const V = WALKER_STATS[variant] || WALKER_STATS.walker;
   if (variant === 'charger') scale *= 1.25;
@@ -1081,233 +1085,239 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
   const g = new THREE.Group();
   const add = (geo, px, py, pz, m = mat) => { const me = new THREE.Mesh(geo, m); me.position.set(px, py, pz); g.add(me); return me; };
 
+  // PERF (todo.md "true lazy enemy spawning"): the body mesh is built on demand (updateEnemies, first frame within combat range), not at world build —
+  // spawn-region builds stop paying ~1200 walk meshes up front. KAOMOJI/PIXELGHOST pick their face/colour with rand() inside the body chain:
+  // those picks are resolved HERE, at spawn time, in the exact seeded-stream position the synchronous build used, so deferral cannot shift the world rand stream.
+  let kpFace = null, pxCol = null;
+  if (variant === 'kaomoji') kpFace = (rand() * KAO_FACES.length) | 0; else if (variant === 'pixelghost') pxCol = (rand() * 4) | 0;
+  const buildBody = () => {                // captures variant/scale/mats/aura — no e refs, runs once per enemy
   if (variant === 'dinosaur') {          // Jungle raptor: long tail, raised neck, jaw and clawed feet
     const hide = mat, belly = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xb5a05a })), mouth = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x270a0a }));
-    add(new THREE.BoxGeometry(1.1, 0.9, 1.65), 0, 1.0, -0.15, hide);                         // torso
-    add(new THREE.BoxGeometry(0.75, 0.8, 0.12), 0, 0.82, 0.72, belly);                       // pale chest
-    add(new THREE.BoxGeometry(0.48, 0.9, 0.52), 0, 1.5, 0.66, hide);                        // upright neck
-    add(new THREE.BoxGeometry(0.76, 0.5, 0.88), 0, 1.95, 0.95, hide);                       // skull
-    add(new THREE.BoxGeometry(0.65, 0.22, 0.76), 0, 1.71, 1.22, mouth);                     // open jaw
+    add(geo('BoxGeometry', 1.1, 0.9, 1.65), 0, 1.0, -0.15, hide);                         // torso
+    add(geo('BoxGeometry', 0.75, 0.8, 0.12), 0, 0.82, 0.72, belly);                       // pale chest
+    add(geo('BoxGeometry', 0.48, 0.9, 0.52), 0, 1.5, 0.66, hide);                        // upright neck
+    add(geo('BoxGeometry', 0.76, 0.5, 0.88), 0, 1.95, 0.95, hide);                       // skull
+    add(geo('BoxGeometry', 0.65, 0.22, 0.76), 0, 1.71, 1.22, mouth);                     // open jaw
     for (const side of [-1, 1]) {
-      add(new THREE.BoxGeometry(0.12, 0.6, 0.16), side * 0.32, 0.38, 0.35, hide);           // powerful legs
-      add(new THREE.ConeGeometry(0.09, 0.28, 4), side * 0.32, 0.12, 0.55, belly);           // claws
-      const arm = add(new THREE.BoxGeometry(0.16, 0.5, 0.18), side * 0.48, 1.05, 0.72, hide); arm.rotation.x = -0.45;
-      add(new THREE.SphereGeometry(0.07, 5, 4), side * 0.37, 2.03, 1.36, new THREE.MeshBasicMaterial({ color: 0xffcf37 }));
-      for (let tooth = 0; tooth < 3; tooth++) add(new THREE.ConeGeometry(0.055, 0.16, 4), side * (0.12 + tooth * 0.16), 1.73, 1.43, belly).rotation.x = Math.PI;
+      add(geo('BoxGeometry', 0.12, 0.6, 0.16), side * 0.32, 0.38, 0.35, hide);           // powerful legs
+      add(geo('ConeGeometry', 0.09, 0.28, 4), side * 0.32, 0.12, 0.55, belly);           // claws
+      const arm = add(geo('BoxGeometry', 0.16, 0.5, 0.18), side * 0.48, 1.05, 0.72, hide); arm.rotation.x = -0.45;
+      add(geo('SphereGeometry', 0.07, 5, 4), side * 0.37, 2.03, 1.36, new THREE.MeshBasicMaterial({ color: 0xffcf37 }));
+      for (let tooth = 0; tooth < 3; tooth++) add(geo('ConeGeometry', 0.055, 0.16, 4), side * (0.12 + tooth * 0.16), 1.73, 1.43, belly).rotation.x = Math.PI;
     }
-    const tail = add(new THREE.ConeGeometry(0.4, 1.9, 5), 0, 1.1, -1.35, hide); tail.rotation.x = -Math.PI / 2;
-    for (let ridge = 0; ridge < 5; ridge++) { const crest = add(new THREE.ConeGeometry(0.13, 0.48, 4), 0, 1.42 + (ridge % 2) * 0.12, 0.2 - ridge * 0.28, belly); crest.rotation.x = Math.PI / 2; }
+    const tail = add(geo('ConeGeometry', 0.4, 1.9, 5), 0, 1.1, -1.35, hide); tail.rotation.x = -Math.PI / 2;
+    for (let ridge = 0; ridge < 5; ridge++) { const crest = add(geo('ConeGeometry', 0.13, 0.48, 4), 0, 1.42 + (ridge % 2) * 0.12, 0.2 - ridge * 0.28, belly); crest.rotation.x = Math.PI / 2; }
   } else if (variant === 'stegosaurus') {   // Jungle tank: neon back plates, tiny head, spiked tail
     const hide = mat, belly = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x9aa05a })), bone = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xd9d2a0 }));
-    const body = add(new THREE.SphereGeometry(0.85, 8, 6), 0, 1.15, 0, hide); body.scale.set(0.95, 0.85, 1.6);
-    add(new THREE.BoxGeometry(0.4, 0.38, 0.55), 0, 0.82, 1.5, hide);                              // small low head
-    add(new THREE.BoxGeometry(0.3, 0.1, 0.3), 0, 0.68, 1.78, belly);                              // beak
+    const body = add(geo('SphereGeometry', 0.85, 8, 6), 0, 1.15, 0, hide); body.scale.set(0.95, 0.85, 1.6);
+    add(geo('BoxGeometry', 0.4, 0.38, 0.55), 0, 0.82, 1.5, hide);                              // small low head
+    add(geo('BoxGeometry', 0.3, 0.1, 0.3), 0, 0.68, 1.78, belly);                              // beak
     for (const side of [-1, 1]) {
-      add(new THREE.SphereGeometry(0.055, 5, 4), side * 0.2, 0.9, 1.72, new THREE.MeshBasicMaterial({ color: 0xff3fc8 }));
-      for (const z of [-0.65, 0.7]) add(new THREE.BoxGeometry(0.34, 0.75, 0.38), side * 0.55, 0.38, z, hide);   // four pillar legs
+      add(geo('SphereGeometry', 0.055, 5, 4), side * 0.2, 0.9, 1.72, new THREE.MeshBasicMaterial({ color: 0xff3fc8 }));
+      for (const z of [-0.65, 0.7]) add(geo('BoxGeometry', 0.34, 0.75, 0.38), side * 0.55, 0.38, z, hide);   // four pillar legs
     }
     for (let i = 0; i < 7; i++) {                                                                   // glowing dorsal plates
-      const sz = 0.42 - Math.abs(i - 3) * 0.06, pl = add(new THREE.OctahedronGeometry(sz, 0), (i % 2 ? 0.14 : -0.14), 2.0 + sz * 0.5 - Math.abs(i - 3) * 0.1, 0.95 - i * 0.34, i % 2 ? neonCyan : neonMag);
+      const sz = 0.42 - Math.abs(i - 3) * 0.06, pl = add(geo('OctahedronGeometry', sz, 0), (i % 2 ? 0.14 : -0.14), 2.0 + sz * 0.5 - Math.abs(i - 3) * 0.1, 0.95 - i * 0.34, i % 2 ? neonCyan : neonMag);
       pl.scale.set(0.35, 1.25, 0.8);
     }
-    const tail = add(new THREE.ConeGeometry(0.42, 1.9, 6), 0, 0.95, -1.9, hide); tail.rotation.x = -Math.PI / 2;
-    for (const [sx, sy] of [[-0.18, 0.18], [0.18, 0.18], [-0.12, -0.08], [0.12, -0.08]]) { const sp = add(new THREE.ConeGeometry(0.07, 0.55, 4), sx * 1.4, 0.95 + sy * 1.4, -2.55, bone); sp.rotation.x = -Math.PI / 2; }   // thagomizer
+    const tail = add(geo('ConeGeometry', 0.42, 1.9, 6), 0, 0.95, -1.9, hide); tail.rotation.x = -Math.PI / 2;
+    for (const [sx, sy] of [[-0.18, 0.18], [0.18, 0.18], [-0.12, -0.08], [0.12, -0.08]]) { const sp = add(geo('ConeGeometry', 0.07, 0.55, 4), sx * 1.4, 0.95 + sy * 1.4, -2.55, bone); sp.rotation.x = -Math.PI / 2; }   // thagomizer
   } else if (variant === 'frog') {      // Jungle hopper: fat green body, bulging eyes, folded legs
     const belly = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xd8f26a }));
-    const body = add(new THREE.SphereGeometry(0.55, 8, 6), 0, 0.5, 0, mat); body.scale.set(1.05, 0.8, 1.15);
-    const chin = add(new THREE.SphereGeometry(0.4, 7, 5), 0, 0.38, 0.28, belly); chin.scale.set(1, 0.6, 1);
+    const body = add(geo('SphereGeometry', 0.55, 8, 6), 0, 0.5, 0, mat); body.scale.set(1.05, 0.8, 1.15);
+    const chin = add(geo('SphereGeometry', 0.4, 7, 5), 0, 0.38, 0.28, belly); chin.scale.set(1, 0.6, 1);
     for (const side of [-1, 1]) {
-      add(new THREE.SphereGeometry(0.17, 6, 5), side * 0.28, 0.98, 0.3, mat);
-      add(new THREE.SphereGeometry(0.075, 5, 4), side * 0.29, 1.0, 0.43, new THREE.MeshBasicMaterial({ color: 0xff3fc8 }));
-      add(new THREE.BoxGeometry(0.2, 0.18, 0.6), side * 0.5, 0.2, -0.28, mat);                    // big back legs
-      add(new THREE.BoxGeometry(0.14, 0.12, 0.3), side * 0.34, 0.1, 0.5, mat);
+      add(geo('SphereGeometry', 0.17, 6, 5), side * 0.28, 0.98, 0.3, mat);
+      add(geo('SphereGeometry', 0.075, 5, 4), side * 0.29, 1.0, 0.43, new THREE.MeshBasicMaterial({ color: 0xff3fc8 }));
+      add(geo('BoxGeometry', 0.2, 0.18, 0.6), side * 0.5, 0.2, -0.28, mat);                    // big back legs
+      add(geo('BoxGeometry', 0.14, 0.12, 0.3), side * 0.34, 0.1, 0.5, mat);
     }
   } else if (variant === 'gorilla') {   // Jungle brute: hunched chest, long knuckles, heavy brow
     const hide = mat, face = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x1c1717 }));
-    const torso = add(new THREE.SphereGeometry(0.83, 7, 5), 0, 1.15, 0, hide); torso.scale.set(1.1, 1.0, 0.85);
-    const chest = add(new THREE.BoxGeometry(1.15, 0.88, 0.28), 0, 1.23, 0.62, dark); chest.rotation.x = -0.12;
-    add(new THREE.SphereGeometry(0.48, 7, 5), 0, 2.05, 0.25, hide);                        // head
-    add(new THREE.BoxGeometry(0.58, 0.26, 0.16), 0, 2.12, 0.66, face);                     // muzzle and brow
+    const torso = add(geo('SphereGeometry', 0.83, 7, 5), 0, 1.15, 0, hide); torso.scale.set(1.1, 1.0, 0.85);
+    const chest = add(geo('BoxGeometry', 1.15, 0.88, 0.28), 0, 1.23, 0.62, dark); chest.rotation.x = -0.12;
+    add(geo('SphereGeometry', 0.48, 7, 5), 0, 2.05, 0.25, hide);                        // head
+    add(geo('BoxGeometry', 0.58, 0.26, 0.16), 0, 2.12, 0.66, face);                     // muzzle and brow
     for (const side of [-1, 1]) {
-      const arm = add(new THREE.BoxGeometry(0.42, 1.28, 0.48), side * 0.82, 0.93, 0.08, hide); arm.rotation.z = -side * 0.16;
-      add(new THREE.BoxGeometry(0.48, 0.32, 0.45), side * 0.87, 0.28, 0.25, face);          // knuckles
-      add(new THREE.BoxGeometry(0.38, 0.63, 0.4), side * 0.34, 0.33, 0, face);              // legs
-      add(new THREE.SphereGeometry(0.075, 5, 4), side * 0.17, 2.12, 0.74, new THREE.MeshBasicMaterial({ color: 0xffcf50 }));
+      const arm = add(geo('BoxGeometry', 0.42, 1.28, 0.48), side * 0.82, 0.93, 0.08, hide); arm.rotation.z = -side * 0.16;
+      add(geo('BoxGeometry', 0.48, 0.32, 0.45), side * 0.87, 0.28, 0.25, face);          // knuckles
+      add(geo('BoxGeometry', 0.38, 0.63, 0.4), side * 0.34, 0.33, 0, face);              // legs
+      add(geo('SphereGeometry', 0.075, 5, 4), side * 0.17, 2.12, 0.74, new THREE.MeshBasicMaterial({ color: 0xffcf50 }));
     }
   } else if (variant === 'spider') {     // Horror crawler: low fat abdomen, eight bent legs, a cluster of red eyes and dripping fangs
     const chit = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x150a10 })), fang = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xe8dcc0 })), eyeM = new THREE.MeshBasicMaterial({ color: 0xff1020 });
-    const abd = add(new THREE.SphereGeometry(0.62, 8, 6), 0, 0.78, -0.62, chit); abd.scale.set(0.9, 0.8, 1.25);
-    add(new THREE.SphereGeometry(0.4, 8, 6), 0, 0.72, 0.25, chit);
-    add(new THREE.BoxGeometry(0.34, 0.2, 0.06), 0, 0.92, -0.95, new THREE.MeshBasicMaterial({ color: 0xb00018 }));       // the hourglass
+    const abd = add(geo('SphereGeometry', 0.62, 8, 6), 0, 0.78, -0.62, chit); abd.scale.set(0.9, 0.8, 1.25);
+    add(geo('SphereGeometry', 0.4, 8, 6), 0, 0.72, 0.25, chit);
+    add(geo('BoxGeometry', 0.34, 0.2, 0.06), 0, 0.92, -0.95, new THREE.MeshBasicMaterial({ color: 0xb00018 }));       // the hourglass
     for (const side of [-1, 1]) {
       for (let i = 0; i < 4; i++) {
-        const zz = 0.5 - i * 0.34, up = add(new THREE.BoxGeometry(0.95, 0.09, 0.09), side * 0.62, 0.95, zz, chit); up.rotation.z = side * 0.55; up.rotation.y = side * (i - 1.5) * 0.18;
-        const lo = add(new THREE.BoxGeometry(0.09, 0.95, 0.09), side * 1.12, 0.45, zz + (i - 1.5) * -0.05, chit); lo.rotation.z = side * -0.12;
+        const zz = 0.5 - i * 0.34, up = add(geo('BoxGeometry', 0.95, 0.09, 0.09), side * 0.62, 0.95, zz, chit); up.rotation.z = side * 0.55; up.rotation.y = side * (i - 1.5) * 0.18;
+        const lo = add(geo('BoxGeometry', 0.09, 0.95, 0.09), side * 1.12, 0.45, zz + (i - 1.5) * -0.05, chit); lo.rotation.z = side * -0.12;
       }
-      add(new THREE.SphereGeometry(0.075, 5, 4), side * 0.13, 0.86, 0.6, eyeM); add(new THREE.SphereGeometry(0.05, 5, 4), side * 0.25, 0.76, 0.58, eyeM); add(new THREE.SphereGeometry(0.05, 5, 4), side * 0.07, 0.96, 0.55, eyeM);
-      const fg = add(new THREE.ConeGeometry(0.06, 0.34, 4), side * 0.13, 0.5, 0.62, fang); fg.rotation.x = Math.PI;
+      add(geo('SphereGeometry', 0.075, 5, 4), side * 0.13, 0.86, 0.6, eyeM); add(geo('SphereGeometry', 0.05, 5, 4), side * 0.25, 0.76, 0.58, eyeM); add(geo('SphereGeometry', 0.05, 5, 4), side * 0.07, 0.96, 0.55, eyeM);
+      const fg = add(geo('ConeGeometry', 0.06, 0.34, 4), side * 0.13, 0.5, 0.62, fang); fg.rotation.x = Math.PI;
     }
   } else if (variant === 'skeleton') {   // Horror/Hell bonewalker: grinning skull, ribcage, long thin limbs
     const bone = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xe6dcc2 })), void_ = new THREE.MeshBasicMaterial({ color: 0x0a0204 }), glowE = new THREE.MeshBasicMaterial({ color: 0xff2a18 });
-    add(new THREE.SphereGeometry(0.3, 8, 6), 0, 1.78, 0, bone).scale.set(1, 1.1, 1.05);
-    add(new THREE.BoxGeometry(0.34, 0.16, 0.26), 0, 1.52, 0.07, bone);
+    add(geo('SphereGeometry', 0.3, 8, 6), 0, 1.78, 0, bone).scale.set(1, 1.1, 1.05);
+    add(geo('BoxGeometry', 0.34, 0.16, 0.26), 0, 1.52, 0.07, bone);
     for (const side of [-1, 1]) {
-      add(new THREE.SphereGeometry(0.085, 5, 4), side * 0.115, 1.84, 0.24, void_); add(new THREE.SphereGeometry(0.035, 5, 4), side * 0.115, 1.84, 0.29, glowE);
-      add(new THREE.BoxGeometry(0.1, 0.8, 0.1), side * 0.5, 1.0, 0, bone).rotation.z = side * 0.14;
-      add(new THREE.BoxGeometry(0.11, 0.9, 0.11), side * 0.2, 0.45, 0, bone);
+      add(geo('SphereGeometry', 0.085, 5, 4), side * 0.115, 1.84, 0.24, void_); add(geo('SphereGeometry', 0.035, 5, 4), side * 0.115, 1.84, 0.29, glowE);
+      add(geo('BoxGeometry', 0.1, 0.8, 0.1), side * 0.5, 1.0, 0, bone).rotation.z = side * 0.14;
+      add(geo('BoxGeometry', 0.11, 0.9, 0.11), side * 0.2, 0.45, 0, bone);
     }
-    add(new THREE.BoxGeometry(0.07, 0.9, 0.07), 0, 1.1, -0.05, bone);
-    for (let i = 0; i < 5; i++) add(new THREE.BoxGeometry(0.62 - i * 0.05, 0.06, 0.28), 0, 1.38 - i * 0.14, 0.02, bone);
-    add(new THREE.BoxGeometry(0.46, 0.14, 0.22), 0, 0.88, 0, bone);
+    add(geo('BoxGeometry', 0.07, 0.9, 0.07), 0, 1.1, -0.05, bone);
+    for (let i = 0; i < 5; i++) add(geo('BoxGeometry', 0.62 - i * 0.05, 0.06, 0.28), 0, 1.38 - i * 0.14, 0.02, bone);
+    add(geo('BoxGeometry', 0.46, 0.14, 0.22), 0, 0.88, 0, bone);
   } else if (variant === 'roach') {      // swarm insect: flat glossy shell, twitching antennae
     const shell = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x3a1c08 })), dk = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x120804 }));
-    const body = add(new THREE.SphereGeometry(0.5, 7, 5), 0, 0.28, 0, shell); body.scale.set(0.8, 0.45, 1.3);
-    add(new THREE.SphereGeometry(0.2, 6, 4), 0, 0.26, 0.62, dk);
+    const body = add(geo('SphereGeometry', 0.5, 7, 5), 0, 0.28, 0, shell); body.scale.set(0.8, 0.45, 1.3);
+    add(geo('SphereGeometry', 0.2, 6, 4), 0, 0.26, 0.62, dk);
     for (const side of [-1, 1]) {
-      const an = add(new THREE.BoxGeometry(0.03, 0.03, 0.9), side * 0.1, 0.4, 1.0, dk); an.rotation.y = side * 0.35; an.rotation.x = -0.25;
-      for (let i = 0; i < 3; i++) { const lg = add(new THREE.BoxGeometry(0.5, 0.05, 0.05), side * 0.45, 0.12, 0.3 - i * 0.3, dk); lg.rotation.z = side * -0.4; }
+      const an = add(geo('BoxGeometry', 0.03, 0.03, 0.9), side * 0.1, 0.4, 1.0, dk); an.rotation.y = side * 0.35; an.rotation.x = -0.25;
+      for (let i = 0; i < 3; i++) { const lg = add(geo('BoxGeometry', 0.5, 0.05, 0.05), side * 0.45, 0.12, 0.3 - i * 0.3, dk); lg.rotation.z = side * -0.4; }
     }
   } else if (variant === 'demon') {      // Hellscape brute: horned, winged, burning eyes, cloven hooves
     const hide = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x5a0808 })), blk = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x120405 })), horn = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xcfc2a0 })), fire = new THREE.MeshBasicMaterial({ color: 0xff7a10 });
-    const tors = add(new THREE.SphereGeometry(0.7, 8, 6), 0, 1.35, 0, hide); tors.scale.set(1.0, 1.2, 0.8);
-    add(new THREE.SphereGeometry(0.38, 8, 6), 0, 2.3, 0.1, hide);
+    const tors = add(geo('SphereGeometry', 0.7, 8, 6), 0, 1.35, 0, hide); tors.scale.set(1.0, 1.2, 0.8);
+    add(geo('SphereGeometry', 0.38, 8, 6), 0, 2.3, 0.1, hide);
     for (const side of [-1, 1]) {
-      const hn = add(new THREE.ConeGeometry(0.13, 0.9, 5), side * 0.3, 2.75, 0.02, horn); hn.rotation.z = side * -0.5; hn.rotation.x = -0.25;
-      add(new THREE.SphereGeometry(0.07, 5, 4), side * 0.15, 2.36, 0.44, fire);
-      const arm = add(new THREE.BoxGeometry(0.3, 1.2, 0.32), side * 0.88, 1.2, 0.1, hide); arm.rotation.z = side * -0.25;
-      add(new THREE.ConeGeometry(0.1, 0.4, 4), side * 0.98, 0.5, 0.2, horn).rotation.x = Math.PI;
-      add(new THREE.BoxGeometry(0.34, 0.9, 0.38), side * 0.32, 0.45, 0, blk); add(new THREE.BoxGeometry(0.36, 0.18, 0.5), side * 0.32, 0.08, 0.1, blk);
-      const wing = add(new THREE.BoxGeometry(1.5, 1.6, 0.05), side * 0.95, 1.9, -0.55, blk); wing.rotation.z = side * -0.5; wing.rotation.y = side * 0.5;
+      const hn = add(geo('ConeGeometry', 0.13, 0.9, 5), side * 0.3, 2.75, 0.02, horn); hn.rotation.z = side * -0.5; hn.rotation.x = -0.25;
+      add(geo('SphereGeometry', 0.07, 5, 4), side * 0.15, 2.36, 0.44, fire);
+      const arm = add(geo('BoxGeometry', 0.3, 1.2, 0.32), side * 0.88, 1.2, 0.1, hide); arm.rotation.z = side * -0.25;
+      add(geo('ConeGeometry', 0.1, 0.4, 4), side * 0.98, 0.5, 0.2, horn).rotation.x = Math.PI;
+      add(geo('BoxGeometry', 0.34, 0.9, 0.38), side * 0.32, 0.45, 0, blk); add(geo('BoxGeometry', 0.36, 0.18, 0.5), side * 0.32, 0.08, 0.1, blk);
+      const wing = add(geo('BoxGeometry', 1.5, 1.6, 0.05), side * 0.95, 1.9, -0.55, blk); wing.rotation.z = side * -0.5; wing.rotation.y = side * 0.5;
     }
-    add(new THREE.BoxGeometry(0.4, 0.07, 0.1), 0, 2.15, 0.5, fire);
-    add(new THREE.ConeGeometry(0.1, 1.3, 4), 0, 0.7, -0.75, blk).rotation.x = -2.2;
+    add(geo('BoxGeometry', 0.4, 0.07, 0.1), 0, 2.15, 0.5, fire);
+    add(geo('ConeGeometry', 0.1, 1.3, 4), 0, 0.7, -0.75, blk).rotation.x = -2.2;
   } else if (variant === 'kaomoji') {    // Kaomoji biome: a squishy pastel blob wearing a face on a sticker
-    const blob = add(new THREE.SphereGeometry(0.62, 10, 8), 0, 0.75, 0, mat); blob.scale.set(1.1, 0.95, 1);
-    for (const side of [-1, 1]) { add(new THREE.SphereGeometry(0.17, 6, 5), side * 0.32, 0.12, 0.1, mat); add(new THREE.SphereGeometry(0.1, 5, 4), side * 0.68, 0.85, 0, mat); }
-    const faceS = new THREE.Sprite(new THREE.SpriteMaterial({ map: kaoTexture(KAO_FACES[(rand() * KAO_FACES.length) | 0]), transparent: true, depthTest: true }));
+    const blob = add(geo('SphereGeometry', 0.62, 10, 8), 0, 0.75, 0, mat); blob.scale.set(1.1, 0.95, 1);
+    for (const side of [-1, 1]) { add(geo('SphereGeometry', 0.17, 6, 5), side * 0.32, 0.12, 0.1, mat); add(geo('SphereGeometry', 0.1, 5, 4), side * 0.68, 0.85, 0, mat); }
+    const faceS = new THREE.Sprite(new THREE.SpriteMaterial({ map: kaoTexture(KAO_FACES[kpFace]), transparent: true, depthTest: true }));
     faceS.scale.set(2.2, 0.83, 1); faceS.position.set(0, 1.0, 0.1); g.add(faceS); g.userData.face = faceS;
   } else if (variant === 'loanshark') {   // Rent's Due: pinstripe suit, shark head with a fin and a grin full of teeth, gold chain, cash briefcase
     const suit = mat, pin = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x12141f })), skin = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x7d8ba0 })), belly = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xcfd6df }));
     const gold = new THREE.MeshBasicMaterial({ color: 0xffc83a }), tooth = new THREE.MeshBasicMaterial({ color: 0xffffff }), tie = new THREE.MeshBasicMaterial({ color: 0xd01830 }), cash = new THREE.MeshBasicMaterial({ color: 0x4cd96a });
-    add(new THREE.BoxGeometry(0.95, 1.05, 0.5), 0, 1.15, 0, suit); add(new THREE.BoxGeometry(0.1, 1.05, 0.52), 0, 1.15, 0, pin);
-    add(new THREE.BoxGeometry(0.16, 0.7, 0.04), 0, 1.2, 0.27, tie);
-    const head = add(new THREE.SphereGeometry(0.46, 9, 7), 0, 2.0, 0.08, skin); head.scale.set(1.0, 0.85, 1.25);
-    add(new THREE.SphereGeometry(0.4, 8, 6), 0, 1.86, 0.2, belly).scale.set(0.95, 0.5, 1.1);
-    const fin = add(new THREE.ConeGeometry(0.22, 0.75, 4), 0, 2.62, -0.05, skin); fin.rotation.x = -0.35;
-    for (let t = 0; t < 6; t++) { const tt = add(new THREE.ConeGeometry(0.045, 0.14, 4), (t - 2.5) * 0.11, 1.8, 0.62, tooth); tt.rotation.x = Math.PI; }
+    add(geo('BoxGeometry', 0.95, 1.05, 0.5), 0, 1.15, 0, suit); add(geo('BoxGeometry', 0.1, 1.05, 0.52), 0, 1.15, 0, pin);
+    add(geo('BoxGeometry', 0.16, 0.7, 0.04), 0, 1.2, 0.27, tie);
+    const head = add(geo('SphereGeometry', 0.46, 9, 7), 0, 2.0, 0.08, skin); head.scale.set(1.0, 0.85, 1.25);
+    add(geo('SphereGeometry', 0.4, 8, 6), 0, 1.86, 0.2, belly).scale.set(0.95, 0.5, 1.1);
+    const fin = add(geo('ConeGeometry', 0.22, 0.75, 4), 0, 2.62, -0.05, skin); fin.rotation.x = -0.35;
+    for (let t = 0; t < 6; t++) { const tt = add(geo('ConeGeometry', 0.045, 0.14, 4), (t - 2.5) * 0.11, 1.8, 0.62, tooth); tt.rotation.x = Math.PI; }
     for (const side of [-1, 1]) {
-      add(new THREE.SphereGeometry(0.07, 5, 4), side * 0.22, 2.08, 0.5, new THREE.MeshBasicMaterial({ color: 0x050505 }));
-      add(new THREE.BoxGeometry(0.22, 0.85, 0.24), side * 0.6, 1.1, 0.02, suit);
-      add(new THREE.BoxGeometry(0.28, 0.85, 0.3), side * 0.24, 0.42, 0, pin);
-      add(new THREE.TorusGeometry(0.1, 0.03, 4, 8), side * 0.6, 0.62, 0.1, gold);
+      add(geo('SphereGeometry', 0.07, 5, 4), side * 0.22, 2.08, 0.5, new THREE.MeshBasicMaterial({ color: 0x050505 }));
+      add(geo('BoxGeometry', 0.22, 0.85, 0.24), side * 0.6, 1.1, 0.02, suit);
+      add(geo('BoxGeometry', 0.28, 0.85, 0.3), side * 0.24, 0.42, 0, pin);
+      add(geo('TorusGeometry', 0.1, 0.03, 4, 8), side * 0.6, 0.62, 0.1, gold);
     }
-    const chain = add(new THREE.TorusGeometry(0.34, 0.035, 4, 12), 0, 1.5, 0.22, gold); chain.rotation.x = Math.PI / 2.4;
-    add(new THREE.BoxGeometry(0.5, 0.36, 0.14), 0.78, 0.55, 0.08, pin); add(new THREE.BoxGeometry(0.42, 0.06, 0.15), 0.78, 0.55, 0.08, cash);
+    const chain = add(geo('TorusGeometry', 0.34, 0.035, 4, 12), 0, 1.5, 0.22, gold); chain.rotation.x = Math.PI / 2.4;
+    add(geo('BoxGeometry', 0.5, 0.36, 0.14), 0.78, 0.55, 0.08, pin); add(geo('BoxGeometry', 0.42, 0.06, 0.15), 0.78, 0.55, 0.08, cash);
   } else if (variant === 'bailiff') {      // Rent's Due: broad uniform, peaked cap, gold badge, hand-held battering ram
     const unif = mat, cap = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x141a2c })), skin = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xc89a78 }));
     const badge = new THREE.MeshBasicMaterial({ color: 0xffc83a });
-    add(new THREE.BoxGeometry(1.15, 1.1, 0.62), 0, 1.25, 0, unif); add(new THREE.SphereGeometry(0.3, 8, 6), 0, 2.0, 0, skin);
-    add(new THREE.CylinderGeometry(0.34, 0.36, 0.2, 8), 0, 2.28, 0, cap); add(new THREE.BoxGeometry(0.5, 0.05, 0.3), 0, 2.2, 0.28, cap);
-    add(new THREE.BoxGeometry(0.2, 0.22, 0.04), -0.3, 1.5, 0.33, badge);
-    for (const side of [-1, 1]) { add(new THREE.BoxGeometry(0.4, 0.8, 0.4), side * 0.34, 0.4, 0, cap); add(new THREE.BoxGeometry(0.3, 0.9, 0.34), side * 0.78, 1.15, 0.12, unif); }
-    const ram = add(new THREE.CylinderGeometry(0.17, 0.17, 1.9, 8), 0, 1.0, 0.75, retroMaterial(new THREE.MeshLambertMaterial({ color: 0x3a2a1a }))); ram.rotation.x = Math.PI / 2;
-    add(new THREE.SphereGeometry(0.28, 7, 5), 0, 1.0, 1.7, steel);
+    add(geo('BoxGeometry', 1.15, 1.1, 0.62), 0, 1.25, 0, unif); add(geo('SphereGeometry', 0.3, 8, 6), 0, 2.0, 0, skin);
+    add(geo('CylinderGeometry', 0.34, 0.36, 0.2, 8), 0, 2.28, 0, cap); add(geo('BoxGeometry', 0.5, 0.05, 0.3), 0, 2.2, 0.28, cap);
+    add(geo('BoxGeometry', 0.2, 0.22, 0.04), -0.3, 1.5, 0.33, badge);
+    for (const side of [-1, 1]) { add(geo('BoxGeometry', 0.4, 0.8, 0.4), side * 0.34, 0.4, 0, cap); add(geo('BoxGeometry', 0.3, 0.9, 0.34), side * 0.78, 1.15, 0.12, unif); }
+    const ram = add(geo('CylinderGeometry', 0.17, 0.17, 1.9, 8), 0, 1.0, 0.75, retroMaterial(new THREE.MeshLambertMaterial({ color: 0x3a2a1a }))); ram.rotation.x = Math.PI / 2;
+    add(geo('SphereGeometry', 0.28, 7, 5), 0, 1.0, 1.7, steel);
   } else if (variant === 'collector') {    // Rent's Due: thin suit, bowler hat, red-lens glasses, bulging briefcase
     const suit = mat, skin = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xd7b595 })), hat = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x0c0c10 }));
-    add(new THREE.BoxGeometry(0.62, 1.0, 0.36), 0, 1.15, 0, suit); add(new THREE.SphereGeometry(0.24, 8, 6), 0, 1.86, 0, skin);
-    add(new THREE.SphereGeometry(0.27, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0, 1.97, 0, hat); add(new THREE.CylinderGeometry(0.34, 0.34, 0.04, 10), 0, 1.96, 0, hat);
-    add(new THREE.BoxGeometry(0.36, 0.08, 0.06), 0, 1.88, 0.22, new THREE.MeshBasicMaterial({ color: 0xff2020 }));
-    for (const side of [-1, 1]) { add(new THREE.BoxGeometry(0.2, 0.8, 0.22), side * 0.17, 0.4, 0, hat); add(new THREE.BoxGeometry(0.14, 0.8, 0.16), side * 0.42, 1.1, 0.04, suit); }
-    add(new THREE.BoxGeometry(0.55, 0.4, 0.18), 0.55, 0.62, 0.08, retroMaterial(new THREE.MeshLambertMaterial({ color: 0x5a3a1a }))); add(new THREE.BoxGeometry(0.1, 0.06, 0.2), 0.55, 0.84, 0.08, new THREE.MeshBasicMaterial({ color: 0xffc83a }));
+    add(geo('BoxGeometry', 0.62, 1.0, 0.36), 0, 1.15, 0, suit); add(geo('SphereGeometry', 0.24, 8, 6), 0, 1.86, 0, skin);
+    add(geo('SphereGeometry', 0.27, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0, 1.97, 0, hat); add(geo('CylinderGeometry', 0.34, 0.34, 0.04, 10), 0, 1.96, 0, hat);
+    add(geo('BoxGeometry', 0.36, 0.08, 0.06), 0, 1.88, 0.22, new THREE.MeshBasicMaterial({ color: 0xff2020 }));
+    for (const side of [-1, 1]) { add(geo('BoxGeometry', 0.2, 0.8, 0.22), side * 0.17, 0.4, 0, hat); add(geo('BoxGeometry', 0.14, 0.8, 0.16), side * 0.42, 1.1, 0.04, suit); }
+    add(geo('BoxGeometry', 0.55, 0.4, 0.18), 0.55, 0.62, 0.08, retroMaterial(new THREE.MeshLambertMaterial({ color: 0x5a3a1a }))); add(geo('BoxGeometry', 0.1, 0.06, 0.2), 0.55, 0.84, 0.08, new THREE.MeshBasicMaterial({ color: 0xffc83a }));
   } else if (variant === 'landlord') {     // Rent's Due: enormous belly, top hat, monocle, cane and a ring of glowing keys
     const coat = mat, skin = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xd2a07c })), hat = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x0a0a0e }));
     const gold = new THREE.MeshBasicMaterial({ color: 0xffc83a });
-    const belly = add(new THREE.SphereGeometry(0.85, 10, 8), 0, 1.25, 0.05, coat); belly.scale.set(1.15, 1.0, 0.95);
-    add(new THREE.SphereGeometry(0.34, 8, 6), 0, 2.25, 0.05, skin);
-    add(new THREE.CylinderGeometry(0.28, 0.3, 0.55, 8), 0, 2.78, 0.05, hat); add(new THREE.CylinderGeometry(0.52, 0.52, 0.06, 10), 0, 2.52, 0.05, hat); add(new THREE.BoxGeometry(0.58, 0.07, 0.31), 0, 2.64, 0.05, new THREE.MeshBasicMaterial({ color: 0xd01830 }));
-    add(new THREE.TorusGeometry(0.1, 0.02, 4, 10), 0.15, 2.28, 0.37, gold);
-    add(new THREE.BoxGeometry(0.38, 0.2, 0.08), 0, 1.5, 0.82, gold);
-    for (const side of [-1, 1]) { add(new THREE.BoxGeometry(0.36, 0.8, 0.4), side * 0.4, 0.4, 0, hat); add(new THREE.BoxGeometry(0.28, 1.0, 0.3), side * 1.02, 1.3, 0.05, coat); }
-    add(new THREE.CylinderGeometry(0.04, 0.04, 1.8, 5), 1.15, 0.9, 0.35, gold); add(new THREE.SphereGeometry(0.1, 6, 5), 1.15, 1.8, 0.35, gold);
-    add(new THREE.TorusGeometry(0.16, 0.03, 4, 10), -1.05, 0.75, 0.2, gold);
+    const belly = add(geo('SphereGeometry', 0.85, 10, 8), 0, 1.25, 0.05, coat); belly.scale.set(1.15, 1.0, 0.95);
+    add(geo('SphereGeometry', 0.34, 8, 6), 0, 2.25, 0.05, skin);
+    add(geo('CylinderGeometry', 0.28, 0.3, 0.55, 8), 0, 2.78, 0.05, hat); add(geo('CylinderGeometry', 0.52, 0.52, 0.06, 10), 0, 2.52, 0.05, hat); add(geo('BoxGeometry', 0.58, 0.07, 0.31), 0, 2.64, 0.05, new THREE.MeshBasicMaterial({ color: 0xd01830 }));
+    add(geo('TorusGeometry', 0.1, 0.02, 4, 10), 0.15, 2.28, 0.37, gold);
+    add(geo('BoxGeometry', 0.38, 0.2, 0.08), 0, 1.5, 0.82, gold);
+    for (const side of [-1, 1]) { add(geo('BoxGeometry', 0.36, 0.8, 0.4), side * 0.4, 0.4, 0, hat); add(geo('BoxGeometry', 0.28, 1.0, 0.3), side * 1.02, 1.3, 0.05, coat); }
+    add(geo('CylinderGeometry', 0.04, 0.04, 1.8, 5), 1.15, 0.9, 0.35, gold); add(geo('SphereGeometry', 0.1, 6, 5), 1.15, 1.8, 0.35, gold);
+    add(geo('TorusGeometry', 0.16, 0.03, 4, 10), -1.05, 0.75, 0.2, gold);
   } else if (variant === 'notice') {       // Rent's Due: an eviction notice that learned to hunt: paper body, red header, ink lines, snapping paper teeth
     const paper = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xe8e2c8 })), red = new THREE.MeshBasicMaterial({ color: 0xd01830 }), ink = new THREE.MeshBasicMaterial({ color: 0x15151c }), tooth = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    add(new THREE.BoxGeometry(0.85, 1.15, 0.07), 0, 0.95, 0, paper);
-    add(new THREE.BoxGeometry(0.85, 0.22, 0.075), 0, 1.42, 0, red);
-    for (let l = 0; l < 4; l++) add(new THREE.BoxGeometry(0.6 - (l % 2) * 0.15, 0.04, 0.08), -0.05, 1.12 - l * 0.17, 0, ink);
-    add(new THREE.CylinderGeometry(0.11, 0.11, 0.09, 8), 0.22, 0.52, 0, red).rotation.x = Math.PI / 2;
-    for (let t = 0; t < 5; t++) { const tt = add(new THREE.ConeGeometry(0.06, 0.18, 4), -0.32 + t * 0.16, 0.34, 0.06, tooth); tt.rotation.x = Math.PI; }
-    for (const side of [-1, 1]) { add(new THREE.SphereGeometry(0.07, 5, 4), side * 0.18, 1.45, 0.05, new THREE.MeshBasicMaterial({ color: 0xffff40 })); add(new THREE.BoxGeometry(0.1, 0.3, 0.1), side * 0.2, 0.15, 0, ink); }
+    add(geo('BoxGeometry', 0.85, 1.15, 0.07), 0, 0.95, 0, paper);
+    add(geo('BoxGeometry', 0.85, 0.22, 0.075), 0, 1.42, 0, red);
+    for (let l = 0; l < 4; l++) add(geo('BoxGeometry', 0.6 - (l % 2) * 0.15, 0.04, 0.08), -0.05, 1.12 - l * 0.17, 0, ink);
+    add(geo('CylinderGeometry', 0.11, 0.11, 0.09, 8), 0.22, 0.52, 0, red).rotation.x = Math.PI / 2;
+    for (let t = 0; t < 5; t++) { const tt = add(geo('ConeGeometry', 0.06, 0.18, 4), -0.32 + t * 0.16, 0.34, 0.06, tooth); tt.rotation.x = Math.PI; }
+    for (const side of [-1, 1]) { add(geo('SphereGeometry', 0.07, 5, 4), side * 0.18, 1.45, 0.05, new THREE.MeshBasicMaterial({ color: 0xffff40 })); add(geo('BoxGeometry', 0.1, 0.3, 0.1), side * 0.2, 0.15, 0, ink); }
   } else if (variant === 'tapehead') {     // Nostalgia Overdose: a VHS cassette on legs: label, two glowing reel eyes, a ribbon of tape dragging behind
     const shell = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x23232c })), lab = new THREE.MeshBasicMaterial({ color: 0xf0e6c8 }), stripe = new THREE.MeshBasicMaterial({ color: 0xff7a1a });
     const eyeM = new THREE.MeshBasicMaterial({ color: 0xff2a3a }), tapeM = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x3a2412 })), tooth = new THREE.MeshBasicMaterial({ color: 0xdadada });
-    add(new THREE.BoxGeometry(1.0, 0.68, 0.16), 0, 0.98, 0, shell); add(new THREE.BoxGeometry(0.78, 0.26, 0.17), 0, 1.16, 0, lab); add(new THREE.BoxGeometry(0.78, 0.07, 0.18), 0, 1.0, 0, stripe);
-    add(new THREE.BoxGeometry(0.62, 0.2, 0.18), 0, 0.8, 0, new THREE.MeshBasicMaterial({ color: 0x08080c }));
+    add(geo('BoxGeometry', 1.0, 0.68, 0.16), 0, 0.98, 0, shell); add(geo('BoxGeometry', 0.78, 0.26, 0.17), 0, 1.16, 0, lab); add(geo('BoxGeometry', 0.78, 0.07, 0.18), 0, 1.0, 0, stripe);
+    add(geo('BoxGeometry', 0.62, 0.2, 0.18), 0, 0.8, 0, new THREE.MeshBasicMaterial({ color: 0x08080c }));
     for (const side of [-1, 1]) {
-      const reel = add(new THREE.CylinderGeometry(0.1, 0.1, 0.2, 8), side * 0.2, 0.8, 0.02, eyeM); reel.rotation.x = Math.PI / 2;
-      add(new THREE.BoxGeometry(0.12, 0.5, 0.14), side * 0.27, 0.3, 0, shell); add(new THREE.BoxGeometry(0.1, 0.4, 0.1), side * 0.6, 0.85, 0.02, shell);
+      const reel = add(geo('CylinderGeometry', 0.1, 0.1, 0.2, 8), side * 0.2, 0.8, 0.02, eyeM); reel.rotation.x = Math.PI / 2;
+      add(geo('BoxGeometry', 0.12, 0.5, 0.14), side * 0.27, 0.3, 0, shell); add(geo('BoxGeometry', 0.1, 0.4, 0.1), side * 0.6, 0.85, 0.02, shell);
     }
-    for (let t = 0; t < 5; t++) { const tt = add(new THREE.ConeGeometry(0.05, 0.14, 4), -0.32 + t * 0.16, 0.6, 0.1, tooth); tt.rotation.x = Math.PI; }
-    const rib = add(new THREE.BoxGeometry(0.2, 0.025, 1.3), 0.15, 0.6, -0.78, tapeM); rib.rotation.x = 0.25; rib.rotation.z = 0.3;
-    const rib2 = add(new THREE.BoxGeometry(0.2, 0.025, 0.9), -0.2, 0.3, -0.5, tapeM); rib2.rotation.x = -0.15; rib2.rotation.z = -0.4;
+    for (let t = 0; t < 5; t++) { const tt = add(geo('ConeGeometry', 0.05, 0.14, 4), -0.32 + t * 0.16, 0.6, 0.1, tooth); tt.rotation.x = Math.PI; }
+    const rib = add(geo('BoxGeometry', 0.2, 0.025, 1.3), 0.15, 0.6, -0.78, tapeM); rib.rotation.x = 0.25; rib.rotation.z = 0.3;
+    const rib2 = add(geo('BoxGeometry', 0.2, 0.025, 0.9), -0.2, 0.3, -0.5, tapeM); rib2.rotation.x = -0.15; rib2.rotation.z = -0.4;
   } else if (variant === 'crthead') {      // Nostalgia Overdose: a CRT television for a head, rabbit-ear antenna, tiny suit
     const cas = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x3a3a44 })), scr = new THREE.MeshBasicMaterial({ color: 0xaecbff }), bar = new THREE.MeshBasicMaterial({ color: 0x1a2a46 }), knob = new THREE.MeshBasicMaterial({ color: 0xffd02a });
-    add(new THREE.BoxGeometry(0.5, 0.82, 0.3), 0, 0.92, 0, mat); add(new THREE.BoxGeometry(0.9, 0.74, 0.72), 0, 1.72, 0, cas);
-    add(new THREE.BoxGeometry(0.68, 0.54, 0.05), -0.04, 1.74, 0.37, scr);
-    for (let b = 0; b < 4; b++) add(new THREE.BoxGeometry(0.68, 0.045, 0.06), -0.04, 1.54 + b * 0.14, 0.38, bar);
-    add(new THREE.BoxGeometry(0.1, 0.14, 0.06), -0.16, 1.82, 0.41, bar); add(new THREE.BoxGeometry(0.1, 0.14, 0.06), 0.1, 1.82, 0.41, bar);
-    add(new THREE.SphereGeometry(0.05, 5, 4), 0.36, 1.9, 0.37, knob); add(new THREE.SphereGeometry(0.05, 5, 4), 0.36, 1.72, 0.37, knob);
+    add(geo('BoxGeometry', 0.5, 0.82, 0.3), 0, 0.92, 0, mat); add(geo('BoxGeometry', 0.9, 0.74, 0.72), 0, 1.72, 0, cas);
+    add(geo('BoxGeometry', 0.68, 0.54, 0.05), -0.04, 1.74, 0.37, scr);
+    for (let b = 0; b < 4; b++) add(geo('BoxGeometry', 0.68, 0.045, 0.06), -0.04, 1.54 + b * 0.14, 0.38, bar);
+    add(geo('BoxGeometry', 0.1, 0.14, 0.06), -0.16, 1.82, 0.41, bar); add(geo('BoxGeometry', 0.1, 0.14, 0.06), 0.1, 1.82, 0.41, bar);
+    add(geo('SphereGeometry', 0.05, 5, 4), 0.36, 1.9, 0.37, knob); add(geo('SphereGeometry', 0.05, 5, 4), 0.36, 1.72, 0.37, knob);
     for (const side of [-1, 1]) {
-      const ant = add(new THREE.CylinderGeometry(0.015, 0.015, 0.7, 4), side * 0.18, 2.3, 0, steel); ant.rotation.z = -side * 0.5;
-      add(new THREE.BoxGeometry(0.18, 0.7, 0.2), side * 0.14, 0.35, 0, dark); add(new THREE.BoxGeometry(0.12, 0.7, 0.14), side * 0.36, 0.95, 0.06, mat);
+      const ant = add(geo('CylinderGeometry', 0.015, 0.015, 0.7, 4), side * 0.18, 2.3, 0, steel); ant.rotation.z = -side * 0.5;
+      add(geo('BoxGeometry', 0.18, 0.7, 0.2), side * 0.14, 0.35, 0, dark); add(geo('BoxGeometry', 0.12, 0.7, 0.14), side * 0.36, 0.95, 0.06, mat);
     }
   } else if (variant === 'cabinet') {      // Nostalgia Overdose: a walking arcade cabinet: neon marquee, an angry pixel face on the screen, joystick and buttons
     const body = mat, neon = new THREE.MeshBasicMaterial({ color: 0xff3fc8 }), cy = new THREE.MeshBasicMaterial({ color: 0x36f6ff }), scr = new THREE.MeshBasicMaterial({ color: 0x7dff4a }), blk = new THREE.MeshBasicMaterial({ color: 0x06100a });
-    add(new THREE.BoxGeometry(1.15, 1.9, 0.9), 0, 1.35, 0, body); add(new THREE.BoxGeometry(1.22, 0.3, 0.6), 0, 2.45, -0.05, neon);
-    add(new THREE.BoxGeometry(0.92, 0.7, 0.08), 0, 1.95, 0.46, scr);
-    for (const side of [-1, 1]) { add(new THREE.BoxGeometry(0.2, 0.12, 0.1), side * 0.22, 2.05, 0.52, blk).rotation.z = side * 0.4; add(new THREE.BoxGeometry(0.18, 0.18, 0.1), side * 0.22, 1.9, 0.52, blk); }
-    add(new THREE.BoxGeometry(0.5, 0.1, 0.1), 0, 1.7, 0.52, blk);
-    const panel = add(new THREE.BoxGeometry(1.1, 0.12, 0.5), 0, 1.38, 0.62, steel); panel.rotation.x = 0.3;
-    add(new THREE.CylinderGeometry(0.03, 0.03, 0.22, 5), -0.28, 1.5, 0.64, dark); add(new THREE.SphereGeometry(0.07, 6, 5), -0.28, 1.63, 0.64, neon);
-    for (let b = 0; b < 3; b++) add(new THREE.SphereGeometry(0.06, 5, 4), 0.05 + b * 0.18, 1.45, 0.66, b === 1 ? cy : neon);
-    add(new THREE.BoxGeometry(0.06, 1.9, 0.92), -0.6, 1.35, 0, cy); add(new THREE.BoxGeometry(0.06, 1.9, 0.92), 0.6, 1.35, 0, cy);
-    for (const side of [-1, 1]) { add(new THREE.BoxGeometry(0.34, 0.5, 0.4), side * 0.3, 0.25, 0, dark); add(new THREE.BoxGeometry(0.2, 0.9, 0.24), side * 0.82, 1.3, 0.05, body); }
+    add(geo('BoxGeometry', 1.15, 1.9, 0.9), 0, 1.35, 0, body); add(geo('BoxGeometry', 1.22, 0.3, 0.6), 0, 2.45, -0.05, neon);
+    add(geo('BoxGeometry', 0.92, 0.7, 0.08), 0, 1.95, 0.46, scr);
+    for (const side of [-1, 1]) { add(geo('BoxGeometry', 0.2, 0.12, 0.1), side * 0.22, 2.05, 0.52, blk).rotation.z = side * 0.4; add(geo('BoxGeometry', 0.18, 0.18, 0.1), side * 0.22, 1.9, 0.52, blk); }
+    add(geo('BoxGeometry', 0.5, 0.1, 0.1), 0, 1.7, 0.52, blk);
+    const panel = add(geo('BoxGeometry', 1.1, 0.12, 0.5), 0, 1.38, 0.62, steel); panel.rotation.x = 0.3;
+    add(geo('CylinderGeometry', 0.03, 0.03, 0.22, 5), -0.28, 1.5, 0.64, dark); add(geo('SphereGeometry', 0.07, 6, 5), -0.28, 1.63, 0.64, neon);
+    for (let b = 0; b < 3; b++) add(geo('SphereGeometry', 0.06, 5, 4), 0.05 + b * 0.18, 1.45, 0.66, b === 1 ? cy : neon);
+    add(geo('BoxGeometry', 0.06, 1.9, 0.92), -0.6, 1.35, 0, cy); add(geo('BoxGeometry', 0.06, 1.9, 0.92), 0.6, 1.35, 0, cy);
+    for (const side of [-1, 1]) { add(geo('BoxGeometry', 0.34, 0.5, 0.4), side * 0.3, 0.25, 0, dark); add(geo('BoxGeometry', 0.2, 0.9, 0.24), side * 0.82, 1.3, 0.05, body); }
   } else if (variant === 'pixelghost') {   // Nostalgia Overdose: a blocky arcade ghost (pellet-chaser silhouette), wavy skirt, big square eyes
-    mat.color.setHex([0xff4a4a, 0xff9ad0, 0x36f6ff, 0xffa030][(rand() * 4) | 0]);
+    mat.color.setHex([0xff4a4a, 0xff9ad0, 0x36f6ff, 0xffa030][pxCol]);
     const eyeW = new THREE.MeshBasicMaterial({ color: 0xffffff }), eyeB = new THREE.MeshBasicMaterial({ color: 0x2030ff });
-    add(new THREE.BoxGeometry(0.9, 0.7, 0.7), 0, 1.0, 0, mat); add(new THREE.BoxGeometry(0.66, 0.22, 0.58), 0, 1.5, 0, mat); add(new THREE.BoxGeometry(0.4, 0.14, 0.4), 0, 1.68, 0, mat);
-    for (let k = 0; k < 4; k++) add(new THREE.BoxGeometry(0.22, k % 2 ? 0.2 : 0.34, 0.7), -0.34 + k * 0.226, k % 2 ? 0.52 : 0.46, 0, mat);
-    for (const side of [-1, 1]) { add(new THREE.BoxGeometry(0.22, 0.3, 0.06), side * 0.2, 1.12, 0.36, eyeW); add(new THREE.BoxGeometry(0.11, 0.14, 0.07), side * 0.2 + 0.04, 1.1, 0.38, eyeB); }
+    add(geo('BoxGeometry', 0.9, 0.7, 0.7), 0, 1.0, 0, mat); add(geo('BoxGeometry', 0.66, 0.22, 0.58), 0, 1.5, 0, mat); add(geo('BoxGeometry', 0.4, 0.14, 0.4), 0, 1.68, 0, mat);
+    for (let k = 0; k < 4; k++) add(geo('BoxGeometry', 0.22, k % 2 ? 0.2 : 0.34, 0.7), -0.34 + k * 0.226, k % 2 ? 0.52 : 0.46, 0, mat);
+    for (const side of [-1, 1]) { add(geo('BoxGeometry', 0.22, 0.3, 0.06), side * 0.2, 1.12, 0.36, eyeW); add(geo('BoxGeometry', 0.11, 0.14, 0.07), side * 0.2 + 0.04, 1.1, 0.38, eyeB); }
   } else if (variant === 'popstar') {      // Nostalgia Overdose: an 80s synth lord: spiked neon hair, shoulder pads, wraparound shades, a keytar
     const jacket = mat, skin = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xe0b090 })), hairM = new THREE.MeshBasicMaterial({ color: 0xff3fc8 }), shades = new THREE.MeshBasicMaterial({ color: 0x36f6ff }), keyW = new THREE.MeshBasicMaterial({ color: 0xf4f4f4 }), keyB = new THREE.MeshBasicMaterial({ color: 0x0a0a10 });
-    add(new THREE.BoxGeometry(0.62, 0.9, 0.36), 0, 1.25, 0, jacket); add(new THREE.BoxGeometry(0.66, 0.1, 0.38), 0, 1.3, 0.001, shades);
-    add(new THREE.SphereGeometry(0.26, 8, 6), 0, 1.97, 0, skin); add(new THREE.BoxGeometry(0.46, 0.1, 0.12), 0, 2.0, 0.22, shades);
-    for (let h = 0; h < 5; h++) { const sp = add(new THREE.ConeGeometry(0.1, 0.55 + (h % 2) * 0.25, 4), (h - 2) * 0.12, 2.38, -0.04, hairM); sp.rotation.z = (h - 2) * 0.22; }
+    add(geo('BoxGeometry', 0.62, 0.9, 0.36), 0, 1.25, 0, jacket); add(geo('BoxGeometry', 0.66, 0.1, 0.38), 0, 1.3, 0.001, shades);
+    add(geo('SphereGeometry', 0.26, 8, 6), 0, 1.97, 0, skin); add(geo('BoxGeometry', 0.46, 0.1, 0.12), 0, 2.0, 0.22, shades);
+    for (let h = 0; h < 5; h++) { const sp = add(geo('ConeGeometry', 0.1, 0.55 + (h % 2) * 0.25, 4), (h - 2) * 0.12, 2.38, -0.04, hairM); sp.rotation.z = (h - 2) * 0.22; }
     for (const side of [-1, 1]) {
-      const pad = add(new THREE.BoxGeometry(0.42, 0.14, 0.4), side * 0.46, 1.68, 0, jacket); pad.rotation.z = side * -0.35;
-      add(new THREE.BoxGeometry(0.22, 0.8, 0.26), side * 0.2, 0.4, 0, dark); add(new THREE.BoxGeometry(0.14, 0.7, 0.14), side * 0.46, 1.2, 0.1, jacket);
+      const pad = add(geo('BoxGeometry', 0.42, 0.14, 0.4), side * 0.46, 1.68, 0, jacket); pad.rotation.z = side * -0.35;
+      add(geo('BoxGeometry', 0.22, 0.8, 0.26), side * 0.2, 0.4, 0, dark); add(geo('BoxGeometry', 0.14, 0.7, 0.14), side * 0.46, 1.2, 0.1, jacket);
     }
-    const kt = add(new THREE.BoxGeometry(1.15, 0.14, 0.26), 0.05, 1.18, 0.34, keyB); kt.rotation.z = 0.45;
-    for (let k = 0; k < 6; k++) { const key = add(new THREE.BoxGeometry(0.1, 0.03, 0.2), -0.28 + k * 0.12, 1.02 + k * 0.1, 0.35, keyW); key.rotation.z = 0.45; }
-    add(new THREE.BoxGeometry(0.4, 0.08, 0.14), 0.55, 1.62, 0.34, shades).rotation.z = 0.45;
+    const kt = add(geo('BoxGeometry', 1.15, 0.14, 0.26), 0.05, 1.18, 0.34, keyB); kt.rotation.z = 0.45;
+    for (let k = 0; k < 6; k++) { const key = add(geo('BoxGeometry', 0.1, 0.03, 0.2), -0.28 + k * 0.12, 1.02 + k * 0.1, 0.35, keyW); key.rotation.z = 0.45; }
+    add(geo('BoxGeometry', 0.4, 0.08, 0.14), 0.55, 1.62, 0.34, shades).rotation.z = 0.45;
   } else if (variant === 'raver') {      // Rave biome: skinny dancer, neon shades, mohawk and a glowstick in each hand
-    add(new THREE.BoxGeometry(0.4, 0.62, 0.26), 0, 0.95, 0, mat); add(new THREE.SphereGeometry(0.22, 8, 6), 0, 1.5, 0, mat);
-    add(new THREE.BoxGeometry(0.34, 0.09, 0.08), 0, 1.52, 0.2, neonCyan); add(new THREE.ConeGeometry(0.1, 0.42, 4), 0, 1.86, -0.02, neonMag);
+    add(geo('BoxGeometry', 0.4, 0.62, 0.26), 0, 0.95, 0, mat); add(geo('SphereGeometry', 0.22, 8, 6), 0, 1.5, 0, mat);
+    add(geo('BoxGeometry', 0.34, 0.09, 0.08), 0, 1.52, 0.2, neonCyan); add(geo('ConeGeometry', 0.1, 0.42, 4), 0, 1.86, -0.02, neonMag);
     for (const side of [-1, 1]) {
-      add(new THREE.BoxGeometry(0.12, 0.56, 0.12), side * 0.13, 0.3, 0, dark); add(new THREE.BoxGeometry(0.1, 0.5, 0.1), side * 0.3, 1.02, 0.06, mat);
-      const gs = add(new THREE.CylinderGeometry(0.035, 0.035, 0.6, 5), side * 0.38, 1.42, 0.2, side < 0 ? neonMag : neonCyan); gs.rotation.z = side * 0.55;
+      add(geo('BoxGeometry', 0.12, 0.56, 0.12), side * 0.13, 0.3, 0, dark); add(geo('BoxGeometry', 0.1, 0.5, 0.1), side * 0.3, 1.02, 0.06, mat);
+      const gs = add(geo('CylinderGeometry', 0.035, 0.035, 0.6, 5), side * 0.38, 1.42, 0.2, side < 0 ? neonMag : neonCyan); gs.rotation.z = side * 0.55;
     }
   } else if (variant === 'crab') {        // Beach biome: wide shell, eye stalks, two big claws, side legs
-    const shell = add(new THREE.SphereGeometry(0.6, 8, 6), 0, 0.45, 0, mat); shell.scale.set(1.3, 0.6, 1);
+    const shell = add(geo('SphereGeometry', 0.6, 8, 6), 0, 0.45, 0, mat); shell.scale.set(1.3, 0.6, 1);
     for (const side of [-1, 1]) {
-      add(new THREE.CylinderGeometry(0.04, 0.04, 0.3, 4), side * 0.2, 0.92, 0.42, dark); add(new THREE.SphereGeometry(0.09, 6, 4), side * 0.2, 1.1, 0.42, new THREE.MeshBasicMaterial({ color: 0xffffff }));
-      add(new THREE.BoxGeometry(0.5, 0.12, 0.12), side * 0.78, 0.5, 0.45, mat); const claw = add(new THREE.ConeGeometry(0.22, 0.5, 5), side * 1.05, 0.52, 0.72, mat); claw.rotation.x = Math.PI / 2;
-      for (let k = 0; k < 3; k++) { const leg = add(new THREE.BoxGeometry(0.5, 0.06, 0.06), side * 0.85, 0.2, -0.25 + k * 0.25, dark); leg.rotation.z = side * 0.5; }
+      add(geo('CylinderGeometry', 0.04, 0.04, 0.3, 4), side * 0.2, 0.92, 0.42, dark); add(geo('SphereGeometry', 0.09, 6, 4), side * 0.2, 1.1, 0.42, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      add(geo('BoxGeometry', 0.5, 0.12, 0.12), side * 0.78, 0.5, 0.45, mat); const claw = add(geo('ConeGeometry', 0.22, 0.5, 5), side * 1.05, 0.52, 0.72, mat); claw.rotation.x = Math.PI / 2;
+      for (let k = 0; k < 3; k++) { const leg = add(geo('BoxGeometry', 0.5, 0.06, 0.06), side * 0.85, 0.2, -0.25 + k * 0.25, dark); leg.rotation.z = side * 0.5; }
     }
   } else if (variant === 'glitchling') { // Glitch biome: unstable cluster of neon cubes that will not hold still
     for (let i = 0; i < 7; i++) {
       const cm = new THREE.MeshBasicMaterial({ color: [0x39ff88, 0xff2bd6, 0x2be8ff, 0xffffff][i % 4] });
-      const c = add(new THREE.BoxGeometry(0.4 + (i % 3) * 0.12, 0.4 + ((i + 1) % 3) * 0.12, 0.4), (i % 3 - 1) * 0.3, 0.7 + (i % 4) * 0.3, ((i * 5) % 3 - 1) * 0.2, cm); c.userData.gl = 1;
+      const c = add(geo('BoxGeometry', 0.4 + (i % 3) * 0.12, 0.4 + ((i + 1) % 3) * 0.12, 0.4), (i % 3 - 1) * 0.3, 0.7 + (i % 4) * 0.3, ((i * 5) % 3 - 1) * 0.2, cm); c.userData.gl = 1;
     }
   } else if (variant === 'stalker' || variant === 'stormWraith' || variant === 'frozenStalker' || variant === 'infernal') {
     // Biome predators share a sleek silhouette, with distinctive horn/crest colors and segmented armor.
@@ -1316,189 +1326,191 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker') {
         : variant === 'stormWraith' ? [0x19233d, 0xa6efff, 0x668dff]
           : [0x650d22, 0xb7aa9a, 0xff1438];
     const rib = retroMaterial(new THREE.MeshLambertMaterial({ color: palette[0] })), bone = retroMaterial(new THREE.MeshLambertMaterial({ color: palette[1] }));
-    const torso = add(new THREE.SphereGeometry(0.52, 8, 6), 0, 1.05, 0.04, rib); torso.scale.set(0.9, 1.25, 0.72);
-    const skull = add(new THREE.SphereGeometry(0.34, 8, 6), 0, 1.82, 0.24, bone); skull.scale.set(1.1, 0.78, 0.92);
-    add(new THREE.BoxGeometry(0.44, 0.075, 0.12), 0, 1.83, 0.54, new THREE.MeshBasicMaterial({ color: palette[2] }));
+    const torso = add(geo('SphereGeometry', 0.52, 8, 6), 0, 1.05, 0.04, rib); torso.scale.set(0.9, 1.25, 0.72);
+    const skull = add(geo('SphereGeometry', 0.34, 8, 6), 0, 1.82, 0.24, bone); skull.scale.set(1.1, 0.78, 0.92);
+    add(geo('BoxGeometry', 0.44, 0.075, 0.12), 0, 1.83, 0.54, new THREE.MeshBasicMaterial({ color: palette[2] }));
     for (const side of [-1, 1]) {
-      const arm = add(new THREE.CapsuleGeometry(0.13, 0.55, 3, 5), side * 0.59, 0.83, 0.03, rib); arm.rotation.z = side * -0.2;
-      const leg = add(new THREE.CapsuleGeometry(0.16, 0.42, 3, 5), side * 0.28, 0.35, 0, bone); leg.rotation.z = side * 0.08;
-      add(new THREE.ConeGeometry(0.13, 0.4, 5), side * 0.28, 0.1, 0.18, rib);
+      const arm = add(geo('CapsuleGeometry', 0.13, 0.55, 3, 5), side * 0.59, 0.83, 0.03, rib); arm.rotation.z = side * -0.2;
+      const leg = add(geo('CapsuleGeometry', 0.16, 0.42, 3, 5), side * 0.28, 0.35, 0, bone); leg.rotation.z = side * 0.08;
+      add(geo('ConeGeometry', 0.13, 0.4, 5), side * 0.28, 0.1, 0.18, rib);
     }
     for (let plate = 0; plate < 3; plate++) {
-      const spine = add(new THREE.ConeGeometry(0.12, 0.42, 4), 0, 1.5 - plate * 0.28, -0.43, bone); spine.rotation.x = -0.35;
+      const spine = add(geo('ConeGeometry', 0.12, 0.42, 4), 0, 1.5 - plate * 0.28, -0.43, bone); spine.rotation.x = -0.35;
     }
     if (isBoss) {
-      const crown = add(new THREE.TorusGeometry(0.52, 0.045, 4, 10), 0, 2.1, -0.08, new THREE.MeshBasicMaterial({ color: palette[2] })); crown.rotation.x = Math.PI / 2;
-      for (const side of [-1, 1]) { const horn = add(new THREE.ConeGeometry(0.11, 0.65, 4), side * 0.3, 2.1, -0.08, rib); horn.rotation.z = side * -0.35; }
+      const crown = add(geo('TorusGeometry', 0.52, 0.045, 4, 10), 0, 2.1, -0.08, new THREE.MeshBasicMaterial({ color: palette[2] })); crown.rotation.x = Math.PI / 2;
+      for (const side of [-1, 1]) { const horn = add(geo('ConeGeometry', 0.11, 0.65, 4), side * 0.3, 2.1, -0.08, rib); horn.rotation.z = side * -0.35; }
     }
     for (let side of [-1, 1]) {
-      const crest = add(new THREE.ConeGeometry(0.2, variant === 'infernal' ? 1.05 : 0.72, 4), side * 0.62, 1.08, -0.42, rib); crest.rotation.z = side * -0.65;
-      add(new THREE.ConeGeometry(0.07, 0.28, 4), side * 0.2, 0.78, 0.38, bone).rotation.x = Math.PI;
-      const ribPlate = add(new THREE.BoxGeometry(0.12, 0.54, 0.12), side * 0.18, 1.28, 0.39, rib); ribPlate.rotation.z = side * 0.12;
+      const crest = add(geo('ConeGeometry', 0.2, variant === 'infernal' ? 1.05 : 0.72, 4), side * 0.62, 1.08, -0.42, rib); crest.rotation.z = side * -0.65;
+      add(geo('ConeGeometry', 0.07, 0.28, 4), side * 0.2, 0.78, 0.38, bone).rotation.x = Math.PI;
+      const ribPlate = add(geo('BoxGeometry', 0.12, 0.54, 0.12), side * 0.18, 1.28, 0.39, rib); ribPlate.rotation.z = side * 0.12;
     }
-    add(new THREE.BoxGeometry(0.52, 0.06, 0.08), 0, 1.52, 0.32, new THREE.MeshBasicMaterial({ color: palette[2] }));
-    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.48, 0.035, 4, 8), new THREE.MeshBasicMaterial({ color: palette[2] })); halo.position.set(0, 1.42, -0.18); g.add(halo);
+    add(geo('BoxGeometry', 0.52, 0.06, 0.08), 0, 1.52, 0.32, new THREE.MeshBasicMaterial({ color: palette[2] }));
+    const halo = new THREE.Mesh(geo('TorusGeometry', 0.48, 0.035, 4, 8), new THREE.MeshBasicMaterial({ color: palette[2] })); halo.position.set(0, 1.42, -0.18); g.add(halo);
   } else if (variant === 'charger') {            // HOG: low four-legged boar with tusks, ears and a bristly mane
     const pink = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xe8a0a0 })),
       charcoal = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x2a1c14 })),
       tuskM = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xf6f0dc }));
-    add(new THREE.BoxGeometry(1.1, 0.85, 1.7), 0, 0.78, -0.1);                                   // body
-    for (const [lx, lz] of [[-0.35, 0.5], [0.35, 0.5], [-0.35, -0.65], [0.35, -0.65]]) add(new THREE.BoxGeometry(0.3, 0.5, 0.3), lx, 0.25, lz, charcoal);
-    add(new THREE.BoxGeometry(0.85, 0.75, 0.7), 0, 0.88, 0.95);                                  // head
-    add(new THREE.BoxGeometry(0.5, 0.35, 0.4), 0, 0.72, 1.4, pink);                              // snout
-    add(new THREE.BoxGeometry(0.08, 0.38, 0.08), -0.27, 0.62, 1.35, tuskM).rotation.z = 0.3;     // tusks
-    add(new THREE.BoxGeometry(0.08, 0.38, 0.08), 0.27, 0.62, 1.35, tuskM).rotation.z = -0.3;
-    add(new THREE.BoxGeometry(0.22, 0.3, 0.1), -0.38, 1.35, 0.85, charcoal).rotation.z = 0.4;    // ears
-    add(new THREE.BoxGeometry(0.22, 0.3, 0.1), 0.38, 1.35, 0.85, charcoal).rotation.z = -0.4;
-    for (let k = 0; k < 6; k++) add(new THREE.BoxGeometry(0.12, 0.25, 0.2), 0, 1.3 + (k % 2) * 0.05, 0.5 - k * 0.3, charcoal);   // mane
-    add(new THREE.BoxGeometry(0.1, 0.1, 0.1), -0.25, 1.05, 1.33, new THREE.MeshBasicMaterial({ color: 0xff2222 }));
-    add(new THREE.BoxGeometry(0.1, 0.1, 0.1), 0.25, 1.05, 1.33, new THREE.MeshBasicMaterial({ color: 0xff2222 }));
-    add(new THREE.BoxGeometry(0.1, 0.1, 0.3), 0, 1.0, -1.0, pink);                               // tail
+    add(geo('BoxGeometry', 1.1, 0.85, 1.7), 0, 0.78, -0.1);                                   // body
+    for (const [lx, lz] of [[-0.35, 0.5], [0.35, 0.5], [-0.35, -0.65], [0.35, -0.65]]) add(geo('BoxGeometry', 0.3, 0.5, 0.3), lx, 0.25, lz, charcoal);
+    add(geo('BoxGeometry', 0.85, 0.75, 0.7), 0, 0.88, 0.95);                                  // head
+    add(geo('BoxGeometry', 0.5, 0.35, 0.4), 0, 0.72, 1.4, pink);                              // snout
+    add(geo('BoxGeometry', 0.08, 0.38, 0.08), -0.27, 0.62, 1.35, tuskM).rotation.z = 0.3;     // tusks
+    add(geo('BoxGeometry', 0.08, 0.38, 0.08), 0.27, 0.62, 1.35, tuskM).rotation.z = -0.3;
+    add(geo('BoxGeometry', 0.22, 0.3, 0.1), -0.38, 1.35, 0.85, charcoal).rotation.z = 0.4;    // ears
+    add(geo('BoxGeometry', 0.22, 0.3, 0.1), 0.38, 1.35, 0.85, charcoal).rotation.z = -0.4;
+    for (let k = 0; k < 6; k++) add(geo('BoxGeometry', 0.12, 0.25, 0.2), 0, 1.3 + (k % 2) * 0.05, 0.5 - k * 0.3, charcoal);   // mane
+    add(geo('BoxGeometry', 0.1, 0.1, 0.1), -0.25, 1.05, 1.33, new THREE.MeshBasicMaterial({ color: 0xff2222 }));
+    add(geo('BoxGeometry', 0.1, 0.1, 0.1), 0.25, 1.05, 1.33, new THREE.MeshBasicMaterial({ color: 0xff2222 }));
+    add(geo('BoxGeometry', 0.1, 0.1, 0.3), 0, 1.0, -1.0, pink);                               // tail
   } else if (variant === 'alien') {            // little green xeno: huge head, black almond eyes, antennae, glowing ray-gun
     const skin = mat, glowG = new THREE.MeshBasicMaterial({ color: 0x7dff4a }), eyeM = new THREE.MeshBasicMaterial({ color: 0x05060c });
     for (const sx of [-1, 1]) {
-      add(new THREE.BoxGeometry(0.16, 0.7, 0.16), sx * 0.2, 0.35, 0, skin);                                  // spindly legs
-      add(new THREE.BoxGeometry(0.22, 0.1, 0.34), sx * 0.2, 0.05, 0.06, dark);
-      const arm = add(new THREE.BoxGeometry(0.12, 0.85, 0.12), sx * 0.45, 0.85, 0.05, skin); arm.rotation.z = sx * 0.18;   // long arms
+      add(geo('BoxGeometry', 0.16, 0.7, 0.16), sx * 0.2, 0.35, 0, skin);                                  // spindly legs
+      add(geo('BoxGeometry', 0.22, 0.1, 0.34), sx * 0.2, 0.05, 0.06, dark);
+      const arm = add(geo('BoxGeometry', 0.12, 0.85, 0.12), sx * 0.45, 0.85, 0.05, skin); arm.rotation.z = sx * 0.18;   // long arms
     }
-    add(new THREE.BoxGeometry(0.62, 0.7, 0.36), 0, 1.0, 0, skin);                                              // slim torso
-    add(new THREE.BoxGeometry(0.5, 0.12, 0.38), 0, 0.7, 0, dark);                                              // belt
-    add(new THREE.BoxGeometry(0.2, 0.1, 0.05), 0, 1.1, 0.19, glowG);                                           // chest glow
-    const head = add(new THREE.SphereGeometry(0.5, 8, 6), 0, 1.75, 0, skin); head.scale.set(1.05, 1.25, 0.95);  // big skull
+    add(geo('BoxGeometry', 0.62, 0.7, 0.36), 0, 1.0, 0, skin);                                              // slim torso
+    add(geo('BoxGeometry', 0.5, 0.12, 0.38), 0, 0.7, 0, dark);                                              // belt
+    add(geo('BoxGeometry', 0.2, 0.1, 0.05), 0, 1.1, 0.19, glowG);                                           // chest glow
+    const head = add(geo('SphereGeometry', 0.5, 8, 6), 0, 1.75, 0, skin); head.scale.set(1.05, 1.25, 0.95);  // big skull
     for (const sx of [-1, 1]) {
-      const eye = add(new THREE.BoxGeometry(0.3, 0.14, 0.08), sx * 0.22, 1.72, 0.42, eyeM); eye.rotation.z = sx * -0.45;   // slanted black eyes
-      add(new THREE.BoxGeometry(0.06, 0.04, 0.03), sx * 0.22, 1.72, 0.47, glowG);
-      const ant = add(new THREE.BoxGeometry(0.05, 0.4, 0.05), sx * 0.24, 2.4, 0, steel); ant.rotation.z = sx * -0.25;
-      add(new THREE.SphereGeometry(0.07, 5, 4), sx * 0.32, 2.62, 0, glowG);
+      const eye = add(geo('BoxGeometry', 0.3, 0.14, 0.08), sx * 0.22, 1.72, 0.42, eyeM); eye.rotation.z = sx * -0.45;   // slanted black eyes
+      add(geo('BoxGeometry', 0.06, 0.04, 0.03), sx * 0.22, 1.72, 0.47, glowG);
+      const ant = add(geo('BoxGeometry', 0.05, 0.4, 0.05), sx * 0.24, 2.4, 0, steel); ant.rotation.z = sx * -0.25;
+      add(geo('SphereGeometry', 0.07, 5, 4), sx * 0.32, 2.62, 0, glowG);
     }
-    add(new THREE.BoxGeometry(0.14, 0.14, 0.55), 0.5, 0.92, 0.4, dark);                                        // ray-gun
-    add(new THREE.BoxGeometry(0.08, 0.08, 0.14), 0.5, 0.92, 0.72, glowG);
+    add(geo('BoxGeometry', 0.14, 0.14, 0.55), 0.5, 0.92, 0.4, dark);                                        // ray-gun
+    add(geo('BoxGeometry', 0.08, 0.08, 0.14), 0.5, 0.92, 0.72, glowG);
   } else if (variant === 'rider') {
     g.add(makeRiderVisual());
   } else {
     // humanoid chassis shared by walker / gunner / shield / boss
-    add(new THREE.BoxGeometry(0.28, 0.4, 0.28), -0.3, 0.2, 0, dark);                             // shins
-    add(new THREE.BoxGeometry(0.28, 0.4, 0.28), 0.3, 0.2, 0, dark);
-    add(new THREE.BoxGeometry(0.34, 0.12, 0.42), -0.3, 0.06, 0.05);                               // boots
-    add(new THREE.BoxGeometry(0.34, 0.12, 0.42), 0.3, 0.06, 0.05);
-    add(new THREE.BoxGeometry(1.05, 0.85, 0.7), 0, 0.92, 0);                                     // torso
-    const chest = add(new THREE.BoxGeometry(0.78, 0.32, 0.12), 0, 1.0, 0.4, dark);               // chest plate
+    add(geo('BoxGeometry', 0.28, 0.4, 0.28), -0.3, 0.2, 0, dark);                             // shins
+    add(geo('BoxGeometry', 0.28, 0.4, 0.28), 0.3, 0.2, 0, dark);
+    add(geo('BoxGeometry', 0.34, 0.12, 0.42), -0.3, 0.06, 0.05);                               // boots
+    add(geo('BoxGeometry', 0.34, 0.12, 0.42), 0.3, 0.06, 0.05);
+    add(geo('BoxGeometry', 1.05, 0.85, 0.7), 0, 0.92, 0);                                     // torso
+    const chest = add(geo('BoxGeometry', 0.78, 0.32, 0.12), 0, 1.0, 0.4, dark);               // chest plate
     chest.rotation.x = -0.12;
-    add(new THREE.BoxGeometry(0.3, 0.1, 0.04), 0, 0.99, 0.47, accent);                           // chest light
-    add(new THREE.BoxGeometry(0.34, 0.26, 0.32), -0.66, 1.06, 0, dark);                          // shoulders
-    add(new THREE.BoxGeometry(0.34, 0.26, 0.32), 0.66, 1.06, 0, dark);
+    add(geo('BoxGeometry', 0.3, 0.1, 0.04), 0, 0.99, 0.47, accent);                           // chest light
+    add(geo('BoxGeometry', 0.34, 0.26, 0.32), -0.66, 1.06, 0, dark);                          // shoulders
+    add(geo('BoxGeometry', 0.34, 0.26, 0.32), 0.66, 1.06, 0, dark);
     // EVA-style pylon horns perched on the shoulder caps (cyan walker, magenta gunner)
     const pylonCol = variant === 'gunner' ? neonMag : neonCyan;
-    const pylonL = add(new THREE.BoxGeometry(0.16, 0.34, 0.16), -0.68, 1.34, 0, retroMaterial(new THREE.MeshLambertMaterial({ color: 0x141c2c })));
+    const pylonL = add(geo('BoxGeometry', 0.16, 0.34, 0.16), -0.68, 1.34, 0, retroMaterial(new THREE.MeshLambertMaterial({ color: 0x141c2c })));
     pylonL.rotation.z = 0.24; pylonL.rotation.x = -0.12;
-    const pylonR = add(new THREE.BoxGeometry(0.16, 0.34, 0.16), 0.68, 1.34, 0, retroMaterial(new THREE.MeshLambertMaterial({ color: 0x141c2c })));
+    const pylonR = add(geo('BoxGeometry', 0.16, 0.34, 0.16), 0.68, 1.34, 0, retroMaterial(new THREE.MeshLambertMaterial({ color: 0x141c2c })));
     pylonR.rotation.z = -0.24; pylonR.rotation.x = -0.12;
-    const hornL = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.24, 4), pylonCol);
+    const hornL = new THREE.Mesh(geo('ConeGeometry', 0.05, 0.24, 4), pylonCol);
     hornL.position.set(-0.78, 1.56, 0.06); hornL.rotation.z = 0.28; g.add(hornL);
-    const hornR = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.24, 4), pylonCol);
+    const hornR = new THREE.Mesh(geo('ConeGeometry', 0.05, 0.24, 4), pylonCol);
     hornR.position.set(0.78, 1.56, 0.06); hornR.rotation.z = -0.28; g.add(hornR);
     // EVA-style torso vents / power nodes close to the shoulders
-    add(new THREE.BoxGeometry(0.1, 0.14, 0.05), -0.44, 0.94, 0.42, neonViolet);
-    add(new THREE.BoxGeometry(0.1, 0.14, 0.05), 0.44, 0.94, 0.42, neonViolet);
+    add(geo('BoxGeometry', 0.1, 0.14, 0.05), -0.44, 0.94, 0.42, neonViolet);
+    add(geo('BoxGeometry', 0.1, 0.14, 0.05), 0.44, 0.94, 0.42, neonViolet);
     // small reactor core just above the chest light — cyan is the eye-catching point
-    add(new THREE.OctahedronGeometry(0.07), 0, 1.14, 0.42, neonCyan);
-    add(new THREE.BoxGeometry(0.2, 0.42, 0.2), -0.68, 0.66, 0);                                  // arms
-    add(new THREE.BoxGeometry(0.2, 0.42, 0.2), 0.68, 0.66, 0);
-    add(new THREE.BoxGeometry(0.22, 0.18, 0.22), -0.68, 0.4, 0, dark);                           // hands
-    add(new THREE.BoxGeometry(0.22, 0.18, 0.22), 0.68, 0.4, 0, dark);
-    add(new THREE.BoxGeometry(0.64, 0.4, 0.52), 0, 1.5, 0);                                      // head
-    add(new THREE.BoxGeometry(0.5, 0.13, 0.05), 0, 1.52, 0.27, visor);                           // visor slit
-    add(new THREE.BoxGeometry(0.06, 0.24, 0.06), -0.2, 1.78, -0.08, steel);                       // antennae
-    add(new THREE.BoxGeometry(0.06, 0.24, 0.06), 0.2, 1.78, -0.08, steel);
+    add(geo('OctahedronGeometry', 0.07), 0, 1.14, 0.42, neonCyan);
+    add(geo('BoxGeometry', 0.2, 0.42, 0.2), -0.68, 0.66, 0);                                  // arms
+    add(geo('BoxGeometry', 0.2, 0.42, 0.2), 0.68, 0.66, 0);
+    add(geo('BoxGeometry', 0.22, 0.18, 0.22), -0.68, 0.4, 0, dark);                           // hands
+    add(geo('BoxGeometry', 0.22, 0.18, 0.22), 0.68, 0.4, 0, dark);
+    add(geo('BoxGeometry', 0.64, 0.4, 0.52), 0, 1.5, 0);                                      // head
+    add(geo('BoxGeometry', 0.5, 0.13, 0.05), 0, 1.52, 0.27, visor);                           // visor slit
+    add(geo('BoxGeometry', 0.06, 0.24, 0.06), -0.2, 1.78, -0.08, steel);                       // antennae
+    add(geo('BoxGeometry', 0.06, 0.24, 0.06), 0.2, 1.78, -0.08, steel);
     if (variant === 'gunner') {
-      add(new THREE.BoxGeometry(0.12, 0.12, 0.6), 0.62, 0.98, 0.4, dark);                         // rifle body
-      add(new THREE.BoxGeometry(0.14, 0.14, 0.24), 0.62, 0.98, 0.76, dark);                       // barrel shroud
-      add(new THREE.BoxGeometry(0.05, 0.05, 0.2), 0.62, 0.98, 0.94, steel);                       // muzzle
-      add(new THREE.BoxGeometry(0.1, 0.28, 0.12), 0.56, 0.78, 0.32, dark);                        // magazine
-      add(new THREE.BoxGeometry(0.16, 0.1, 0.3), 0.62, 1.08, 0.16, dark);                         // grip / stock
-      add(new THREE.BoxGeometry(0.08, 0.1, 0.14), 0.62, 1.2, 0.42, neonMag);                      // optic bump (now magenta)
-      add(new THREE.BoxGeometry(0.44, 0.14, 0.44), 0, 1.72, 0, dark);                             // helmet brim
-      add(new THREE.BoxGeometry(0.4, 0.16, 0.4), 0, 1.82, 0);                                     // helmet dome
+      add(geo('BoxGeometry', 0.12, 0.12, 0.6), 0.62, 0.98, 0.4, dark);                         // rifle body
+      add(geo('BoxGeometry', 0.14, 0.14, 0.24), 0.62, 0.98, 0.76, dark);                       // barrel shroud
+      add(geo('BoxGeometry', 0.05, 0.05, 0.2), 0.62, 0.98, 0.94, steel);                       // muzzle
+      add(geo('BoxGeometry', 0.1, 0.28, 0.12), 0.56, 0.78, 0.32, dark);                        // magazine
+      add(geo('BoxGeometry', 0.16, 0.1, 0.3), 0.62, 1.08, 0.16, dark);                         // grip / stock
+      add(geo('BoxGeometry', 0.08, 0.1, 0.14), 0.62, 1.2, 0.42, neonMag);                      // optic bump (now magenta)
+      add(geo('BoxGeometry', 0.44, 0.14, 0.44), 0, 1.72, 0, dark);                             // helmet brim
+      add(geo('BoxGeometry', 0.4, 0.16, 0.4), 0, 1.82, 0);                                     // helmet dome
     } else if (variant === 'shield') {
       const rim = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x2e4a66 }));
       const shieldMat = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x66e0ff }));
-      add(new THREE.CylinderGeometry(0.05, 0.05, 0.7, 6), -0.62, 0.86, 0.5, steel).rotation.x = 1.4;   // arm brace
-      const face = add(new THREE.CylinderGeometry(0.78, 0.78, 0.1, 10), -0.18, 1.0, 0.85, shieldMat); // shield face
+      add(geo('CylinderGeometry', 0.05, 0.05, 0.7, 6), -0.62, 0.86, 0.5, steel).rotation.x = 1.4;   // arm brace
+      const face = add(geo('CylinderGeometry', 0.78, 0.78, 0.1, 10), -0.18, 1.0, 0.85, shieldMat); // shield face
       face.rotation.x = Math.PI / 2; face.rotation.z = 0;
-      add(new THREE.TorusGeometry(0.8, 0.07, 4, 10), -0.18, 1.0, 0.8, rim).rotation.x = Math.PI / 2;  // shield rim
-      add(new THREE.BoxGeometry(0.3, 0.3, 0.06), -0.18, 1.0, 0.87, rim);                              // shield crest
-      const sig = new THREE.Mesh(new THREE.OctahedronGeometry(0.09), neonCyan);                     // glowing shield sigil
+      add(geo('TorusGeometry', 0.8, 0.07, 4, 10), -0.18, 1.0, 0.8, rim).rotation.x = Math.PI / 2;  // shield rim
+      add(geo('BoxGeometry', 0.3, 0.3, 0.06), -0.18, 1.0, 0.87, rim);                              // shield crest
+      const sig = new THREE.Mesh(geo('OctahedronGeometry', 0.09), neonCyan);                     // glowing shield sigil
       sig.position.set(-0.18, 1.0, 0.92); g.add(sig);
     } else if (isBoss) {
-      add(new THREE.BoxGeometry(0.4, 0.34, 0.36), -0.86, 1.32, 0, dark);                          // heavier shoulders
-      add(new THREE.BoxGeometry(0.4, 0.34, 0.36), 0.86, 1.32, 0, dark);
-      add(new THREE.BoxGeometry(0.28, 0.26, 0.28), -0.86, 1.32, 0.2, steel);
-      add(new THREE.BoxGeometry(0.28, 0.26, 0.28), 0.86, 1.32, 0.2, steel);
+      add(geo('BoxGeometry', 0.4, 0.34, 0.36), -0.86, 1.32, 0, dark);                          // heavier shoulders
+      add(geo('BoxGeometry', 0.4, 0.34, 0.36), 0.86, 1.32, 0, dark);
+      add(geo('BoxGeometry', 0.28, 0.26, 0.28), -0.86, 1.32, 0.2, steel);
+      add(geo('BoxGeometry', 0.28, 0.26, 0.28), 0.86, 1.32, 0.2, steel);
       for (const [px, pz] of [[-0.5, 0.3], [0, 0.34], [0.5, 0.3]]) {                               // crown spikes
-        add(new THREE.ConeGeometry(0.14, 0.44, 4), px, 1.78, pz, steel);
+        add(geo('ConeGeometry', 0.14, 0.44, 4), px, 1.78, pz, steel);
       }
       // EVA unit-01 vibe: a tall twin-horn crest and glowing collar pylons
-      const crest = add(new THREE.BoxGeometry(0.1, 0.5, 0.12), 0, 1.78, 0.18, dark);
+      const crest = add(geo('BoxGeometry', 0.1, 0.5, 0.12), 0, 1.78, 0.18, dark);
       crest.rotation.x = -0.18;
-      const hornC1 = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.4, 4), neonMag);
+      const hornC1 = new THREE.Mesh(geo('ConeGeometry', 0.06, 0.4, 4), neonMag);
       hornC1.position.set(-0.08, 1.96, 0.22); hornC1.rotation.z = 0.18; g.add(hornC1);
-  const hornC2 = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.4, 4), neonMag);
+  const hornC2 = new THREE.Mesh(geo('ConeGeometry', 0.06, 0.4, 4), neonMag);
   hornC2.position.set(0.08, 1.96, 0.22); hornC2.rotation.z = -0.18; g.add(hornC2);
       // collar-core pylon — a magenta reactor eye above the visor
-      const corePylon = add(new THREE.BoxGeometry(0.3, 0.14, 0.14), 0, 1.68, 0.24, dark);
+      const corePylon = add(geo('BoxGeometry', 0.3, 0.14, 0.14), 0, 1.68, 0.24, dark);
       corePylon.rotation.x = -0.15;
-      add(new THREE.OctahedronGeometry(0.09), 0, 1.68, 0.34, neonMag);
-      add(new THREE.BoxGeometry(0.5, 0.2, 0.6), 0, 0.55, 0.32, dark);                             // hip plates
-      add(new THREE.BoxGeometry(0.34, 0.24, 0.34), -0.68, 0.36, 0.02, dark);                       // gauntlets
-      add(new THREE.BoxGeometry(0.34, 0.24, 0.34), 0.68, 0.36, 0.02, dark);
+      add(geo('OctahedronGeometry', 0.09), 0, 1.68, 0.34, neonMag);
+      add(geo('BoxGeometry', 0.5, 0.2, 0.6), 0, 0.55, 0.32, dark);                             // hip plates
+      add(geo('BoxGeometry', 0.34, 0.24, 0.34), -0.68, 0.36, 0.02, dark);                       // gauntlets
+      add(geo('BoxGeometry', 0.34, 0.24, 0.34), 0.68, 0.36, 0.02, dark);
     }
   }
   if (biomeName) {
     const crestMat = new THREE.MeshBasicMaterial({ color: biomeAccent });
     if (biomeName === 'Jungle') {
       for (const side of [-1, 1]) {
-        const leaf = add(new THREE.IcosahedronGeometry(0.28, 0), side * 0.52, 1.48, -0.32, new THREE.MeshLambertMaterial({ color: side < 0 ? 0x47ad3d : 0x8cdb48 }));
+        const leaf = add(geo('IcosahedronGeometry', 0.28, 0), side * 0.52, 1.48, -0.32, new THREE.MeshLambertMaterial({ color: side < 0 ? 0x47ad3d : 0x8cdb48 }));
         leaf.scale.set(0.7, 1.3, 0.4); leaf.rotation.z = side * -0.4;
       }
-      add(new THREE.TorusGeometry(0.36, 0.055, 4, 10), 0, 0.95, 0.48, crestMat).rotation.x = Math.PI / 2;
+      add(geo('TorusGeometry', 0.36, 0.055, 4, 10), 0, 0.95, 0.48, crestMat).rotation.x = Math.PI / 2;
     } else if (biomeName === 'Frozen') {
-      for (const side of [-1, 1]) { const shard = add(new THREE.ConeGeometry(0.16, 0.72, 5), side * 0.46, 1.5, -0.2, crestMat); shard.rotation.z = side * -0.28; }
-      add(new THREE.OctahedronGeometry(0.2), 0, 1.08, 0.46, new THREE.MeshBasicMaterial({ color: 0xe8fcff }));
+      for (const side of [-1, 1]) { const shard = add(geo('ConeGeometry', 0.16, 0.72, 5), side * 0.46, 1.5, -0.2, crestMat); shard.rotation.z = side * -0.28; }
+      add(geo('OctahedronGeometry', 0.2), 0, 1.08, 0.46, new THREE.MeshBasicMaterial({ color: 0xe8fcff }));
     } else if (biomeName === 'Inferno') {
-      for (const side of [-1, 1]) { const horn = add(new THREE.ConeGeometry(0.14, 0.76, 5), side * 0.5, 1.55, -0.18, crestMat); horn.rotation.z = side * -0.48; }
-      add(new THREE.TorusGeometry(0.38, 0.06, 4, 12), 0, 0.94, 0.5, new THREE.MeshBasicMaterial({ color: 0xffb83f }));
+      for (const side of [-1, 1]) { const horn = add(geo('ConeGeometry', 0.14, 0.76, 5), side * 0.5, 1.55, -0.18, crestMat); horn.rotation.z = side * -0.48; }
+      add(geo('TorusGeometry', 0.38, 0.06, 4, 12), 0, 0.94, 0.5, new THREE.MeshBasicMaterial({ color: 0xffb83f }));
     } else if (biomeName === 'Storm') {
-      const halo = add(new THREE.TorusGeometry(0.7, 0.035, 4, 14), 0, 1.68, -0.12, crestMat); halo.rotation.x = 1.15;
-      for (const side of [-1, 1]) add(new THREE.OctahedronGeometry(0.14), side * 0.52, 0.98, 0.42, crestMat);
+      const halo = add(geo('TorusGeometry', 0.7, 0.035, 4, 14), 0, 1.68, -0.12, crestMat); halo.rotation.x = 1.15;
+      for (const side of [-1, 1]) add(geo('OctahedronGeometry', 0.14), side * 0.52, 0.98, 0.42, crestMat);
     } else if (biomeName === 'Horror') {
-      const mask = add(new THREE.BoxGeometry(0.48, 0.28, 0.08), 0, 1.66, 0.38, new THREE.MeshLambertMaterial({ color: 0xd2c5b0 }));
-      for (const side of [-1, 1]) add(new THREE.SphereGeometry(0.07, 5, 4), side * 0.15, 1.68, 0.45, new THREE.MeshBasicMaterial({ color: 0xff1537 }));
-      for (let rib = 0; rib < 3; rib++) add(new THREE.BoxGeometry(0.72, 0.055, 0.055), 0, 0.75 - rib * 0.14, 0.44, crestMat);
+      const mask = add(geo('BoxGeometry', 0.48, 0.28, 0.08), 0, 1.66, 0.38, new THREE.MeshLambertMaterial({ color: 0xd2c5b0 }));
+      for (const side of [-1, 1]) add(geo('SphereGeometry', 0.07, 5, 4), side * 0.15, 1.68, 0.45, new THREE.MeshBasicMaterial({ color: 0xff1537 }));
+      for (let rib = 0; rib < 3; rib++) add(geo('BoxGeometry', 0.72, 0.055, 0.055), 0, 0.75 - rib * 0.14, 0.44, crestMat);
     } else {
-      for (const side of [-1, 1]) add(new THREE.OctahedronGeometry(0.22), side * 0.55, 1.15, 0.35, crestMat);
-      const spiral = add(new THREE.TorusGeometry(0.46, 0.045, 4, 12), 0, 1.42, -0.15, crestMat); spiral.rotation.set(0.7, 0.3, 0.25);
+      for (const side of [-1, 1]) add(geo('OctahedronGeometry', 0.22), side * 0.55, 1.15, 0.35, crestMat);
+      const spiral = add(geo('TorusGeometry', 0.46, 0.045, 4, 12), 0, 1.42, -0.15, crestMat); spiral.rotation.set(0.7, 0.3, 0.25);
     }
   }
   if (isBoss) {
     const armor = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x171323 }));
     for (const side of [-1, 1]) {
-      const shoulder = add(new THREE.OctahedronGeometry(0.4, 0), side * 0.82, 1.28, 0.02, armor); shoulder.scale.set(1.15, 0.85, 0.85);
-      const horn = add(new THREE.ConeGeometry(0.13, 0.72, 5), side * 0.82, 1.67, 0.02, new THREE.MeshBasicMaterial({ color: biomeAccent })); horn.rotation.z = side * -0.35;
+      const shoulder = add(geo('OctahedronGeometry', 0.4, 0), side * 0.82, 1.28, 0.02, armor); shoulder.scale.set(1.15, 0.85, 0.85);
+      const horn = add(geo('ConeGeometry', 0.13, 0.72, 5), side * 0.82, 1.67, 0.02, new THREE.MeshBasicMaterial({ color: biomeAccent })); horn.rotation.z = side * -0.35;
     }
-    const sigil = add(new THREE.TorusGeometry(0.62, 0.055, 5, 16), 0, 2.35, 0, new THREE.MeshBasicMaterial({ color: biomeAccent })); sigil.rotation.x = Math.PI / 2;
+    const sigil = add(geo('TorusGeometry', 0.62, 0.055, 5, 16), 0, 2.35, 0, new THREE.MeshBasicMaterial({ color: biomeAccent })); sigil.rotation.x = Math.PI / 2;
   }
+  };
   // A restrained ground halo makes silhouettes legible at range without turning every enemy into a glowing blob.
   const auraMat = new THREE.MeshBasicMaterial({ color: biomeAccent, transparent: true, opacity: isBoss ? .38 : .18, blending: THREE.AdditiveBlending, depthWrite: false });
-  const aura = new THREE.Mesh(new THREE.TorusGeometry(isBoss ? 1.15 : .72, isBoss ? .055 : .035, 4, 12), auraMat); aura.rotation.x = Math.PI / 2; aura.position.y = .045; g.add(aura);
+  const aura = new THREE.Mesh(geo('TorusGeometry', isBoss ? 1.15 : .72, isBoss ? .055 : .035, 4, 12), auraMat); aura.rotation.x = Math.PI / 2; aura.position.y = .045; g.add(aura);
   const beaconMat = new THREE.MeshBasicMaterial({ color: isBoss ? 0xff294b : biomeAccent, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false });
-  const beacon = new THREE.Mesh(new THREE.OctahedronGeometry(isBoss ? .12 : .07), beaconMat); beacon.position.set(0, 1.95, -.05); g.add(beacon);
+  const beacon = new THREE.Mesh(geo('OctahedronGeometry', isBoss ? .12 : .07), beaconMat); beacon.position.set(0, 1.95, -.05); g.add(beacon);
   g.scale.setScalar(scale); g.position.set(x, y, z); scene.add(g);
   const a = rand() * 6.28;
   const e = { kind: 'walker', boss: isBoss, mesh: g, mat, x, y, z, plat, hp: isBoss ? 12 : V.hp, maxhp: isBoss ? 12 : V.hp,
     r: 0.65 * scale, h: 1.8 * scale, dir: { x: Math.cos(a), z: Math.sin(a) }, speed: isBoss ? 4.6 : V.sp,
     kx: 0, kz: 0, stun: 0, hit: 0, dead: false, slamT: 0, slamCd: 2.5, pts: isBoss ? 1000 : V.pts,
     variant: isBoss ? 'boss' : variant, zone: plat && plat.zone || null, shield: variant === 'shield', strafe: Math.random() < 0.5 ? 1 : -1,
-    fireCd: 1 + Math.random() * 1.5, aimT: 0, chCd: 1.5, windT: 0, charge: 0, cdx: 0, cdz: 0, accent: biomeAccent, aura, auraMat, beacon, beaconMat };
+    fireCd: 1 + Math.random() * 1.5, aimT: 0, chCd: 1.5, windT: 0, charge: 0, cdx: 0, cdz: 0, commonsGuard: false, dropCoins: false, accent: biomeAccent, aura, auraMat, beacon, beaconMat };
+  e.built = false; e.buildBody = () => { if (e.built) return; e.built = true; buildBody(); };   // LAZY BODY: first relevant frame builds the real mesh (aura/beacon/aggro arrow are already up)
   if (isBoss) { e.bossRole = variant; e.boss = true; }
   if (variant === 'charger') { e.h = 1.3 * scale; e.r = 0.85 * scale; }       // hogs are low and wide
   if (variant === 'dinosaur') { e.h = 2.7 * scale; e.r = 0.95 * scale; e.pounceCd = 1.4 + rand() * 1.2; e.pounceT = 0; }
@@ -1540,21 +1552,21 @@ function makeDrone(hx, hy, hz, variant = 'drone', biome = null) {   // an EYE �
   const shell = retroMaterial(new THREE.MeshLambertMaterial({ color: bomber ? 0x7a0e0e : 0x48526c }));  // optic ring
   const steel = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x5a6578 }));
   // eyeball sphere: chunky PS1 sphere, iris + pupil front, glow rim from the existing neon kit
-  sperm.add(new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 5), mat));
+  sperm.add(new THREE.Mesh(geo('SphereGeometry', 0.55, 8, 5), mat));
   const biomeEye = ({ Jungle: 0xb5f35a, Psychedelic: 0xf14bff, Frozen: 0x9cf4ff, Inferno: 0xff672e, Storm: 0x74aaff, Horror: 0xff173c })[biome && biome.name] || 0x22aaff;
   const irisCol = bomber ? 0xff3a5a : biomeEye;                       // each biome retunes the optic
-  const iris = new THREE.Mesh(new THREE.SphereGeometry(0.36, 8, 5), new THREE.MeshBasicMaterial({ color: irisCol }));
+  const iris = new THREE.Mesh(geo('SphereGeometry', 0.36, 8, 5), new THREE.MeshBasicMaterial({ color: irisCol }));
   iris.position.z = 0.36; sperm.add(iris);
-  const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 4), new THREE.MeshBasicMaterial({ color: 0x05060c }));
+  const pupil = new THREE.Mesh(geo('SphereGeometry', 0.16, 6, 4), new THREE.MeshBasicMaterial({ color: 0x05060c }));
   pupil.position.z = 0.58; sperm.add(pupil);            // black pupil staring dead center, like a real eyeball
   // glowing optic-ring band (replaces the old hull band) — cyan for drone, magenta for bomber
   const bandCol = new THREE.MeshBasicMaterial({ color: bomber ? 0xff3fc8 : biomeEye });
-  const bandRing = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.055, 4, 10), bandCol);
+  const bandRing = new THREE.Mesh(geo('TorusGeometry', 0.56, 0.055, 4, 10), bandCol);
   bandRing.rotation.x = Math.PI / 2; bandRing.position.y = 0.0; sperm.add(bandRing);
   // iris runs in tiny veins when we're in 'bomber' mode — bloodshot / berserk eye
   if (bomber) {
     for (let k = 0; k < 5; k++) {
-      const vein = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.05), new THREE.MeshBasicMaterial({ color: 0xff2a4a }));
+      const vein = new THREE.Mesh(geo('BoxGeometry', 0.06, 0.05, 0.05), new THREE.MeshBasicMaterial({ color: 0xff2a4a }));
       const a = (k / 5) * Math.PI * 2, r = 0.22 + (k % 2) * 0.09;
       vein.position.set(Math.cos(a) * r, Math.sin(a) * r, 0.62); sperm.add(vein);
     }
@@ -1562,32 +1574,32 @@ function makeDrone(hx, hy, hz, variant = 'drone', biome = null) {   // an EYE �
   // e.ring stays the spin target the game loop already drives; hang the rotors off it
   const ring = new THREE.Group();
   // rotor Housing — thin torus arc around the eyeball like an optic halo, plus 3 spinning blades
-  const ringTorus = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.07, 4, 10), shell);
+  const ringTorus = new THREE.Mesh(geo('TorusGeometry', 0.85, 0.07, 4, 10), shell);
   ringTorus.rotation.x = Math.PI / 2; ring.add(ringTorus);
   const rotorHub = new THREE.Group();
   rotorHub.rotation.x = Math.PI / 2;
   for (let k = 0; k < 3; k++) {
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.03, 0.1), steel);
+    const blade = new THREE.Mesh(geo('BoxGeometry', 0.7, 0.03, 0.1), steel);
     blade.rotation.y = (k / 3) * Math.PI; rotorHub.add(blade);
   }
   ring.add(rotorHub);
   sperm.add(ring);
   // 4 rotor arm stubs that hang the ring/band off the eyeball like eyelashes
   for (let k = 0; k < 4; k++) {
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.5), steel);
+    const arm = new THREE.Mesh(geo('BoxGeometry', 0.14, 0.08, 0.5), steel);
     arm.position.set(k < 2 ? -0.6 : 0.6, 0.05, k % 2 === 0 ? -0.6 : 0.6);
     arm.rotation.y = Math.atan2(arm.position.x, arm.position.z) - Math.PI / 2;
     sperm.add(arm);
-    const housing = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.05, 4, 8), steel);
+    const housing = new THREE.Mesh(geo('TorusGeometry', 0.24, 0.05, 4, 8), steel);
     housing.position.set(arm.position.x, arm.position.y + 0.06, arm.position.z);
     housing.rotation.x = Math.PI / 2; sperm.add(housing);
   }
   // optic nerve planting forward at the bottom so the silhouette reads from below
-  const nerve = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.24, 5), steel);
+  const nerve = new THREE.Mesh(geo('CylinderGeometry', 0.06, 0.06, 0.24, 5), steel);
   nerve.position.y = -0.58; sperm.add(nerve);
   sperm.position.set(hx, hy, hz); scene.add(sperm);
-  const e = { kind: 'drone', mesh: sperm, ring, mat, zone: biome || null, x: hx, cy: hy, y: hy - 0.55, z: hz, hx, hy, hz, ph: rand() * 6, w: 0.5 + rand() * 0.3,
-    hp: 1, maxhp: 1, r: 0.65, h: 1.1, kx: 0, kz: 0, ky: 0, stun: 0, hit: 0, dead: false, pts: bomber ? 60 : 40, variant };
+  const e = { kind: 'drone', built: true, mesh: sperm, ring, mat, zone: biome || null, x: hx, cy: hy, y: hy - 0.55, z: hz, hx, hy, hz, ph: rand() * 6, w: 0.5 + rand() * 0.3,
+    hp: 1, maxhp: 1, r: 0.65, h: 1.1, kx: 0, kz: 0, ky: 0, stun: 0, hit: 0, dead: false, pts: bomber ? 60 : 40, commonsGuard: false, dropCoins: false, variant };
   e.mesh.add(new THREE.Mesh(aggroGeo, aggroMat)).position.y = e.h + 1.1;    // floating red arrow over the eyeball
   enemies.push(e); return e;
 }
@@ -1605,7 +1617,7 @@ function makeUfo(hx, hy, hz) {           // flying saucer: rotating rim lights, 
   const beam = new THREE.Mesh(new THREE.ConeGeometry(0.9, 2.2, 8, 1, true), new THREE.MeshBasicMaterial({ color: 0x7dff4a, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
   beam.position.y = -1.6; g.add(beam);
   g.position.set(hx, hy, hz); scene.add(g);
-  const e = { kind: 'drone', mesh: g, ring: new THREE.Group(), lights, mat: hull, zone: null, x: hx, cy: hy, y: hy - 0.55, z: hz, hx, hy, hz, ph: rand() * 6, w: 0.4 + rand() * 0.25,
+  const e = { kind: 'drone', built: true, mesh: g, ring: new THREE.Group(), lights, mat: hull, zone: null, x: hx, cy: hy, y: hy - 0.55, z: hz, hx, hy, hz, ph: rand() * 6, w: 0.4 + rand() * 0.25,
     hp: 4, maxhp: 4, r: 1.5, h: 1.0, kx: 0, kz: 0, ky: 0, stun: 0, hit: 0, dead: false, pts: 140, variant: 'ufo', fireCd: 1 + rand() * 2, aimT: 0, strafe: rand() < 0.5 ? 1 : -1, orbitA: rand() * 6.28 };
   e.mesh.add(new THREE.Mesh(aggroGeo, aggroMat)).position.y = 1.6;
   enemies.push(e); return e;
@@ -1643,7 +1655,7 @@ function makeMaw(hx, hy, hz) {
   for (let i = 0; i < 3; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(1, 0.05, 4, 36), new THREE.MeshBasicMaterial({ color: 0xff7ad8, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false })); r.position.z = 1.2; g.add(r); inhale.push(r); }
   g.position.set(hx, hy, hz); scene.add(g);
   const mat = new THREE.MeshLambertMaterial({ color: 0x220018 });
-  const e = { kind: 'drone', mesh: g, ring: new THREE.Group(), lights: lips, slit, strands, dripT: 0, swirl, swirl2, inhale, mat, zone: null, x: hx, cy: hy, y: hy - 4, z: hz, hx, hy, hz, ph: rand() * 6, w: 0.3,
+  const e = { kind: 'drone', built: true, mesh: g, ring: new THREE.Group(), lights: lips, slit, strands, dripT: 0, swirl, swirl2, inhale, mat, zone: null, x: hx, cy: hy, y: hy - 4, z: hz, hx, hy, hz, ph: rand() * 6, w: 0.3,
     hp: 16, maxhp: 16, r: 2.4, h: 8.5, kx: 0, kz: 0, ky: 0, stun: 0, hit: 0, dead: false, pts: 600, variant: 'maw', accent: 0xff5aa0 };
   enemies.push(e); return e;
 }
@@ -3057,26 +3069,315 @@ function buildCommons(launch, ux, uz, px, pz, homes) {
   const scr = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.1, 0.22), new THREE.MeshBasicMaterial({ color: 0x7dff4a })); scr.position.set(0, 2.8, 0.12); board.add(scr);
   board.position.set(CX + px * 12, CY, CZ + pz * 12); board.rotation.y = Math.atan2(px, pz); scene.add(board);
   const boardLbl = makeLabel('COMMONS CONTRACT'); boardLbl.position.set(CX + px * 12, CY + 4.8, CZ + pz * 12); boardLbl.scale.set(8, 2, 1); scene.add(boardLbl);
+  // MID-BAND SPOKES: the nest goes on the node angularly FARTHEST from the descent shelf, the house on the node
+  // angularly OPPOSITE the nest, and the shroom wherever there's the most clear air left, so all three locations
+  // hang in open air and never crowd a route.
+  let nestNode = null, houseNode = null, shroomNode = null;
+  {
+    const cands = nodes.filter(n => !n.gate && !n.outpost && ad(n.a, ma) > 1.05);
+    if (cands.length >= 3) {
+      nestNode = cands.slice().sort((p, q) => ad(q.a, ma) - ad(p.a, ma))[0];
+      houseNode = cands.filter(n => n !== nestNode).sort((p, q) => ad(q.a, nestNode.a) - ad(p.a, nestNode.a))[0];
+      shroomNode = cands.filter(n => n !== nestNode && n !== houseNode).sort((p, q) => (ad(q.a, nestNode.a) + ad(q.a, houseNode.a)) - (ad(p.a, nestNode.a) + ad(p.a, houseNode.a)))[0];
+    } else if (cands.length === 2) {
+      nestNode = cands.slice().sort((p, q) => ad(q.a, ma) - ad(p.a, ma))[0];
+      houseNode = cands.filter(n => n !== nestNode).sort((p, q) => ad(q.a, nestNode.a) - ad(p.a, nestNode.a))[0];
+    }
+  }
+  commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode);
 }
+
+// ---------- COMMONS MID BAND: two fought-over locations below the rim and above LEDGE -1, each with its own unique boss ----------
+// 1. THE GIANT PUSSY — a flesh nest sprouting off the ring, guarded by maws. Three maw guards wake THE MOTHER MAW,
+//    a boss maw. Her death: +2 heart slots, her own infinite VOIDBEAM, and MAWS PURGED FROM THE MAP FOREVER.
+// 2. THE HAUNTED NEXUS HOUSE — a massive gothic spire under the ring, garrisoned by horror critters. Three waves
+//    wake THE NEXUS, a colossal horror eye hanging over the spire. Its death: +2 heart slots and the infinite HEXFIRE.
+// Everything is universal (solo / co-op / PvP): the structures build on every client; spawns and boss progress run
+// on the host, and guests see the units through the normal enemy-snapshot channels (enemy-kill server does the rest).
+const HORROR_KINDS = ['spider', 'skeleton', 'pixelghost'];
+let midWins = { maw: false, nex: false };        // survives commons rebuilds (per level); re-fighting a boss re-grants nothing
+let midGen = 0;                                  // debug: which mid-site state instance is live right now
+function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
+  if (!commons) return;
+  const sites = {};
+  // FAR-LANDS (2026-10-26): the three sites are no longer ring-side spurs — each is its own far land ~0.95–1.1 km out
+  // along its spoke's bearing (the band where the far skyline towers live, well past the universe ring at 600), still in
+  // the mid-band height range. Reaching one is THE JOURNEY: connectFar chains a full stepping-stone causeway back to
+  // the launch ring (rest island, checkpoints, ammo/hearts, garrison, coins), each land keeps its local approach
+  // (flesh terraces / front-door steps / rabbit-hole discs), and each keeps its own unique boss + reward.
+  // farAnchor tries a couple of radii/angle nudges for open air; the ladder ends at the legacy near-ring spot so a
+  // crowded world can still fall back to the old spur layout unchanged.
+  const MID_DIST = { nest: 940, house: 1010, shroom: 1080 };       // staggered so the three lands never bunch up
+  const farAnchor = (node, key) => {
+    if (!node) return null;
+    const D0 = MID_DIST[key];
+    for (const [D, da] of [[D0, 0], [D0, 0.22], [D0, -0.22], [D0 + 80, 0.12], [D0 - 80, -0.12], [D0 + 160, 0], [0, 0]]) {
+      const a = node.a + da, X0 = D ? CX + Math.cos(a) * D : node.x, Z0 = D ? CZ + Math.sin(a) * D : node.z;
+      if (blocked(X0, node.y, Z0, 42)) continue;
+      if (buildingHubs.length && buildingHubs.some(h => Math.hypot(X0 - h.x, Z0 - h.z) < h.hw + 30)) continue;   // keep a gap to skyline hubs too (towerWindowCheck eats footprints); real shield is the FAR LANDS GATE in towerWindowCheck
+      if (D) console.log(`[mids] ${key} land anchored far: D=${Math.round(D)} da=${da.toFixed(2)}`);
+      return { a, X0, Z0, y0: node.y, far: !!D };
+    }
+    return { a: node.a, X0: node.x, Z0: node.z, y0: node.y, far: false };   // legacy spur fallback
+  };
+  const connectMid = (node, tx, tz, ty, zone, hw, hd) => {
+    const A = { x: node.x, z: node.z, top: node.y, hw: 8, hd: 8, zone };
+    const B = { x: tx, z: tz, top: ty, hw, hd, zone };
+    let ok = false;
+    for (let retry = 0; retry < 2 && !ok; retry++) ok = connectFar(A, B);
+    if (!ok) console.log('[mids] far causeway to', zone.name, 'found no clear line — the land still sits on its spoke past the skyline');
+  };
+  // ---- site 1: THE GIANT PUSSY (flesh nest + ball-chair arena) ----
+  // Adaptive placement: try several arena radii/drops, then build the chain BACK from whichever arena found air.
+  if (nestNode) {
+    const AN = farAnchor(nestNode, 'nest');
+    const nx = Math.cos(AN.a), nz = Math.sin(AN.a);
+    const X0 = AN.X0, Z0 = AN.Z0, y0 = AN.y0;
+    const FP = { name: 'FleshNest', weather: 'none', plate: 0xff5aa0 };
+    if (AN.far) addSlab(X0, y0, Z0, 9, 9, 2.4, FP, true);           // far land: the causeway's landing rim pad
+    let arenaSite = null;
+    for (const [ra, drop] of [[58, -11.2], [66, -9.4], [70, -12.6], [50, -13]]) {
+      const ax = X0 + nx * ra, az = Z0 + nz * ra, ay = y0 + drop;
+      if (!blocked(ax, ay, az, 13)) {
+        arenaSite = { x: ax, z: az, y: ay, ra };
+        addSlab(ax, ay, az, 13, 13, 2.6, FP, true);
+        break;
+      }
+    }
+    if (arenaSite) {
+      const { x: ax, z: az, y: ay, ra } = arenaSite;
+      const steps = [];
+      for (let k = 1; k <= 3; k++) {                                   // 3 flesh terraces ringing down from the ring node
+        const sx = X0 + nx * (13 + k * 11), sz = Z0 + nz * (13 + k * 11), sy = y0 - 3.4 * k;
+        if (blocked(sx, sy, sz, 4.4)) continue;
+        const sl = addSlab(sx, sy, sz, 4.4, 4.4, 2, FP, true);
+        steps.push({ x: sx, z: sz, y: sy });
+      }
+      // rails + dash pads: ring node -> terraces -> arena (skip any blocked terrace)
+      let A = { x: X0, z: Z0, y: y0 };
+      for (let i = 0; i < steps.length; i++) { const B = steps[i]; addRail(A.x, A.z, A.y + 1.35, B.x, B.z, 0xff5aa0, B.y + 1.35, false); if (i === 0) addDashPad(A.x, A.y, A.z, nx, nz); A = B; }
+      addRail(A.x, A.z, A.y + 1.35, ax, az, 0xff5aa0, ay + 1.35, false);
+      for (let i = 0; i < 12; i++) {                                   // swelling flesh walls ringing the nest pit
+        const a2 = i / 12 * Math.PI * 2, bx = ax + Math.cos(a2) * 16, bz = az + Math.sin(a2) * 16;
+        const pod = new THREE.Mesh(new THREE.SphereGeometry(1.6 + (i % 3) * 0.5, 7, 5), lam(i % 2 ? 0xd85a80 : 0xe8688a));
+        pod.position.set(bx, ay + 2 + Math.sin(a2 * 3) * 1.4, bz); scene.add(pod);
+      }
+      const lbl = makeLabel('THE GIANT PUSSY'); lbl.position.set(ax, ay + 9, az); lbl.scale.set(13, 3.25, 1); scene.add(lbl);
+      beacon(ax, ay + 1, az, 0xff5aa0);
+      sites.nest = { x: ax, z: az, y: ay };
+      if (AN.far) connectMid(nestNode, X0, Z0, y0, FP, 9, 9);        // THE JOURNEY: full causeway from the ring to this land
+    }
+  }
+  // ---- site 2: THE HAUNTED NEXUS HOUSE (massive gothic spire + horror garrison) ----
+  if (houseNode) {
+    const AH = farAnchor(houseNode, 'house');
+    const nx = Math.cos(AH.a), nz = Math.sin(AH.a);
+    const X0 = AH.X0, Z0 = AH.Z0, y0 = AH.y0;
+    const FHT = { name: 'HauntedHouse', weather: 'none', plate: 0x7dff4a };
+    if (AH.far) addSlab(X0, y0, Z0, 9, 9, 2.4, FHT, true);          // far land: the causeway's landing rim pad
+    let hx = X0 + nx * 34, hz = Z0 + nz * 34, hy = y0 - 7.5;          // house base sits in the mid band
+    if (blocked(hx, hy, hz, 17)) { hx += nx * 16; hz += nz * 16; }
+    if (!blocked(hx, hy, hz, 17)) {
+      const wallMat = lam(0x241a33), roofMat = new THREE.MeshBasicMaterial({ color: 0x9dff3a, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
+      const winMat = new THREE.MeshBasicMaterial({ color: 0x20ff8a, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false });
+      const winMat2 = new THREE.MeshLambertMaterial({ color: 0x153024, emissive: 0x0d3a24, emissiveIntensity: 0.8 });
+      const land = addSlab(hx, hy, hz, 17, 12, 2.8, FHT, true);        // 34 x 24 haunted ground
+      const wall = (x0, x1, z0, z1, tall) => { const s = addSolid(x0, x1, hy, hy + tall, z0, z1); const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, tall, z1 - z0), wallMat); m.position.set((x0 + x1) / 2, hy + tall / 2, (z0 + z1) / 2); scene.add(m); return s; };
+      wall(hx - 17, hx - 11, hz - 12, hz + 12, 26); wall(hx + 11, hx + 17, hz - 12, hz + 12, 26);   // side walls
+      wall(hx - 17, hx + 17, hz + 10, hz + 12, 26); wall(hx - 17, hx + 17, hz - 12, hz - 10, 26);   // back + full-height front walls
+      wall(hx - 3, hx + 3, hz - 12, hz - 10, 9);                                                     // the gate lintels above the door gap
+      const f1 = addSlab(hx, hy + 8.2, hz, 16, 11, 1.5, FHT, true);     // interior floors (the garrison hunts these)
+      const f2 = addSlab(hx, hy + 16.4, hz, 15, 10, 1.5, FHT, true);
+      for (const sz of [hz - 11.1, hz + 11.1]) for (const wx of [-10, -5, 5, 10]) {
+        const w = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.6, 0.3), winMat); w.position.set(hx + wx, hy + 4.5, sz); scene.add(w);
+        const w2 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.6, 0.3), winMat2); w2.position.set(hx + wx, hy + 12.7, sz); scene.add(w2);
+      }
+      const spire = addSlab(hx, hy + 24.8, hz, 5.5, 5.5, 1.6, FHT, true);   // SPIRE: the Nexus hangs over this floor
+      for (const sx2 of [-4.8, 4.8]) for (const sz2 of [-4.8, 4.8]) { const p = new THREE.Mesh(new THREE.BoxGeometry(1.1, 10, 1.1), wallMat); p.position.set(hx + sx2, hy + 29.6, hz + sz2); scene.add(p); }
+      const pyra = new THREE.Mesh(new THREE.ConeGeometry(7, 7, 4), lam(0x1a1226)); pyra.position.set(hx, hy + 37, hz); pyra.rotation.y = Math.PI / 4; scene.add(pyra);
+      const eyeRing = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.16, 4, 20), new THREE.MeshBasicMaterial({ color: 0x9dff3a, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }));
+      eyeRing.position.set(hx, hy + 33.5, hz); scene.add(eyeRing);
+      const webM = new THREE.MeshLambertMaterial({ color: 0xcfd8e8, transparent: true, opacity: 0.22 });
+      for (let i = 0; i < 4; i++) { const w = new THREE.Mesh(new THREE.BoxGeometry(7, 0.12, 4), webM); w.position.set(hx + (i % 2 ? 9 : -9), hy + 5 + i * 1.6, hz + (i < 2 ? 15.4 : -15.4)); w.rotation.z = i % 2 ? -0.35 : 0.35; scene.add(w); }
+      const candM = new THREE.MeshBasicMaterial({ color: 0xffc46a, transparent: true, opacity: 0.85 });
+      for (let i = 0; i < 5; i++) { const c = new THREE.Mesh(new THREE.SphereGeometry(0.3, 6, 4), candM); c.position.set(hx + (rand() - 0.5) * 26, hy + 0.8, hz + (rand() - 0.5) * 18); scene.add(c); }
+      // approach: ring stone -> 2 down-steps -> the front door, with rails + dash pads
+      const steps = [];
+      for (let k = 1; k <= 2; k++) {
+        const sx = X0 + nx * (14 + k * 12), sz = Z0 + nz * (14 + k * 12), sy = y0 - 3.75 * k;
+        if (blocked(sx, sy, sz, 4.2)) { steps.length = 0; break; }
+        const sl = addSlab(sx, sy, sz, 4.2, 4.2, 2, FHT, true); steps.push({ x: sx, z: sz, y: sy, slab: sl });
+      }
+      for (let i = 0; i < steps.length; i++) {
+        const A = i === 0 ? { x: X0, z: Z0, y: y0 } : steps[i - 1], B = steps[i];
+        addRail(A.x, A.z, A.y + 1.35, B.x, B.z, 0x9dff3a, B.y + 1.35, false);
+        if (i === 0) addDashPad(A.x, A.y, A.z, nx, nz);
+      }
+      if (steps.length) { const l2 = steps[steps.length - 1]; addRail(l2.x, l2.z, l2.y + 1.35, hx - nx * 18, hz - nz * 18, 0x9dff3a, hy + 1.35, false); addDashPad(l2.x, l2.y, l2.z, nx, nz); }
+      const lbl = makeLabel('THE HAUNTED NEXUS HOUSE'); lbl.position.set(hx, hy + 42, hz); lbl.scale.set(14, 3.5, 1); scene.add(lbl);
+      beacon(hx, hy + 1, hz, 0x7dff4a);
+      sites.house = { x: hx, z: hz, y: hy, slabs: [land, f1, f2, spire] };
+      if (AH.far) connectMid(houseNode, X0, Z0, y0, FHT, 9, 9);      // THE JOURNEY: full causeway from the ring to this land
+    }
+  }
+  // ---- site 3: THE GRAND SHROOM (psychedelic wonderland stalk + cap, Alice easter eggs) ----
+  if (shroomNode) {
+    const AS = farAnchor(shroomNode, 'shroom');
+    const nx = Math.cos(AS.a), nz = Math.sin(AS.a);
+    const X0 = AS.X0, Z0 = AS.Z0, y0 = AS.y0;
+    const FSH = { name: 'Shroom', weather: 'none', plate: 0xf13be8 };
+    if (AS.far) addSlab(X0, y0, Z0, 9, 9, 2.4, FSH, true);          // far land: the causeway's landing rim pad
+    // a spiral rabbit-hole of glowing cap-discs winding DOWN from the rim to the cap arena (down = into wonderland)
+    const discs = [];
+    let prevA = shroomNode.a, ok = true;
+    for (let k = 1; k <= 4; k++) {
+      const rr = 12.5 + k * 7.5, x2 = X0 + nx * rr, z2 = Z0 + nz * rr;   // discs spiral OUT from the rim pad toward the cap, winding down
+      const y2 = y0 - 2.6 * k;
+      if (blocked(x2, y2, z2, 4)) { continue; }
+      const sl = addSlab(x2, y2, z2, 4, 4, 1.8, FSH, true);
+      discs.push({ x: x2, z: z2, y: y2, slab: sl });
+    }
+    let mx = X0 + nx * 50, mz = Z0 + nz * 50, my = y0 - 11.5;
+    for (let mo = 90; blocked(mx, my, mz, 14) && mo <= 210; mo += 40) { mx = X0 + nx * mo; mz = Z0 + nz * mo; }   // nudge the cap outward if the anchor's air was only nominal
+    if (!blocked(mx, my, mz, 14)) {
+      // THE CAP: a huge psychedelic umbrella disc over the stalk (visual), with a solid walkable cap-slab under it
+      const cap = addSlab(mx, my, mz, 14, 14, 2.4, FSH, true);
+      const capMat = new THREE.MeshBasicMaterial({ vertexColors: false, color: 0xf13be8, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
+      const capCone = new THREE.Mesh(new THREE.ConeGeometry(15.5, 6.5, 9, 1, true), capMat); capCone.rotation.x = Math.PI; capCone.position.set(mx, my + 5.6, mz); scene.add(capCone);
+      const capSpots = new THREE.Mesh(new THREE.SphereGeometry(1.15, 8, 6), new THREE.MeshBasicMaterial({ color: 0x24ffc8, transparent: true, opacity: 0.9 }));
+      for (const [sx3, sz3] of [[-8, -8], [8, -8], [-8, 8], [8, 8], [0, 11], [0, -11], [11, 0], [-11, 0]]) { const s = capSpots.clone(); const g2 = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), capSpots.material); g2.position.set(mx + sx3, my + 3.4, mz + sz3); g2.scale.setScalar(0.8 + (sx3 ? 0.35 : 0)); scene.add(g2); }
+      capCone.rotation.z = 0; capCone.rotation.x = Math.PI;
+      // THE STALK: pillars below the cap (visual + a few solid struts so it reads as a mushroom from below)
+      for (const [sx3, sz3] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) { const st = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.9, 20, 7), lam(0xd8c8f0)); st.position.set(mx + sx3, my - 10, mz + sz3); scene.add(st); }
+      for (let i = 0; i < discs.length; i++) {
+        const A = i === 0 ? { x: X0, z: Z0, y: y0 } : discs[i - 1], B = discs[i];
+        addRail(A.x, A.z, A.y + 1.35, B.x, B.z, 0xf13be8, B.y + 1.35, false);
+        if (i === 0) addDashPad(A.x, A.y, A.z, nx, nz);
+      }
+      if (discs.length) { const l3 = discs[discs.length - 1]; addRail(l3.x, l3.z, l3.y + 1.35, mx, mz, 0xf13be8, my + 1.35, false); addDashPad(l3.x, l3.y, l3.z, nx, nz); }
+      // Alice nods: floating labels around the cap
+      const eggLbls = ['EAT ME', 'DRINK ME', 'CURIOUSER AND CURIOUSER', 'DOWN THE RABBIT HOLE', 'WE ARE ALL MAD HERE'];
+      for (let i = 0; i < eggLbls.length; i++) { const el2 = makeLabel(eggLbls[i]); el2.position.set(mx + Math.cos(i * 1.256 + 0.5) * 13, my + 1.6 + (i % 2) * 2.4, mz + Math.sin(i * 1.256 + 0.5) * 13); el2.scale.set(7, 1.75, 1); scene.add(el2); }
+      const shroomLbl = makeLabel('THE GRAND SHROOM'); shroomLbl.position.set(mx, my + 12, mz); shroomLbl.scale.set(13, 3.25, 1); scene.add(shroomLbl);
+      beacon(mx, my + 1, mz, 0xf13be8);
+      sites.shroom = { x: mx, z: mz, y: my, slabs: [cap, ...discs.map(d => d.slab)] };
+      if (AS.far) connectMid(shroomNode, X0, Z0, y0, FSH, 9, 9);     // THE JOURNEY: full causeway from the ring to this land
+    } else console.log('[mids] shroom cap blocked at every outward nudge — site skipped this build');
+  }
+  commons.mid = {
+    nest: sites.nest ? { ...sites.nest, woken: false, waves: 0, guardCd: 6, bossSpawned: false, bossDead: false, gen: midGen++ } : null,
+    house: sites.house ? { ...sites.house, woken: false, waves: 0, guardCd: 6, waveCd: 8, bossSpawned: false, bossDead: false, gen: midGen++ } : null,
+    shroom: sites.shroom ? { ...sites.shroom, woken: false, waves: 0, guardCd: 6, bossSpawned: false, bossDead: false, gen: midGen++ } : null,
+  };
+  for (const k of ['nest', 'house', 'shroom']) if (commons.mid[k]) commons.mid[k].key = k;
+  {                                  // the far lands live past the stock world edge: widen the bounds like the other far builders do
+    let farD = 0;
+    for (const k of ['nest', 'house', 'shroom']) if (commons.mid[k]) farD = Math.max(farD, Math.hypot(commons.mid[k].x, commons.mid[k].z));
+    if (farD) { WORLD_R = Math.max(WORLD_R, farD + 320); camera.far = Math.max(camera.far, (farD + 400) * 1.7); camera.updateProjectionMatrix(); }
+  }
+}
+function spawnNestGuard() {
+  const n = commons.mid.nest, a = rand() * 6.283;
+  const e = makeMaw(n.x + Math.cos(a) * 9, n.y + 11 + rand() * 2, n.z + Math.sin(a) * 9);
+  e.pts = 260; e.midGuard = 'nest'; e.eyeLift = 4; e.neverDespawn = true;
+  toast('A MAW CRAWLS OUT OF THE GIANT PUSSY', 2100); return e;
+}
+const PSY_ZONE = { name: 'Psychedelic', plate: 0xf13be8 };   // a stand-in zone so the shroom garrison dresses in psychedelic kit
+function spawnPsycUnit(s) {
+  const sl = (s.slabs || [])[((rand() * (s.slabs.length || 1)) | 0)] || null;
+  const a = rand() * 6.283, r = 6 + rand() * 6;
+  const e = spawnBiomeEnemy(s.x + Math.cos(a) * r, (sl ? sl.top : s.y) + 0.3, s.z + Math.sin(a) * r, sl, PSY_ZONE, 1, 1);
+  if (e) { e.midGuard = 'shroom'; e.neverDespawn = true; }
+  return e;
+}
+function spawnHorror(s) {
+  const sl = (s.slabs || [])[((rand() * (s.slabs.length || 1)) | 0)] || null;
+  const e = makeWalker(s.x + (rand() - 0.5) * 10, (sl ? sl.top : s.y) + 0.4, s.z + (rand() - 0.5) * 8, sl, 1, false, HORROR_KINDS[(rand() * HORROR_KINDS.length) | 0]);
+  e.midGuard = 'house'; e.neverDespawn = true; return e;      // tagged to the SITE key: the tick counts/culls house guards by this
+}
+function spawnNestBoss() {
+  const n = commons.mid.nest;
+  const e = makeMaw(n.x, n.y + 16, n.z);
+  e.bodyScale = 2.6; e.mesh.scale.setScalar(2.6);
+  e.hp = e.maxhp = 64; e.r = 3.6; e.h = 13; e.pts = 3000;
+  e.mawBoss = true; e.midBoss = 'maw'; e.mawEat = 5.5; e.neverDespawn = true;
+  toast('THE MOTHER MAW AWAKENS IN THE GIANT PUSSY — KILL HER FOR +2 HEARTS, HER VOIDBEAM, AND A WORLD PURGE ON MAWS', 4600); shockRing({ x: e.x, y: e.cy, z: e.z }, 30, 0xff5aa0); try { dreadSting(0.6); } catch (_) {} shake = Math.max(shake, 0.8);
+}
+function spawnNexusBoss() {
+  const h = commons.mid.house;
+  const e = makeDrone(h.x, h.y + 30, h.z, 'drone', null);
+  e.mesh.scale.setScalar(3.2);
+  e.hp = e.maxhp = 70; e.r = 2.4; e.h = 3.2; e.pts = 3000;
+  e.nexusBoss = true; e.midBoss = 'nex'; e.neverDespawn = true; e.waveCd = 6; e.accent = 0x9dff3a;
+  toast('THE NEXUS OPENS ITS EYE OVER THE SPIRE — KILL IT FOR +2 HEARTS AND THE HEXFIRE', 4600); shockRing({ x: h.x, y: h.y + 30, z: h.z }, 30, 0x9dff3a); try { dreadSting(0.6); } catch (_) {} shake = Math.max(shake, 0.8);
+}
+function spawnCheshireBoss() {
+  const s = commons.mid.shroom;
+  const e = makeDrone(s.x, s.y + 9, s.z, 'drone', PSY_ZONE);
+  e.mesh.scale.setScalar(3.0);
+  e.hp = e.maxhp = 66; e.r = 2.3; e.h = 3.2; e.pts = 3000;
+  e.cheshireBoss = true; e.midBoss = 'shroom'; e.neverDespawn = true; e.waveCd = 6; e.accent = 0xc86aff;
+  toast('THE CHESHIRE GLASS GRINS OVER THE GRAND SHROOM — IT WON\'T FADE UNTIL IT\'S DEAD. +2 HEARTS, +TEAPARTY', 4600); shockRing({ x: s.x, y: s.y + 9, z: s.z }, 30, 0xc86aff); try { dreadSting(0.6); } catch (_) {} shake = Math.max(shake, 0.8);
+}
+function grantMidBossReward(which) {
+  if (!commons || !commons.mid) return;
+  const s = which === 'maw' ? commons.mid.nest : which === 'shroom' ? commons.mid.shroom : commons.mid.house;
+  if (!s || s.bossDead) return;
+  s.bossDead = true; s.bossSpawned = true; midWins[which] = true;
+  score += 2600;
+  shockRing({ x: s.x, y: s.y + 4, z: s.z }, 40, which === 'maw' ? 0xff5aa0 : which === 'shroom' ? 0xc86aff : 0x9dff3a);
+  const n = Math.min(2, MAX_BONUS_HEARTS - bonusHearts);
+  for (let i = 0; i < n; i++) { bonusHearts++; MAXHP++; }
+  health = MAXHP;
+  const wi = which === 'maw' ? WEAPON_VOIDBEAM : which === 'shroom' ? WEAPON_TEAPARTY : WEAPON_HEXFIRE;
+  const got2 = unlockWeapon(wi); if (got2) selectWeapon(wi);
+  if (which === 'maw') mawCd = 9e8;                  // the world purge: no more wild maws tear open
+  toast(`${which === 'maw' ? 'MOTHER MAW SLAIN' : which === 'shroom' ? 'THE CHESHIRE GLASS FADES AWAY (FOR REAL)' : 'NEXUS DESTROYED'} — ${which === 'maw' ? 'MAWS PURGED FROM THE MAP FOREVER' : which === 'shroom' ? 'THE GRAND SHROOM SHINES CLEAN' : 'THE HAUNTED HOUSE LIES SILENT'}  ${n === 2 ? '+2 HEART SLOTS' : n === 1 ? '+1 HEART SLOT' : ''}  ${got2 ? `· WEAPON: ${WEAPONS[wi].name}` : ''}`, 5200);
+  try { sfx.bullseye(8); } catch (_) { try { sfx.kill(); } catch (__) {} }
+  for (let i = 0; i < 10; i++) coin(s.x + Math.cos(i * 0.628) * 5, s.y + 1.4, s.z + Math.sin(i * 0.628) * 5, null);
+  heart(s.x - 4, s.y + 1.4, s.z + 2); heart(s.x + 4, s.y + 1.4, s.z - 2); ammoBox(s.x, s.y + 1, s.z);
+}
+// host-side driver: proximity reveals the site, 3 guard waves each, then the boss; the Nexus keeps summoning while it lives
+const MID_SITE_KEY = { nest: 'maw', house: 'nex', shroom: 'shroom' };
+function commonsMidTick(dt) {
+  if (!commons || !commons.mid || state !== 'play' || paused || inInterior) return;
+  if (net.on && !net.host) return;
+  for (const key of ['nest', 'house', 'shroom']) {
+    const s = commons.mid[key];
+    if (!s || s.bossDead || midWins[MID_SITE_KEY[key]]) continue;
+    const d = Math.hypot(pos.x - s.x, pos.z - s.z);
+    if (!s.woken && d < 60 && Math.abs(pos.y - s.y) < 40) {
+      s.woken = true;
+      toast(key === 'nest' ? 'THE GIANT PUSSY PURRS BELOW — THE MAWS GUARD THEIR MOTHER'
+        : key === 'shroom' ? 'THE GRAND SHROOM CAP SMELLS GROOVY — ITS TRIPPERS GUARD THE CHESHIRE'
+        : 'THE HAUNTED HOUSE GARRISON WAKES — CLEANSE THE HALLS TO WAKE THE NEXUS', 4000); try { dreadSting(0.35); } catch (_) {}
+    }
+    if (!s.woken) continue;
+    if (!s.bossSpawned) {
+      s.guardCd -= dt;
+      if (s.guardCd <= 0 && enemies.filter(u => !u.dead && u.midGuard === key).length < 3) {
+        s.guardCd = 9; s.waves++;
+        if (key === 'nest') spawnNestGuard(); else if (key === 'shroom') spawnPsycUnit(s); else spawnHorror(s);
+      }
+      if (s.waves >= 3 && !enemies.some(u => !u.dead && u.midGuard === key)) {
+        s.bossSpawned = true;
+        if (key === 'nest') spawnNestBoss(); else if (key === 'shroom') spawnCheshireBoss(); else spawnNexusBoss();
+        continue;
+      }
+    } else if (key !== 'nest') {                       // the NEXUS and the CHESHIRE keep summoning while they live
+      s.waveCd -= dt;
+      if (s.waveCd <= 0 && enemies.filter(u => !u.dead && u.midGuard === key).length < 4) {
+        s.waveCd = 8;
+        if (key === 'shroom') spawnPsycUnit(s); else spawnHorror(s);
+      }
+    }
+  }
+}
+
 // A chain of floating platforms from hub A to hub B. Heights wander (level runs, climbs, drops) so the player goes UP as well as down,
 // and a chain may climb from a lower hub to a higher one. Chains leaving an arena stay LOCKED (ghost outlines) until its Guardian dies.
 // HIGHWAYS: a continuous, wide, neon-striped road between two hubs, built for the bike and buggy. Only for downhill links (roads can't climb).
-let roadBudget = 0, roadSerial = 0, startRoads = 0;
-// directional kicker ramp for any angle: stepped solid blocks (AABBs) across the road width, topped with a bounce pad
-function addRampDir(x, z, baseY, ux, uz, steps = 4, width = 7, lipBoost = 24, col = 0x2a3350) {
-  const nx = -uz, nz = ux, cnt = Math.max(1, Math.round(width / 2.4)), mat = lam(col);
-  for (let j = 0; j < cnt; j++) {
-    const lat = (j - (cnt - 1) / 2) * 2.4;
-    for (let i = 0; i < steps; i++) {
-      const h = 0.5 * (i + 1), px = x + ux * i * 2.4 + nx * lat, pz = z + uz * i * 2.4 + nz * lat;
-      addSolid(px - 1.3, px + 1.3, baseY, baseY + h, pz - 1.3, pz + 1.3);
-      const m = new THREE.Mesh(new THREE.BoxGeometry(2.6, h, 2.6), mat); m.position.set(px, baseY + h / 2, pz); scene.add(m);
-    }
-    const px = x + ux * steps * 2.4 + nx * lat, pz = z + uz * steps * 2.4 + nz * lat, py = baseY + 0.5 * steps;
-    const pad = addSolid(px - 1.3, px + 1.3, py, py + 0.4, pz - 1.3, pz + 1.3); pad.bounce = true; pad.boost = lipBoost;
-    const pm = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.4, 2.6), new THREE.MeshLambertMaterial({ color: 0x33e0ff, emissive: 0x2bd0ff, emissiveIntensity: 0.9 })); pm.position.set(px, py + 0.2, pz); scene.add(pm);
-  }
-}
+let roadBudget = 0, roadSerial = 0, startRoads = 0;   // kickers/half-pipes/stepped road ramps were removed entirely
 // a full vertical loop-the-loop for cars and bikes: a bounce pad flings you onto the lead-in rail, the loop carries you round, the exit rail drops you back on the road
 function addRoadLoop(x, y, z, ux, uz, R = 9) {
   const f = new THREE.Vector3(ux, 0, uz), side = new THREE.Vector3(-uz, 0, ux);
@@ -3113,11 +3414,8 @@ function tryRoad(A, B, ux, uz, eA, eB, D) {
     if (!first) { first = { x, y, z }; }
     builtK.add(k);
     const inLoop = loopK > 0 && k >= loopK - 4 && k <= loopK + 6;      // keep the loop's footprint clear
-    if (mild && k > 1 && k < n - 1 && !inLoop) {                       // SKATE-PARK DYNAMICS on flat stretches: kickers, a half-pipe, grind rails
-      const nz = Math.abs(uz) > 0.6;                                 // half-pipe is z-axis aligned
-      if (!bikeTrail && nz && k === Math.floor(n / 2)) { addRamp(x, z - 3.5, y, 0, -1, 4, 8, 26); addRamp(x, z + 3.5, y, 0, 1, 4, 8, 26); }      // HALF-PIPE: two quarter-pipes facing each other
-      else if (k % (bikeTrail ? 3 : 5) === 2) addRampDir(x - ux * 4, z - uz * 4, y, ux, uz, bikeTrail ? 5 : 4, bikeTrail ? 4.8 : 7, bikeTrail ? 28 : 22);   // KICKER (any angle; bike trails get a lot more)
-      else if (!bikeTrail && k % 4 === 1) addRail(x - ux * 3, z - uz * 3, y + 1.5, x + ux * 10, z + uz * 10, [0xff3fc8, 0x36f6ff, 0xffd23a][k % 3]);   // GRIND RAIL
+    if (mild && k > 1 && k < n - 1) {                            // flat stretches: grind rails only (ramps were removed entirely)
+      if (!bikeTrail && k % 4 === 1) addRail(x - ux * 3, z - uz * 3, y + 1.5, x + ux * 10, z + uz * 10, [0xff3fc8, 0x36f6ff, 0xffd23a][k % 3]);   // GRIND RAIL
     }
     if (k % 2 === 0) coin(x, y + 1.2, z, zone);
     if (k % 4 === 1 && k > 1 && k < n - 1) spawnBiomeEnemy(x, y, z, sl, zone, depth);
@@ -3462,7 +3760,6 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     if (near.length > 1 && Math.hypot(near[1].x - hubs[i].x, near[1].z - hubs[i].z) < 260 && rand() < 0.85) connect(near[1], hubs[i]);     // extra links make it a network, not a tree
   }
   buildFlow(hubs);                                           // trampoline towers, mega-rails, loops
-  try { buildSkatePlaza(); } catch (err) { console.error('[skate plaza] failed', err); }
   const byDist = h => (a, b) => Math.hypot(a.x - h.x, a.z - h.z) - Math.hypot(b.x - h.x, b.z - h.z);
   // every arena needs a way on (locked behind its Guardian)
   for (const h of hubs) if (h.kind === 'arena' && !h.gated) {
@@ -3870,31 +4167,7 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     g.position.set(x, y, z); g.rotation.y = head; scene.add(g);
     return g;
   }
-  // full-width ramp on the road: dy > 0 = kicker with a bounce lip, dy < 0 = stepped downhill descent; never a hole
-  function nosRamp(anchor, bearing, width, run, dy, boost = 0) {
-    const ux = Math.round(Math.cos(bearing)), uz = Math.round(Math.sin(bearing));
-    addDashPad(anchor.x - ux * 9, anchor.y, anchor.z - uz * 9, ux, uz);
-    const hw = (width - 1) / 2, box = (f0, f1, y0, y1) => {
-      const xa = anchor.x + ux * f0 - (uz ? hw : 0), xb = anchor.x + ux * f1 + (uz ? hw : 0);
-      const za = anchor.z + uz * f0 - (ux ? hw : 0), zb = anchor.z + uz * f1 + (ux ? hw : 0);
-      return addSolid(Math.min(xa, xb), Math.max(xa, xb), y0, y1, Math.min(za, zb), Math.max(za, zb));
-    };
-    const n = 8, sw = run / n, sh = dy / n;
-    for (let i = 0; i < n; i++) {                       // downhill: real descending steps (each tread its own slab, top at its step); uphill: kicker rising from road level
-      const topI = anchor.y + sh * (i + 1), tread = box(i * sw, (i + 1) * sw, dy < 0 ? topI - 9 : anchor.y - 9, topI);
-      tread.nosRampTread = true;
-    }
-    const wedge = new THREE.Mesh(new THREE.BoxGeometry(width - 1, 0.34, Math.hypot(run, Math.abs(dy))), lam(0x2a3350));
-    wedge.position.set(anchor.x + ux * run * 0.5, anchor.y + dy * 0.5 - 0.12, anchor.z + uz * run * 0.5);
-    wedge.rotation.order = 'YXZ'; wedge.rotation.y = Math.PI / 2 - Math.atan2(uz, ux); wedge.rotation.x = -Math.atan2(dy, run);
-    scene.add(wedge); wedge.userData.noCull = true;
-    if (boost) {                                        // up-ramps only: bounce lip throws you back down the road
-      const pad = box(run, run + 1.7, anchor.y + dy, anchor.y + dy + 0.3);
-      Object.assign(pad, { cx: anchor.x + ux * (run + 0.85), cz: anchor.z + uz * (run + 0.85), top: anchor.y + dy + 0.3, bounce: true, boost, road: true });
-      const lip = new THREE.Mesh(new THREE.BoxGeometry(uz ? width - 1 : 1.7, 0.12, ux ? width - 1 : 1.7), new THREE.MeshBasicMaterial({ color: 0x36f6ff, toneMapped: false }));
-      lip.position.set(anchor.x + ux * (run + 0.85), anchor.y + dy + 0.28, anchor.z + uz * (run + 0.85)); scene.add(lip); lip.userData.noCull = true;
-    }
-  }
+  // kickers/road ramps were removed entirely: flat segments keep only grind rails and boost arches
   // neon boost arch: a full-width booster tread hurls you through the arch — a jump without a hole
   function nosBoostArch(cx, y, cz, bearing, width, zoneCol) {
     const ux = Math.cos(bearing), uz = Math.sin(bearing), archMat = lam(0xff35bd);
@@ -4048,9 +4321,7 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
         addDashPad(cursor.x + Math.round(Math.cos(bearing)) * 6, cursor.y, cursor.z + Math.round(Math.sin(bearing)) * 6, Math.round(Math.cos(bearing)), Math.round(Math.sin(bearing)));
         nosRoadAudit.gaps.push(len);
       } else {                                            // flat segment = jump country
-        if (i % 3 === 1 || rand() < 0.4) { const p = at(0.62); nosRamp(p, bearing, width, 18 + rand() * 5, 2.2, 26 + prog * 9); nosRoadAudit.gaps.push(18 + rand() * 5 + 42); }
-        if (rand() < 0.5) { const p = at(0.24); nosRamp(p, bearing, width, 14, 1.6, 24 + prog * 8); nosRoadAudit.gaps.push(56); }      // smooth kicker (hidden fine treads under a sloped wedge), not the old visible 0.5 m staircase
-        if (rand() < 0.34 && zone.nos !== 3) { const p = at(0.5); addRail(p.x - Math.cos(bearing) * 6, p.z - Math.sin(bearing) * 6, cursor.y + 1.5, p.x + Math.cos(bearing) * 13, p.z + Math.sin(bearing) * 13, [0xff3fc8, 0x36f6ff, 0xffd23a][i % 3]); }
+        if (rand() < 0.34 && zone.nos !== 3) { const p = at(0.5); addRail(p.x - Math.cos(bearing) * 6, p.z - Math.sin(bearing) * 6, cursor.y + 1.5, p.x + Math.cos(bearing) * 13, p.z + Math.sin(bearing) * 13, [0xff3fc8, 0x36f6ff, 0xffd23a][i % 3]); }      // kickers were removed entirely; flat segments keep only grind rails
       }
       if (!dy && i % 3 === 0 && i > 0) { const p = at(0.05), s = i % 2 ? 1 : -1; nosPipe(p.x + nxOf(bearing) * s * 6, cursor.y, p.z + nzOf(bearing) * s * 6, pipeList); }
       if (!dy && i % 5 === 1) { const p = at(0.36); nosEggBlocks(p.x, cursor.y, p.z, bearing + Math.PI / 2, i % 10 === 1); }     // ? blocks (bearing + 90deg = across the road)
@@ -5229,6 +5500,7 @@ function buildTowerWindows() {
 }
 function towerWindowCheck() {
   if (inInterior || state !== 'play' || towerEnterCd > 0) return;
+  if (commons && commons.mid && ['nest', 'house', 'shroom'].some(k => { const s = commons.mid[k]; return s && Math.abs(pos.x - s.x) < 130 && Math.abs(pos.z - s.z) < 130 && Math.abs(pos.y - s.y) < 80; })) return;      // FAR LANDS GATE: the sites live inside the skyline-tower field — tower interiors must never swallow the player (inInterior freezes the mid tick)
   for (const h of buildingHubs) {
     if (!h.windows || !h.windows.length || Math.abs(pos.x - h.x) > h.hw + 4 || Math.abs(pos.z - h.z) > h.hd + 4 || pos.y > h.top) continue;
     for (const w of h.windows) {
@@ -5808,12 +6080,33 @@ function makeWeaponMeshes() {
   part(rail, 0.26, 0.28, 0.3, dark, 0, 0, 0.45); part(rail, 0.3, 0.06, 0.4, 0x4ab8ff, 0, 0.14, 0.3); part(rail, 0.12, 0.12, 0.3, 0x8a96aa, 0, -0.04, -0.12);
   part(beamg, 0.26, 0.08, 0.5, dark, 0, 0.16, 0.5); part(beamg, 0.3, 0.3, 0.12, 0x2a6a6a, 0, 0, 0.0); part(beamg, 0.14, 0.14, 0.22, dark, 0, 0.02, 1.52);
   part(arcg, 0.34, 0.08, 0.4, dark, 0, 0.17, 0.3); part(arcg, 0.2, 0.2, 0.14, 0x5a3a8a, 0, 0, 0.66); for (const sx of [-0.18, 0.18]) part(arcg, 0.05, 0.3, 0.14, dark, sx, 0, 0.3);
-  return [blade, laser, scatter, plasma, rail, beamg, arcg];
+  // 7: voidbeam - the Mother Maw's own drain-focuser: flesh-wrapped barrel, breathing pink orifice, dangling tendrils
+  const voidb = new THREE.Group();
+  part(voidb, 0.3, 0.3, 0.75, 0x4a1028, 0, 0, 0.3); part(voidb, 0.12, 0.26, 0.14, 0x2b2f36, 0, -0.26, 0.05);
+  part(voidb, 0.12, 0.12, 1.05, 0x8a2a4a, 0, 0, 1.1);
+  const orif = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), glowMat(0xff5aa0, 0.9)); orif.scale.z = 1.6; orif.position.set(0, 0, 1.7); voidb.add(orif);
+  const pinkRing = new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.04, 4, 10), glowMat(0xff8ad2)); pinkRing.rotation.y = Math.PI / 2; pinkRing.position.set(0, 0, 1.62); voidb.add(pinkRing);
+  for (const sx of [-1, 1]) { const tdn = part(voidb, 0.05, 0.05, 0.4, 0xd25a86, sx * 0.14, -0.16, 1.2); tdn.rotation.x = 0.7; }
+  // 8: hexfire - the Nexus's cursed prodder: crooked bone-white rod, sickly green orb, rune rings
+  const hexg = new THREE.Group();
+  part(hexg, 0.26, 0.26, 0.6, 0x22301a, 0, 0, 0.25); part(hexg, 0.1, 0.24, 0.12, 0x2b2f36, 0, -0.24, 0.05);
+  const rod = part(hexg, 0.07, 0.07, 1.0, 0xcfd8b8, 0, 0.05, 1.05); rod.rotation.x = 0.06;
+  glow(hexg, new THREE.SphereGeometry(0.15, 10, 8), 0x9dff3a, 0, 0.05, 1.6, 0.85);
+  glow(hexg, box(0.08, 0.2, 0.4), 0x9dff3a, 0.14, 0, 0.5); glow(hexg, box(0.08, 0.2, 0.4), 0x6aff9a, -0.14, 0, 0.5);
+  for (const rz of [0.7, 1.0, 1.3]) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.025, 4, 8), glowMat(0x9dff3a)); r.position.set(0, 0.05, rz); hexg.add(r); }
+  // 9: teaparty - the Cheshire's psychedelic glass: an iridescent hookah-pipe with a swirling violet bowl
+  const teag = new THREE.Group();
+  const tube2 = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 1.1, 10), gunMat(0x3a1a5a)); tube2.rotation.x = Math.PI / 2; tube2.position.z = 0.6; teag.add(tube2);
+  part(teag, 0.24, 0.24, 0.5, 0x2a1440, 0, 0, 0.2); part(teag, 0.1, 0.24, 0.12, 0x2b2f36, 0, -0.24, 0.0);
+  const bowl2 = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), glowMat(0xc86aff)); bowl2.scale.y = 0.75; bowl2.position.set(0, 0.1, 1.25); teag.add(bowl2);
+  glow(teag, new THREE.TorusGeometry(0.19, 0.035, 4, 12), 0xff7ae0, 0, 0.1, 1.25);
+  for (const rz of [0.35, 0.65, 0.95]) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.03, 4, 10), glowMat(0xff7ae0, 0.8)); r.rotation.x = Math.PI / 2; r.position.z = rz; teag.add(r); }
+  return [blade, laser, scatter, plasma, rail, beamg, arcg, voidb, hexg, teag];
 }
 // Give every weapon a readable, animated power source and muzzle assembly rather than leaving it as a static prop.
 function heroWeapon(g, i) {
-  const colors = [0x2ad8ff, 0x39ff6a, 0xff3af0, 0x5aff8a, 0x72baff, 0x3affd0, 0xb06aff];
-  const z = [1.42, 1.66, 1.28, 1.2, 1.82, 1.72, 1.25][i], col = colors[i];
+  const colors = [0x2ad8ff, 0x39ff6a, 0xff3af0, 0x5aff8a, 0x72baff, 0x3affd0, 0xb06aff, 0xff5aa0, 0x9dff3a, 0xc86aff];
+  const z = [1.42, 1.66, 1.28, 1.2, 1.82, 1.72, 1.25, 1.75, 1.72, 1.7][i], col = colors[i];
   const coreMat = new THREE.MeshBasicMaterial({ color: col });
   const core = new THREE.Mesh(new THREE.SphereGeometry(i === 4 ? .12 : .09, 8, 6), coreMat); core.position.set(0, .02, z); g.add(core);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(i === 4 ? .18 : .13, .025, 5, 12), coreMat); ring.position.copy(core.position); ring.rotation.x = Math.PI / 2; g.add(ring);
@@ -5986,7 +6279,7 @@ const sfx = {
   monkey: () => { if (!actx || muted) return; const b = 600 + Math.random() * 300; tone(b, b * 0.55, 0.09, 'square', 0.05); setTimeout(() => tone(b * 1.2, b * 0.6, 0.1, 'square', 0.05), 110); setTimeout(() => tone(b * 0.8, b * 0.4, 0.16, 'sawtooth', 0.05), 240); },
   zap: () => { noise(0.05, 0.12, 5000); tone(1500 + Math.random() * 900, 300, 0.06, 'sawtooth', 0.04); },
   wind: speed => {
-    if (!windGain) return;
+    if (!windGain || !Number.isFinite(speed)) return;
     windGain.gain.setTargetAtTime(muted ? 0 : clamp((speed - 12) / 40, 0, 1) * 0.18, actx.currentTime, 0.1);
     windFilter.frequency.setTargetAtTime(300 + speed * 25, actx.currentTime, 0.1);
   },
@@ -6318,6 +6611,17 @@ function gpEdge(gp, i) {
   return v && !was;
 }
 
+// Look tuning, persisted in localStorage so a handheld keeps its owner's thumb feel between plays.
+// `[` / `]` = sensitivity down/up, `I` = invert right-stick Y. Mouse/keyboard look is untouched.
+const GP_SENS_KEY = 'towerdrop.gp.sens', GP_INVY_KEY = 'towerdrop.gp.invertY';
+const GP_SENS_DEF = 1, GP_SENS_MIN = 0.3, GP_SENS_MAX = 3, GP_SENS_STEP = 0.25;
+let gpSens = GP_SENS_DEF, gpInvertY = false;
+function gpStoreLook() { try { localStorage.setItem(GP_SENS_KEY, String(gpSens)); localStorage.setItem(GP_INVY_KEY, gpInvertY ? '1' : ''); } catch (_) {} }
+try {
+  gpSens = Math.min(GP_SENS_MAX, Math.max(GP_SENS_MIN, parseFloat(localStorage.getItem(GP_SENS_KEY)) || GP_SENS_DEF));
+  gpInvertY = localStorage.getItem(GP_INVY_KEY) === '1';
+} catch (_) {}
+
 function showMsg(title, body, sub) {
   $('msg').innerHTML = title ? `<h1>${title}</h1><p>${body || ''}</p><p><b>${sub || ''}</b></p>` : '';
 }
@@ -6524,9 +6828,12 @@ function menuExit() {
 }
 function menuKey(e) {
   if (menuMode === 'main') {
-    if (e.code === 'Enter' || e.code === 'Space') menuStart();
+    const vis = menuBtns.filter(id => { const b = $(id); return b && b.offsetParent !== null; });   // step only VISIBLE buttons (bExit is hidden)
+    let idx = vis.indexOf(menuBtns[menuSel]); if (idx < 0) idx = 0;
+    if (e.code === 'Enter' || e.code === 'Space') { ({ bStart: menuStart, bMulti: menuMulti, bExit: menuExit })[vis[idx] || 'bStart'](); menuRender(); }
     else if (e.code === 'KeyP') menuMulti();
-    menuRender();
+    else if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'ArrowLeft' || e.code === 'KeyA') { menuSel = menuBtns.indexOf(vis[(idx + vis.length - 1) % vis.length]); menuRender(); }
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'ArrowRight' || e.code === 'KeyD') { menuSel = menuBtns.indexOf(vis[(idx + 1) % vis.length]); menuRender(); }
   } else if (menuMode === 'levels') {
     const n = LEVELS.length, step = dir => { let j = levelSel; for (let k = 0; k < n; k++) { j = (j + dir + n) % n; if (LEVELS[j].unlocked) { levelSel = j; break; } } };
     if (e.code === 'ArrowUp' || e.code === 'KeyW') { step(-1); menuLevelsRender(); }
@@ -6581,7 +6888,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyE' && state === 'play' && hintNpc && !hintProp && !onVehicle) { eUsedProp = true; openGuideDialog(); return; }
   if ((e.code === 'Enter' || (e.code === 'KeyE' && (hintProp || onVehicle))) && state === 'play') { eUsedProp = e.code === 'KeyE'; useProp(); }
   if (e.code === 'CapsLock' || e.code === 'KeyV') { fpv = !fpv; toast(fpv ? 'First-person view' : 'Third-person view', 900); }
-  if (/^Digit[1-7]$/.test(e.code)) { const i = +e.code[5] - 1; if (i === 1 && state !== 'title') { hotbarSel = 1; updateHotbar(); toast('BUILDER HAND — walk into ore to mine, KeyE to place a block', 1600); }
+  if (/^Digit[1-9]$/.test(e.code)) { const i = +e.code[5] - 1; if (i === 1 && state !== 'title') { hotbarSel = 1; updateHotbar(); toast('BUILDER HAND — walk into ore to mine, KeyE to place a block', 1600); }
     else { hotbarSel = 0; updateHotbar(); selectWeapon(i); } }
   if (e.code === 'Tab') cycleWeapon(1);
   if (e.code === 'KeyL') { voiceLines = !voiceLines; toast(voiceLines ? 'Enemy voice lines on' : 'Enemy voice lines off', 1200); if (!voiceLines) { try { window.speechSynthesis.cancel(); } catch (_) {} $('subs').textContent = ''; } }
@@ -6591,6 +6898,8 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyP' && state !== 'title') cycleRetroPreset();
   if (e.code === 'KeyB' && state !== 'title') toggleCrazy();
   if (e.code === 'KeyG') { goreOn = !goreOn; decalMesh.visible = goreOn; toast(goreOn ? 'Gore on' : 'Gore off', 900); }
+  if (e.code === 'BracketRight' || e.code === 'BracketLeft') { gpSens = Math.min(GP_SENS_MAX, Math.max(GP_SENS_MIN, gpSens + (e.code === 'BracketRight' ? GP_SENS_STEP : -GP_SENS_STEP))); gpStoreLook(); toast(`Gamepad look sensitivity ${Math.round(gpSens * 100)}%  ([\u00A0/ ] to tune)`, 1400); }
+  if (e.code === 'KeyI') { gpInvertY = !gpInvertY; gpStoreLook(); toast(gpInvertY ? 'Gamepad look Y INVERTED' : 'Gamepad look Y standard', 1400); }
   if (e.code === 'KeyH' && state !== 'title') { schizoOn = !schizoOn; document.body.classList.toggle('schizo', schizoOn); toast(schizoOn ? 'the voices are back' : 'silence', 1400); }
 });
 addEventListener('keyup', e => { keys[e.code] = false; kbdKeys[e.code] = false; });
@@ -6617,16 +6926,36 @@ function gamepadTick(nowMs) {
   if (playing) {
     const rx = gpDead(ax[2] || 0), ry = gpDead(ax[3] || 0);
     if (rx || ry) {
-      camYaw -= rx * 4.2 * gdt;
-      camPitch = clamp(camPitch + ry * 2.4 * gdt, -0.15, 1.3);
-      fpPitch = clamp(fpPitch - ry * 2.4 * gdt, -1.45, 1.45);
+      const inv = gpInvertY ? -1 : 1;
+      camYaw -= rx * 4.2 * gpSens * gdt;
+      camPitch = clamp(camPitch + ry * 2.4 * gpSens * inv * gdt, -0.15, 1.3);
+      fpPitch = clamp(fpPitch - ry * 2.4 * gpSens * inv * gdt, -1.45, 1.45);
     }
   }
   if (!gpSeen) {
     gpSeen = true;
-    toast('Gamepad: left stick move · right stick look · A jump · B ground pound · X use/interact · RT fire · LT aim · RB weapons · LB grapple · L3 sprint/boost · Y view · Start pause', 7000);
+    toast('Gamepad: left stick move · right stick look · A jump · B ground pound · X use/interact · RT fire · LT aim · RB weapons · LB grapple · L3 sprint/boost · Y view · Start pause · [ and ] look speed · I invert Y', 7000);
   }
   if (!playing) {
+    // Menus (title) and pause: A = confirm, B/Back = back, d-pad or left stick up/down = browse,
+    // all routed through menuKey() so pad input behaves EXACTLY like pressing the real keys.
+    if (gpEdge(gp, 0)) menuKey({ code: 'Enter' });
+    if (gpEdge(gp, 1) || gpEdge(gp, 8)) {                  // B / Back = Escape (un-pause during play)
+      if (state === 'play') { if (paused && !guideDialogOpen && performance.now() - pausedAt > 250) setPaused(false); }
+      else menuKey({ code: 'Escape' });
+    }
+    if (state === 'title') {
+      if (gpEdge(gp, 12)) menuKey({ code: 'ArrowUp' });
+      if (gpEdge(gp, 13)) menuKey({ code: 'ArrowDown' });
+      if (menuMode === 'multi') {                          // MULTIPLAYER screen: X = host (H), Y = join (J)
+        if (gpEdge(gp, 2)) menuKey({ code: 'KeyH' });
+        if (gpEdge(gp, 3)) menuKey({ code: 'KeyJ' });
+      }
+      const msUp = (ax[1] || 0) < -0.5, msDown = (ax[1] || 0) > 0.5;   // left stick browse with hysteresis latch
+      if (msUp || msDown) {
+        if (gpPrev.msDir !== (msUp ? -1 : 1)) { gpPrev.msDir = msUp ? -1 : 1; menuKey({ code: msUp ? 'ArrowUp' : 'ArrowDown' }); }
+      } else gpPrev.msDir = 0;
+    }
     if (gpEdge(gp, 9)) {                                   // Start button: menus
       if (state === 'title') menuKey({ code: 'Enter' });
       else if (!guideDialogOpen && (!paused || performance.now() - pausedAt > 250)) setPaused(!paused);
@@ -6734,6 +7063,17 @@ function damageEnemy(e, dmg, kind = 'hit') {
   e.hp -= dmg * (quadT > 0 ? 3 : 1);              // QUAD damage triples anything it touches while active
   e.hit = 0.18; if (e.hp > 0) { if (kind !== 'beam') { sfx.hit(); enemyHurtVoice(e); } } else { sfx.kill(); enemyDeathVoice(e); }
   if (e.variant === 'charger' && e.hp <= 0) sfx.squeal();
+  if (e.mawBoss && e.hp <= 0) {
+    // MOTHER MAW death burst: guts + a ring of shrinking pink toruses before her life collapses
+    shockRing({ x: e.x, y: e.cy, z: e.z }, 12, 0xff5aa0); bloodBurst(new THREE.Vector3(e.x, e.cy, e.z), 80, 2.2);
+    for (let i = 0; i < 30; i++) flashFx(new THREE.Vector3(e.x + (Math.random() - 0.5) * 24, e.cy + (Math.random() - 0.5) * 20, e.z + (Math.random() - 0.5) * 24), 0xff7ac8, 1.6, 0.35);
+  }
+  if (e.nexusBoss && e.hp <= 0) {
+    // NEXUS death burst: green lightning bolts旱闪 out everywhere, then the eye implodes into a ring
+    shockRing({ x: e.x, y: e.cy, z: e.z }, 14, 0x9dff3a); flashFx(new THREE.Vector3(e.x, e.cy, e.z), 0xd8ffb0, 9, 0.4);
+    for (let i = 0; i < 14; i++) lightning(new THREE.Vector3(e.x, e.cy, e.z), new THREE.Vector3(e.x + (Math.random() - 0.5) * 21, e.cy + (Math.random() - 0.5) * 18, e.z + (Math.random() - 0.5) * 21));
+    for (const u of enemies) if (!u.dead && u.midGuard === 'house' && Math.hypot(u.x - e.x, u.z - e.z) < 140) { u.dead = true; u.mesh.removeFromParent(); missionEnemyKilled(u); }   // the garrison collapses with it
+  }
   const dx = e.x - (kbX ?? pos.x), dz = e.z - (kbZ ?? pos.z), d = Math.hypot(dx, dz) || 1;
   const tick = kind === 'beam';                           // continuous beams: gentle push, light effects
   const kb = tick ? 1.2 : e.boss ? 2 : 9;
@@ -6742,8 +7082,9 @@ function damageEnemy(e, dmg, kind = 'hit') {
   bloodBurst(new THREE.Vector3(e.x, e.y + e.h / 2, e.z), tick ? 3 : 26, 1.1); if (!tick || Math.random() < 0.2) splatter(e.x, e.y + 0.5, e.z, 3, 1, 0.5);
   if (e.hp <= 0) {
     e.dead = true; if (kind !== 'net') missionEnemyKilled(e); if (!net.on || net.host) commonsKill(e); e.mesh.removeFromParent(); if (e.warn) e.warn.visible = false;   // a guest's hit never advances the host's private contract
-    if (net.on && net.host) netSend({ t: 'kill', i: enemies.indexOf(e) });
+    if (net.on && net.host) netSend({ t: 'kill', i: enemies.indexOf(e), mw: e.midBoss ? (e.midBoss === 'maw' ? 'maw' : e.midBoss === 'shroom' ? 'shroom' : 'nex') : undefined });
     spawnOreVein(e.x, e.y, e.z, Math.random() < 0.3 ? activeZ : null);      // enemies drop veins, Minecraft-ish
+    if (e.midBoss && (!net.on || net.host)) grantMidBossReward(e.midBoss);      // MID-BAND BOSSES: the killing blow hands out the run rewards on the authority that owns this enemy
     enemyGore(e); shake = Math.max(shake, e.boss ? 1.2 : 0.5);
     score += e.pts; toast(`+${e.pts}`, 700); killFx(e, e.boss);
     if (e.variant === 'bomber') explode({ x: e.x, y: e.cy, z: e.z }, 4.2, 0, 'enemy', kind);
@@ -7077,8 +7418,12 @@ const WEAPONS = [
   { name: 'Railgun', col: '#7ab8ff', cd: 1.5, ammoKey: 'rails', starterAmmo: 3, ammoCap: 6, ammoPickup: 1 },        // piercing beam through everything in line
   { name: 'Beam',    col: '#3affd0', cont: 'beam', beamDmg: 0.45 },       // CONTINUOUS laser stream; drains the energy meter
   { name: 'Arc',     col: '#b06aff', cont: 'arc' },                       // CONTINUOUS short-range lightning that hits up to 3 targets
+  { name: 'Voidbeam', col: '#ff5aa0', cont: 'beam', infinite: true, beamDmg: 1.15 },  // MOTHER MAW drop: her own devouring pink drain-beam; infinite fire (no energy)
+  { name: 'Hexfire',  col: '#9dff3a', cont: 'arc',  infinite: true, arcDmg: 0.55 },   // NEXUS drop: cursed horror-fire lightning; infinite fire, hotter than the Arc
+  { name: 'Teaparty', col: '#c86aff', cont: 'beam', infinite: true, beamDmg: 0.9 },   // CHESHIRE drop: the rabbit-hole tea-beam; infinite fire, wobbling psychedelic beam
 ];
-const weaponOwned = [true, true, false, false, false, false, false];
+const WEAPON_VOIDBEAM = 7, WEAPON_HEXFIRE = 8, WEAPON_TEAPARTY = 9;
+const weaponOwned = [true, true, false, false, false, false, false, false, false, false];
 const ammo = { shells: 0, rockets: 0, rails: 0, reserve: 0 };
 function ammoPickupUseful() {
   return ammo.reserve < 6 || WEAPONS.some(w => w.ammoKey && weaponOwned[WEAPONS.indexOf(w)] && ammo[w.ammoKey] < w.ammoCap);
@@ -7421,7 +7766,7 @@ function useWeapon() {
   const o = chest(), d = aimDirection(o);
   face = Math.atan2(d.x, d.z);
   const mz = o.clone().addScaledVector(d, 1.1);
-  const fireCol = [0x2ad8ff, 0x39ff6a, 0xff3af0, 0x5aff8a, 0x72baff, 0x3affd0, 0xb06aff][weapon];
+  const fireCol = [0x2ad8ff, 0x39ff6a, 0xff3af0, 0x5aff8a, 0x72baff, 0x3affd0, 0xb06aff, 0xff5aa0, 0x9dff3a, 0xc86aff][weapon];
   const firePower = weapon === 4 ? 1.8 : weapon === 3 ? 1.45 : weapon === 2 ? 1.25 : 1;
   muzzleFlash(mz, d, fireCol, firePower);
   for (const gun of [handGuns[weapon], vmGuns[weapon]]) if (gun && gun.userData.hero) gun.userData.hero.kick = 1;
@@ -7519,7 +7864,7 @@ function fireArc(o, d, dt) {
     const ends = targets.slice(0, 3).map(t => t.c);
     if (!ends.length) ends.push(o.clone().addScaledVector(spread(d, 0.25), range * (0.5 + Math.random() * 0.5)));
     for (const end of ends) { lightning(m0, end); netSend({ t: 'ray', a: r1(m0), b: r1(end), c: 0xb06aff, w: 0.04, l: 0.1 }); }
-    for (const t of targets.slice(0, 3)) damageEnemy(t.e, 0.3, 'beam');
+    for (const t of targets.slice(0, 3)) damageEnemy(t.e, WEAPONS[weapon].arcDmg || 0.3, 'beam');
     if (Math.random() < 0.5) sfx.zap();
   }
 }
@@ -7993,7 +8338,7 @@ function updateEnv(dt, cp) {
   updateDreadWatcher(dt, cp);
   warpTick(dt);
   zoneFxTick(dt);
-  mawTick(dt); ambientPopTick(dt); commonsTick(dt);
+  mawTick(dt); ambientPopTick(dt); commonsTick(dt); commonsMidTick(dt);
   if (trick.t > 0) trick.t = Math.max(0, trick.t - dt);
 }
 // gameplay side-effects of the active zone / the surface underfoot
@@ -8470,8 +8815,8 @@ function variantAI(e, dt, d, dxp, dzp) {
   } else if (av === 'shield') spd = 1.8;
   return [dx, dz, spd];
 }
-function walker(e, dt, t) {
-  const P = nearestPlayer(e);              // co-op: chase whichever player is closest
+function walker(e, dt, t, pre) {
+  const P = pre || nearestPlayer(e);       // co-op: chase whichever player is closest (already computed by updateEnemies)
   const dxp = P.x - e.x, dzp = P.z - e.z, d = Math.hypot(dxp, dzp) || 1;
   const playing = state === 'play' || (state === 'dead' && peerAlive());
   const active = playing && (e.boss ? (P.y < 8 && d < 120)
@@ -8527,11 +8872,14 @@ function walker(e, dt, t) {
   }
   // contact is handled in physics substeps
 }
-function drone(e, dt, t) {
+function drone(e, dt, t, pre) {
   if (e.variant === 'ufo') return ufoAI(e, dt, t);
   if (e.variant === 'maw') return mawAI(e, dt, t);
-  const PL = nearestPlayer(e), px = PL.x, py = PL.y + 1.0, pz = PL.z;
-  const chase = (state === 'play' || (state === 'dead' && peerAlive())) && Math.hypot(px - e.x, py - e.cy, pz - e.z) < 17;
+  const PL = pre || nearestPlayer(e), px = PL.x, py = PL.y + 1.0, pz = PL.z;   // pre: already computed by updateEnemies
+  const chase = (state === 'play' || (state === 'dead' && peerAlive())) && Math.hypot(px - e.x, py - e.cy, pz - e.z) < (e.nexusBoss ? 60 : 17);   // bosses of the mid band stay engaged from far
+  if (e.nexusBoss && chase && (e.waveT = (e.waveT || 4) - dt) <= 0) { e.waveT = 7; try { spawnHorror(commons.mid.house); } catch (_) {} }
+  if (e.cheshireBoss && chase && (e.waveT = (e.waveT || 4) - dt) <= 0) { e.waveT = 7; try { spawnPsycUnit(commons.mid.shroom); } catch (_) {} }
+  if (e.nexusBoss) e.accent = 0x9dff3a; else if (e.cheshireBoss) { e.accent = 0xc86aff; e.mesh.rotation.z = Math.sin(t * 3) * 0.35; }   // the mid band's bosses stay tied to their site no matter where they chase
   let tx, ty, tz;
   if (chase) { tx = px; ty = py; tz = pz; }
   else { tx = e.hx + Math.cos(t * e.w + e.ph) * 4; ty = e.hy + Math.sin(t * 2 + e.ph) * 0.5; tz = e.hz + Math.sin(t * e.w + e.ph) * 4; }
@@ -8550,16 +8898,16 @@ function updateEnemies(dt) {
   const t = performance.now() / 1000;
   for (const e of enemies) {
     if (e.dead) continue;
-    { const NP0 = nearestPlayer(e); if (Math.hypot(NP0.x - e.x, NP0.z - e.z) > (e.boss ? 300 : 230) || Math.abs(NP0.y - e.y) > 300) { e.hit = Math.max(0, e.hit - dt); e.stun = Math.max(0, e.stun - dt); continue; } }     // far enemies skip all per-frame work
+    const NP = nearestPlayer(e); if (Math.hypot(NP.x - e.x, NP.z - e.z) > (e.boss ? 300 : 230) || Math.abs(NP.y - e.y) > 300) { e.hit = Math.max(0, e.hit - dt); e.stun = Math.max(0, e.stun - dt); continue; }     // far enemies skip all per-frame work (cullTick already freezes/hides their built bodies)
+    if (!e.built) e.buildBody();                                          // LAZY BODY: this is the first frame the enemy can act or be fought — build its mesh now
     e.hit = Math.max(0, e.hit - dt); e.stun = Math.max(0, e.stun - dt);
     const pulse = .65 + .35 * Math.sin(t * (e.boss ? 5 : 3) + e.x * .3);
     e.mat.emissive.setHex(e.hit > 0 ? 0xff3030 : e.accent || 0x142030);
     e.mat.emissiveIntensity = e.hit > 0 ? 1.2 : (e.boss ? .42 : .16);
     if (e.aura) { e.aura.rotation.z += dt * (e.boss ? 2.5 : 1.1); e.auraMat.opacity = (e.boss ? .28 : .11) + pulse * (e.boss ? .22 : .11) + e.hit * .3; e.beacon.scale.setScalar(.75 + pulse * .45 + e.hit * .7); e.beaconMat.opacity = .45 + pulse * .42; }
-    { const NP = nearestPlayer(e); if (Math.hypot(NP.x - e.x, NP.z - e.z) > (e.boss ? 300 : 230) || Math.abs(NP.y - e.y) > 300) continue; }     // distant bosses still animate from the street approach
     enemyVoice(e, dt);
     if (net.on && !net.host) clientEnemy(e, dt);            // guests just follow the host's snapshots
-    else (e.kind === 'walker' ? walker : drone)(e, dt, t);
+    else (e.kind === 'walker' ? walker : drone)(e, dt, t, NP);
   }
 }
 
@@ -9245,17 +9593,6 @@ function buildFlow(netHubs) {
   }
 }
 
-function addRamp(cx, cz, baseY, dirX, dirZ, steps = 4, width = 8, lipBoost = 30) {
-  for (let i = 0; i < steps; i++) {
-    const h = 0.5 * (i + 1), px = cx + dirX * (i * 2.4), pz = cz + dirZ * (i * 2.4);
-    addSlab(px, baseY + h, pz, width / 2, 1.2, Math.max(2, baseY + h), null, false);
-  }
-  const lipX = cx + dirX * (steps * 2.4), lipZ = cz + dirZ * (steps * 2.4), lipY = baseY + 0.55 * steps;
-  const pad = addSolid(lipX - width / 2, lipX + width / 2, lipY, lipY + 0.4, lipZ - 1.2, lipZ + 1.2); pad.bounce = true; pad.boost = lipBoost;
-  const padMesh = new THREE.Mesh(new THREE.BoxGeometry(width, 0.4, 2.4), retroMaterial(new THREE.MeshLambertMaterial({ color: 0x33e0ff, emissive: 0x2bd0ff, emissiveIntensity: 0.9 }))); padMesh.position.set(lipX, lipY + 0.2, lipZ); scene.add(padMesh);
-  return { x: lipX, z: lipZ, y: lipY };
-}
-
 const railSolids = [];
 const props = [];                      // street props (vehicles / gear). NOTE: declaration was missing (props is not defined crash) - restored by the arena session
 function buildRidePark() {                     // floating street playground; part of the hub network
@@ -9267,10 +9604,7 @@ function buildRidePark() {                     // floating street playground; pa
     if (activeStartHubs().some(home => Math.hypot(cx - home.x, cz - home.z) < 52)) continue;   // keep the ride park off the six home roofs
     break;
   }
-  const slab = addSlab(cx, parkY, cz, 26, 26, 3, RIDE_ZONE, false);
-  const north = addRamp(cx, cz - 16, parkY, 0, 1, 6, 10, 32);
-  const south = addRamp(cx, cz + 16, parkY, 0, -1, 6, 10, 32);
-  addRail(north.x, north.z + 1.2, north.y + 0.45, south.x, south.z - 1.2, 0xff3fc8);              // the money rail between both lips
+  const slab = addSlab(cx, parkY, cz, 26, 26, 3, RIDE_ZONE, false);   // quarter-pipe ramps were removed entirely; the park keeps its grind rails
   addRail(cx - 20, cz, parkY + 1.7, cx + 20, cz, 0x36f6ff);                                        // long centre grind bar
   addRail(cx - 9, cz - 9, parkY + 1.5, cx + 9, cz + 9, 0xffd23a);                                  // diagonal trick rail
   addRail(cx + 14, cz - 14, parkY + 2.4, cx - 4, cz - 2, 0x9b73ff);                                // kicker rail for angled grinds
@@ -9895,7 +10229,7 @@ function netMessage(m) {
     case 'dmg':
       if (net.host) { const e = enemies[m.i | 0]; if (e) { kbX = num(m.px); kbZ = num(m.pz); damageEnemy(e, clamp(num(m.d), 0, 20), m.k === 'beam' ? 'beam' : 'net'); kbX = kbZ = null; } }
       break;
-    case 'kill': if (!net.host && from === net.hostId) { const e = enemies[m.i | 0]; if (e && !e.dead) remoteKill(e); } break;
+    case 'kill': if (!net.host && from === net.hostId) { const e = enemies[m.i | 0]; if (e && !e.dead) remoteKill(e); if (m.mw) grantMidBossReward(m.mw); } break;
     case 'es': if (from === net.hostId && !net.host) spawnEnemyShot(vec3(m.o), vec3(m.v)); break;
     case 'ray': tracer(vec3(m.a), vec3(m.b), num(m.c) | 0, clamp(num(m.w), 0.01, 0.4), clamp(num(m.l), 0.05, 0.6)); break;
     case 'rkt': { const o = vec3(m.o), d = vec3(m.d); const mesh = plasmaMesh(); mesh.position.copy(o).addScaledVector(d, 1.0); lvl.add(mesh);
@@ -11033,33 +11367,7 @@ function trickLand() {
   else if (trick.bank > 0) { score += trick.bank; trick.best = Math.max(trick.best, trick.bank); toast(`CLEAN LAND  +${trick.bank}${trick.chain > 2 ? '  ·  ' + trick.chain + ' TRICK COMBO' : ''}`, 1500); sfx.clear && sfx.clear(); shockRing(pos, 3 + trick.chain, 0xffd23a); }
   trick.chain = 0; trick.bank = 0; trick.t = 0;
 }
-// ---------- SKATE PLAZA: kickers, half-pipes and grind rails on ledges all over the sky ----------
-function buildSkatePlaza() {
-  let made = 0; const cap = 240;
-  const homes = activeStartHubs();
-  for (const q of platforms) {
-    if (made >= cap) break;
-    if (q.sp || q.bounce || q.checkpoint || q.cx === undefined || q.hw < 3.5 || q.hd < 2.2 || q.arena) continue;
-    if (homes.some(h => Math.hypot(q.cx - h.x, q.cz - h.z) < 70 && q.top > h.top - 70)) continue;
-    if (rand() > 0.34) continue;
-    const alongX = q.hw >= q.hd, half = alongX ? q.hw : q.hd, cross = alongX ? q.hd : q.hw, ax = alongX ? 1 : 0, az = alongX ? 0 : 1;
-    const width = Math.max(2.4, Math.min(4.8, cross * 2 - 1.2)), col = q.zone ? q.zone.plate : 0x2a3350;
-    if (half >= 12) {                                                              // HALF-PIPE: two kickers rising away from a flat valley
-      addRampDir(q.cx - ax * 3.5, q.cz - az * 3.5, q.top, -ax, -az, 3, width, 20, 0x2a3350);
-      addRampDir(q.cx + ax * 3.5, q.cz + az * 3.5, q.top, ax, az, 3, width, 20, 0x2a3350);
-      made += 2;
-    } else {
-      const steps = half >= 4.6 ? 3 : 2, dir = rand() < 0.5 ? 1 : -1, edge = half - 1.4;
-      const sx = q.cx + ax * dir * (edge - steps * 2.4) , sz = q.cz + az * dir * (edge - steps * 2.4);
-      if (edge - steps * 2.4 < -half + 0.6) continue;
-      addRampDir(sx, sz, q.top, ax * dir, az * dir, steps, width, 18, 0x2a3350); made++;
-      if (half >= 6 && cross >= 3) {                                               // a grind rail along the far side
-        const off = cross - 1.2, y = q.top + 1.3; addRail(q.cx - ax * -0 + az * off - ax * (half - 2), q.cz + ax * off - az * (half - 2), y, q.cx + az * off + ax * (half - 2), q.cz + ax * off + az * (half - 2), col); made++;
-      }
-    }
-  }
-  console.log('[skate plaza] features', made);
-}
+// SKATE PLAZA removed entirely: no scattered kickers/half-pipes on platforms anymore
 function warpTick(dt) {
   const p = warp.pad; if (!p) return;
   const on = warp.dest.length > 0, t = performance.now() / 1000;
@@ -11423,10 +11731,19 @@ res ${outputWidth}x${outputHeight} @${adaptRes.scale.toFixed(2)}x  ${retroPreset
     alien() { this.spawn(); buildMarsRoute(); flushJobs(); const m = moonInfo; pos.set(m.x + m.ux * 95, m.y + 6, m.z + m.uz * 95); camYaw = Math.atan2(m.ux, m.uz) + Math.PI; fpPitch = -0.12; },
   },
 };
-window.__ng.linkGraph = () => linkGraphFn ? linkGraphFn() : null;
-window.__ng.commons = () => commons ? ({ x: +commons.x.toFixed(1), y: +commons.y.toFixed(1), z: +commons.z.toFixed(1), r: commons.r, kills: commons.kills, quota: commons.quota, done: commons.done, nodes: commons.nodes.length, outposts: commons.outposts.length, islets: commons.islets.length, ledges: commons.ledges.length, bonusHearts, maxhp: MAXHP, inCommons: inCommons(pos.x, pos.y, pos.z) }) : null;
-window.__ng.commonsGo = () => { if (!commons) return false; pos.set(commons.x + 20, commons.y + 2, commons.z); vel.set(0, 0, 0); return true; };
-window.__ng.commonsKillAll = () => { let n = 0; for (const e of enemies) if (!e.dead && inCommons(e.x, e.y, e.z)) { damageEnemy(e, 99999, 'pound'); n++; } return n; };
+window.__ng.linkGraph = () => linkGraphFn ? linkGraphFn() : null;  window.__ng.commons = () => commons ? ({ x: +commons.x.toFixed(1), y: +commons.y.toFixed(1), z: +commons.z.toFixed(1), r: commons.r, kills: commons.kills, quota: commons.quota, done: commons.done, nodes: commons.nodes.length, outposts: commons.outposts.length, islets: commons.islets.length, ledges: commons.ledges.length, bonusHearts, maxhp: MAXHP, inCommons: inCommons(pos.x, pos.y, pos.z) }) : null;
+  window.__ng.commonsGo = () => { if (!commons) return false; pos.set(commons.x + 20, commons.y + 2, commons.z); vel.set(0, 0, 0); return true; };
+  window.__ng.commonsKillAll = () => { let n = 0; for (const e of enemies) if (!e.dead && inCommons(e.x, e.y, e.z)) { damageEnemy(e, 99999, 'pound'); n++; } return n; };
+  // MID-BAND dev hooks: mids() state, midsGo(site) teleport, midsKill(site) kill one unit of that site's roster (guard first), midsSteps(site) force the wave pipeline
+  window.__ng.mids = () => !commons || !commons.mid ? null : ({ sites: ['nest', 'house', 'shroom'].map(k => { const s = commons.mid[k]; const boss = s && enemies.find(u => !u.dead && u.midBoss === MID_SITE_KEY[k]); const guards = s ? enemies.filter(u => !u.dead && u.midGuard === k).length : 0; return s ? { site: k, woken: !!s.woken, waves: s.waves, guards, bossSpawned: !!s.bossSpawned, bossHp: boss ? +boss.hp.toFixed(1) : null, bossDead: !!s.bossDead } : { site: k, missing: true }; }), mawPurged: !!(commons.mid.nest && commons.mid.nest.bossDead), bonusHearts, maxhp: MAXHP, owned: weaponOwned.slice(), midWins: { ...midWins } });
+  window.__ng.midsGo = site => { const k = { nest: 'nest', house: 'house', shroom: 'shroom' }[site]; const s = commons && commons.mid && commons.mid[k]; if (!s) return false; pos.set(s.x, s.y + 2.2, s.z); vel.set(0, 0, 0); onGround = false; return true; };
+  window.__ng.midsKill = site => { const s = commons && commons.mid && commons.mid[site]; if (!s || s.bossDead) return 'nosite'; const key = MID_SITE_KEY[site]; const near = u => Math.hypot(u.x - s.x, u.z - s.z) < 120; const order = site === 'nest' ? [u => !u.dead && u.midBoss === 'maw' && near(u), u => !u.dead && u.midGuard === 'nest' && near(u)] : [u => !u.dead && u.midGuard === site && near(u), u => !u.dead && u.midBoss === key && near(u)]; for (const p of order) { const u = enemies.find(p); if (u) { damageEnemy(u, 99999, 'pound'); return 'killed'; } } return 'noTarget'; };
+  window.__ng.midsStaff = () => ({ mawCount: enemies.filter(e => e.variant === 'maw' && !e.dead).length });
+  window.__ng.midsStep = site => { const s = commons && commons.mid && commons.mid[site]; if (!s) return false; s.waveCd = 0; s.woken = true; return true; };   // dev/test: wake the site and let its summoner keep up, but leave guardCd alone (zeroing it re-spawns a guard the same tick the boss needs an empty field)
+  window.__ng.midsDbg = () => ({ state, paused: !!paused, inInterior: !!inInterior, pos: [+pos.x.toFixed(1), +pos.y.toFixed(1), +pos.z.toFixed(1)], velY: +vel.y.toFixed(2), mid: commons && commons.mid ? Object.fromEntries(['nest', 'house', 'shroom'].map(k => { const s = commons.mid[k]; return [k, s ? { x: Math.round(s.x), z: Math.round(s.z), y: Math.round(s.y), woken: !!s.woken, guardCd: +(+s.guardCd).toFixed(2), waves: s.waves, bossSpawned: !!s.bossSpawned, bossDead: !!s.bossDead } : null]; })) : null, guards: enemies.filter(u => !u.dead && u.midGuard).map(u => `${u.midGuard}@${Math.round(u.x)},${Math.round(u.y)},${Math.round(u.z)}`) });
+  window.__ng.midsGates = () => ({ state, paused: !!paused, inInterior: !!inInterior, netOn: net.on, host: net.host, pos: { x: +pos.x.toFixed(1), y: +pos.y.toFixed(1), z: +pos.z.toFixed(1) }, sites: commons && commons.mid ? Object.fromEntries(['nest', 'house', 'shroom'].map(k => { const s = commons.mid[k]; return [k, s ? { x: +s.x.toFixed(1), y: +s.y.toFixed(1), z: +s.z.toFixed(1), gen: s.gen, woken: !!s.woken, waves: s.waves, guardCd: +s.guardCd.toFixed(2), bossSpawned: !!s.bossSpawned, enemies: enemies.filter(u => !u.dead && u.midGuard === k).length } : null]; })) : null });
+  window.__ng.enterPlay = () => { if (state !== 'play') LEVELS[0].startFn(); return state; };
+  window.__ng.midsRoster = () => commons && commons.mid ? Object.fromEntries(['nest', 'house', 'shroom'].map(k => { const s = commons.mid[k]; return [k, s ? enemies.filter(u => !u.dead && (u.midGuard === k || u.midBoss === MID_SITE_KEY[k])).map(u => ({ x: +u.x.toFixed(0), y: +u.y.toFixed(0), z: +u.z.toFixed(0), d: +Math.hypot(u.x - s.x, u.z - s.z).toFixed(0), g: u.midGuard || null, b: u.midBoss || null, hp: u.hp, v: u.variant || u.kind || '?' })) : null]; })) : null;
 window.__ng.solidsNear = (x, y, z, r = 60) => solids.map((s, i) => ({ i, d: Math.hypot((s.minx + s.maxx) / 2 - x, (s.minz + s.maxz) / 2 - z), x: [+s.minx.toFixed(1), +s.maxx.toFixed(1)], y: [+s.miny.toFixed(1), +s.maxy.toFixed(1)], z: [+s.minz.toFixed(1), +s.maxz.toFixed(1)], f: (s.road ? 'road ' : '') + (s.bounce ? 'bounce ' : '') + (s.sp ? 'sp ' : '') + (s.arena ? 'arena' : '') })).filter(o => o.d < r && Math.abs(o.y[1] - y) < 40).sort((a, b) => a.d - b.d).slice(0, 25); window.__ng.noCullCount = () => lvl.children.filter(c => c.userData && c.userData.noCull).length; window.__ng.plateInfo = () => platforms.slice(0, 3).map(p => ({ top: p.top, y: p.plate && p.plate.position.y, vis: p.plate && p.plate.visible, col: p.plate && p.plate.material.color.getHex(), em: p.plate && p.plate.material.emissive.getHex(), ei: p.plate && p.plate.material.emissiveIntensity, po: p.plate && p.plate.material.polygonOffset, par: p.plate && p.plate.parent && p.plate.parent.type, h: p.plate && p.plate.geometry.parameters.height })); window.__ng.towerWindows = () => buildingHubs.flatMap(h => h.windows || []).map(w => ({ x: w.x, y: w.y, z: w.z, nx: w.nx, nz: w.nz })); window.__ng.netState = () => ({ on: net.on, room: net.room, peers: net.peers.size, slot: net.slot }); window.__ng.pvpShot = () => { let r = 'nopeer'; eachPeer(p => { const o = new THREE.Vector3(pos.x, pos.y + 1.4, pos.z), d = new THREE.Vector3(p.pos.x - pos.x, p.pos.y + 1 - o.y, p.pos.z - pos.z).normalize(), h = castRay(o, d, 60); r = (h.peer ? 'hit' : 'miss') + JSON.stringify({ me: [pos.x, pos.y, pos.z].map(v => +v.toFixed(1)), peer: [p.pos.x, p.pos.y, p.pos.z].map(v => +v.toFixed(1)), t: +h.t.toFixed(2), wall: !!h.hit, alive: p.alive }); if (h.peer) hitPeer(h.peer, 1); }); return r; }; window.__ng.health = () => health; window.__ng.setCull = r => { CULL_R = r; };
 window.__ng.lvl = () => lvl;
 window.__ng.cull = () => ({ tracked: cull.list.length, hidden: cull.hidden, children: lvl.children.length, solids: solids.length, platforms: platforms.length, specials: specials.length, enemies: enemies.length, items: items.length, props: props.length });
