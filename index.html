@@ -8521,7 +8521,7 @@ function makeBikeMesh(prop) {
     // Turbine accent hub (cyan center)
     const hub = new THREE.Mesh(BIKE_GEO.turbine, cyan); hub.rotation.z = Math.PI / 2; hub.scale.set(0.10, 0.09, 0.10); pivot.add(hub);
     // Four turbine vanes for readable rotation
-    const vanes = new THREE.InstancedMesh(BIKE_GEO.box, dark, 8);
+    const vanes = new THREE.InstancedMesh(BIKE_GEO.box, dark, 8), vanePose = new THREE.Object3D();
     for (let vane = 0; vane < 8; vane++) {
       vanePose.position.set(0, Math.cos(vane * Math.PI / 4) * 0.11, Math.sin(vane * Math.PI / 4) * 0.11); vanePose.scale.set(0.04, 0.04, 0.18); vanePose.updateMatrix(); vanes.setMatrixAt(vane, vanePose.matrix);
     }
@@ -8640,8 +8640,9 @@ function makeBuggyMesh(prop) {
     addBox(accent, 0.12, 0.66, 1.00, side * 0.86, 1.56, -0.30, 0, 0, -side * 0.44);
     addBox(darkGlass, 0.08, 0.38, 0.78, side * 0.90, 1.58, -0.32, 0, 0, -side * 0.44);
     addBox(dark, 0.08, 0.32, 1.02, side * 0.89, 0.82, -0.30);              // lower cabin sill (slightly more prominent)
+  }
 
-  // --- 5. REAR WINDOW BLACK LOUVRES ---
+  // --- 5. REAR WINDOW BLACK LOUVERS ---
   for (let k = 0; k < 7; k++) {  // increased from 5 to 7 for better rear readability
     addBox(black, 1.46, 0.05, 0.22, 0, 1.34 - k * 0.06, -0.84 - k * 0.11, 0.12);
   }
@@ -11217,7 +11218,6 @@ renderer.setAnimationLoop(now => {
   }
   if (P) { PERF.renderDone(_r0); PERF.overlayTick(now); }
       });
-    }
   } catch (err) {
     const msg = err.message || String(err);
     const stack = err.stack || '';
