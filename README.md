@@ -36,6 +36,23 @@ city and work your way down (or up) through floating platforms, rooftops, arenas
 | R | respawn at last checkpoint |
 | M / N / G / H | sound / music / gore / hint bar |
 
+### Gamepad / handheld (Steam Deck, ROG Ally, Legion Go, controllers)
+
+Works in any browser with a controller connected — no mapping app needed.
+
+| Input | Action |
+|---|---|
+| Left stick | move |
+| Right stick | look (same sensitivity clamps as mouse) |
+| A | jump · double-jump hoverboard · hold to glide · wall-jump |
+| B | ground pound |
+| X | interact / use prop / place block (same as E) |
+| Y | first / third person |
+| RT | fire · LT aim down sights |
+| RB | next weapon · LB grapple (hold to reel; also picks warp destinations) |
+| L3 (stick click) | sprint, or boost on a vehicle |
+| Start | pause (ENTER on the title screen) |
+
 ## Run it
 
 **Quickest (single player):** open `index.html` through any static file server, for example
