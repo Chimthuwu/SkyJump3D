@@ -165,7 +165,7 @@
   #pause .tip{font-size:13px;opacity:.75;margin:10px 0 0}
   #subs{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);max-width:min(760px,92vw);text-align:center;font:700 clamp(15px,2.2vw,22px) Consolas,monospace;
         letter-spacing:.08em;text-shadow:0 0 8px #000,0 0 14px currentColor;pointer-events:none;z-index:20}
-  #menu{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#e9fbff;z-index:30;
+  #menu{position:fixed;inset:0;display:flex!important;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#e9fbff;z-index:30;
         background:radial-gradient(ellipse at center,rgba(8,12,30,.5),rgba(2,3,10,.9));padding:0 16px}
   #menu h1{font-size:clamp(44px,10vw,104px);margin:0;letter-spacing:.12em;text-shadow:0 0 12px #36f6ff,0 0 34px #ff3fc8}
   #menu .sub{opacity:.85;margin:8px auto 26px;font-size:clamp(14px,2vw,19px);max-width:680px;line-height:1.55}
@@ -314,6 +314,8 @@
 </script>
 <script type="module">
 import * as THREE from 'three';
+
+console.log('🚀 SkyJump3D module START');
 
 // Global error catcher - shows errors on screen if console isn't visible
 window.addEventListener('error', e => {
@@ -489,6 +491,22 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.95;
 document.body.appendChild(renderer.domElement);
+
+// Aggressive WebGL context-lost guard — catches silent context loss that doesn't throw
+setTimeout(() => {
+  try {
+    const gl = renderer.getContext();
+    if (gl && gl.isContextLost()) {
+      throw new Error('WebGL context lost immediately after creation');
+    }
+  } catch (err) {
+    const d = document.createElement('div');
+    d.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#05060f;color:#ff8a7a;font:16px monospace;text-align:center;padding:24px';
+    d.textContent = 'WebGL context lost (' + (err && err.message || err) + '). Fully close and reopen the browser (check chrome://gpu shows WebGL: Hardware accelerated), then reload.';
+    document.body.appendChild(d);
+    console.error('WebGL context lost:', err);
+  }
+}, 0);
 
 function createSceneTarget() {
   const target = new THREE.WebGLRenderTarget(RETRO_WIDTH, RETRO_HEIGHT, {
@@ -2324,7 +2342,8 @@ function marsReached(sol) {
     try { $('subs').textContent = '[IT] You think this was the end? There is so much more sky.'; setTimeout(() => { $('subs').textContent = ''; }, 6500); } catch (_) {}
     spawnMarsReward();
   }
-  buildPlanetLeg(0);
+  buildPlanetLeg(0);          // existing leg
+  buildSpaceOpenWorld();      // <<< NEW: open world starts here
 }
 function planetReached(sol) {
   const i = sol.planet - 1, spec = PLANETS[i]; if (!spec) return;
@@ -2420,13 +2439,178 @@ function* buildPlanetLegGen(i) {
   for (let k = 0; k < 4; k++) addStatic(cx + ux * (k * 11 + 5), topY - 2.2 + k * 0.5, cz + uz * (k * 11 + 5), 3.2, 3.2, 'box', SEGS - 1);
   for (const b of Object.values(batches)) { const ms = [b.body, b.plate]; if (b.cap) ms.push(b.cap); for (const m of ms) if (m.count !== (m === b.body ? b.nb : m === b.plate ? b.np : b.nc)) m.count = Math.min(m.count, cap); }
   coin(cx + ux * 60 - 6, topY + 1.2, cz + uz * 60, ALIEN_ZONE); coin(cx + ux * 60 + 6, topY + 1.2, cz + uz * 60, ALIEN_ZONE); heart(cx + ux * 60, topY + 1.3, cz + uz * 60 + 6);
+  // SOLID WALKABLE PLANET SURFACE
+  const surfSize = rad * 3.5;
+  const surf = new THREE.Mesh(new THREE.PlaneGeometry(surfSize, surfSize), new THREE.MeshBasicMaterial({ color: spec.cols[0], transparent: false, fog: false, roughness: 0.8 }));
+  surf.rotation.x = -Math.PI / 2;
+  surf.position.set(cx + ux * 60, topY - 0.5, cz + uz * 60);
+  lvl.add(surf);
+  surf.userData = { solid: true, planetSurface: true, zone: ALIEN_ZONE };
   WORLD_R = Math.max(WORLD_R, Math.hypot(cx - 0, cz - 0) + 1400); camera.far = Math.max(camera.far, (lastD + rad) * 1.6); camera.updateProjectionMatrix();
-  toast(`${spec.name} RISES AHEAD — ${LANES * PER} platforms · ${spec.biomes.join(' → ')}`, 6500);
-  console.log('[planet leg]', spec.name, 'platforms', all.length);
 }
-// THE ALIEN VOID: three weaving lanes of ~1000 mixed platforms (small, round, beams, movers, orbiters, pistons, crumblers) crossing and cross-linking
-// all the way to Mars, with drifting space-cities hanging underneath (rooftops you can land on) tethered to the lanes.
-function* buildAlienRouteGen() {
+// ====================== SPACE OPEN WORLD (asteroid + Falcon) ======================
+function buildSpaceOpenWorld() {
+  // ---- GIANT ASTEROID (explorable) ----------------------------------------
+  const asteroidRadius = 1500;                     // big enough to feel epic
+  const asteroidMat = new THREE.MeshBasicMaterial({
+    color: 0x444444,
+    transparent: true,
+    opacity: 0.85,
+    roughness: 0.9,
+    metalness: 0.1,
+  });
+  const asteroidGeo = new THREE.SphereGeometry(asteroidRadius, 96, 64);
+  const asteroid = new THREE.Mesh(asteroidGeo, asteroidMat);
+  asteroid.position.set(0, asteroidRadius, 0);    // ground at y = 0
+  asteroid.userData = { solid: true, asteroid: true, type: 'explorable' };
+  lvl.add(asteroid);
+
+  // ---- CAVE ENTRANCE (visual) ------------------------------------------------
+  const entranceGeo = new THREE.CylinderGeometry(asteroidRadius * 0.6, asteroidRadius * 0.6, 30, 32);
+  const entrance = new THREE.Mesh(entranceGeo, new THREE.MeshBasicMaterial({color: 0x333333}));
+  entrance.position.set(0, asteroidRadius + 15, 0);
+  entrance.rotation.x = Math.PI / 2;
+  lvl.add(entrance);
+
+  // ---- INTERIOR CAVES (randomly placed) ------------------------------------
+  const caveCount = 20;
+  for (let i = 0; i < caveCount; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.random() * asteroidRadius * 0.7 + asteroidRadius * 0.3;
+    const x = Math.cos(angle) * dist;
+    const z = Math.sin(angle) * dist;
+    const y = asteroidRadius * 0.5 + Math.random() * 200;
+
+    // cave opening (hollow sphere chunk)
+    const caveGeo = new THREE.SphereGeometry(asteroidRadius * 0.12, 20, 20);
+    const caveMat = new THREE.MeshBasicMaterial({color: 0x666666, transparent: true, opacity: 0.6, roughness: 0.8});
+    const cave = new THREE.Mesh(caveGeo, caveMat);
+    cave.position.set(x, y, z);
+    lvl.add(cave);
+
+    // platform inside (walkable)
+    const platform = new THREE.Mesh(
+      new THREE.PlaneGeometry(24, 24),
+      new THREE.MeshBasicMaterial({color: 0x888888, side: THREE.DoubleSide})
+    );
+    platform.rotation.x = -Math.PI / 2;
+    platform.position.set(x, y - 10, z);
+    platform.userData = { solid: true, walk: true };
+    lvl.add(platform);
+  }
+
+  // ---- LANDING PADS (for Falcon) ----------------------------------------
+  const padGroup = new THREE.Group();
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2;
+    const x = Math.cos(angle) * (asteroidRadius * 0.85);
+    const z = Math.sin(angle) * (asteroidRadius * 0.85);
+    const pad = new THREE.Mesh(
+      new THREE.CylinderGeometry(16, 16, 4, 16),
+      new THREE.MeshBasicMaterial({
+        color: 0xffaa00,
+        emissive: 0xffaa00,
+        emissiveIntensity: 0.8,
+        roughness: 0.6,
+      })
+    );
+    pad.position.set(x, asteroidRadius + 2, z);
+    padGroup.add(pad);
+  }
+  padGroup.userData = { landingPads: true };
+  lvl.add(padGroup);
+
+  // ---- TIE FIGHTER SWARMS (optional hostile patrol) ---------------------------
+  // Add a small fleet of TIE fighters that patrol the asteroid area
+  const tieCount = 6;
+  for (let i = 0; i < tieCount; i++) {
+    const tie = createTIEfighter();
+    const angle = Math.random() * Math.PI * 2;
+    const radius = asteroidRadius * 0.9;
+    tie.position.set(Math.cos(angle) * radius, asteroidRadius + 50, Math.sin(angle) * radius);
+    tie.userData = { hostile: true, target: player }; // link to player
+    lvl.add(tie);
+  }
+
+  // ---- MILENNIUM FALCON (mountable ship) ----------------------------------
+  const falcon = createFalconShip();
+  falcon.position.set(asteroidRadius * 0.6, asteroidRadius + 5, 0);
+  falcon.userData = { vehicle: true, mountable: true };
+  lvl.add(falcon);
+
+  // ---- STAR WARS RADIO MESSAGES -------------------------------------------
+  const radioLines = [
+    "Rebel Base: Contact established.",
+    "Base Command: Check the asteroid landing pads.",
+    "Transmission scrambled... but we can work with it.",
+    "Falcon ready for departure at pad #3.",
+    "All stations: abort sequence initiated.",
+    "This is the final frontier. Stay close.",
+  ];
+  let radioIndex = 0;
+  function playNextRadio() {
+    if (radioIndex >= radioLines.length) return;
+    console.log(`[RADIO] ${radioLines[radioIndex++]}`); // replace with actual UI
+    setTimeout(playNextRadio, 8000 + Math.random() * 6000);
+  }
+  playNextRadio();
+}
+
+function createFalconShip() {
+  const group = new THREE.Group();
+
+  // main hull
+  const hull = new THREE.Mesh(
+    new THREE.BoxGeometry(14, 5, 32),
+    new THREE.MeshPhysicalMaterial({
+      color: 0x334466,
+      metalness: 0.9,
+      roughness: 0.2,
+      emissive: 0x112244,
+      emissiveIntensity: 0.2,
+    })
+  );
+  hull.position.set(0, 3, 0);
+  group.add(hull);
+
+  // wing
+  const wingGeo = new THREE.BoxGeometry(2, 0.5, 28);
+  const wingMat = new THREE.MeshPhysicalMaterial({color: 0x112244, metalness: 0.8, roughness: 0.3});
+  const leftWing = new THREE.Mesh(wingGeo, wingMat);
+  leftWing.position.set(-7, 3, 0);
+  group.add(leftWing);
+
+  // tail fin
+  const tail = new THREE.Mesh(
+    new THREE.BoxGeometry(4, 6, 2),
+    new THREE.MeshPhysicalMaterial({color: 0x224466, metalness: 0.7})
+  );
+  tail.position.set(0, 3, -16);
+  group.add(tail);
+
+  return group;
+}
+
+function createTIEfighter() {
+  const body = new THREE.Group();
+  const hull = new THREE.Mesh(
+    new THREE.BoxGeometry(8, 4, 20),
+    new THREE.MeshPhysicalMaterial({color: 0xcc0000, metalness: 0.8, roughness: 0.3})
+  );
+  hull.position.set(0, 2, 0);
+  body.add(hull);
+
+  const wing = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 0.4, 12),
+    new THREE.MeshPhysicalMaterial({color: 0xaa0000})
+  );
+  wing.position.set(-4, 2, 0);
+  body.add(wing);
+
+  return body;
+  }
+
+  function* buildAlienRouteGen() {
   const { ux, uz, x: mx, y: my, z: mz } = moonInfo, px = -uz, pz = ux, R = missionRandom((levelSeed | 0) ^ 0x5EED), Z = ALIEN_ZONE;
   const LANES = 3, PER = 300, r0 = 70, rise = 0.34;
   const lanes = [], all = [];                                   // all = every placed platform centre (for overlap nudging and cross-links)
@@ -5978,6 +6162,188 @@ function hurt(n, fromX, fromZ) {
   }
 }
 
+// ---------- main menu: START / MULTIPLAYER / EXIT ----------
+const menuBtns = ['bStart', 'bMulti', 'bExit'];
+let menuSel = 0, menuMode = 'main';
+// LEVEL SELECT: pure data so a second real level is a data-only addition later (no UI rewrite).
+// Each entry: id, display name/subtitle (player-facing copy only), unlocked, startFn (what actually begins play).
+const SP_ONLY_DESCENT = true;   // TEMP: single-player menu shows only Lil Spasticism while the other levels are built; multiplayer joins via LEVEL_DEFS so it still reaches them
+const LEVELS_ALL = [
+  { id: 'descent', name: 'Lil Spasticism', subtitle: "The one endless procedural descent — floating platforms all the way down.", unlocked: true, startFn: () => startLevelDef('descent') },
+  { id: 'rent', name: "Rent's Due", subtitle: 'Urban decay all the way down - eviction notices, loan sharks, and the rent is overdue.', unlocked: true, startFn: () => startLevelDef('rent') },
+  { id: 'nos', name: 'Nostalgia Overdose', subtitle: 'VHS fog, CRT scanlines, cassette platforms and 80s synth bosses - be kind, rewind.', unlocked: true, startFn: () => startLevelDef('nos') },
+  { id: 'arena', name: 'THE ARENAS', subtitle: 'Four closed deathmatch chambers - Longest Yard, Deck, Camping Grounds, Facing Worlds - rocket, rail and quad, 2-8 players.', unlocked: true, startFn: () => startLevelDef('arena') },
+  { id: 'locked3', name: '???', subtitle: 'LOCKED — COMING SOON', unlocked: false },
+];
+const LEVELS = SP_ONLY_DESCENT ? LEVELS_ALL.filter(lv => lv.id === 'descent') : LEVELS_ALL;
+let levelSel = 0;
+// Switch the live level definition, rebuild the world for it if it differs from what is already built, then run the usual preload -> begin.
+// (The world is built once at boot for the default descent, so choosing 'descent' while it is already live is exactly the old path.)
+function startLevelDef(id) {
+  if (levelDef.id !== id) {
+    levelDef = LEVEL_DEFS[id] || LEVEL_DEFS.descent; level = 1;
+    preloadThen.done = false;           // new world = new materials/shaders: run the compile+warm pass again under the loading screen
+    preloadThen(begin, () => { buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); });      // build happens behind the overlay, not while the menu looks frozen
+    return;
+  }
+  preloadThen(begin);
+}
+function buildLevelButtons() {
+  const list = $('lvlList');
+  list.innerHTML = LEVELS.map((lv, i) => `<button id="lvlBtn${i}" ${lv.unlocked ? '' : 'disabled'}>${lv.name}<span class="lvlSub">${lv.subtitle}</span></button>`).join('');
+  LEVELS.forEach((lv, i) => { const b = $('lvlBtn' + i); if (b) { if (lv.unlocked) b.onclick = () => lv.startFn(); b.onmouseenter = () => { if (lv.unlocked) { levelSel = i; menuLevelsRender(); } }; } });
+}
+function menuLevelsRender() { LEVELS.forEach((lv, i) => { const b = $('lvlBtn' + i); if (b) b.className = (i === levelSel && lv.unlocked) ? 'sel' : ''; }); }
+function menuRender() {
+  $('menuSub').style.display = 'none';
+  $('menu').classList.toggle('main', menuMode === 'main'); const hn = document.querySelector('#menu .hint'); if (hn) hn.style.display = menuMode === 'main' ? 'none' : '';
+  menuBtns.forEach((id, i) => { $(id).className = i === menuSel ? 'sel' : ''; });
+  $('menuMain').style.display = menuMode === 'main' ? 'block' : 'none';
+  $('menuLevels').style.display = menuMode === 'levels' ? 'block' : 'none';
+  $('menuMulti').style.display = menuMode === 'multi' ? 'block' : 'none';
+  $('menuHost').style.display = menuMode === 'host' ? 'block' : 'none';
+  $('menuJoin').style.display = menuMode === 'join' ? 'block' : 'none';
+  $('menuBye').style.display = menuMode === 'bye' ? 'block' : 'none';
+  if (menuMode === 'levels') menuLevelsRender();
+}
+function showMenu(v) { 
+  const m = $('menu'); 
+  if (!m) { console.error('MENU ELEMENT NOT FOUND'); return; }
+  m.style.setProperty('display', v ? 'flex' : 'none', 'important'); 
+  console.log('showMenu(', v, ') -> menu.display =', m.style.display, 'computed:', getComputedStyle(m).display);
+  if (v) menuRender(); 
+}
+function menuStart() { LEVELS[0].startFn(); }      // ENTER drops straight into the first level (level select is hidden for now; LEVELS_ALL keeps the rest for when it returns)
+// PRELOAD: show a loading screen, finish the platform merge, then compile EVERY shader variant that exists anywhere in the level (hidden objects included),
+// so nothing hitches the first time a new enemy, biome or effect comes into view.
+function preloadThen(go, pre) {      // pre: optional heavy work (e.g. a level rebuild) run AFTER the overlay has painted
+  if (preloadThen.done) { go(); return; }
+  let el = $('loading'); if (!el) { el = document.createElement('div'); el.id = 'loading'; el.style.cssText = 'position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#050817;color:#fff;font:14px "Press Start 2P",monospace;text-shadow:2px 2px 0 #000'; el.innerHTML = '<div>LOADING WORLD</div><div style="width:260px;height:14px;border:3px solid #36f6ff;box-shadow:4px 4px 0 #000"><div id="loadBar" style="height:100%;width:8%;background:linear-gradient(180deg,#fff 0 2px,#36f6ff 2px 60%,#0a8aff 60%)"></div></div><div id="loadTxt" style="font-size:9px;color:#8fe8ff">MERGING PLATFORMS</div>'; document.body.appendChild(el); }
+  el.style.display = 'flex';
+  const step = (pct, txt) => { $('loadBar').style.width = pct + '%'; $('loadTxt').textContent = txt; return new Promise(r => requestAnimationFrame(() => setTimeout(r, 0))); };
+  (async () => {
+    try {
+      await step(15, pre ? 'BUILDING LEVEL' : 'MERGING PLATFORMS'); if (pre) { pre(); await step(30, 'MERGING PLATFORMS'); } flushJobs();
+      await step(45, 'COMPILING SHADERS');
+      const hidden = []; scene.traverse(o => { if (!o.visible) { hidden.push(o); o.visible = true; } });
+      // Warm the canvas textures/materials that otherwise build lazily on first use during real play (bullseye target
+      // rings, crumble-platform cracks, Hellscape pentagram sigil) -- each one does canvas drawing + a CanvasTexture
+      // upload the FIRST time its platform/decal kind appears, which can show up as a one-time hitch mid-game. Build
+      // them now, parked off-world under the loading overlay, so by the time one of these specials spawns for real
+      // the material/texture already exists and only cheap mesh instancing is left on the hot path.
+      const warmObjs = [];
+      try {
+        warmObjs.push(addBullseye(0, -5000, 0, 1));
+        ensureCrackMat();
+        const cq = new THREE.Mesh(crackGeo, crackMat); cq.position.set(0, -5000, 0); scene.add(cq); warmObjs.push(cq);
+        const pent = pentagramDecal(4); pent.position.set(0, -5000, 0); scene.add(pent); warmObjs.push(pent);
+      } catch (err) { console.warn('[preload] texture warmup failed', err); }
+      try { renderer.compile(scene, camera); } catch (err) { console.warn('[preload] compile failed', err); }
+      for (const o of hidden) o.visible = false;
+      await step(80, 'WARMING UP');
+      renderer.render(scene, camera);
+      for (const o of warmObjs) scene.remove(o);       // shared geometry/material caches (bullGeo/bullMat/crackGeo/crackMat/pentTexCache) stay alive for real use
+      await step(100, 'READY');
+    } catch (err) { console.warn('[preload] skipped', err); }
+    preloadThen.done = true; el.style.display = 'none'; go();
+  })();
+}
+function menuMulti() { menuMode = 'multi'; menuRender(); }
+// ----- guided multiplayer setup: the player is walked through installing Tailscale, running the server and sharing an invite link -----
+const roomVal = () => (($('inRoom').value || '').trim().replace(/[^\w-]/g, '').slice(0, 24) || 'lobby');
+// The public site (Pages) is static and has no relay, so online play goes through the Cloudflare Worker relay.
+const RELAY_HOST = 'skyjump3d.chimske.workers.dev', SITE_URL = 'https://sky-jump.pages.dev/';
+let netInfo = null;
+const servedByServer = () => /^https?:$/.test(location.protocol || '');
+// If this page was opened as a plain file (double-clicked index.html) the server is still reachable at localhost:8080, so look for it there.
+const serverOrigin = () => (servedByServer() ? '' : 'http://localhost:8080');
+function setStep(id, ok) { $(id).className = ok ? 'ok' : 'bad'; $(id + 'Chk').textContent = ok ? '✓' : '✗'; }
+let mpLevel = 'descent';        // multiplayer: the level the HOST picked; joiners adopt it from the host
+function mpLevelsRender() {
+  const box = $('mpLevels'); if (!box) return;
+  box.innerHTML = LEVELS_ALL.filter(lv => lv.unlocked).map(lv => `<button data-lv="${lv.id}" class="${lv.id === mpLevel ? 'sel' : ''}" style="font-size:13px;padding:8px 14px">${lv.name}</button>`).join('');
+  box.querySelectorAll('button').forEach(b => { b.onclick = () => { mpLevel = b.dataset.lv; mpLevelsRender(); }; });
+}
+function menuHostOpen() {
+  menuMode = 'host'; menuRender(); mpLevelsRender();
+  const q = new URLSearchParams(location.search || '').get('room'); if (q) $('inRoom').value = q.slice(0, 24);
+  hostRefresh();
+  fetch(serverOrigin() + '/net-info').then(r => r.json()).then(j => { netInfo = j; hostRefresh(); }).catch(() => { netInfo = { port: 443, addresses: [], cloud: true }; hostRefresh(); });      // no local relay (e.g. the Pages site): use the online one
+}
+function hostRefresh() {
+  const ts = netInfo && netInfo.addresses.find(a => a.kind === 'tailscale'), other = netInfo && netInfo.addresses.find(a => a.kind !== 'tailscale');
+  const cloud = !!(netInfo && netInfo.cloud);
+  setStep('stTs', !!ts || cloud); setStep('stSrv', !!netInfo);
+  $('srvHint').style.display = netInfo ? 'none' : 'inline';
+  $('tsNote').textContent = cloud ? 'Online mode: no Tailscale or server needed - just share the link below.' : ts ? 'Tailscale detected on this PC - friends use the link below.'
+    : netInfo ? 'The server does not see a Tailscale connection. Make sure Tailscale is running and signed in, then press REFRESH.'
+    : 'Start the server first (step 2) so I can check for Tailscale, then press REFRESH.';
+  const addr = ts ? ts.address : other ? other.address : 'localhost';
+  $('inviteAddr').textContent = cloud ? `${servedByServer() ? location.origin + '/' : SITE_URL}?room=${roomVal()}` : `http://${addr}:${(netInfo && netInfo.port) || 8080}/?room=${roomVal()}`;
+  $('bGo').disabled = !netInfo;
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); }
+  catch (_) { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (__) {} if (ta.remove) ta.remove(); }
+}
+function hostGo() {
+  if (!netInfo) return;
+  if (netInfo.cloud) { netConnect(RELAY_HOST, roomVal()); startLevelDef(mpLevel); }
+  else if (servedByServer()) { netConnect(location.host, roomVal()); startLevelDef(mpLevel); }
+  else location.href = `http://localhost:8080/?room=${roomVal()}`;       // from a plain file: hop onto the server's copy of the game, which joins the room by itself
+}
+function menuJoinOpen() { menuMode = 'join'; $('joinMsg').textContent = ''; menuRender(); setTimeout(() => { try { $('inInvite').focus(); } catch (_) {} }, 0); }
+function parseInvite() {
+  let t = ($('inInvite').value || '').trim(); if (!t) return null;
+  if (!/^https?:\/\//i.test(t)) t = 'http://' + t;
+  try { const u = new URL(t); if (!u.port && u.protocol === 'http:') u.port = '8080'; if (!u.searchParams.get('room')) u.searchParams.set('room', 'lobby'); return u; } catch (_) { return null; }
+}
+function joinTest() {
+  const u = parseInvite(), m = $('joinMsg');
+  if (!u) { m.textContent = 'That does not look like an invite link or address.'; return; }
+  m.textContent = 'Testing connection...';
+  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 5000);
+  fetch(u.origin + '/tts-status', { mode: 'no-cors', signal: ctl.signal })
+    .then(() => { clearTimeout(to); m.textContent = '✓ The host is reachable. Press JOIN.'; })
+    .catch(() => { clearTimeout(to); m.textContent = '✗ Cannot reach the host. Is Tailscale running on BOTH of you, and is the host\'s server on?'; });
+}
+function joinGo() { const u = parseInvite(); if (!u) { $('joinMsg').textContent = 'Paste the invite link your host sent you.'; return; } location.href = u.href; }
+function menuConnect() { if (menuMode === 'host') hostGo(); else if (menuMode === 'join') joinGo(); }
+function menuExit() {
+  menuMode = 'bye'; menuRender();
+  try { if (document.fullscreenElement) document.exitFullscreen(); } catch (_) {}
+  try { window.close(); } catch (_) {}
+}
+function menuKey(e) {
+  if (menuMode === 'main') {
+    if (e.code === 'Enter' || e.code === 'Space') menuStart();
+    else if (e.code === 'KeyP') menuMulti();
+    menuRender();
+  } else if (menuMode === 'levels') {
+    const n = LEVELS.length, step = dir => { let j = levelSel; for (let k = 0; k < n; k++) { j = (j + dir + n) % n; if (LEVELS[j].unlocked) { levelSel = j; break; } } };
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') { step(-1); menuLevelsRender(); }
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') { step(1); menuLevelsRender(); }
+    else if (e.code === 'Enter' || e.code === 'Space') { if (LEVELS[levelSel] && LEVELS[levelSel].unlocked) LEVELS[levelSel].startFn(); }
+    else if (e.code === 'Escape') { menuMode = 'main'; menuRender(); }
+  } else if (menuMode === 'multi') {
+    if (e.code === 'KeyH') menuHostOpen(); else if (e.code === 'KeyJ') menuJoinOpen(); else if (e.code === 'Escape') { menuMode = 'main'; menuRender(); }
+  } else if (menuMode === 'host' || menuMode === 'join') {
+    if (e.code === 'Enter') menuConnect(); else if (e.code === 'Escape') { menuMode = 'multi'; menuRender(); }
+  } else if (e.code === 'Enter' || e.code === 'Escape') { menuMode = 'main'; menuRender(); }
+}
+$('bStart').onclick = menuStart; $('bMulti').onclick = menuMulti; $('bExit').onclick = menuExit;
+buildLevelButtons(); $('bLevelsBack').onclick = () => { menuMode = 'main'; menuRender(); };
+$('bHost').onclick = menuHostOpen; $('bJoin').onclick = menuJoinOpen;
+$('bBack').onclick = () => { menuMode = 'main'; menuRender(); }; $('bBye').onclick = () => { menuMode = 'main'; menuRender(); };
+$('bBack2').onclick = $('bBack3').onclick = () => { menuMode = 'multi'; menuRender(); };
+$('bTsDl').onclick = $('bTsDl2').onclick = () => { window.open('https://tailscale.com/download', '_blank', 'noopener'); };
+$('bRefresh').onclick = menuHostOpen; $('inRoom').oninput = hostRefresh;
+$('bCopyInv').onclick = () => { copyText($('inviteAddr').textContent); $('bCopyInv').textContent = 'COPIED!'; setTimeout(() => { $('bCopyInv').textContent = 'COPY INVITE LINK'; }, 1500); };
+$('bGo').onclick = hostGo; $('bTest').onclick = joinTest; $('bJoinGo').onclick = joinGo;
+$('bMenu').onclick = () => location.reload();
+menuBtns.forEach((id, i) => { $(id).onmouseenter = () => { menuSel = i; menuRender(); }; });
+
+
 // ---------- input ----------
 addEventListener('keydown', e => {
   if (e.target && e.target.tagName === 'INPUT') {            // typing in the multiplayer form
@@ -7685,14 +8051,14 @@ function playerUpdate(dt) {
 // ---------- THE FUNK: a procedural live-band (drums, slap bass, chord stabs, licks) that changes key/tempo per zone ----------
 // Scheduler with look-ahead on the WebAudio clock. Intensity rises near enemies and in free-fall; space strips it down to a pad + arp.
 let musicOn = false, musicBus = null, musicNext = 0, musicStep = 0;
-// SOUNDTRACK: the author's own tracks, loudness-normalized (EBU R128, -16 LUFS) mp3s in music/track01..19.mp3. Shuffled, loops forever.
+// SOUNDTRACK: the author's own tracks, loudness-normalized (EBU R128, -16 LUFS) mp3s in music/track01..19.mp3 (track04 removed). Shuffled, loops forever.
 // N = pause/resume, M = mute. Starts on the first Enter/click (browsers block audio before a gesture).
 const MUSIC_COUNT = 19, MUSIC_VOL = 0.55;
 const scMusic = {
   a: null, order: [], i: -1, on: true, started: false,
   start() {
     if (this.started) return; this.started = true;
-    this.order = Array.from({ length: MUSIC_COUNT }, (_, k) => k + 1).sort(() => Math.random() - 0.5);
+    this.order = Array.from({ length: MUSIC_COUNT }, (_, k) => k + 1).filter(n => n !== 4).sort(() => Math.random() - 0.5);
     this.a = new Audio(); this.a.preload = 'auto'; this.a.addEventListener('ended', () => this.next()); this.a.addEventListener('error', () => setTimeout(() => this.next(), 500));
     this.next();
   },
@@ -10663,181 +11029,6 @@ function enemyDeathVoice(e) {
   if (d < 40 && Math.random() < (e.boss || e.mini ? 1 : 0.08)) say(e, pickLine("death"), true);
 }
 
-// ---------- main menu: START / MULTIPLAYER / EXIT ----------
-const menuBtns = ['bStart', 'bMulti', 'bExit'];
-let menuSel = 0, menuMode = 'main';
-// LEVEL SELECT: pure data so a second real level is a data-only addition later (no UI rewrite).
-// Each entry: id, display name/subtitle (player-facing copy only), unlocked, startFn (what actually begins play).
-const SP_ONLY_DESCENT = true;   // TEMP: single-player menu shows only Lil Spasticism while the other levels are built; multiplayer joins via LEVEL_DEFS so it still reaches them
-const LEVELS_ALL = [
-  { id: 'descent', name: 'Lil Spasticism', subtitle: "The one endless procedural descent — floating platforms all the way down.", unlocked: true, startFn: () => startLevelDef('descent') },
-  { id: 'rent', name: "Rent's Due", subtitle: 'Urban decay all the way down - eviction notices, loan sharks, and the rent is overdue.', unlocked: true, startFn: () => startLevelDef('rent') },
-  { id: 'nos', name: 'Nostalgia Overdose', subtitle: 'VHS fog, CRT scanlines, cassette platforms and 80s synth bosses - be kind, rewind.', unlocked: true, startFn: () => startLevelDef('nos') },
-  { id: 'arena', name: 'THE ARENAS', subtitle: 'Four closed deathmatch chambers - Longest Yard, Deck, Camping Grounds, Facing Worlds - rocket, rail and quad, 2-8 players.', unlocked: true, startFn: () => startLevelDef('arena') },
-  { id: 'locked3', name: '???', subtitle: 'LOCKED — COMING SOON', unlocked: false },
-];
-const LEVELS = SP_ONLY_DESCENT ? LEVELS_ALL.filter(lv => lv.id === 'descent') : LEVELS_ALL;
-let levelSel = 0;
-// Switch the live level definition, rebuild the world for it if it differs from what is already built, then run the usual preload -> begin.
-// (The world is built once at boot for the default descent, so choosing 'descent' while it is already live is exactly the old path.)
-function startLevelDef(id) {
-  if (levelDef.id !== id) {
-    levelDef = LEVEL_DEFS[id] || LEVEL_DEFS.descent; level = 1;
-    preloadThen.done = false;           // new world = new materials/shaders: run the compile+warm pass again under the loading screen
-    preloadThen(begin, () => { buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); });      // build happens behind the overlay, not while the menu looks frozen
-    return;
-  }
-  preloadThen(begin);
-}
-function buildLevelButtons() {
-  const list = $('lvlList');
-  list.innerHTML = LEVELS.map((lv, i) => `<button id="lvlBtn${i}" ${lv.unlocked ? '' : 'disabled'}>${lv.name}<span class="lvlSub">${lv.subtitle}</span></button>`).join('');
-  LEVELS.forEach((lv, i) => { const b = $('lvlBtn' + i); if (b) { if (lv.unlocked) b.onclick = () => lv.startFn(); b.onmouseenter = () => { if (lv.unlocked) { levelSel = i; menuLevelsRender(); } }; } });
-}
-function menuLevelsRender() { LEVELS.forEach((lv, i) => { const b = $('lvlBtn' + i); if (b) b.className = (i === levelSel && lv.unlocked) ? 'sel' : ''; }); }
-function menuRender() {
-  $('menuSub').style.display = 'none';
-  $('menu').classList.toggle('main', menuMode === 'main'); const hn = document.querySelector('#menu .hint'); if (hn) hn.style.display = menuMode === 'main' ? 'none' : '';
-  menuBtns.forEach((id, i) => { $(id).className = i === menuSel ? 'sel' : ''; });
-  $('menuMain').style.display = menuMode === 'main' ? 'block' : 'none';
-  $('menuLevels').style.display = menuMode === 'levels' ? 'block' : 'none';
-  $('menuMulti').style.display = menuMode === 'multi' ? 'block' : 'none';
-  $('menuHost').style.display = menuMode === 'host' ? 'block' : 'none';
-  $('menuJoin').style.display = menuMode === 'join' ? 'block' : 'none';
-  $('menuBye').style.display = menuMode === 'bye' ? 'block' : 'none';
-  if (menuMode === 'levels') menuLevelsRender();
-}
-function showMenu(v) { $('menu').style.display = v ? 'flex' : 'none'; if (v) menuRender(); }
-function menuStart() { LEVELS[0].startFn(); }      // ENTER drops straight into the first level (level select is hidden for now; LEVELS_ALL keeps the rest for when it returns)
-// PRELOAD: show a loading screen, finish the platform merge, then compile EVERY shader variant that exists anywhere in the level (hidden objects included),
-// so nothing hitches the first time a new enemy, biome or effect comes into view.
-function preloadThen(go, pre) {      // pre: optional heavy work (e.g. a level rebuild) run AFTER the overlay has painted
-  if (preloadThen.done) { go(); return; }
-  let el = $('loading'); if (!el) { el = document.createElement('div'); el.id = 'loading'; el.style.cssText = 'position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#050817;color:#fff;font:14px "Press Start 2P",monospace;text-shadow:2px 2px 0 #000'; el.innerHTML = '<div>LOADING WORLD</div><div style="width:260px;height:14px;border:3px solid #36f6ff;box-shadow:4px 4px 0 #000"><div id="loadBar" style="height:100%;width:8%;background:linear-gradient(180deg,#fff 0 2px,#36f6ff 2px 60%,#0a8aff 60%)"></div></div><div id="loadTxt" style="font-size:9px;color:#8fe8ff">MERGING PLATFORMS</div>'; document.body.appendChild(el); }
-  el.style.display = 'flex';
-  const step = (pct, txt) => { $('loadBar').style.width = pct + '%'; $('loadTxt').textContent = txt; return new Promise(r => requestAnimationFrame(() => setTimeout(r, 0))); };
-  (async () => {
-    try {
-      await step(15, pre ? 'BUILDING LEVEL' : 'MERGING PLATFORMS'); if (pre) { pre(); await step(30, 'MERGING PLATFORMS'); } flushJobs();
-      await step(45, 'COMPILING SHADERS');
-      const hidden = []; scene.traverse(o => { if (!o.visible) { hidden.push(o); o.visible = true; } });
-      // Warm the canvas textures/materials that otherwise build lazily on first use during real play (bullseye target
-      // rings, crumble-platform cracks, Hellscape pentagram sigil) -- each one does canvas drawing + a CanvasTexture
-      // upload the FIRST time its platform/decal kind appears, which can show up as a one-time hitch mid-game. Build
-      // them now, parked off-world under the loading overlay, so by the time one of these specials spawns for real
-      // the material/texture already exists and only cheap mesh instancing is left on the hot path.
-      const warmObjs = [];
-      try {
-        warmObjs.push(addBullseye(0, -5000, 0, 1));
-        ensureCrackMat();
-        const cq = new THREE.Mesh(crackGeo, crackMat); cq.position.set(0, -5000, 0); scene.add(cq); warmObjs.push(cq);
-        const pent = pentagramDecal(4); pent.position.set(0, -5000, 0); scene.add(pent); warmObjs.push(pent);
-      } catch (err) { console.warn('[preload] texture warmup failed', err); }
-      try { renderer.compile(scene, camera); } catch (err) { console.warn('[preload] compile failed', err); }
-      for (const o of hidden) o.visible = false;
-      await step(80, 'WARMING UP');
-      renderer.render(scene, camera);
-      for (const o of warmObjs) scene.remove(o);       // shared geometry/material caches (bullGeo/bullMat/crackGeo/crackMat/pentTexCache) stay alive for real use
-      await step(100, 'READY');
-    } catch (err) { console.warn('[preload] skipped', err); }
-    preloadThen.done = true; el.style.display = 'none'; go();
-  })();
-}
-function menuMulti() { menuMode = 'multi'; menuRender(); }
-// ----- guided multiplayer setup: the player is walked through installing Tailscale, running the server and sharing an invite link -----
-const roomVal = () => (($('inRoom').value || '').trim().replace(/[^\w-]/g, '').slice(0, 24) || 'lobby');
-// The public site (Pages) is static and has no relay, so online play goes through the Cloudflare Worker relay.
-const RELAY_HOST = 'skyjump3d.chimske.workers.dev', SITE_URL = 'https://sky-jump.pages.dev/';
-let netInfo = null;
-const servedByServer = () => /^https?:$/.test(location.protocol || '');
-// If this page was opened as a plain file (double-clicked index.html) the server is still reachable at localhost:8080, so look for it there.
-const serverOrigin = () => (servedByServer() ? '' : 'http://localhost:8080');
-function setStep(id, ok) { $(id).className = ok ? 'ok' : 'bad'; $(id + 'Chk').textContent = ok ? '✓' : '✗'; }
-let mpLevel = 'descent';        // multiplayer: the level the HOST picked; joiners adopt it from the host
-function mpLevelsRender() {
-  const box = $('mpLevels'); if (!box) return;
-  box.innerHTML = LEVELS_ALL.filter(lv => lv.unlocked).map(lv => `<button data-lv="${lv.id}" class="${lv.id === mpLevel ? 'sel' : ''}" style="font-size:13px;padding:8px 14px">${lv.name}</button>`).join('');
-  box.querySelectorAll('button').forEach(b => { b.onclick = () => { mpLevel = b.dataset.lv; mpLevelsRender(); }; });
-}
-function menuHostOpen() {
-  menuMode = 'host'; menuRender(); mpLevelsRender();
-  const q = new URLSearchParams(location.search || '').get('room'); if (q) $('inRoom').value = q.slice(0, 24);
-  hostRefresh();
-  fetch(serverOrigin() + '/net-info').then(r => r.json()).then(j => { netInfo = j; hostRefresh(); }).catch(() => { netInfo = { port: 443, addresses: [], cloud: true }; hostRefresh(); });      // no local relay (e.g. the Pages site): use the online one
-}
-function hostRefresh() {
-  const ts = netInfo && netInfo.addresses.find(a => a.kind === 'tailscale'), other = netInfo && netInfo.addresses.find(a => a.kind !== 'tailscale');
-  const cloud = !!(netInfo && netInfo.cloud);
-  setStep('stTs', !!ts || cloud); setStep('stSrv', !!netInfo);
-  $('srvHint').style.display = netInfo ? 'none' : 'inline';
-  $('tsNote').textContent = cloud ? 'Online mode: no Tailscale or server needed - just share the link below.' : ts ? 'Tailscale detected on this PC - friends use the link below.'
-    : netInfo ? 'The server does not see a Tailscale connection. Make sure Tailscale is running and signed in, then press REFRESH.'
-    : 'Start the server first (step 2) so I can check for Tailscale, then press REFRESH.';
-  const addr = ts ? ts.address : other ? other.address : 'localhost';
-  $('inviteAddr').textContent = cloud ? `${servedByServer() ? location.origin + '/' : SITE_URL}?room=${roomVal()}` : `http://${addr}:${(netInfo && netInfo.port) || 8080}/?room=${roomVal()}`;
-  $('bGo').disabled = !netInfo;
-}
-async function copyText(t) {
-  try { await navigator.clipboard.writeText(t); }
-  catch (_) { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (__) {} if (ta.remove) ta.remove(); }
-}
-function hostGo() {
-  if (!netInfo) return;
-  if (netInfo.cloud) { netConnect(RELAY_HOST, roomVal()); startLevelDef(mpLevel); }
-  else if (servedByServer()) { netConnect(location.host, roomVal()); startLevelDef(mpLevel); }
-  else location.href = `http://localhost:8080/?room=${roomVal()}`;       // from a plain file: hop onto the server's copy of the game, which joins the room by itself
-}
-function menuJoinOpen() { menuMode = 'join'; $('joinMsg').textContent = ''; menuRender(); setTimeout(() => { try { $('inInvite').focus(); } catch (_) {} }, 0); }
-function parseInvite() {
-  let t = ($('inInvite').value || '').trim(); if (!t) return null;
-  if (!/^https?:\/\//i.test(t)) t = 'http://' + t;
-  try { const u = new URL(t); if (!u.port && u.protocol === 'http:') u.port = '8080'; if (!u.searchParams.get('room')) u.searchParams.set('room', 'lobby'); return u; } catch (_) { return null; }
-}
-function joinTest() {
-  const u = parseInvite(), m = $('joinMsg');
-  if (!u) { m.textContent = 'That does not look like an invite link or address.'; return; }
-  m.textContent = 'Testing connection...';
-  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 5000);
-  fetch(u.origin + '/tts-status', { mode: 'no-cors', signal: ctl.signal })
-    .then(() => { clearTimeout(to); m.textContent = '✓ The host is reachable. Press JOIN.'; })
-    .catch(() => { clearTimeout(to); m.textContent = '✗ Cannot reach the host. Is Tailscale running on BOTH of you, and is the host\'s server on?'; });
-}
-function joinGo() { const u = parseInvite(); if (!u) { $('joinMsg').textContent = 'Paste the invite link your host sent you.'; return; } location.href = u.href; }
-function menuConnect() { if (menuMode === 'host') hostGo(); else if (menuMode === 'join') joinGo(); }
-function menuExit() {
-  menuMode = 'bye'; menuRender();
-  try { if (document.fullscreenElement) document.exitFullscreen(); } catch (_) {}
-  try { window.close(); } catch (_) {}
-}
-function menuKey(e) {
-  if (menuMode === 'main') {
-    if (e.code === 'Enter' || e.code === 'Space') menuStart();
-    else if (e.code === 'KeyP') menuMulti();
-    menuRender();
-  } else if (menuMode === 'levels') {
-    const n = LEVELS.length, step = dir => { let j = levelSel; for (let k = 0; k < n; k++) { j = (j + dir + n) % n; if (LEVELS[j].unlocked) { levelSel = j; break; } } };
-    if (e.code === 'ArrowUp' || e.code === 'KeyW') { step(-1); menuLevelsRender(); }
-    else if (e.code === 'ArrowDown' || e.code === 'KeyS') { step(1); menuLevelsRender(); }
-    else if (e.code === 'Enter' || e.code === 'Space') { if (LEVELS[levelSel] && LEVELS[levelSel].unlocked) LEVELS[levelSel].startFn(); }
-    else if (e.code === 'Escape') { menuMode = 'main'; menuRender(); }
-  } else if (menuMode === 'multi') {
-    if (e.code === 'KeyH') menuHostOpen(); else if (e.code === 'KeyJ') menuJoinOpen(); else if (e.code === 'Escape') { menuMode = 'main'; menuRender(); }
-  } else if (menuMode === 'host' || menuMode === 'join') {
-    if (e.code === 'Enter') menuConnect(); else if (e.code === 'Escape') { menuMode = 'multi'; menuRender(); }
-  } else if (e.code === 'Enter' || e.code === 'Escape') { menuMode = 'main'; menuRender(); }
-}
-$('bStart').onclick = menuStart; $('bMulti').onclick = menuMulti; $('bExit').onclick = menuExit;
-buildLevelButtons(); $('bLevelsBack').onclick = () => { menuMode = 'main'; menuRender(); };
-$('bHost').onclick = menuHostOpen; $('bJoin').onclick = menuJoinOpen;
-$('bBack').onclick = () => { menuMode = 'main'; menuRender(); }; $('bBye').onclick = () => { menuMode = 'main'; menuRender(); };
-$('bBack2').onclick = $('bBack3').onclick = () => { menuMode = 'multi'; menuRender(); };
-$('bTsDl').onclick = $('bTsDl2').onclick = () => { window.open('https://tailscale.com/download', '_blank', 'noopener'); };
-$('bRefresh').onclick = menuHostOpen; $('inRoom').oninput = hostRefresh;
-$('bCopyInv').onclick = () => { copyText($('inviteAddr').textContent); $('bCopyInv').textContent = 'COPIED!'; setTimeout(() => { $('bCopyInv').textContent = 'COPY INVITE LINK'; }, 1500); };
-$('bGo').onclick = hostGo; $('bTest').onclick = joinTest; $('bJoinGo').onclick = joinGo;
-$('bMenu').onclick = () => location.reload();
-menuBtns.forEach((id, i) => { $(id).onmouseenter = () => { menuSel = i; menuRender(); }; });
-
 // ---------- dev tools: ESC pause menu with coordinates, F3 live overlay, F4 fly-through, copyable report ----------
 const rr1 = v => Math.round(v * 10) / 10;
 function sbox(s) {
@@ -11024,7 +11215,8 @@ renderer.setAnimationLoop(now => {
     }
   }
   if (P) { PERF.renderDone(_r0); PERF.overlayTick(now); }
-  });
+      });
+    }
   } catch (err) {
     const msg = err.message || String(err);
     const stack = err.stack || '';
