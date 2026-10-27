@@ -3238,13 +3238,12 @@ function updatePalaceMotion(dt) {
       f.mesh.position.y = f.y + lift * f.lift;
       f.mesh.position.z = f.z;
     }
-    for (const c of palace.clefts) {
-      const pulse = 0.92 + (0.5 + 0.5 * Math.sin(t * 0.72 + palace.breathPhase - 0.55)) * 0.12;
-      c.material.opacity = c.opacity * pulse;
-    }
+    const cleftPulse = 0.92 + (0.5 + 0.5 * Math.sin(t * 0.72 + palace.breathPhase - 0.55)) * 0.12;
+    for (const c of palace.clefts) c.material.opacity = c.opacity * cleftPulse;
     for (const h of palace.highlights) {
-      const pulse = 1 + Math.sin(t * 1.35 + h.phase) * 0.035 + breath * 0.006;
+      const pulse = 1 + breath * h.breathAmount;
       h.mesh.scale.set(h.sx * pulse, h.sy * pulse, h.sz * pulse);
+      h.mesh.material.opacity = h.opacity * (0.94 + (cleftPulse - 0.92) * 0.55);
     }
     for (const d of palace.drips) {
       const sway = Math.sin(t * 1.1 + d.phase) * 0.035;
@@ -3336,8 +3335,8 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
 
       // THE GATE: sculpted external anatomy, modeled as a framed entrance rather than a single pale oval.
       const opening = new THREE.Shape();
-      opening.moveTo(-8, 0); opening.lineTo(-8, 47); opening.quadraticCurveTo(-7, 62, 0, 66);
-      opening.quadraticCurveTo(7, 62, 8, 47); opening.lineTo(8, 0); opening.closePath();
+      opening.moveTo(-11, 0); opening.lineTo(-11, 47); opening.quadraticCurveTo(-10, 62, 0, 66);
+      opening.quadraticCurveTo(10, 62, 11, 47); opening.lineTo(11, 0); opening.closePath();
       M(new THREE.ShapeGeometry(opening, 16), glow(0x170714), 0, 0, 31.5);
       // Gradient vertex colors and softly shaded flesh match the roaming MAW instead of flat neon ellipsoids.
       const fleshGradient = (top, bottom) => {
@@ -3384,17 +3383,17 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
       };
       // A tapered, visibly open cleft sits in front of the doorway recess so the gate reads clearly at distance.
       const cleftShape = new THREE.Shape();
-      cleftShape.moveTo(-1.5, 11); cleftShape.bezierCurveTo(-2.8, 20, -3.2, 40, -2.2, 51);
-      cleftShape.quadraticCurveTo(0, 57, 2.2, 51); cleftShape.bezierCurveTo(3.2, 40, 2.8, 20, 1.5, 11);
+      cleftShape.moveTo(-1.7, 11); cleftShape.bezierCurveTo(-3, 20, -3.5, 40, -2.5, 51);
+      cleftShape.quadraticCurveTo(0, 57, 2.5, 51); cleftShape.bezierCurveTo(3.5, 40, 3, 20, 1.7, 11);
       cleftShape.quadraticCurveTo(0, 7, -1.5, 11);
       const cleftMat = new THREE.MeshBasicMaterial({ color: 0x4b0925, transparent: true, opacity: 0.92, fog: false, toneMapped: false });
       const cleft = new THREE.Mesh(new THREE.ShapeGeometry(cleftShape, 12), cleftMat);
       cleft.position.set(0, 0, 46.5); cleft.userData.noCull = true; g.add(cleft);
       // Broad, continuous membranes curve around the entrance; the inner edges taper into the cleft rather than ending as separate sausage shapes.
       for (const side of [-1, 1]) {
-        const outerLip = addMembrane(side, 6, 64, 9.4, 13.2, 1.2, 34.2, 12.5, [0xffd0ae, 0xb95d69], outerFlesh);
+        const outerLip = addMembrane(side, 6, 64, 11.2, 14.8, 1.5, 34.2, 13.2, [0xffd0ae, 0xb95d69], outerFlesh);
         entranceFolds.push({ mesh: outerLip, x: 0, y: 35, z: 34.2, sx: 1, sy: 1, sz: 1, lift: 0.3 });
-        const innerLip = addMembrane(side, 10, 57, 3.2, 4.2, 0.65, 43.4, 6.2, [0xffb2c2, 0x9e2248], innerFlesh);
+        const innerLip = addMembrane(side, 10, 57, 3.7, 4.8, 0.75, 43.4, 6.6, [0xffb2c2, 0x9e2248], innerFlesh);
         entranceFolds.push({ mesh: innerLip, x: 0, y: 33.5, z: 43.4, sx: 1, sy: 1, sz: 1, lift: 0.2 });
         // Fine crease and moist inner rim use solid materials (vertex-color-only materials made these tubes render black).
         const innerRim = new THREE.CatmullRomCurve3([
@@ -3413,7 +3412,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
       }
       // Two slim, swept hood folds join the upper labia in a soft V; leave the center open instead of capping it with a rounded dome.
       for (const side of [-1, 1]) {
-        const hoodWing = addMembrane(side, 56, 74, 3.3, 5.2, 1.25, 39.5, 5.2, [0xffd0ae, 0xb95d69], hoodMat);
+        const hoodWing = addMembrane(side, 56, 74, 3.8, 5.8, 1.35, 39.5, 5.5, [0xffd0ae, 0xb95d69], hoodMat);
         entranceFolds.push({ mesh: hoodWing, x: 0, y: 65, z: 39.5, sx: 1, sy: 1, sz: 1, lift: 0.12 });
       }
       const hoodEdgeCurve = new THREE.CatmullRomCurve3([
@@ -3434,19 +3433,19 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
         ]);
         const shine = new THREE.Mesh(new THREE.TubeGeometry(glint, 24, 0.42, 6, false), wet);
         shine.userData.noCull = true; g.add(shine);
-        wetHighlights.push({ mesh: shine, sx: 1, sy: 1, sz: 1, phase: side * 0.8 });
+        wetHighlights.push({ mesh: shine, sx: 1, sy: 1, sz: 1, opacity: 1, breathAmount: 0.012 });
       }
       for (const [x, top, len] of [[-5.2, 13, 7], [1.8, 10, 10], [5.6, 14, 5.5]]) {
         const drip = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.07, len, 7).translate(0, -len / 2, 0), wetPink);
         drip.position.set(x, top, 47.4); drip.userData.noCull = true; g.add(drip);
         wetDrips.push({ mesh: drip, x, y: top, rz: 0, phase: top * 0.17 });
         const droplet = M(sp2, wetPink, x, top - len - 0.25, 47.4, 0.48, 0.72, 0.48);
-        wetHighlights.push({ mesh: droplet, sx: 0.48, sy: 0.72, sz: 0.48, phase: top * 0.11 });
+        wetHighlights.push({ mesh: droplet, sx: 0.48, sy: 0.72, sz: 0.48, opacity: 0.8, breathAmount: 0.035 });
       }
       // Small wet highlights catch the light across the hood and outer folds.
       for (const [x, y, z, sx, sy, sz] of [[-4, 65, 47, 0.65, 0.42, 0.35], [3, 64, 47, 0.5, 0.35, 0.3], [-20, 34, 40, 0.55, 0.35, 0.28], [20, 44, 40, 0.55, 0.35, 0.28]]) {
         const highlight = M(sp2, wet, x, y, z, sx, sy, sz);
-        wetHighlights.push({ mesh: highlight, sx, sy, sz, phase: x * 0.13 + y * 0.07 });
+        wetHighlights.push({ mesh: highlight, sx, sy, sz, opacity: 0.72, breathAmount: 0.028 });
       }
 
       // Feminine detailing on the existing castle: rose-window rosette, curved cornices and slim blush banners.
@@ -8442,12 +8441,11 @@ function hitPeer(p, dmg) {
 }
 let pvpAcc = 0;
 function pvpReceive(d, from) {
-  console.log('[PvP pvpReceive]', { d, from, netMode, state, invuln, pvpAcc });
   if (netMode === 'coop') return;                            // COOP room: ignore any incoming player damage, even from stale clients
   if (state !== 'play' || invuln > 0) return;
   if (activeStartHubs().some(h => Math.abs(pos.x - h.x) < h.hw + 10 && Math.abs(pos.z - h.z) < h.hd + 10 && pos.y > TOP - 4)) return;      // home towers are safe from other players
   pvpAcc += d; if (pvpAcc < 1) return; pvpAcc = 0;
-  const p = net.peers.get(from); hurt(1, p ? p.pos.x : pos.x, p ? p.pos.z : pos.z);
+  const p = net.peers.get(from); hurt(Math.max(1, Math.round(pvpAcc + d)), p ? p.pos.x : pos.x, p ? p.pos.z : pos.z);
 }
 // the dark figure / watchers used to be scenery. Now they can be shot: they scream, vanish, and pay out.
 let phantomKills = 0;
