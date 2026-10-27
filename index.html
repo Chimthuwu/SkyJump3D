@@ -3346,11 +3346,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
         geo.setAttribute('color', new THREE.BufferAttribute(colors, 3)); return geo;
       };
       const softGlow = (opacity = 1) => new THREE.MeshBasicMaterial({ vertexColors: true, transparent: opacity < 1, opacity, toneMapped: false, fog: false });
-      const outerGeo = fleshGradient(0xffd0ae, 0xb95d69);
-      const labiaGeo = fleshGradient(0xffb2c2, 0x9e2248);
-      const foldGeo = fleshGradient(0xffd2d0, 0xd94d78);
-      const outerFlesh = softGlow(), innerFlesh = softGlow(), foldLight = softGlow(), hoodMat = softGlow();
-      const foldSolid = glow(0xffc0c9), creaseSolid = glow(0xb94c68);
+      const outerFlesh = softGlow(), innerFlesh = softGlow();
       const membrane = (side, bottom, top, maxWidth, centerX, centerBend, zBase, bulge, colors) => {
         const rows = 36, cols = 14, centerY = (bottom + top) * 0.5;
         const positions = [], vertexColors = [], indices = [];
@@ -3381,71 +3377,26 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
         const mesh = new THREE.Mesh(made.geo, material); mesh.position.set(0, made.centerY, made.zBase);
         mesh.material.side = THREE.DoubleSide; mesh.userData.noCull = true; g.add(mesh); return mesh;
       };
-      // A tapered, visibly open cleft sits in front of the doorway recess so the gate reads clearly at distance.
+      // Keep one broad, clean cleft in front of the doorway; the paired folds meet around it without a separate cap or dangling trim.
       const cleftShape = new THREE.Shape();
-      cleftShape.moveTo(-1.7, 11); cleftShape.bezierCurveTo(-3, 20, -3.5, 40, -2.5, 51);
-      cleftShape.quadraticCurveTo(0, 57, 2.5, 51); cleftShape.bezierCurveTo(3.5, 40, 3, 20, 1.7, 11);
-      cleftShape.quadraticCurveTo(0, 7, -1.5, 11);
+      cleftShape.moveTo(-2.1, 9); cleftShape.bezierCurveTo(-4.1, 21, -4.6, 39, -3.8, 49);
+      cleftShape.quadraticCurveTo(0, 54, 3.8, 49); cleftShape.bezierCurveTo(4.6, 39, 4.1, 21, 2.1, 9);
+      cleftShape.quadraticCurveTo(0, 6, -2.1, 9);
       const cleftMat = new THREE.MeshBasicMaterial({ color: 0x4b0925, transparent: true, opacity: 0.92, fog: false, toneMapped: false });
-      const cleft = new THREE.Mesh(new THREE.ShapeGeometry(cleftShape, 12), cleftMat);
-      cleft.position.set(0, 0, 46.5); cleft.userData.noCull = true; g.add(cleft);
-      // Broad, continuous membranes curve around the entrance; the inner edges taper into the cleft rather than ending as separate sausage shapes.
+      const cleft = new THREE.Mesh(new THREE.ShapeGeometry(cleftShape, 16), cleftMat);
+      cleft.position.set(0, 0, 52); cleft.userData.noCull = true; g.add(cleft);
+      // Broader, lower swept membranes form two joined masses around the readable central cleft.
       for (const side of [-1, 1]) {
-        const outerLip = addMembrane(side, 6, 64, 11.2, 14.8, 1.5, 34.2, 13.2, [0xffd0ae, 0xb95d69], outerFlesh);
-        entranceFolds.push({ mesh: outerLip, x: 0, y: 35, z: 34.2, sx: 1, sy: 1, sz: 1, lift: 0.3 });
-        const innerLip = addMembrane(side, 10, 57, 3.7, 4.8, 0.75, 43.4, 6.6, [0xffb2c2, 0x9e2248], innerFlesh);
-        entranceFolds.push({ mesh: innerLip, x: 0, y: 33.5, z: 43.4, sx: 1, sy: 1, sz: 1, lift: 0.2 });
-        // Fine crease and moist inner rim use solid materials (vertex-color-only materials made these tubes render black).
-        const innerRim = new THREE.CatmullRomCurve3([
-          new THREE.Vector3(side * 2.2, 11, 48), new THREE.Vector3(side * 2.8, 22, 49),
-          new THREE.Vector3(side * 3.1, 35, 49.4), new THREE.Vector3(side * 2.7, 48, 49),
-          new THREE.Vector3(side * 1.5, 55, 47.8)
-        ]);
-        const rimMesh = new THREE.Mesh(new THREE.TubeGeometry(innerRim, 28, 0.7, 8, false), foldSolid);
-        rimMesh.userData.noCull = true; g.add(rimMesh);
-        const crease = new THREE.CatmullRomCurve3([
-          new THREE.Vector3(side * 22, 10, 42), new THREE.Vector3(side * 22.5, 24, 43),
-          new THREE.Vector3(side * 21, 43, 43), new THREE.Vector3(side * 17, 60, 41)
-        ]);
-        const creaseMesh = new THREE.Mesh(new THREE.TubeGeometry(crease, 24, 0.55, 7, false), creaseSolid);
-        creaseMesh.userData.noCull = true; g.add(creaseMesh);
+        const outerLip = addMembrane(side, 7, 64, 16, 19, 1.1, 35, 15, [0xffd0ae, 0xb95d69], outerFlesh);
+        entranceFolds.push({ mesh: outerLip, x: 0, y: 35.5, z: 35, sx: 1, sy: 1, sz: 1, lift: 0.3 });
+        const innerLip = addMembrane(side, 10, 56, 4.2, 5.1, 0.55, 44.5, 7.2, [0xffb2c2, 0x9e2248], innerFlesh);
+        entranceFolds.push({ mesh: innerLip, x: 0, y: 33, z: 44.5, sx: 1, sy: 1, sz: 1, lift: 0.2 });
       }
-      // Two slim, swept hood folds join the upper labia in a soft V; leave the center open instead of capping it with a rounded dome.
-      for (const side of [-1, 1]) {
-        const hoodWing = addMembrane(side, 56, 74, 3.8, 5.8, 1.35, 39.5, 5.5, [0xffd0ae, 0xb95d69], hoodMat);
-        entranceFolds.push({ mesh: hoodWing, x: 0, y: 65, z: 39.5, sx: 1, sy: 1, sz: 1, lift: 0.12 });
-      }
-      const hoodEdgeCurve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(-5.8, 58.5, 46), new THREE.Vector3(-3.7, 57.5, 47.2), new THREE.Vector3(0, 57, 47.6),
-        new THREE.Vector3(3.7, 57.5, 47.2), new THREE.Vector3(5.8, 58.5, 46)
-      ]);
-      const hoodEdge = new THREE.Mesh(new THREE.TubeGeometry(hoodEdgeCurve, 20, 0.48, 7, false), foldSolid);
-      hoodEdge.userData.noCull = true; g.add(hoodEdge);
-      const clitoris = M(foldGeo, foldLight, 0, 56.2, 48.1, 0.62, 0.9, 0.4);              // small glans tucked under the narrow hood folds
-      entranceFolds.push({ mesh: clitoris, x: 0, y: 56.2, z: 48.1, sx: 0.62, sy: 0.9, sz: 0.4, lift: 0.15 });
-      // Wet specular streaks trace the inner folds; droplets hang from the lower labia.
+      // A pair of short, soft sheen marks follows the pulse without adding dangling strings or balloon-like outlines.
       const wet = new THREE.MeshBasicMaterial({ color: 0xffe0e7, transparent: true, opacity: 0.72, fog: false, toneMapped: false });
-      const wetPink = new THREE.MeshBasicMaterial({ color: 0xff8fb0, transparent: true, opacity: 0.8, fog: false, toneMapped: false });
       for (const side of [-1, 1]) {
-        const glint = new THREE.CatmullRomCurve3([
-          new THREE.Vector3(side * 7.2, 13, 47.5), new THREE.Vector3(side * 6.4, 25, 47.8),
-          new THREE.Vector3(side * 6.1, 38, 47.8), new THREE.Vector3(side * 6.7, 49, 46)
-        ]);
-        const shine = new THREE.Mesh(new THREE.TubeGeometry(glint, 24, 0.42, 6, false), wet);
-        shine.userData.noCull = true; g.add(shine);
-        wetHighlights.push({ mesh: shine, sx: 1, sy: 1, sz: 1, opacity: 1, breathAmount: 0.012 });
-      }
-      for (const [x, top, len] of [[-5.2, 13, 7], [1.8, 10, 10], [5.6, 14, 5.5]]) {
-        const drip = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.07, len, 7).translate(0, -len / 2, 0), wetPink);
-        drip.position.set(x, top, 47.4); drip.userData.noCull = true; g.add(drip);
-        wetDrips.push({ mesh: drip, x, y: top, rz: 0, phase: top * 0.17 });
-        const droplet = M(sp2, wetPink, x, top - len - 0.25, 47.4, 0.48, 0.72, 0.48);
-        wetHighlights.push({ mesh: droplet, sx: 0.48, sy: 0.72, sz: 0.48, opacity: 0.8, breathAmount: 0.035 });
-      }
-      // Small wet highlights catch the light across the hood and outer folds.
-      for (const [x, y, z, sx, sy, sz] of [[-4, 65, 47, 0.65, 0.42, 0.35], [3, 64, 47, 0.5, 0.35, 0.3], [-20, 34, 40, 0.55, 0.35, 0.28], [20, 44, 40, 0.55, 0.35, 0.28]]) {
-        const highlight = M(sp2, wet, x, y, z, sx, sy, sz);
-        wetHighlights.push({ mesh: highlight, sx, sy, sz, opacity: 0.72, breathAmount: 0.028 });
+        const highlight = M(sp2, wet, side * 26, 38, 46.5, 0.34, 2.6, 0.32);
+        wetHighlights.push({ mesh: highlight, sx: 0.34, sy: 2.6, sz: 0.32, opacity: 0.72, breathAmount: 0.018 });
       }
 
       // Feminine detailing on the existing castle: rose-window rosette, curved cornices and slim blush banners.
