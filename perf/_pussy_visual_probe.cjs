@@ -34,9 +34,9 @@ const SRC = path.resolve(__dirname, '..', 'index.html');
     await page.evaluate(({x,y,z,yaw}) => {
       window.dispatchEvent(new KeyboardEvent('keydown', { code: 'F4', bubbles: true }));
       const frontX = Math.sin(yaw), frontZ = Math.cos(yaw);
-      const px = x + frontX * 470, py = y + 135, pz = z + frontZ * 470;
+      const px = x + frontX * 285, py = y + 112, pz = z + frontZ * 285;
       window.__ng.tp(px, py, pz);
-      window.__ng.look(yaw, 0.04);
+      window.__ng.look(yaw, -0.13);
     }, view);
     await new Promise(r => setTimeout(r, 250));
     await page.evaluate(() => {
