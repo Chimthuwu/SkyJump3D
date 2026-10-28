@@ -6954,6 +6954,16 @@ function buildBetween() {
       coin(fx + (rand() - 0.5) * 6, 5.2, fz + (rand() - 0.5) * 6, null);
       if (k % 4 === 1) spawnBiomeEnemy(fx, 5, fz, null, null, 0.7, 1);
     }
+    // Baseline decoration independent of corruption-bleed, so the Foundation isn't a bare slab before
+    // any Gravity Anchor is lit — broken dark-stone pillars/debris, purely visual, no interaction.
+    const pillarMat = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x0e0a14 })), accentMat = new THREE.MeshBasicMaterial({ color: 0x3a2a56, transparent: true, opacity: 0.8 });
+    for (let k = 0; k < 14; k++) {
+      const ang = rand() * Math.PI * 2, rad = 25 + rand() * (FR - 25);
+      const fx = Math.cos(ang) * rad, fz = Math.sin(ang) * rad, h = 3 + rand() * 7, lean = (rand() - 0.5) * 0.3;
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(1.2 + rand(), h, 1.2 + rand()), pillarMat);
+      pillar.position.set(fx, 4 + h / 2, fz); pillar.rotation.set(lean, rand() * Math.PI, lean); scene.add(pillar);
+      if (rand() < 0.4) { const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.3 + rand() * 0.3, 0), accentMat); shard.position.set(fx + (rand() - 0.5), 4 + h + 0.4, fz + (rand() - 0.5)); scene.add(shard); }
+    }
   }
 
   // 7a-2) Grapple-vein waypoints: grappleFire() already hooks any solid (castRay against solids[], no
