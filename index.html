@@ -10179,6 +10179,7 @@ function hurt(n, fromX, fromZ) {
   bloodBurst(new THREE.Vector3(pos.x, pos.y + 1, pos.z), horrorHit ? 52 : 34, horrorHit ? 1.4 : 1.2);
   splatter(pos.x, pos.y + 0.3, pos.z, horrorHit ? 20 : 13, horrorHit ? 2 : 1.4, horrorHit ? 0.85 : 0.6);
   wallSplat(pos.x, pos.y + 1, pos.z, horrorHit ? 6 : 3, horrorHit ? 1 : 0.7); bloodScreen(0.7, false);
+  if (nosOn()) { for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; coin(pos.x + Math.cos(a) * 1.6, pos.y + 1, pos.z + Math.sin(a) * 1.6, null, true); } toast('RING SPILL!', 900); }
   if (health <= 0) return die('KNOCKED OUT', 'Enemies are tough — stomp them from above or slash with your sword.');
   if (fromX !== undefined) {
     const dx = pos.x - fromX, dz = pos.z - fromZ, d = Math.hypot(dx, dz) || 1;
