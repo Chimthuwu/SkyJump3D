@@ -414,6 +414,12 @@ Status: Rent's Due built (uncommitted - see Done). Nostalgia Overdose built the 
 - Headless-verified: zero errors on full BETWEEN pass + default regression.
 - Plan status: Steps 1-4 done (Step 4 confirmed already covered). Remaining: the rest of Step 5 (Foundation decorative structures beyond the lore/coin/enemy ring already added in Step 2).
 
+## THE BETWEEN scale/density polish — Step 5 done, plan complete (2026-10-28, CLAUDE)
+- Added baseline Foundation decoration independent of the corruption-bleed system: ~14 broken dark-stone pillars (leaning, varied height) + occasional glowing debris shards, scattered radius 25 to `foundationHalf-40`, purely visual (not in `solids[]`/`decorSites`, zero gameplay risk) so the 880×880 floor doesn't read as a bare slab before any Gravity Anchor is lit.
+- **All 5 steps of the approved plan (`C:\Users\Serge\.claude\plans\memoized-watching-reef.md`) are now complete**: atmosphere/weather, BETWEEN-only lore+density, grapple-vein waypoints, roaming threat (found already covered), Foundation polish.
+- Headless-verified: zero errors on full BETWEEN pass + default regression, same as every step this session.
+- Summary of the whole polish pass for whoever reads this next: THE BETWEEN now has per-zone weather, dedicated Hellscape/Glitch backdrops, its own lore pool (separate tone from descent's), coin/heart/ammo density on the Canopy and Foundation, grapple waypoints tied to the vein aesthetic, and baseline Foundation decoration — on top of the already-existing roaming-enemy density and dynamic biome dressing. Not attempted: literal scale-matching to descent's 600m×6-universe + Moon/Mars/space footprint — the user explicitly asked for density/design quality, not a size clone.
+
 ## Decisions made (review me)
 - 2026-10-24 — Retro/NOS pass: bounded CSS fix (line 43 dither) chosen over new egg features. Checkpoint SHA: e6fc920.
 - 2026-10-26 — Scrolling parallax skyline added as CSS-only bounded step (line 46); remaining sprite billboards + floating plates for next worker. No ambiguity, no checkpoint needed.
