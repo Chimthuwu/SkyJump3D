@@ -3614,9 +3614,9 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
       // A soft pink cloudbank cradles the foundation without recoloring or reshaping the castle.
       const cloudMat = new THREE.MeshBasicMaterial({ color: 0xf08bc8, transparent: true, opacity: 0.62, depthWrite: false, fog: false, toneMapped: false });
       const cloudHi = new THREE.MeshBasicMaterial({ color: 0xffb8df, transparent: true, opacity: 0.68, depthWrite: false, fog: false, toneMapped: false });
-      for (let i = 0; i < 10; i++) {
-        const angle = i * Math.PI * 2 / 10, radius = 65;
-        for (const [dx, dy, dz, sx, sy, sz, mat] of [[0, -2, 0, 18, 7, 13, cloudMat], [-8, 1, 1, 12, 8, 11, cloudHi], [8, 0, -2, 13, 7, 10, cloudMat]]) {
+      for (let i = 0; i < 16; i++) {
+        const angle = i * Math.PI * 2 / 16, radius = 90;
+        for (const [dx, dy, dz, sx, sy, sz, mat] of [[0, -2, 0, 18, 7, 13, cloudMat], [-8, 1, 1, 12, 8, 11, cloudHi], [8, 0, -2, 13, 7, 10, cloudMat], [0, 3, 4, 10, 6, 9, cloudHi]]) {
           const puff = M(softGeo, mat, Math.cos(angle) * radius + dx, dy, Math.sin(angle) * radius + dz, sx, sy, sz);
           cloudMotion.push({ mesh: puff, angle, radius, radiusWobble: 1.5, puffX: dx, puffZ: dz, y: dy, sx, sy, sz, phase: i * 0.73 + dx * 0.04 + dz * 0.03, orbitSpeed: 0.012 + (i % 3) * 0.0015, bob: 0.2 });
         }
