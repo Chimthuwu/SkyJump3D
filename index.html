@@ -7045,55 +7045,6 @@ function buildBetween() {
 }
 
 // ===== PHASE 4: PERFORMANCE BATCHING =====
-// Batch static platform meshes by material to reduce draw calls.
-// Called once after buildBetween() completes.
-function betweenBatchPlatforms() {
-  if (!betweenOn()) return;
-  const batches = new Map(); // materialKey -> { geos: BufferGeometry[], meshes: [], material }
-  for (const p of platforms) {
-    if (!p.slab || p.sp || p.isCanopy || p.isBeacon || p.isDungeonMouth || p.isFoundation || p.returnGeyser || p.bounce) continue; // skip special/dynamic
-    const mat = p.slab.material;
-    const key = mat.color.getHexString() + '|' + (mat.emissive ? mat.emissive.getHexString() : '0') + '|' + (mat.map ? 'tex' : 'notex');
-    if (!batches.has(key)) batches.set(key, { geos: [], meshes: [], material: mat });
-    const batch = batches.get(key);
-    // Collect slab geometry (world-space, indexed to match)
-    const slabGeo = p.slab.geometry.clone().toNonIndexed();
-    slabGeo.applyMatrix4(p.slab.matrixWorld);
-    batch.geos.push(slabGeo);
-    batch.meshes.push(p.slab);
-    // Also collect plate geometry if present
-    if (p.plate) {
-      const plateGeo = p.plate.geometry.clone().toNonIndexed();
-      plateGeo.applyMatrix4(p.plate.matrixWorld);
-      batch.geos.push(plateGeo);
-      batch.meshes.push(p.plate);
-    }
-  }
-  // Replace individual meshes with one batched mesh per material group
-  let groupCount = 0;
-  for (const [key, batch] of batches) {
-    if (!batch.geos.length) continue;
-    const merged = mergeGeometries(batch.geos, false);
-    if (!merged || !merged.attributes.position || merged.attributes.position.count === 0) continue;
-    const mesh = new THREE.Mesh(merged, batch.material);
-    mesh.frustumCulled = true;
-    scene.add(mesh);
-    for (const m of batch.meshes) { if (m.parent) m.parent.remove(m); }
-    groupCount++;
-  }
-  console.log('[BETWEEN] Batched', groupCount, 'material groups');
-}
-
-// Hook into buildLevel to run batching after BETWEEN is built
-// DISABLED: betweenBatchPlatforms() produces a merged mesh that crashes WebGLRenderer's
-// uniform refresh (refreshUniformsCommon reading undefined) on some platform/plate geometry
-// combinations. It's a draw-call optimization only — no gameplay depends on it — so it's left
-// off rather than risk a renderer crash. See TODO.md for follow-up if perf becomes an issue.
-const originalBuildLevel = buildLevel;
-buildLevel = function() {
-  originalBuildLevel();
-};
-
 // Grapple-vein waypoints: small glowing anchor nodes along the Canopy, grapple-hookable because
 // grappleFire() hooks any solid — these just mark intentional swing points, matching the existing
 // bioluminescent-vein color (0x36f6ff cyan / 0x9a6aff violet, same palette as betweenVeins/beacons).
