@@ -260,6 +260,7 @@
   </div>
   <div id="menuHost">
     <div class="sub" id="netModeRow">ROOM MODE: <b id="netModeLabel">PVP</b> &mdash; <button class="mini" id="bNetMode">TOGGLE (C or RB)</button><br><span class="dim">PVP = everyone vs everyone &middot; COOP = players share the world and can never hurt each other</span></div>
+    <div class="sub" id="betweenDropRow">THE BETWEEN DROP: <b id="betweenDropModeLabel">TEAM DROP</b> &mdash; <button class="mini" id="bBetweenDropMode">TOGGLE</button><br><span class="dim">TEAM DROP = all 4 at Beacon 1 &middot; SCATTERED DROP = 1 per Beacon (1-4)</span></div>
     <div class="sub">Hosting uses <b>Tailscale</b> (free) so friends can reach your PC privately from anywhere. Do these in order:</div>
     <ol class="steps">
       <li id="stTs" class="bad"><b id="stTsChk">&#10007;</b><span><b>1.</b> Install Tailscale and sign in on this PC. <button class="mini" id="bTsDl">GET TAILSCALE</button><button class="mini" id="bRefresh">REFRESH</button><br><span class="dim" id="tsNote"></span></span></li>
@@ -420,6 +421,10 @@ let betweenWell = null;                       // THE BETWEEN: Phase 2 — the Gr
 let betweenTeleportT = 0;                     // THE BETWEEN: Phase 2 — scripted camera-roll timer for D6 flip panels (seconds remaining)
 let betweenGlitchT = 0;                       // THE BETWEEN: Phase 2 — D1 input-swap timer (seconds remaining)
 const FRACTAL_ZONE = { name: 'Fractal', desc: 'the angles are wrong on purpose', top: '#04020a', mid: '#140a2e', bot: '#2a1046', fog: 0x120a24, hemi: 0.55, hemiCol: 0xb49aff, sun: 0.4, sunCol: 0x8a6aff, cloud: 0x1a1030, plate: 0x9a6aff, weather: 'none' };
+// THE BETWEEN — custom dungeon zones (Phase 3)
+const VHS_ZONE = { name: 'VHS', desc: 'static hiss eats the walls', top: '#0a0a12', mid: '#1a1426', bot: '#2a1e36', fog: 0x141024, hemi: 0.45, hemiCol: 0x8866aa, sun: 0.3, sunCol: 0x664488, cloud: 0x0a0814, plate: 0xaa88ff, weather: 'none' };
+const GULLET_ZONE = { name: 'Gullet', desc: 'you are inside it', top: '#1a0408', mid: '#3a0a14', bot: '#5a121a', fog: 0x2a060c, hemi: 0.65, hemiCol: 0xff6677, sun: 0.2, sunCol: 0xff3344, cloud: 0x1a0408, plate: 0xcc3355, weather: 'none' };
+const LIMINAL_ZONE = { name: 'Liminal', desc: 'the water remembers', top: '#020814', mid: '#081426', bot: '#0e243a', fog: 0x0a0e1a, hemi: 0.75, hemiCol: 0x44aaff, sun: 0.15, sunCol: 0x2288cc, cloud: 0x040a14, plate: 0x3399dd, weather: 'none' };
 
 // ---------- helpers ----------
 let seed = 11, levelSeed = 11;
@@ -1073,7 +1078,7 @@ const WALKER_STATS = {
   angle:     { hp: 3, sp: 2.9, pts: 130, col: 0x0a0a0e },      // single-vertex silhouette in black: hurts to study, closes the distance while you don't (stalker AI)
 };
 // Themed dungeon species borrow movement patterns while keeping their own models and stats.
-const AI_ALIAS = { notice: 'spider', bailiff: 'charger', collector: 'gunner', landlord: 'gorilla', tapehead: 'spider', crthead: 'gunner', cabinet: 'gorilla', pixelghost: 'kaomoji', cryptGhost: 'stalker', zombie: 'gorilla', sporeling: 'kaomoji', prismWraith: 'stalker', capBrute: 'gorilla', watcher: 'stalker', crawler: 'spider', whisperer: 'stalker', spawnSwarm: 'kaomoji', amalgam: 'gorilla', shell: 'kaomoji', angle: 'stalker' };
+const AI_ALIAS = { notice: 'spider', bailiff: 'charger', collector: 'gunner', landlord: 'gorilla', tapehead: 'spider', crthead: 'gunner', cabinet: 'gorilla', pixelghost: 'kaomoji', cryptGhost: 'stalker', zombie: 'gorilla', sporeling: 'kaomoji', prismWraith: 'stalker', capBrute: 'gorilla', watcher: 'stalker', crawler: 'spider', whisperer: 'stalker', spawnSwarm: 'kaomoji', amalgam: 'gorilla', shell: 'kaomoji', angle: 'stalker', scrub: 'stalker', secondMouth: 'stalker', resident: 'stalker', untitled: 'stalker', otherPlayer: 'stalker', vertex: 'stalker' };
 // THE BETWEEN §7.2: the systemic roster dripped into every sector (per zone name at pickEnemy), replacing biome rosters for this level only.
 const BETWEEN_ENEMY_ROSTER = ['watcher', 'crawler', 'whisperer', 'spawnSwarm', 'amalgam', 'shell', 'angle'];
 const faceTex = {};
@@ -6859,16 +6864,68 @@ function buildBetween() {
   // 7) The wiring engine: 5 named combo archetypes + enough filler circuits to reach 20+, 3+ global
   buildBetweenWiring(sectors, sectorCenterX, CANOPY_Y);
 
-  // 7b) Phase 2: the three reference dungeons (D1/D4/D6 — D2/D3/D5 are a later phase)
+  // 7b) Phase 2: the three reference dungeons (D1/D4/D6)
   buildDungeonGlitchExe(betweenDungeonMouths[0], 0);
   buildDungeonPsychosis(betweenDungeonMouths[3], 3);
   buildDungeonFractalDescent(betweenDungeonMouths[5], 5);
 
+  // 7c) Phase 3: the three remaining dungeons (D2/D3/D5)
+  buildDungeonVhsRewind(betweenDungeonMouths[1], 1);
+  buildDungeonTheGullet(betweenDungeonMouths[2], 2);
+  buildDungeonLiminalPools(betweenDungeonMouths[4], 4);
+
   // 8) Sky profile (SKY_PROFILES.between, keyed by levelDef.id — already wired, no new code needed here)
   buildSky();
 
+  // 9) Presentation layer initialization
+  initBetweenPresentation();
+
   // No skyway, no moon platform chain: buildSkyway() is never called for this level, by omission.
 }
+
+// ===== PHASE 4: PERFORMANCE BATCHING =====
+// Batch static platform meshes by material to reduce draw calls.
+// Called once after buildBetween() completes.
+function betweenBatchPlatforms() {
+  if (!betweenOn()) return;
+  const batches = new Map(); // materialKey -> { geo: BufferGeometry, meshes: [] }
+  for (const p of platforms) {
+    if (!p.slab || p.sp || p.isCanopy || p.isBeacon || p.isDungeonMouth || p.isFoundation || p.returnGeyser || p.bounce) continue; // skip special/dynamic
+    const mat = p.slab.material;
+    const key = mat.color.getHexString() + '|' + (mat.emissive ? mat.emissive.getHexString() : '0') + '|' + (mat.map ? 'tex' : 'notex');
+    if (!batches.has(key)) batches.set(key, { geo: new THREE.BufferGeometry(), meshes: [], material: mat });
+    const batch = batches.get(key);
+    // Merge slab geometry
+    const slabGeo = p.slab.geometry.clone();
+    slabGeo.applyMatrix4(p.slab.matrixWorld);
+    batch.geo = THREE.BufferGeometryUtils.mergeBufferGeometries([batch.geo, slabGeo], false);
+    // Also merge plate geometry if present
+    if (p.plate) {
+      const plateGeo = p.plate.geometry.clone();
+      plateGeo.applyMatrix4(p.plate.matrixWorld);
+      batch.geo = THREE.BufferGeometryUtils.mergeBufferGeometries([batch.geo, plateGeo], false);
+    }
+  }
+  // Replace individual meshes with batched meshes
+  for (const [key, batch] of batches) {
+    if (batch.geo.attributes.position.count === 0) continue;
+    const mesh = new THREE.Mesh(batch.geo, batch.material);
+    mesh.frustumCulled = true;
+    scene.add(mesh);
+    batch.meshes.push(mesh);
+  }
+  console.log('[BETWEEN] Batched', batches.size, 'material groups');
+}
+
+// Hook into buildLevel to run batching after BETWEEN is built
+const originalBuildLevel = buildLevel;
+buildLevel = function() {
+  originalBuildLevel();
+  if (betweenOn()) {
+    // Run batching after a frame to let all platforms settle
+    setTimeout(betweenBatchPlatforms, 100);
+  }
+};
 
 // ===================== CANOPY SECTOR BUILDER (Phase 1) =====================
 // Each biome sector gets a native platform network skinned with the biome's material.
@@ -7122,18 +7179,20 @@ function buildBetweenDungeonShaft(mouth, dungeonIndex, zone, levels, arenaType, 
   const arenaHub = { kind: 'arena', x: A.x, z: A.z, top: A.top, hw: A.hw, hd: A.hd, zone, universe: mySlot, slab: null };
   connect(hubs[levels - 1], arenaHub);
   // Return geyser: a small floating platform just past the arena's own edge (every arenaType has its own
-  // internal obstacle layout — colosseum corner towers, reactor pylons/core, pillars columns — so flush-with-
-  // the-floor placement near the center risks landing on one of those; just outside the footprint avoids all of them).
-  const gx = A.x + A.hw + 5, gz = A.z;
-  const geyser = addSolid(gx - 3, gx + 3, arenaTop + 1.6, arenaTop + 2, gz - 3, gz + 3);
-  Object.assign(geyser, { cx: gx, cz: gz, top: arenaTop + 2, zone, returnGeyser: true, geyserTarget: { x: mouth.cx, y: topY + 3, z: mouth.cz } });
+    // internal obstacle layout — colosseum corner towers, reactor pylons/core, pillars columns — so flush-with-
+    // the-floor placement near the center risks landing on one of those; just outside the footprint avoids all of them).
+    const gx = A.x + A.hw + 5, gz = A.z;
+    const geyser = addSolid(gx - 3, gx + 3, arenaTop + 1.6, arenaTop + 2, gz - 3, gz + 3);
+    // Return-geyser mapping: D1/D2→Beacon1, D3/D4→Beacon2, D5/D6→Beacon3/4
+    const beaconMap = [0, 0, 1, 1, 2, 3]; // dungeon index -> beacon index
+    const targetBeacon = betweenBeacons[beaconMap[dungeonIndex]] || betweenBeacons[0];
+    Object.assign(geyser, { cx: gx, cz: gz, top: arenaTop + 2, zone, returnGeyser: true, geyserTarget: { x: targetBeacon.x, y: CANOPY_Y + 3, z: targetBeacon.z } });
   const padMesh = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 0.4, 16), new THREE.MeshBasicMaterial({ color: 0x36f6ff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
   padMesh.position.set(gx, arenaTop + 1.8, gz); scene.add(padMesh);
   connect(arenaHub, { kind: 'building', x: gx, z: gz, top: arenaTop + 2, hw: 3, hd: 3, zone, universe: mySlot, slab: null });
   return { hubs, A, geyser, last: { x: A.x, z: A.z, top: A.top, hw: A.hw, hd: A.hd } };
 }
-// Gravity Anchor: counts toward the (future, Phase 4+) Gravity Well — no launch logic here, just the
-// counter + a visual pulse on the dungeon mouth's existing decorative shaft column.
+// Gravity Anchor: counts toward the Gravity Well. When all 6 anchors active, Well inverts and becomes a launch mechanism.
 function activateGravityAnchor(dungeonIndex) {
   if (!betweenWell) return;
   const anchor = betweenWell.anchors[dungeonIndex];
@@ -7143,6 +7202,18 @@ function activateGravityAnchor(dungeonIndex) {
   if (mouth && mouth.dungeonShaft) { mouth.dungeonShaft.material.opacity = 0.55; mouth.dungeonShaft.material.color.setHex(0x8ad0ff); }
   toast('GRAVITY ANCHOR ACTIVATED (' + betweenWell.anchorsActive + '/6)', 2600);
   shockRing({ x: mouth ? mouth.cx : 0, y: 4, z: mouth ? mouth.cz : 0 }, 10, 0x8ad0ff); sfx.clear && sfx.clear();
+  // When all 6 anchors active: Gravity Well inverts and unlocks Moon launch
+  if (betweenWell.anchorsActive >= 6 && !betweenWell.active) {
+    betweenWell.active = true;
+    betweenWell.launchReady = true;
+    betweenWell.invertT = 0;
+    toast('GRAVITY WELL INVERTED — MOON LAUNCH AVAILABLE', 4000);
+    shockRing({ x: 0, y: 30, z: 0 }, 25, 0x36f6ff);
+    // Start the Well inversion animation
+    betweenWell.rotation.x = Math.PI;
+  }
+  // Corruption bleed: cleared dungeon adds its biome/platforms/enemies to Canopy and Foundation
+  if (mouth && betweenOn()) betweenCorruptionBleed(dungeonIndex, mouth);
 }
 // One-frame glitch flick: screen-tear + a short CSS filter glitch, reusing the file's existing
 // additive-glow/CSS-filter convention (see nosTear()) instead of a new shader.
@@ -7161,6 +7232,260 @@ let glitchCrashActive = false;     // fake crash active
 let glitchFakeCrashOsc = null;     // crash audio oscillator
 let glitchMomentumThreshold = 8;   // min speed for momentum-gated platforms
 let glitchBossArena = null;        // reference to boss arena for wiring
+
+// ===== PHASE 4: GLOBAL SANITY SYSTEM =====
+// Single float across the level. Drains with descent, enemy kills, geometry exposure, whispers.
+// Resets at Beacons (grounding anchors) and D4 grounding anchors.
+// At low sanity: variant skins on existing enemies, hallucination bleed, whisper audio, co-op enemy flicker.
+let betweenSanity = 1.0;                 // 0..1 (1 = grounded, 0 = lost)
+let betweenSanityDrain = 0.0;            // accumulated drain this frame
+let betweenSanityLowWarning = false;     // HUD warning shown at <0.3
+let betweenSanityCritWarning = false;    // HUD warning shown at <0.15
+// Sanity drain rates (per second)
+const SANITY_DRAIN_BASE = 0.008;         // passive drain per second while in BETWEEN
+const SANITY_DRAIN_DESCENT = 0.002;      // extra per meter below Canopy (Y=120)
+const SANITY_DRAIN_KILL = 0.02;          // per enemy kill
+const SANITY_DRAIN_GEOMETRY = 0.015;     // per "wrong" geometry exposure (D1 fake crash, D4 hallucinations)
+const SANITY_DRAIN_WHISPER = 0.005;      // per whisper tick
+const SANITY_RESET_BEACON = 0.35;        // amount restored per Beacon touch (capped at 1.0)
+const SANITY_RESET_D4_ANCHOR = 0.2;      // amount restored per D4 grounding anchor
+
+function updateBetweenSanity(dt) {
+  if (!betweenOn()) return;
+  betweenSanityDrain = 0;
+  // Passive drain
+  betweenSanityDrain += SANITY_DRAIN_BASE * dt;
+  // Descent drain (more drain the lower you go)
+  const descentDepth = Math.max(0, CANOPY_Y - pos.y) / 120; // 0 at Canopy, 1 at Foundation
+  betweenSanityDrain += SANITY_DRAIN_DESCENT * descentDepth * dt;
+  // Whisper drain (from updateBetweenPresentation)
+  if (betweenWhisperActive) betweenSanityDrain += SANITY_DRAIN_WHISPER * dt;
+  // Apply drain
+  betweenSanity = Math.max(0, betweenSanity - betweenSanityDrain);
+  // HUD warnings
+  if (betweenSanity < 0.3 && !betweenSanityLowWarning) {
+    betweenSanityLowWarning = true;
+    toast('SANITY FRAGILE — FIND A BEACON', 3000);
+  } else if (betweenSanity >= 0.3) {
+    betweenSanityLowWarning = false;
+  }
+  if (betweenSanity < 0.15 && !betweenSanityCritWarning) {
+    betweenSanityCritWarning = true;
+    toast('REALITY THINNING — HALLUCINATIONS INCOMING', 3000);
+  } else if (betweenSanity >= 0.15) {
+    betweenSanityCritWarning = false;
+  }
+  // Variant skin hook: at low sanity, existing enemies in BETWEEN gain extra eyes/corners
+  // (handled in enemy render by checking betweenSanity < 0.4)
+}
+
+// Restore sanity at Beacon (grounding anchor)
+function betweenRestoreSanityAtBeacon(amount = SANITY_RESET_BEACON) {
+  if (!betweenOn()) return;
+  betweenSanity = Math.min(1, betweenSanity + amount);
+  betweenSanityLowWarning = false;
+  betweenSanityCritWarning = false;
+  if (betweenSanity > 0.5) toast('GROUNDING ANCHOR ACTIVE — SANITY RESTORED', 2000);
+}
+
+// Restore sanity at D4 grounding anchor
+function betweenRestoreSanityAtD4Anchor() {
+  if (!betweenOn()) return;
+  betweenSanity = Math.min(1, betweenSanity + SANITY_RESET_D4_ANCHOR);
+  if (betweenSanity > 0.5) toast('GROUNDING ANCHOR — CALIBRATION RESET', 2000);
+}
+
+// ===== PHASE 4: CORRUPTION BLEED =====
+// Clearing a dungeon adds its biome/platforms/enemies to the Canopy and Foundation.
+let betweenCorruptionBleedDone = new Array(6).fill(false);
+const BETWEEN_BIOME_ZONES = ['Glitch', 'VHS', 'Gullet', 'Psychosis', 'Liminal', 'Fractal'];
+
+function betweenCorruptionBleed(dungeonIndex, mouth) {
+  if (betweenCorruptionBleedDone[dungeonIndex]) return;
+  betweenCorruptionBleedDone[dungeonIndex] = true;
+  const biomeName = BETWEEN_BIOME_ZONES[dungeonIndex] || 'Glitch';
+  toast('CORRUPTION BLEED: ' + biomeName.toUpperCase() + ' SEEPS INTO THE CANOPY', 3000);
+  // Add biome platforms to Canopy sectors near this dungeon's mouth
+  if (betweenDungeonMouths[dungeonIndex]) {
+    const mx = mouth.cx, mz = mouth.cz;
+    for (let i = 0; i < 4; i++) {
+      const angle = i * Math.PI / 2;
+      const bx = mx + Math.cos(angle) * 30;
+      const bz = mz + Math.sin(angle) * 30;
+      const plat = addPlatform(bx, CANOPY_Y, bz, 3, false, 0, mouth.zone, true, true);
+      plat.isCorruptionBleed = true;
+      plat.dungeonSource = dungeonIndex;
+      // Biome-native platform kind for this dungeon
+      const kind = pickBiomePlatformKind(mouth.zone);
+      if (kind !== 'static') makeSpecial(plat, kind, biomePlatformParams(mouth.zone, kind));
+    }
+  }
+  // Add biome platforms to Foundation around Gravity Well
+  for (let i = 0; i < 3; i++) {
+    const angle = (dungeonIndex * Math.PI / 3) + i * 0.5;
+    const fx = Math.cos(angle) * 80;
+    const fz = Math.sin(angle) * 80;
+    const plat = addPlatform(fx, 0, fz, 4, false, 0, mouth.zone, true, true);
+    plat.isCorruptionBleed = true;
+    plat.dungeonSource = dungeonIndex;
+    const kind = pickBiomePlatformKind(mouth.zone);
+    if (kind !== 'static') makeSpecial(plat, kind, biomePlatformParams(mouth.zone, kind));
+  }
+  // Spawn biome-specific enemies on Canopy and Foundation
+  if (mouth.zone && BETWEEN_ENEMY_ROSTER) {
+    for (let i = 0; i < 3; i++) {
+      const angle = i * Math.PI * 2 / 3;
+      const ex = mouth.cx + Math.cos(angle) * 20;
+      const ez = mouth.cz + Math.sin(angle) * 20;
+      spawnBiomeEnemy(ex, CANOPY_Y + 1, ez, mouth, mouth.zone, 0.6, 1);
+    }
+    for (let i = 0; i < 2; i++) {
+      const angle = (dungeonIndex * Math.PI / 3) + i * 1.2;
+      const ex = Math.cos(angle) * 60;
+      const ez = Math.sin(angle) * 60;
+      spawnBiomeEnemy(ex, 1, ez, foundation, mouth.zone, 0.5, 1);
+    }
+  }
+}
+
+// ===== PHASE 4: GRAVITY WELL LAUNCH SEQUENCE =====
+// After all 6 anchors active: Well inverts, player steps in, launches to Moon.
+// Launch is a skill sequence — player steers with glide through orbital debris gauntlet.
+// Failure falls back to y=0 and retries; no death.
+let betweenLaunchActive = false;
+let betweenLaunchPhase = 0; // 0=enter, 1=ascending, 2=gauntlet, 3=moon
+let betweenLaunchT = 0;
+let betweenLaunchVY = 0;
+let betweenLaunchDebris = [];
+let betweenLaunchFailSafe = false;
+
+function updateGravityWellLaunch(dt) {
+  if (!betweenOn() || !betweenWell || !betweenWell.launchReady) return;
+  if (!betweenLaunchActive) {
+    // Check if player enters Well (at Foundation center, Y=0-30)
+    const wellDist = Math.hypot(pos.x, pos.z);
+    if (wellDist < 12 && pos.y < 40 && pos.y > 0) {
+      // Player entered Well — begin launch sequence
+      betweenLaunchActive = true;
+      betweenLaunchPhase = 1;
+      betweenLaunchT = 0;
+      betweenLaunchVY = 55; // initial launch velocity
+      betweenLaunchFailSafe = false;
+      vel.set(0, betweenLaunchVY, 0);
+      pos.set(0, 5, 0);
+      onGround = false;
+      // Spawn orbital debris gauntlet
+      spawnLaunchDebris();
+      toast('GRAVITY WELL ENGAGED — STEER TO THE MOON', 3000);
+      shockRing({ x: 0, y: 15, z: 0 }, 20, 0x55e6ff);
+    }
+  } else {
+    betweenLaunchT += dt;
+    if (betweenLaunchPhase === 1) {
+      // Ascending phase: player steers with glide/horizontal movement
+      // Gravity is reduced during launch (spaceK fade applies)
+      // Debris moves toward player
+      updateLaunchDebris(dt);
+      if (pos.y > 300) {
+        betweenLaunchPhase = 2; // Enter gauntlet proper
+        betweenLaunchT = 0;
+      }
+    } else if (betweenLaunchPhase === 2) {
+      // Gauntlet phase: dense debris field, must navigate to Moon
+      updateLaunchDebris(dt);
+      // Moon approach check
+      if (pos.y > 800) {
+        betweenLaunchPhase = 3;
+        betweenLaunchT = 0;
+      }
+    } else if (betweenLaunchPhase === 3) {
+      // Moon approach: trigger Moon ending
+      betweenLaunchActive = false;
+      betweenLaunchPhase = 0;
+      moonReached(); // reuse existing Moon ending
+      return;
+    }
+    // Fail-safe: if player falls below Y=0 during launch, reset
+    if (pos.y < 0 && !betweenLaunchFailSafe) {
+      betweenLaunchFailSafe = true;
+      betweenLaunchActive = false;
+      betweenLaunchPhase = 0;
+      pos.set(0, 10, 0);
+      vel.set(0, 0, 0);
+      onGround = false;
+      toast('LAUNCH ABORTED — WELL RECHARGING', 3000);
+      // Clear debris
+      for (const d of betweenLaunchDebris) { if (d.mesh && d.mesh.parent) scene.remove(d.mesh); if (d.geo) d.geo.dispose(); }
+      betweenLaunchDebris.length = 0;
+    }
+  }
+}
+
+// Spawn orbital debris for launch gauntlet
+function spawnLaunchDebris() {
+  betweenLaunchDebris.length = 0;
+  for (let i = 0; i < 80; i++) {
+    const angle = rand() * Math.PI * 2;
+    const height = 50 + rand() * 900;
+    const radius = 15 + rand() * 40;
+    const d = {
+      x: Math.cos(angle) * radius,
+      y: height,
+      z: Math.sin(angle) * radius,
+      vx: (rand() - 0.5) * 2,
+      vy: (rand() - 0.5) * 1,
+      vz: (rand() - 0.5) * 2,
+      radius: 0.8 + rand() * 1.5,
+      mesh: null
+    };
+    const geo = new THREE.BoxGeometry(d.radius * 2, d.radius * 2, d.radius * 2);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x2a1040, wireframe: true, transparent: true, opacity: 0.6 });
+    d.mesh = new THREE.Mesh(geo, mat);
+    d.mesh.position.set(d.x, d.y, d.z);
+    scene.add(d.mesh);
+    betweenLaunchDebris.push(d);
+  }
+}
+
+function updateLaunchDebris(dt) {
+  for (const d of betweenLaunchDebris) {
+    if (!d.mesh) continue;
+    d.x += d.vx * dt * 10;
+    d.y += d.vy * dt * 10;
+    d.z += d.vz * dt * 10;
+    d.mesh.position.set(d.x, d.y, d.z);
+    d.mesh.rotation.x += dt * 0.3;
+    d.mesh.rotation.y += dt * 0.5;
+    // Simple collision with player
+    if (Math.hypot(pos.x - d.x, pos.y - d.y, pos.z - d.z) < 2) {
+      // Hit debris — knock player back
+      const dx = pos.x - d.x, dy = pos.y - d.y, dz = pos.z - d.z;
+      const dist = Math.hypot(dx, dy, dz) || 1;
+      vel.x += (dx / dist) * 15;
+      vel.y += (dy / dist) * 5;
+      vel.z += (dz / dist) * 15;
+      hurt(1);
+    }
+  }
+}
+
+// Hook moonReached for BETWEEN ending (eye blink)
+const originalMoonReached = moonReached;
+moonReached = function(sol) {
+  if (betweenOn()) {
+    // THE BETWEEN ending: the Moon's eye blinks
+    const eye = scene.getObjectByName('moonEye');
+    if (eye) {
+      eye.scale.y = 0.01;
+      setTimeout(() => { eye.scale.y = 1; }, 300);
+    }
+    toast('THE EYE BLINKS — THE INVITATION IS ACCEPTED', 5000);
+    // Trigger credits/toast sequence
+    levelClear('moon', 5000, false);
+    return;
+  }
+  return originalMoonReached(sol);
+};
 
 function glitchDeco(hub, i, levels, slab) {
   if (!slab) return;
@@ -7341,14 +7666,17 @@ function buildDungeonGlitchExe(mouth, dungeonIndex) {
   const zone = ZONES.find(z => z.name === 'Glitch') || ZONES[0];
   const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, zone, 9, 'reactor', glitchDeco);
   const mini = swapArenaBoss(A, 'walker', 'null_pointer', 1.9, 42, 'null_pointer', dungeonIndex);
-  mini.mat.color.setHex(0x9aa0a8); mini.mat.emissive && mini.mat.emissive.setHex(0x2a2e34);
+  // Boss reskin: untextured T-pose, wireframe cage (Lovecraftian palette)
+  mini.mat.color.setHex(LOVECRAFT_PALETTE.ichorBlack);
+  mini.mat.emissive && mini.mat.emissive.setHex(LOVECRAFT_PALETTE.voidPurple);
+  mini.mat.transparent = true; mini.mat.opacity = 0.9;
   // T-pose: rotate arms out
   mini.mesh.traverse(o => { if (o.name === 'armL') o.rotation.set(-1.5, 0, 1.5); if (o.name === 'armR') o.rotation.set(-1.5, 0, -1.5); });
   const cageGeo = new THREE.BoxGeometry(1.1, 2.1, 1.1);
-  const cage = new THREE.Mesh(cageGeo, new THREE.MeshBasicMaterial({ color: 0x39ff88, wireframe: true, transparent: true, opacity: 0.6 }));
+  const cage = new THREE.Mesh(cageGeo, new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.bioluminescent, wireframe: true, transparent: true, opacity: 0.6 }));
   cage.position.y = 1.05; mini.mesh.add(cage);
   // Wireframe outline on real platform (tell)
-  const outline = new THREE.Mesh(new THREE.BoxGeometry(last.hw * 2 + 0.4, 0.3, last.hd * 2 + 0.4), new THREE.MeshBasicMaterial({ color: 0x39ff88, wireframe: true, transparent: true, opacity: 0.5 }));
+  const outline = new THREE.Mesh(new THREE.BoxGeometry(last.hw * 2 + 0.4, 0.3, last.hd * 2 + 0.4), new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.bioluminescent, wireframe: true, transparent: true, opacity: 0.5 }));
   outline.position.set(last.x, 8.2, last.z); scene.add(outline);
   // Fake decoy platforms near boss (non-solid, no wireframe tell)
   for (let k = 0; k < 3; k++) {
@@ -7484,6 +7812,8 @@ function d4UpdateHallucinations(dt) {
       h.tellTimer = 0;
       h.tellFrame = frame;
       // Apply the tell for exactly 1 frame
+      const hm = h.mesh && h.mesh.material;          // some hallucination meshes are Groups (no direct material)
+      if (!hm) { h.tell = null; }
       if (h.tell === 'colorShift') {
         h.mesh.material.color.setHex(h.mesh.material.color.getHex() ^ 0x00ffff); // cyan shift
         h.mesh.material.needsUpdate = true;
@@ -7502,7 +7832,7 @@ function d4UpdateHallucinations(dt) {
       }
     }
     // Revert tell after 1 frame
-    if (h.tellFrame === frame - 1) {
+    if (h.tellFrame === frame - 1 && h.mesh && h.mesh.material) {
       if (h.tell === 'colorShift') h.mesh.material.color.setHex(h.originalColor);
       else if (h.tell === 'wrongShadow') h.mesh.scale.x *= -1;
       else if (h.tell === 'mismatchedReflection' && h.mesh.material.emissive) {
@@ -7605,16 +7935,22 @@ function buildDungeonPsychosis(mouth, dungeonIndex) {
   const zone = ZONES.find(z => z.name === 'Psychedelic') || ZONES[0];
   const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, zone, 9, 'pit', null);
   const mini = swapArenaBoss(A, 'walker', 'observer', 2.1, 50, 'THE OBSERVER', dungeonIndex);
-  mini.mat.color.setHex(0xff66cc);
-  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-  eye.position.y = 2.3; mini.mesh.add(eye);
-  const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), new THREE.MeshBasicMaterial({ color: 0x120018 }));
-  pupil.position.set(0, 2.3, 0.4); mini.mesh.add(pupil);
+  // Boss reskin: floating eye, pupil dilation (Lovecraftian palette)
+  mini.mat.color.setHex(LOVECRAFT_PALETTE.pallidFlesh);
+  mini.mat.emissive && mini.mat.emissive.setHex(LOVECRAFT_PALETTE.whisperViolet);
+  mini.mesh.scale.setScalar(0.8); // Smaller, more eye-like
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 14), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  eye.position.y = 2.0; mini.mesh.add(eye);
+  const iris = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 10), new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.voidPurple }));
+  iris.position.set(0, 2.0, 0.5); mini.mesh.add(iris);
+  const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.ichorBlack }));
+  pupil.position.set(0, 2.0, 0.65); mini.mesh.add(pupil);
   // Tell: pupil dilation when observed
   mini.observerPupil = pupil;
+  mini.observerIris = iris;
   
-  // Tell outline on real boss (visible when observed)
-  d4BossOutline = new THREE.Mesh(new THREE.SphereGeometry(2.8, 16, 12), new THREE.MeshBasicMaterial({ color: 0x36f6ff, wireframe: true, transparent: true, opacity: 0.2 }));
+  // Tell outline on real boss (visible when observed) - bioluminescent
+  d4BossOutline = new THREE.Mesh(new THREE.SphereGeometry(3.2, 20, 16), new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.bioluminescent, wireframe: true, transparent: true, opacity: 0.2 }));
   d4BossOutline.position.set(last.x, last.top + 2, last.z);
   scene.add(d4BossOutline);
   
@@ -7671,9 +8007,9 @@ let d6ReorientParticles = [];      // particle effects on reorient
 function d6BuildReorientTells(hubs) {
   for (const hub of hubs) {
     if (!hub || hub.kind === 'arena') continue;
-    // Mark walls and ceilings as reorientable
+    // Mark walls and ceilings as reorientable - bioluminescent
     const tell = new THREE.Mesh(new THREE.RingGeometry(1.5, 2, 8), 
-      new THREE.MeshBasicMaterial({ color: 0x9a6aff, transparent: true, opacity: 0.6, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+      new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.bioluminescent, transparent: true, opacity: 0.6, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
     tell.position.set(hub.x, hub.top + 1, hub.z);
     tell.rotation.x = -Math.PI / 2;
     tell.userData.d6Reorient = true;
@@ -7681,11 +8017,11 @@ function d6BuildReorientTells(hubs) {
     scene.add(tell);
     d6ReorientTells.push({ mesh: tell, hub, orientation: tell.userData.targetOrientation });
     
-    // Also add wall markers (vertical rings)
+    // Also add wall markers (vertical rings) - bioluminescent
     for (let side = 0; side < 4; side++) {
       const angle = side * Math.PI / 2;
       const wallTell = new THREE.Mesh(new THREE.RingGeometry(1.5, 2, 8), 
-        new THREE.MeshBasicMaterial({ color: 0x9a6aff, transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
+        new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.bioluminescent, transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
       wallTell.position.set(hub.x + Math.cos(angle) * (hub.hw + 1), hub.top, hub.z + Math.sin(angle) * (hub.hd + 1));
       wallTell.rotation.y = angle + Math.PI / 2;
       wallTell.userData.d6Reorient = true;
@@ -7718,13 +8054,13 @@ function d6TryReorient() {
   // Visual feedback
   betweenTear();
   flashWhite();
-  shockRing(pos, 8, 0x9a6aff);
+  shockRing(pos, 8, LOVECRAFT_PALETTE.bioluminescent);
   toast(`GRAVITY REORIENTED: ${['DOWN', '+X', 'UP', '-X'][d6GravityOrientation]}`, 1500);
   
-  // Particle burst
+  // Particle burst - bioluminescent
   for (let i = 0; i < 20; i++) {
     const p = new THREE.Mesh(new THREE.SphereGeometry(0.15, 4, 3), 
-      new THREE.MeshBasicMaterial({ color: 0x9a6aff, transparent: true, opacity: 0.8 }));
+      new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.bioluminescent, transparent: true, opacity: 0.8 }));
     const angle = rand() * Math.PI * 2;
     const speed = 5 + rand() * 10;
     p.position.copy(pos);
@@ -7835,7 +8171,7 @@ function updateFractalDescent(dt) {
         tell.mesh.material.opacity = 1;
         tell.mesh.material.color.setHex(0xffffff);
       } else {
-        tell.mesh.material.color.setHex(0x9a6aff);
+        tell.mesh.material.color.setHex(LOVECRAFT_PALETTE.bioluminescent);
       }
     }
   }
@@ -7879,18 +8215,31 @@ function buildDungeonFractalDescent(mouth, dungeonIndex) {
   };
   const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, zone, 9, 'pillars', flipDeco);
   const mini = swapArenaBoss(A, 'walker', 'architect', 2.2, 4, 'THE ARCHITECT', dungeonIndex);
-  mini.mat.color.setHex(0x9a6aff); 
+  // Boss reskin: 4 orientation cubes (Lovecraftian palette)
+  mini.mat.color.setHex(LOVECRAFT_PALETTE.voidPurple);
+  mini.mat.emissive && mini.mat.emissive.setHex(LOVECRAFT_PALETTE.whisperViolet);
   mini.activeBody = 0; 
   mini.bodies = [];
-  // Create 4 body cubes (one per orientation)
+  // Create 4 body cubes (one per orientation) - impossible geometry
+  const cubeColors = [
+    LOVECRAFT_PALETTE.abyssalBlue,
+    LOVECRAFT_PALETTE.sicklyGreen,
+    LOVECRAFT_PALETTE.rust,
+    LOVECRAFT_PALETTE.bioluminescent
+  ];
   for (let k = 0; k < 4; k++) {
     const a = k * Math.PI / 2;
     const cube = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), 
-      new THREE.MeshBasicMaterial({ color: 0x9a6aff, transparent: true, opacity: k === 0 ? 0.95 : 0.25 }));
+      new THREE.MeshBasicMaterial({ color: cubeColors[k], transparent: true, opacity: k === 0 ? 0.95 : 0.25 }));
     cube.position.set(Math.cos(a) * 1.1, 1.3, Math.sin(a) * 1.1); 
     mini.mesh.add(cube); 
     mini.bodies.push(cube);
   }
+  // Central impossible vertex
+  const vertexGeo = new THREE.OctahedronGeometry(0.4, 1);
+  const vertex = new THREE.Mesh(vertexGeo, new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.ichorBlack, wireframe: true, transparent: true, opacity: 0.8 }));
+  vertex.position.y = 1.3; mini.mesh.add(vertex);
+  mini.architectVertex = vertex;
   
   d6ArchitectBoss = mini;
   d6BossFloor = last;
@@ -7906,7 +8255,7 @@ function buildDungeonFractalDescent(mouth, dungeonIndex) {
   
   // Add boss floor reorient tell
   const bossTell = new THREE.Mesh(new THREE.RingGeometry(3, 4, 16), 
-    new THREE.MeshBasicMaterial({ color: 0x9a6aff, transparent: true, opacity: 0.7, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+    new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.bioluminescent, transparent: true, opacity: 0.7, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
   bossTell.position.set(last.x, last.top + 0.5, last.z);
   bossTell.rotation.x = -Math.PI / 2;
   bossTell.userData.d6Reorient = true;
@@ -7914,9 +8263,9 @@ function buildDungeonFractalDescent(mouth, dungeonIndex) {
   scene.add(bossTell);
   d6ReorientTells.push({ mesh: bossTell, hub: last, orientation: 0 });
   
-  // Wireframe ghost on boss floor (tell)
+  // Wireframe ghost on boss floor (tell) - bioluminescent
   last.glitchGhost = new THREE.Mesh(new THREE.BoxGeometry(last.hw * 2 + 0.4, 0.3, last.hd * 2 + 0.4), 
-    new THREE.MeshBasicMaterial({ color: 0x9a6aff, wireframe: true, transparent: true, opacity: 0.5 }));
+    new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.bioluminescent, wireframe: true, transparent: true, opacity: 0.5 }));
   last.glitchGhost.position.set(last.x, last.top + 0.2, last.z);
   scene.add(last.glitchGhost);
   
@@ -7948,6 +8297,930 @@ function buildDungeonFractalDescent(mouth, dungeonIndex) {
     d6OrientationIndicators = [];
     d6ArchitectBoss = null;
   };
+}
+
+// ===================== THE BETWEEN — Phase 3: D2 VHS REWIND =====================
+// Mechanic: Record last ~6s as solid ghost platform; rewind only yourself, not world; finite tape. Fast-forward speeds world.
+// Boss: THE TAPE — records your attacks and replays them. Kill by feinting so it replays the feint.
+// Surreal unique: The Scrub — visible only in rewind; right behind you. Rewinding past it lets it act.
+
+// VHS REWIND state
+let d2TapeT = 0;                    // Global tape cycle timer
+let d2TapePhase = 0;                // 0=recording, 1=rewinding, 2=fast-forward
+let d2RecordBuffer = [];            // Circular buffer of player states (pos, vel, action) for last 6s
+let d2RecordIndex = 0;              // Current write position in buffer
+let d2MaxRecordFrames = 720;        // 6 seconds at 120Hz
+let d2TapeLength = 0;               // Current tape length (seconds recorded)
+let d2MaxTapeLength = 6;            // Maximum tape length (seconds)
+let d2RewindActive = false;         // Is player currently rewinding?
+let d2RewindIndex = 0;              // Read position during rewind
+let d2RewindT = 0;                  // Rewind timer
+let d2GhostPlatforms = [];          // Solid ghost platforms from recording
+let d2FastForwardActive = false;    // Fast-forward mode
+let d2FastForwardSpeed = 2;         // World speed multiplier during fast-forward
+let d2TapeDecoys = [];              // Fake platforms spawned by boss
+let d2TapeBoss = null;              // THE TAPE boss reference
+let d2TapeBossFloor = null;         // Boss arena floor
+let d2TapeBossOutline = null;       // Tell on real boss platform
+let d2ScrubEntity = null;           // The Scrub surreal unique
+
+function vhsDeco(hub, i, levels, slab) {
+  if (!slab) return;
+  // Organic tape platforms — every 2nd level, offset from hub
+  if (i % 2 === 0 && i > 0 && i < levels - 1) {
+    const offsetX = (rand() - 0.5) * 8;
+    const offsetZ = (rand() - 0.5) * 8;
+    const p = addPlatform(slab.cx + offsetX, slab.top, slab.cz + offsetZ, 2.5, false, 0, slab.zone, true, true);
+    p.vhsTape = true;
+    p.vhsPhase = (i * 0.3) % 1;
+    // Visual tell: VHS tracking lines
+    const trackingGeo = new THREE.BoxGeometry((p.hw || 2.5) * 2, 0.05, (p.hd || 2.5) * 2);
+    const trackingMat = new THREE.MeshBasicMaterial({ color: 0xaa88ff, transparent: true, opacity: 0.3, depthWrite: false });
+    const tracking = new THREE.Mesh(trackingGeo, trackingMat);
+    tracking.position.set(p.cx, p.top + 0.1, p.cz);
+    scene.add(tracking);
+    p.vhsTracking = tracking;
+  }
+  // Boss floor (last level): wire the real platform
+  if (i === levels - 1) {
+    slab.isTapeBossFloor = true;
+    d2TapeBossFloor = slab;
+  }
+}
+
+// Record player state into circular buffer
+function d2RecordPlayerState() {
+  if (d2RecordBuffer.length < d2MaxRecordFrames) {
+    d2RecordBuffer.push({ x: pos.x, y: pos.y, z: pos.z, vx: vel.x, vy: vel.y, vz: vel.z, action: null, t: d2TapeT });
+  } else {
+    d2RecordBuffer[d2RecordIndex] = { x: pos.x, y: pos.y, z: pos.z, vx: vel.x, vy: vel.y, vz: vel.z, action: null, t: d2TapeT };
+  }
+  d2RecordIndex = (d2RecordIndex + 1) % d2MaxRecordFrames;
+  d2TapeLength = Math.min(d2MaxTapeLength, d2RecordBuffer.length / 120);
+}
+
+// Create solid ghost platform from recorded state
+function d2CreateGhostPlatform(state) {
+  const geo = new THREE.BoxGeometry(4, 0.4, 4);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xaa88ff, transparent: true, opacity: 0.6, wireframe: true });
+  const ghost = new THREE.Mesh(geo, mat);
+  ghost.position.set(state.x, state.y + 0.2, state.z);
+  ghost.userData.vhsGhost = true;
+  ghost.userData.vhsTime = state.t;
+  scene.add(ghost);
+  // Add as solid for physics
+  const solid = { minx: state.x - 2, maxx: state.x + 2, minz: state.z - 2, maxz: state.z + 2, top: state.y + 0.4, vhsGhost: true };
+  solids.push(solid);
+  d2GhostPlatforms.push({ mesh: ghost, solid, state, life: 8 }); // Ghost lasts 8 seconds
+  return ghost;
+}
+
+// Update VHS REWIND systems (called from betweenOn block)
+function updateVhsRewind(dt) {
+  if (!d2TapeBoss && d2GhostPlatforms.length === 0 && d2RecordBuffer.length === 0) return; // not in D2
+
+  d2TapeT += dt;
+
+  // Record player state every frame (120Hz simulation)
+  d2RecordPlayerState();
+
+  // Ghost platform lifecycle
+  for (let i = d2GhostPlatforms.length - 1; i >= 0; i--) {
+    const gp = d2GhostPlatforms[i];
+    gp.life -= dt;
+    gp.mesh.material.opacity = Math.max(0, 0.6 * (gp.life / 8));
+    if (gp.life <= 0) {
+      gp.mesh.removeFromParent();
+      const idx = solids.indexOf(gp.solid);
+      if (idx >= 0) solids.splice(idx, 1);
+      d2GhostPlatforms.splice(i, 1);
+    }
+  }
+
+  // Rewind logic
+  if (d2RewindActive) {
+    d2RewindT -= dt;
+    // Read from buffer backwards
+    const readIdx = (d2RecordIndex - 1 - Math.floor(d2RewindT * 120) + d2MaxRecordFrames) % d2MaxRecordFrames;
+    if (readIdx >= 0 && readIdx < d2RecordBuffer.length) {
+      const state = d2RecordBuffer[readIdx];
+      // Only rewind player, not world
+      pos.x = state.x; pos.y = state.y; pos.z = state.z;
+      vel.x = state.vx; vel.y = state.vy; vel.z = state.vz;
+      // Create ghost platform at rewind position
+      if (rand() < 0.1) d2CreateGhostPlatform(state);
+    }
+    if (d2RewindT <= 0) {
+      d2RewindActive = false;
+      toast('REWIND COMPLETE', 1000);
+    }
+  }
+
+  // Fast-forward logic
+  if (d2FastForwardActive) {
+    // World speeds up, player moves at normal speed
+    // Handled by multiplying dt in main physics for non-player entities
+  }
+
+  // The Scrub surreal unique — visible only during rewind, right behind player
+  if (d2RewindActive) {
+    if (!d2ScrubEntity) {
+      d2ScrubEntity = makeWalker(pos.x + (rand() - 0.5) * 2, pos.y, pos.z - 3, null, 1.2, false, 'stalker');
+      d2ScrubEntity.variant = 'scrub';
+      d2ScrubEntity.mesh.traverse(o => { if (o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0; } });
+      enemies.push(d2ScrubEntity);
+    } else {
+      d2ScrubEntity.mesh.traverse(o => { if (o.material) o.material.opacity = 0.8; });
+      // Position right behind player (in rewind, this is "ahead" in recording)
+      d2ScrubEntity.x = pos.x; d2ScrubEntity.z = pos.z - 2;
+      d2ScrubEntity.mesh.position.set(d2ScrubEntity.x, pos.y, d2ScrubEntity.z);
+    }
+  } else if (d2ScrubEntity) {
+    d2ScrubEntity.mesh.traverse(o => { if (o.material) o.material.opacity = 0; });
+  }
+
+  // Spawn ghost platforms from tape periodically
+  if (d2TapeT > 1 && rand() < dt * 0.5 && d2RecordBuffer.length > 60) {
+    const idx = (d2RecordIndex - 1 - Math.floor(rand() * d2TapeLength * 120) + d2MaxRecordFrames) % d2MaxRecordFrames;
+    if (idx < d2RecordBuffer.length) d2CreateGhostPlatform(d2RecordBuffer[idx]);
+  }
+
+  // Boss-specific: THE TAPE handled in variantAI, but add visual sync
+  if (d2TapeBoss && !d2TapeBoss.dead) {
+    if (d2TapeBoss.tapePhase === 1 && d2TapeBossOutline) { // Recording player attacks
+      d2TapeBossOutline.material.opacity = 0.5 + 0.3 * Math.sin(performance.now() / 200);
+    } else if (d2TapeBossOutline) {
+      d2TapeBossOutline.material.opacity = 0.2;
+    }
+  }
+}
+
+// Input hook for VHS REWIND (call from player input handling)
+function d2TriggerRewind() {
+  if (d2TapeLength < 0.5 || d2RewindActive) return;
+  d2RewindActive = true;
+  d2RewindT = Math.min(d2TapeLength, 3); // Max 3s rewind
+  d2RewindIndex = d2RecordIndex;
+  toast('REWINDING...', 1000);
+  betweenTear(); // Screen tear tell
+}
+
+function d2TriggerFastForward() {
+  if (d2FastForwardActive) return;
+  d2FastForwardActive = true;
+  toast('FAST-FORWARD: WORLD ACCELERATED', 1500);
+}
+
+function buildDungeonVhsRewind(mouth, dungeonIndex) {
+  if (!mouth) return;
+  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, VHS_ZONE, 9, 'reactor', vhsDeco);
+  const mini = swapArenaBoss(A, 'walker', 'tape', 2.0, 48, 'THE TAPE', dungeonIndex);
+  mini.mat.color.setHex(0xaa88ff);
+  mini.mat.emissive && mini.mat.emissive.setHex(0x442266);
+  // Cassette tape visual
+  const tapeGeo = new THREE.BoxGeometry(1.2, 0.3, 0.8);
+  const tapeMat = new THREE.MeshBasicMaterial({ color: 0x221133 });
+  const tape = new THREE.Mesh(tapeGeo, tapeMat);
+  tape.position.set(0, 2.5, 0.8);
+  mini.mesh.add(tape);
+  const spool1 = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.3, 8), new THREE.MeshBasicMaterial({ color: 0x442266 }));
+  spool1.position.set(-0.35, 2.5, 1.0); spool1.rotation.x = Math.PI / 2; mini.mesh.add(spool1);
+  const spool2 = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.3, 8), new THREE.MeshBasicMaterial({ color: 0x442266 }));
+  spool2.position.set(0.35, 2.5, 1.0); spool2.rotation.x = Math.PI / 2; mini.mesh.add(spool2);
+
+  // Wireframe outline on real platform (tell)
+  d2TapeBossOutline = new THREE.Mesh(new THREE.BoxGeometry(last.hw * 2 + 0.4, 0.3, last.hd * 2 + 0.4), new THREE.MeshBasicMaterial({ color: 0xaa88ff, wireframe: true, transparent: true, opacity: 0.2 }));
+  d2TapeBossOutline.position.set(last.x, 8.2, last.z); scene.add(d2TapeBossOutline);
+
+  // Fake decoy platforms
+  for (let k = 0; k < 3; k++) {
+    const gm = new THREE.Mesh(new THREE.BoxGeometry(last.hw * 1.6, 0.4, last.hd * 1.6), new THREE.MeshBasicMaterial({ color: 0x1a1428, transparent: true, opacity: 0.4 }));
+    gm.position.set(last.x + (k - 1) * 16, 8 + (rand() - 0.5) * 4, last.z + (rand() - 0.5) * 12); scene.add(gm);
+    gm.isTapeDecoy = true; d2TapeDecoys.push(gm);
+  }
+
+  // Boss custom behavior data
+  mini.tapePhase = 0;       // 0=idle, 1=recording attacks, 2=replaying
+  mini.tapePhaseT = 0;
+  mini.recordedAttacks = []; // Array of {type, pos, dir, time}
+  mini.replayIndex = 0;
+
+  // Wiring: local circuit for boss floor
+  const bossPlateId = 'tape_boss_plate_' + dungeonIndex;
+  const bossWireId = 'tape_boss_wire_' + dungeonIndex;
+  wireRegister(last, bossPlateId, { signalType: 'pulse', pulseLen: 1.0, receivers: [bossWireId] });
+  wireRegister({ wire: { active: false, energy: 0, fake: true } }, bossWireId, { signalType: 'hold', fake: true, receivers: [] });
+
+  // Enemy spawns in shaft
+  for (const hub of hubs) {
+    if (hub.kind !== 'arena' && rand() < 0.3) {
+      spawnBiomeEnemy(hub.x, hub.top + 1, hub.z, hub.slab, VHS_ZONE, 0.5);
+    }
+  }
+
+  // Gravity Anchor on boss death
+  mini.onDeath = () => {
+    activateGravityAnchor(dungeonIndex);
+    // Cleanup VHS state
+    d2GhostPlatforms.forEach(gp => { gp.mesh.removeFromParent(); const idx = solids.indexOf(gp.solid); if (idx >= 0) solids.splice(idx, 1); });
+    d2GhostPlatforms = [];
+    d2RecordBuffer = []; d2RecordIndex = 0; d2TapeLength = 0;
+    d2RewindActive = false; d2FastForwardActive = false;
+    d2TapeDecoys.forEach(d => d.removeFromParent()); d2TapeDecoys = [];
+    if (d2TapeBossOutline) d2TapeBossOutline.removeFromParent();
+    if (d2ScrubEntity) { d2ScrubEntity.dead = true; d2ScrubEntity.mesh.removeFromParent(); d2ScrubEntity = null; }
+    d2TapeBoss = null; d2TapeBossFloor = null; d2TapeBossOutline = null;
+  };
+  d2TapeBoss = mini;
+}
+
+// ===================== THE BETWEEN — Phase 3: D3 THE GULLET =====================
+// Mechanic: Breath cycle (~4s) narrows/pulls up on inhale, widens/pushes down on exhale. Digestion meter fills while still. Organic platforms recoil when hit. Sphincter doors cycle.
+// Boss: THE UVULA — attacks on heartbeat; off-beat windows are safe. Every hit gags the body and inverts gravity for 1s.
+// Surreal unique: The Second Mouth — mouth inside a mouth; swallows space; arena shrinks. Kill by feeding it a platform.
+
+// THE GULLET state
+let d3BreathPhase = 0;            // 0=inhale, 1=exhale, 2=hold
+let d3BreathT = 0;                // Breath cycle timer
+let d3BreathPeriod = 4.0;         // ~4 second cycle
+let d3DigestionMeter = 0;         // Fills while player is still
+let d3DigestionMax = 100;         // Max digestion
+let d3SphincterDoors = [];        // Cycling door platforms
+let d3OrganicPlatforms = [];      // Platforms that recoil when hit
+let d3GulletBoss = null;          // THE UVULA boss reference
+let d3GulletBossFloor = null;     // Boss arena floor
+let d3GulletBossOutline = null;   // Tell on real boss
+let d3SecondMouth = null;         // The Second Mouth surreal unique
+let d3ArenaShrink = 0;            // Arena shrink amount from Second Mouth
+
+function gulletDeco(hub, i, levels, slab) {
+  if (!slab) return;
+  // Organic platforms that recoil when hit
+  if (i % 2 === 0 && i > 0 && i < levels - 1) {
+    const p = addPlatform(slab.cx + (rand() - 0.5) * 6, slab.top, slab.cz + (rand() - 0.5) * 6, 2.2 + rand() * 1, false, 0, slab.zone, true, true);
+    p.gulletOrganic = true;
+    p.gulletRecoil = 0;
+    p.gulletBaseY = p.top;
+    // Visual tell: pulsing vein texture
+    const veinGeo = new THREE.RingGeometry(1.5, 2.2, 6);
+    const veinMat = new THREE.MeshBasicMaterial({ color: 0xcc3355, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+    const vein = new THREE.Mesh(veinGeo, veinMat);
+    vein.rotation.x = -Math.PI / 2;
+    vein.position.set(p.cx, p.top + 0.15, p.cz);
+    scene.add(vein);
+    p.gulletVein = vein;
+    d3OrganicPlatforms.push(p);
+  }
+  // Sphincter doors — every 3rd level
+  if (i % 3 === 1 && i < levels - 1) {
+    const door = addPlatform(slab.cx, slab.top + 0.5, slab.cz, 3, false, 0, slab.zone, true, true);
+    door.gulletSphincter = true;
+    door.gulletPhase = (i * 0.5) % 1;
+    door.gulletClosed = false;
+    // Visual: ring that constricts
+    const ringGeo = new THREE.RingGeometry(0.5, 3.5, 16);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xaa2233, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(door.cx, door.top + 0.1, door.cz);
+    scene.add(ring);
+    door.gulletRing = ring;
+    d3SphincterDoors.push(door);
+  }
+  // Boss floor
+  if (i === levels - 1) {
+    slab.isGulletBossFloor = true;
+    d3GulletBossFloor = slab;
+  }
+}
+
+// Update THE GULLET systems (called from betweenOn block)
+function updateTheGullet(dt) {
+  if (!d3GulletBoss && d3OrganicPlatforms.length === 0 && d3SphincterDoors.length === 0) return;
+
+  // Breath cycle
+  d3BreathT += dt;
+  const cyclePos = (d3BreathT % d3BreathPeriod) / d3BreathPeriod;
+  if (cyclePos < 0.4) { d3BreathPhase = 0; } // Inhale: 40%
+  else if (cyclePos < 0.8) { d3BreathPhase = 1; } // Exhale: 40%
+  else { d3BreathPhase = 2; } // Hold: 20%
+
+  const inhaleStrength = d3BreathPhase === 0 ? (1 - cyclePos / 0.4) : 0;
+  const exhaleStrength = d3BreathPhase === 1 ? ((cyclePos - 0.4) / 0.4) : 0;
+
+  // Apply breath forces to player
+  if (d3BreathPhase === 0) { // Inhale: pull up and narrow
+    vel.y += dt * 8 * inhaleStrength;
+    // Horizontal pull toward center
+    const toCenterX = -pos.x * 0.1 * inhaleStrength;
+    const toCenterZ = -pos.z * 0.1 * inhaleStrength;
+    vel.x += toCenterX * dt * 10;
+    vel.z += toCenterZ * dt * 10;
+  } else if (d3BreathPhase === 1) { // Exhale: push down and widen
+    vel.y -= dt * 10 * exhaleStrength;
+    // Horizontal push away from center
+    const awayX = pos.x * 0.15 * exhaleStrength;
+    const awayZ = pos.z * 0.15 * exhaleStrength;
+    vel.x += awayX * dt * 10;
+    vel.z += awayZ * dt * 10;
+  }
+
+  // Digestion meter: fills while player is still
+  const speed = Math.hypot(vel.x, vel.z);
+  if (speed < 1) {
+    d3DigestionMeter = Math.min(d3DigestionMax, d3DigestionMeter + dt * 5);
+  } else {
+    d3DigestionMeter = Math.max(0, d3DigestionMeter - dt * 3);
+  }
+  // Visual digestion indicator
+  if (!document.getElementById('d3DigestionHUD') && d3DigestionMeter > 20) {
+    const hud = document.createElement('div');
+    hud.id = 'd3DigestionHUD';
+    hud.style.cssText = 'position:fixed;bottom:150px;left:50%;transform:translateX(-50%);width:200px;height:12px;background:#1a0408;border:2px solid #cc3355;z-index:10;pointer-events:none;';
+    hud.innerHTML = '<div id="d3DigestionFill" style="height:100%;background:linear-gradient(90deg,#cc3355,#ff6677);width:0%;transition:width 0.1s;"></div>';
+    document.body.appendChild(hud);
+  }
+  const fill = document.getElementById('d3DigestionFill');
+  if (fill) fill.style.width = (d3DigestionMeter / d3DigestionMax * 100) + '%';
+  if (d3DigestionMeter <= 20) {
+    const hud = document.getElementById('d3DigestionHUD');
+    if (hud) hud.remove();
+  }
+
+  // Sphincter doors cycle with breath
+  for (const door of d3SphincterDoors) {
+    if (!door.gulletRing || !door.gulletRing.parent) continue;
+    const openAmount = d3BreathPhase === 0 ? 0.3 : (d3BreathPhase === 1 ? 1 : 0.6);
+    door.gulletRing.scale.setScalar(openAmount);
+    door.gulletRing.material.opacity = 0.3 + 0.4 * openAmount;
+    door.gulletClosed = openAmount < 0.5;
+    // When closed, door is not solid
+    if (door.gulletClosed) {
+      door.gulletWasSolid = door.gulletWasSolid !== false;
+      const idx = solids.findIndex(s => s.minx === door.minx && s.maxx === door.maxx && s.minz === door.minz && s.maxz === door.maxz && s.top === door.top);
+      if (idx >= 0 && door.gulletWasSolid) { solids.splice(idx, 1); door.gulletWasSolid = false; }
+    } else if (!door.gulletWasSolid) {
+      solids.push({ minx: door.minx, maxx: door.maxx, minz: door.minz, maxz: door.maxz, top: door.top, gulletDoor: true });
+      door.gulletWasSolid = true;
+    }
+  }
+
+  // Organic platforms recoil and pulse
+  for (const p of d3OrganicPlatforms) {
+    if (!p.gulletVein || !p.gulletVein.parent) continue;
+    p.gulletVein.material.opacity = 0.3 + 0.3 * Math.sin(performance.now() / 300 + (p.gulletPhase || 0) * 6.28);
+    p.gulletVein.scale.setScalar(1 + 0.1 * Math.sin(performance.now() / 400));
+    // Recoil decay
+    if (p.gulletRecoil > 0) {
+      p.gulletRecoil = Math.max(0, p.gulletRecoil - dt * 2);
+      const offset = p.gulletRecoil * 0.5;
+      p.top = p.gulletBaseY + offset;
+      p.gulletVein.position.y = p.top + 0.15;
+    }
+  }
+
+  // Second Mouth surreal unique — mouth inside mouth, swallows space
+  if (d3SecondMouth && !d3SecondMouth.dead) {
+    d3ArenaShrink = Math.min(15, d3ArenaShrink + dt * 0.5); // Arena slowly shrinks
+    const mouth = d3SecondMouth;
+    // Position at center of boss arena
+    mouth.x = d3GulletBossFloor ? d3GulletBossFloor.cx : 0;
+    mouth.z = d3GulletBossFloor ? d3GulletBossFloor.cz : 0;
+    mouth.mesh.position.set(mouth.x, (d3GulletBossFloor ? d3GulletBossFloor.top : 8) + 1, mouth.z);
+    mouth.mesh.scale.setScalar(1 + d3ArenaShrink * 0.05);
+    // Visual: pulsing maw
+    mouth.mesh.traverse(o => { if (o.material && o.material.color) o.material.color.setHex(0xaa1122); });
+  }
+
+  // Boss-specific: THE UVULA handled in variantAI
+  if (d3GulletBoss && !d3GulletBoss.dead) {
+    if (d3GulletBoss.gulletHeartbeat && d3GulletBossOutline) {
+      d3GulletBossOutline.material.opacity = 0.8;
+    } else if (d3GulletBossOutline) {
+      d3GulletBossOutline.material.opacity = 0.15;
+    }
+  }
+}
+
+// Input hook for GULLET — player can "feed" platform to Second Mouth
+function d3FeedSecondMouth() {
+  if (!d3SecondMouth || d3SecondMouth.dead) return;
+  // Find nearest organic platform
+  let nearest = null, nearestDist = Infinity;
+  for (const p of d3OrganicPlatforms) {
+    const d = Math.hypot(pos.x - p.cx, pos.z - p.cz);
+    if (d < nearestDist && d < 8) { nearestDist = d; nearest = p; }
+  }
+  if (nearest) {
+    // Remove platform, "feed" to Second Mouth
+    nearest.gulletVein.removeFromParent();
+    const idx = solids.findIndex(s => s.minx === nearest.minx && s.maxx === nearest.maxx && s.minz === nearest.minz && s.maxz === nearest.maxz && s.top === nearest.top);
+    if (idx >= 0) solids.splice(idx, 1);
+    d3OrganicPlatforms.splice(d3OrganicPlatforms.indexOf(nearest), 1);
+    d3ArenaShrink = Math.max(0, d3ArenaShrink - 3); // Feeding pushes back the shrink
+    toast('THE SECOND MOUTH SWALLOWS THE PLATFORM — ARENA STABILIZES', 2000);
+    // Damage Second Mouth
+    d3SecondMouth.hp -= 10;
+    if (d3SecondMouth.hp <= 0) {
+      d3SecondMouth.dead = true;
+      d3SecondMouth.mesh.removeFromParent();
+      toast('THE SECOND MOUTH SILENCED', 3000);
+    }
+  }
+}
+
+function buildDungeonTheGullet(mouth, dungeonIndex) {
+  if (!mouth) return;
+  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, GULLET_ZONE, 9, 'pit', gulletDeco);
+  const mini = swapArenaBoss(A, 'walker', 'uvula', 2.5, 60, 'THE UVULA', dungeonIndex);
+  mini.mat.color.setHex(0xcc3355);
+  mini.mat.emissive && mini.mat.emissive.setHex(0x441118);
+  // Uvula visual — hanging fleshy sac
+  const uvulaGeo = new THREE.ConeGeometry(0.6, 1.5, 8);
+  const uvulaMat = new THREE.MeshBasicMaterial({ color: 0xaa1122, transparent: true, opacity: 0.9 });
+  const uvula = new THREE.Mesh(uvulaGeo, uvulaMat);
+  uvula.rotation.x = Math.PI;
+  uvula.position.set(0, 1.0, 0);
+  mini.mesh.add(uvula);
+  mini.uvulaMesh = uvula;
+
+  // Heartbeat tell outline
+  d3GulletBossOutline = new THREE.Mesh(new THREE.RingGeometry(2.5, 3.5, 16), new THREE.MeshBasicMaterial({ color: 0xff6677, wireframe: true, transparent: true, opacity: 0.15, side: THREE.DoubleSide }));
+  d3GulletBossOutline.rotation.x = -Math.PI / 2;
+  d3GulletBossOutline.position.set(last.x, 8.5, last.z);
+  scene.add(d3GulletBossOutline);
+
+  // Second Mouth surreal unique — spawn at arena center
+  d3SecondMouth = makeWalker(last.x, 10, last.z, null, 3, false, 'stalker');
+  d3SecondMouth.variant = 'secondMouth';
+  d3SecondMouth.hp = 50;
+  d3SecondMouth.maxhp = 50;
+  d3SecondMouth.mesh.scale.setScalar(2);
+  d3SecondMouth.mesh.traverse(o => { if (o.material) { o.material = o.material.clone(); o.material.color.setHex(0x880011); o.material.emissive = new THREE.Color(0x440008); } });
+  enemies.push(d3SecondMouth);
+  d3ArenaShrink = 0;
+
+  // Boss custom behavior data
+  mini.gulletHeartbeat = true;
+  mini.gulletBeatT = 0;
+  mini.gulletBeatInterval = 0.8; // Heartbeat every 0.8s
+  mini.gulletGravityInvert = false;
+  mini.gulletGravityInvertT = 0;
+
+  // Wiring: local circuit - sphincter door pulse
+  const sphincterId = 'gullet_sphincter_' + dungeonIndex;
+  const bossWireId = 'gullet_boss_' + dungeonIndex;
+  for (const door of d3SphincterDoors) {
+    wireRegister(door, sphincterId, { signalType: 'pulse', pulseLen: 0.5, receivers: [bossWireId] });
+  }
+  wireRegister(last, bossWireId, { signalType: 'hold', gatedBy: sphincterId, receivers: [] });
+
+  // Enemy spawns in shaft
+  for (const hub of hubs) {
+    if (hub.kind !== 'arena' && rand() < 0.3) {
+      spawnBiomeEnemy(hub.x, hub.top + 1, hub.z, hub.slab, GULLET_ZONE, 0.5);
+    }
+  }
+
+  // Gravity Anchor on boss death
+  mini.onDeath = () => {
+    activateGravityAnchor(dungeonIndex);
+    // Cleanup GULLET state
+    d3BreathPhase = 0; d3BreathT = 0; d3DigestionMeter = 0;
+    d3SphincterDoors.forEach(d => { if (d.gulletRing) d.gulletRing.removeFromParent(); });
+    d3SphincterDoors = [];
+    d3OrganicPlatforms.forEach(p => { if (p.gulletVein) p.gulletVein.removeFromParent(); });
+    d3OrganicPlatforms = [];
+    if (d3GulletBossOutline) d3GulletBossOutline.removeFromParent();
+    if (d3SecondMouth && !d3SecondMouth.dead) { d3SecondMouth.dead = true; d3SecondMouth.mesh.removeFromParent(); }
+    d3SecondMouth = null; d3ArenaShrink = 0;
+    const hud = document.getElementById('d3DigestionHUD'); if (hud) hud.remove();
+  };
+  d3GulletBoss = mini;
+}
+
+// ===================== THE BETWEEN — Phase 3: D5 LIMINAL POOLS =====================
+// Mechanic: Platforms exist only while observed or recently observed; memory meter drains as you move. Rooms shuffle when unobserved; "forward/down" guaranteed. Sound attracts entities; low gravity = often silent. Entities move only when unobserved.
+// Boss: THE THING IN THE POOL — direct eye contact kills you. Fight via water reflections while keeping footing observed.
+// Surreal unique: The Resident — always exactly one room away. Cannot be fought; only outrun downward. It is the dungeon's clock.
+
+// LIMINAL POOLS state
+let d5MemoryMeter = 100;           // Memory/observation meter (0-100)
+let d5MemoryMax = 100;
+let d5ObservedPlatforms = new Map(); // platformId -> {mesh, solid, lastObserved, observed}
+let d5RoomSeed = 0;                // Room layout seed
+let d5CurrentRoom = 0;             // Current room index
+let d5Rooms = [];                  // Generated room layouts
+let d5ThingBoss = null;            // THE THING IN THE POOL boss reference
+let d5ThingBossFloor = null;       // Boss arena floor
+let d5ThingBossOutline = null;     // Tell on boss (reflection-based)
+let d5Resident = null;             // The Resident surreal unique
+let d5ResidentRoom = -1;           // Room where Resident currently is
+let d5WhisperAudio = null;         // Whisper audio context
+let d5WaterReflection = null;      // Water reflection plane for boss fight
+
+function liminalDeco(hub, i, levels, slab) {
+  if (!slab) return;
+  // Observation-dependent platforms
+  if (i % 2 === 0 && i > 0 && i < levels - 1) {
+    const p = addPlatform(slab.cx + (rand() - 0.5) * 5, slab.top, slab.cz + (rand() - 0.5) * 5, 2, false, 0, slab.zone, true, true);
+    p.liminalObserved = false;
+    p.liminalLastObserved = 0;
+    p.liminalFadeTime = 3; // Seconds before fading when unobserved
+    p.liminalId = 'liminal_p_' + i + '_' + rand().toString(36).substr(2, 6);
+    // Visual tell: subtle shimmer
+    const shimmerGeo = new THREE.RingGeometry(1.8, 2.2, 8);
+    const shimmerMat = new THREE.MeshBasicMaterial({ color: 0x3399dd, transparent: true, opacity: 0.3, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+    const shimmer = new THREE.Mesh(shimmerGeo, shimmerMat);
+    shimmer.rotation.x = -Math.PI / 2;
+    shimmer.position.set(p.cx, p.top + 0.1, p.cz);
+    scene.add(shimmer);
+    p.liminalShimmer = shimmer;
+    d5ObservedPlatforms.set(p.liminalId, { mesh: shimmer, solid: p, lastObserved: 0, observed: false, platform: p });
+  }
+  // Boss floor
+  if (i === levels - 1) {
+    slab.isLiminalBossFloor = true;
+    d5ThingBossFloor = slab;
+    // Water plane for reflections
+    const waterGeo = new THREE.PlaneGeometry(last.hw * 4, last.hd * 4);
+    const waterMat = new THREE.MeshBasicMaterial({ color: 0x0a1a2a, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+    d5WaterReflection = new THREE.Mesh(waterGeo, waterMat);
+    d5WaterReflection.rotation.x = -Math.PI / 2;
+    d5WaterReflection.position.set(last.x, last.top + 0.1, last.z);
+    scene.add(d5WaterReflection);
+  }
+}
+
+// Check if player is observing a platform (camera frustum + raycast)
+function d5CheckPlatformObservation() {
+  const frustum = new THREE.Frustum();
+  const projScreenMatrix = new THREE.Matrix4();
+  projScreenMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  frustum.setFromProjectionMatrix(projScreenMatrix);
+
+  for (const [id, data] of d5ObservedPlatforms) {
+    if (!data.mesh || !data.mesh.parent) continue;
+    const sphere = new THREE.Sphere(data.mesh.position, 3);
+    const observed = frustum.intersectsSphere(sphere);
+    data.observed = observed;
+    if (observed) {
+      data.lastObserved = performance.now() / 1000;
+      data.mesh.material.opacity = Math.min(0.5, data.mesh.material.opacity + 0.02);
+      // Ensure solid exists
+      if (!solids.includes(data.solid)) solids.push(data.solid);
+    } else {
+      // Fade out when unobserved
+      const timeSinceObserved = performance.now() / 1000 - data.lastObserved;
+      if (timeSinceObserved > data.platform.liminalFadeTime) {
+        data.mesh.material.opacity = Math.max(0, 0.3 * (1 - (timeSinceObserved - data.platform.liminalFadeTime) / 5));
+        // Remove solid if fully faded
+        if (data.mesh.material.opacity < 0.05) {
+          const idx = solids.indexOf(data.solid);
+          if (idx >= 0) solids.splice(idx, 1);
+        }
+      }
+    }
+  }
+}
+
+// Room shuffling when unobserved
+function d5MaybeShuffleRooms() {
+  // Simplified: when player looks away from a room area, regenerate it
+  // For now, just shift platform positions slightly when unobserved
+  if (rand() < 0.001) { // Very rare
+    d5RoomSeed = rand() * 10000;
+    for (const [id, data] of d5ObservedPlatforms) {
+      if (!data.observed && data.mesh && data.mesh.parent) {
+        // Shift platform to new position (but keep "forward/down" guaranteed)
+        const offsetX = (rand() - 0.5) * 4;
+        const offsetZ = -Math.abs(rand() * 6) - 2; // Always forward/down
+        data.mesh.position.x += offsetX;
+        data.mesh.position.z += offsetZ;
+        data.solid.minx += offsetX; data.solid.maxx += offsetX;
+        data.solid.minz += offsetZ; data.solid.maxz += offsetZ;
+        data.platform.cx = data.mesh.position.x;
+        data.platform.cz = data.mesh.position.z;
+      }
+    }
+  }
+}
+
+// Update LIMINAL POOLS systems (called from betweenOn block)
+function updateLiminalPools(dt) {
+  if (!d5ThingBoss && d5ObservedPlatforms.size === 0) return;
+
+  // Memory meter drains as you move
+  const speed = Math.hypot(vel.x, vel.z);
+  d5MemoryMeter = Math.max(0, d5MemoryMeter - dt * (speed > 2 ? 8 : 3));
+
+  // Visual memory meter HUD
+  if (!document.getElementById('d5MemoryHUD') && d5MemoryMeter < 90) {
+    const hud = document.createElement('div');
+    hud.id = 'd5MemoryHUD';
+    hud.style.cssText = 'position:fixed;top:150px;left:50%;transform:translateX(-50%);width:220px;height:14px;background:#020814;border:2px solid #3399dd;z-index:10;pointer-events:none;font:10px monospace;color:#3399dd;text-align:center;line-height:14px;';
+    hud.innerHTML = 'MEMORY <span id="d5MemoryFill" style="color:#44aaff;"></span>';
+    document.body.appendChild(hud);
+  }
+  const fill = document.getElementById('d5MemoryFill');
+  if (fill) fill.textContent = ' █'.repeat(Math.floor(d5MemoryMeter / 5));
+  if (d5MemoryMeter >= 90) {
+    const hud = document.getElementById('d5MemoryHUD');
+    if (hud) hud.remove();
+  }
+
+  // Check platform observation
+  d5CheckPlatformObservation();
+
+  // Room shuffling
+  d5MaybeShuffleRooms();
+
+  // Entities move only when unobserved (handled in variantAI for liminal enemies)
+  // Sound attracts entities — simplified: making noise (shooting, jumping) increases spawn rate
+
+  // The Resident surreal unique — always one room away
+  if (d5Resident && !d5Resident.dead) {
+    // Position Resident one "room" below player
+    const targetY = pos.y - 20 - d5CurrentRoom * 15;
+    d5Resident.x = pos.x + (rand() - 0.5) * 10;
+    d5Resident.z = pos.z + (rand() - 0.5) * 10;
+    d5Resident.y = targetY;
+    d5Resident.mesh.position.set(d5Resident.x, d5Resident.y, d5Resident.z);
+    // Resident is invisible when observed
+    const toResident = new THREE.Vector3(d5Resident.x - camera.position.x, d5Resident.y - camera.position.y, d5Resident.z - camera.position.z);
+    const camDir = camera.getWorldDirection(new THREE.Vector3());
+    const observed = camDir.dot(toResident.clone().normalize()) > 0.7 && toResident.length() < 30;
+    d5Resident.mesh.traverse(o => { if (o.material) o.material.opacity = observed ? 0 : 0.6; });
+  }
+
+  // Water reflection for boss fight
+  if (d5WaterReflection && d5WaterReflection.parent) {
+    d5WaterReflection.material.opacity = 0.3 + 0.2 * Math.sin(performance.now() / 500);
+    // Ripple effect
+    d5WaterReflection.scale.setScalar(1 + 0.02 * Math.sin(performance.now() / 200));
+  }
+
+  // Boss-specific: THE THING IN THE POOL handled in variantAI
+  if (d5ThingBoss && !d5ThingBoss.dead) {
+    if (d5ThingBoss.thingObserved && d5ThingBossOutline) {
+      d5ThingBossOutline.material.opacity = 0.7;
+    } else if (d5ThingBossOutline) {
+      d5ThingBossOutline.material.opacity = 0.1;
+    }
+  }
+}
+
+// Input hook — "Observe" action (hold key to focus observation)
+function d5TriggerObserve() {
+  // Boost memory meter slightly when actively observing
+  d5MemoryMeter = Math.min(d5MemoryMax, d5MemoryMeter + 2);
+}
+
+function buildDungeonLiminalPools(mouth, dungeonIndex) {
+  if (!mouth) return;
+  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, LIMINAL_ZONE, 9, 'pillars', liminalDeco);
+  const mini = swapArenaBoss(A, 'walker', 'thing', 2.3, 55, 'THE THING IN THE POOL', dungeonIndex);
+  mini.mat.color.setHex(0x3399dd);
+  mini.mat.emissive && mini.mat.emissive.setHex(0x0a2a44);
+  // Thing visual — amorphous pool entity
+  const thingGeo = new THREE.SphereGeometry(1.2, 16, 12);
+  const thingMat = new THREE.MeshBasicMaterial({ color: 0x1a4466, transparent: true, opacity: 0.7 });
+  const thing = new THREE.Mesh(thingGeo, thingMat);
+  thing.position.set(0, 1.5, 0);
+  mini.mesh.add(thing);
+  mini.thingCore = thing;
+  // Eye that kills on contact
+  const eyeGeo = new THREE.SphereGeometry(0.4, 12, 10);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffaa });
+  const eye = new THREE.Mesh(eyeGeo, eyeMat);
+  eye.position.set(0, 1.8, 0.9);
+  mini.mesh.add(eye);
+  mini.thingEye = eye;
+
+  // Reflection tell outline (visible in water)
+  d5ThingBossOutline = new THREE.Mesh(new THREE.RingGeometry(3, 4.5, 24), new THREE.MeshBasicMaterial({ color: 0x44aaff, wireframe: true, transparent: true, opacity: 0.1, side: THREE.DoubleSide }));
+  d5ThingBossOutline.rotation.x = -Math.PI / 2;
+  d5ThingBossOutline.position.set(last.x, last.top + 0.15, last.z);
+  scene.add(d5ThingBossOutline);
+
+  // The Resident surreal unique — spawn one room away
+  d5Resident = makeWalker(last.x, last.top - 30, last.z, null, 1.5, false, 'stalker');
+  d5Resident.variant = 'resident';
+  d5Resident.hp = 999999; // Cannot be killed
+  d5Resident.maxhp = 999999;
+  d5Resident.speed = 0; // Doesn't chase directly
+  d5Resident.mesh.traverse(o => { if (o.material) { o.material = o.material.clone(); o.material.color.setHex(0x0a0a1a); o.material.transparent = true; o.material.opacity = 0; } });
+  enemies.push(d5Resident);
+  d5ResidentRoom = 1;
+
+  // Boss custom behavior data
+  mini.thingObserved = false;
+  mini.thingReflectionOnly = true; // Can only be damaged via reflection
+  mini.thingPhase = 0;
+
+  // Wiring: local circuit - observation pulse
+  const observeId = 'liminal_observe_' + dungeonIndex;
+  const bossWireId = 'liminal_boss_' + dungeonIndex;
+  wireRegister(last, observeId, { signalType: 'hold', activeFn: () => d5MemoryMeter > 30, receivers: [bossWireId] });
+  wireRegister({ wire: { active: false, energy: 0 } }, bossWireId, { signalType: 'hold', gatedBy: observeId, receivers: [] });
+
+  // Enemy spawns in shaft (liminal variants)
+  for (const hub of hubs) {
+    if (hub.kind !== 'arena' && rand() < 0.3) {
+      spawnBiomeEnemy(hub.x, hub.top + 1, hub.z, hub.slab, LIMINAL_ZONE, 0.5);
+    }
+  }
+
+  // Gravity Anchor on boss death
+  mini.onDeath = () => {
+    activateGravityAnchor(dungeonIndex);
+    // Cleanup LIMINAL state
+    d5MemoryMeter = 100;
+    d5ObservedPlatforms.forEach(data => { if (data.mesh) data.mesh.removeFromParent(); });
+    d5ObservedPlatforms.clear();
+    if (d5ThingBossOutline) d5ThingBossOutline.removeFromParent();
+    if (d5WaterReflection) d5WaterReflection.removeFromParent();
+    if (d5Resident && !d5Resident.dead) { d5Resident.dead = true; d5Resident.mesh.removeFromParent(); }
+    d5Resident = null; d5ResidentRoom = -1;
+    const hud = document.getElementById('d5MemoryHUD'); if (hud) hud.remove();
+  };
+  d5ThingBoss = mini;
+}
+
+// ===================== THE BETWEEN — Phase 3: Presentation Layer =====================
+// Lovecraftian palette mutation, bioluminescent lighting, whisper audio, unreadable-script HUD
+
+// Lovecraftian palette — mutates biome colors toward abyssal blue, pallid flesh, sickly green, void purple, rust
+const LOVECRAFT_PALETTE = {
+  abyssalBlue: 0x0a1a3a,
+  pallidFlesh: 0xddbbaa,
+  sicklyGreen: 0x4a8844,
+  voidPurple: 0x3a1a5a,
+  rust: 0x883322,
+  bioluminescent: 0x44ffaa,
+  whisperViolet: 0x8844aa,
+  ichorBlack: 0x0a0a0f
+};
+
+// Apply palette mutation to a zone's colors
+function mutateZonePalette(zone, intensity = 0.5) {
+  if (!zone) return zone;
+  const mutated = { ...zone };
+  const lerp = (a, b, t) => Math.round(a + (b - a) * t);
+  const lerpHex = (hexA, hexB, t) => {
+    const ra = (hexA >> 16) & 0xff, ga = (hexA >> 8) & 0xff, ba = hexA & 0xff;
+    const rb = (hexB >> 16) & 0xff, gb = (hexB >> 8) & 0xff, bb = hexB & 0xff;
+    return (lerp(ra, rb, t) << 16) | (lerp(ga, gb, t) << 8) | lerp(ba, bb, t);
+  };
+  mutated.top = '#' + lerpHex(parseInt(zone.top.replace('#', ''), 16), LOVECRAFT_PALETTE.abyssalBlue, intensity).toString(16).padStart(6, '0');
+  mutated.mid = '#' + lerpHex(parseInt(zone.mid.replace('#', ''), 16), LOVECRAFT_PALETTE.pallidFlesh, intensity).toString(16).padStart(6, '0');
+  mutated.bot = '#' + lerpHex(parseInt(zone.bot.replace('#', ''), 16), LOVECRAFT_PALETTE.sicklyGreen, intensity).toString(16).padStart(6, '0');
+  mutated.fog = lerpHex(zone.fog, LOVECRAFT_PALETTE.ichorBlack, intensity);
+  mutated.hemiCol = lerpHex(zone.hemiCol, LOVECRAFT_PALETTE.whisperViolet, intensity);
+  mutated.sunCol = lerpHex(zone.sunCol, LOVECRAFT_PALETTE.voidPurple, intensity);
+  mutated.plate = lerpHex(zone.plate, LOVECRAFT_PALETTE.bioluminescent, intensity);
+  return mutated;
+}
+
+// Bioluminescent lighting in deep areas (below Y=40)
+let biolumLights = [];
+function setupBioluminescentLighting() {
+  // Clear existing
+  biolumLights.forEach(l => { scene.remove(l.mesh); if (l.light) scene.remove(l.light); });
+  biolumLights = [];
+
+  // Add bioluminescent particles/lights in deep areas
+  for (let i = 0; i < 200; i++) {
+    const x = (rand() - 0.5) * 400;
+    const y = rand() * 40; // Only in deep (below 40)
+    const z = (rand() - 0.5) * 400;
+    const color = [LOVECRAFT_PALETTE.bioluminescent, LOVECRAFT_PALETTE.whisperViolet, LOVECRAFT_PALETTE.sicklyGreen][(rand() * 3) | 0];
+    const geo = new THREE.SphereGeometry(0.15 + rand() * 0.2, 4, 3);
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.3 + rand() * 0.4, blending: THREE.AdditiveBlending });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    mesh.userData.biolum = { baseY: y, phase: rand() * Math.PI * 2, speed: 0.5 + rand() * 1.5, color };
+    scene.add(mesh);
+    biolumLights.push({ mesh });
+  }
+}
+
+// Update bioluminescent lighting
+function updateBioluminescentLighting(dt) {
+  const t = performance.now() / 1000;
+  for (const l of biolumLights) {
+    if (!l.mesh || !l.mesh.parent) continue;
+    const data = l.mesh.userData.biolum;
+    if (!data) continue;
+    l.mesh.position.y = data.baseY + Math.sin(t * data.speed + data.phase) * 0.5;
+    l.mesh.material.opacity = 0.2 + 0.3 * Math.sin(t * data.speed * 2 + data.phase);
+    l.mesh.scale.setScalar(0.8 + 0.3 * Math.sin(t * data.speed + data.phase));
+  }
+}
+
+// Whisper audio per enemy family
+const WHISPER_FREQUENCIES = {
+  watcher:    [220, 330, 440],      // Eye-like, high
+  crawler:    [110, 165, 220],      // Low, grinding
+  whisperer:  [440, 660, 880],      // Very high, barely audible
+  spawnSwarm: [165, 247, 330],      // Wet, splitting
+  amalgam:    [82, 123, 165],       // Deep, fused
+  shell:      [55, 82, 110],        // Very low, patient
+  angle:      [880, 1320, 1760],    // Painful high
+  stalker:    [220, 330, 494],      // Standard stalker
+  scrub:      [330, 495, 660],      // VHS static-like
+  secondMouth: [110, 165, 220],    // Wet, organic
+  resident:   [41, 62, 82],         // Infrasonic, felt not heard
+  untitled:   [440, 466, 494],      // Uncanny, detuned
+  otherPlayer: [220, 330, 440],    // Mirror of player
+  vertex:     [1760, 2640, 3520]    // Impossible high
+};
+
+let whisperAudioCtx = null;
+let whisperSources = new Map();
+function initWhisperAudio() {
+  if (!actx) return;
+  whisperAudioCtx = actx;
+}
+
+function playWhisper(variant, position, intensity = 1) {
+  if (!whisperAudioCtx || muted) return;
+  const freqs = WHISPER_FREQUENCIES[variant] || WHISPER_FREQUENCIES.stalker;
+  const freq = freqs[(rand() * freqs.length) | 0];
+  const o = whisperAudioCtx.createOscillator();
+  const g = whisperAudioCtx.createGain();
+  const f = whisperAudioCtx.createBiquadFilter();
+  o.type = 'sine';
+  o.frequency.value = freq + (rand() - 0.5) * 20;
+  f.type = 'bandpass';
+  f.frequency.value = freq;
+  f.Q.value = 10;
+  g.gain.value = 0.02 * intensity;
+  o.connect(f); f.connect(g); g.connect(whisperAudioCtx.destination);
+  o.start();
+  o.stop(whisperAudioCtx.currentTime + 0.5 + rand() * 1.5);
+  // Spatialization (simplified: volume based on distance)
+  const dist = Math.hypot(pos.x - position.x, pos.y - position.y, pos.z - position.z);
+  g.gain.value *= Math.max(0.1, 1 - dist / 50);
+}
+
+// Trigger whispers near enemies
+function updateWhisperAudio(dt) {
+  if (!betweenOn()) return;
+  for (const e of enemies) {
+    if (e.dead || !e.built) continue;
+    const dist = Math.hypot(pos.x - e.x, pos.z - e.z);
+    if (dist < 30 && rand() < dt * 0.1) { // 10% chance per second when close
+      playWhisper(e.variant, { x: e.x, y: e.y, z: e.z }, 1 - dist / 30);
+    }
+  }
+}
+
+// Unreadable-script HUD fragments
+const UNREADABLE_GLYPHS = ['⏚','⏛','⏜','⏝','⏞','⏟','⏠','⏡','⏢','⏣','⏤','⏥','⏦','⏧','⏨','⏩','⏪','⏫','⏬','⏭','⏮','⏯','⏰','⏱','⏲','⏳','⏴','⏵','⏶','⏷','⏸','⏹','⏺','⏻','⏼','⏽','⏾','⏿','␀','␁','␂','␃','␄','␅','␆','␇','␈','␉','␊','␋','␌','␍','␎','␏','␐','␑','␒','␓','␔','␕','␖','␗','␘','␙','␚','␛','␜','␝','␞','␟'];
+
+let unreadableHUD = null;
+function createUnreadableHUD() {
+  if (unreadableHUD) return;
+  unreadableHUD = document.createElement('div');
+  unreadableHUD.id = 'unreadableHUD';
+  unreadableHUD.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);font:12px monospace;color:#44aaff;text-shadow:0 0 8px #3399dd;pointer-events:none;z-index:10;letter-spacing:0.2em;opacity:0.6;white-space:nowrap;';
+  document.body.appendChild(unreadableHUD);
+}
+
+function updateUnreadableHUD(dt) {
+  if (!betweenOn()) return;
+  createUnreadableHUD();
+  // Only show at low sanity / deep depth
+  const show = (d4SanityT < 0.5) || (pos.y < 40) || (d5MemoryMeter < 50);
+  if (!show) { unreadableHUD.style.opacity = 0; return; }
+  unreadableHUD.style.opacity = 0.4 + 0.3 * Math.sin(performance.now() / 500);
+  // Generate shifting glyphs
+  let text = '';
+  for (let i = 0; i < 20; i++) {
+    text += UNREADABLE_GLYPHS[(rand() * UNREADABLE_GLYPHS.length) | 0];
+  }
+  unreadableHUD.textContent = text;
+}
+
+// Main presentation update (called from betweenOn block)
+function updateBetweenPresentation(dt) {
+  if (!betweenOn()) return;
+  updateBioluminescentLighting(dt);
+  updateWhisperAudio(dt);
+  updateUnreadableHUD(dt);
+}
+
+// Initialize presentation on level start
+function initBetweenPresentation() {
+  setupBioluminescentLighting();
+  initWhisperAudio();
+  // Mutate all BETWEEN zone palettes
+  const betweenZones = [VHS_ZONE, GULLET_ZONE, LIMINAL_ZONE, FRACTAL_ZONE];
+  betweenZones.forEach(z => {
+    const m = mutateZonePalette(z, 0.6);
+    z.top = m.top; z.mid = m.mid; z.bot = m.bot; z.fog = m.fog; z.hemiCol = m.hemiCol; z.sunCol = m.sunCol; z.plate = m.plate;
+  });
 }
 
 function buildLevelBody() {
@@ -8754,7 +10027,10 @@ function die(title, why) {
 }
 function hurt(n, fromX, fromZ) {
   if (state !== 'play' || invuln > 0) return;
-  if (betweenOn()) betweenWarpCd = Math.max(betweenWarpCd, 30);   // THE BETWEEN: taking damage breaks/refreshes the fast-travel cooldown
+  if (betweenOn()) {
+    betweenWarpCd = Math.max(betweenWarpCd, 30);   // THE BETWEEN: taking damage breaks/refreshes the fast-travel cooldown
+    betweenSanity = Math.max(0, betweenSanity - 0.05); // Sanity drain on damage
+  }
   health -= n; invuln = 1.3; shake = 0.6; sfx.hurt();
   const horrorHit = activeZ && activeZ.name === 'Horror';
   bloodBurst(new THREE.Vector3(pos.x, pos.y + 1, pos.z), horrorHit ? 52 : 34, horrorHit ? 1.4 : 1.2);
@@ -8887,6 +10163,10 @@ function hostRefresh() {
   const addr = ts ? ts.address : other ? other.address : 'localhost';
   $('inviteAddr').textContent = cloud ? `${servedByServer() ? location.origin + '/' : SITE_URL}?room=${roomVal()}` : `http://${addr}:${(netInfo && netInfo.port) || 8080}/?room=${roomVal()}`;
   $('bGo').disabled = !netInfo;
+  netModeApply();
+  betweenDropModeApply();
+  const bNetMode = $('bNetMode'); if (bNetMode) bNetMode.onclick = netModeToggle;
+  const bBetweenDrop = $('bBetweenDropMode'); if (bBetweenDrop) bBetweenDrop.onclick = betweenDropModeToggle;
 }
 async function copyText(t) {
   try { await navigator.clipboard.writeText(t); }
@@ -8924,6 +10204,14 @@ function netModeToggle() {                                 // host-owned; guests
   netModeApply();
   toast(netMode === 'coop' ? 'ROOM MODE: COOP — teammates cannot hurt each other' : 'ROOM MODE: PVP — friendly fire is on', 3000);
   if (net.on && net.host) { netSend({ t: 'mode', md: netMode }); toast('Room notified', 1200); }
+}
+function betweenDropModeApply() { const el = $('betweenDropModeLabel'); if (el) el.textContent = betweenTeamDrop ? 'TEAM DROP' : 'SCATTERED DROP'; }
+function betweenDropModeToggle() {
+  if (net.on && !net.host) { toast('Only the host picks the drop mode', 1800); return; }
+  betweenTeamDrop = !betweenTeamDrop;
+  betweenDropModeApply();
+  toast(betweenTeamDrop ? 'TEAM DROP: all players spawn at Beacon 1' : 'SCATTERED DROP: players spread across Beacons 1-4', 3000);
+  if (net.on && net.host) { netSend({ t: 'betweenDrop', td: betweenTeamDrop }); toast('Room notified', 1200); }
 }
 function menuExit() {
   menuMode = 'bye'; menuRender();
@@ -9030,6 +10318,25 @@ addEventListener('keydown', e => {
     } else {
       toast('GRAVITY REORIENT UNAVAILABLE — NOT IN FRACTAL DESCENT', 1200);
     }
+  }
+  // THE BETWEEN D2: VHS REWIND — Rewind (KeyR) / Fast-forward (KeyF)
+  if (betweenOn() && e.code === 'KeyR' && state === 'play' && d2TapeLength > 0) {
+    const inVhs = d2GhostPlatforms.length > 0 || d2RecordBuffer.length > 0;
+    if (inVhs) d2TriggerRewind();
+  }
+  if (betweenOn() && e.code === 'KeyF' && state === 'play') {
+    const inVhs = d2GhostPlatforms.length > 0 || d2RecordBuffer.length > 0;
+    if (inVhs) d2TriggerFastForward();
+  }
+  // THE BETWEEN D3: THE GULLET — Feed Second Mouth (KeyG)
+  if (betweenOn() && e.code === 'KeyG' && state === 'play') {
+    const inGullet = d3OrganicPlatforms.length > 0 || d3SphincterDoors.length > 0;
+    if (inGullet) d3FeedSecondMouth();
+  }
+  // THE BETWEEN D5: LIMINAL POOLS — Observe (KeyV)
+  if (betweenOn() && e.code === 'KeyV' && state === 'play') {
+    const inLiminal = d5ObservedPlatforms.size > 0;
+    if (inLiminal) d5TriggerObserve();
   }
   });
 addEventListener('keyup', e => { keys[e.code] = false; kbdKeys[e.code] = false; });
@@ -9218,6 +10525,8 @@ function damageEnemy(e, dmg, kind = 'hit') {
     if (e.midBoss && (!net.on || net.host)) grantMidBossReward(e.midBoss);      // MID-BAND BOSSES: the killing blow hands out the run rewards on the authority that owns this enemy
     enemyGore(e); shake = Math.max(shake, e.boss ? 1.2 : 0.5);
     score += e.pts; toast(`+${e.pts}`, 700); killFx(e, e.boss);
+    // THE BETWEEN: sanity drain on enemy kill
+    if (betweenOn()) betweenSanity = Math.max(0, betweenSanity - SANITY_DRAIN_KILL);
     if (e.variant === 'bomber') explode({ x: e.x, y: e.cy, z: e.z }, 4.2, 0, 'enemy', kind);
     dropAmmo(e); dropCoins(e); if (e.mini) unlockArena(e.hub); if (e.anchorIndex !== undefined) activateGravityAnchor(e.anchorIndex);
     if (e.boss && endBosses.every(b => b.dead)) {
@@ -11003,6 +12312,106 @@ function variantAI(e, dt, d, dxp, dzp) {
     e.archT = (e.archT === undefined ? 3 : e.archT) - dt;
     if (e.archT <= 0 && e.bodies) { e.archT = 3; e.activeBody = (e.activeBody + 1) % 4; e.bodies.forEach((b, i) => { b.material.opacity = i === e.activeBody ? 0.95 : 0.25; }); }
     spd = e.speed * 0.4;
+  } else if (av === 'tape') {              // THE TAPE: records player attacks, replays them as projectiles
+    e.tapePhase = (e.tapePhase === undefined ? 0 : e.tapePhase); // 0=record, 1=replay
+    e.tapePhaseT = (e.tapePhaseT === undefined ? 0 : e.tapePhaseT) - dt;
+    if (e.tapePhase === 0) {
+      // Recording phase: store player attacks
+      e.recordCd = (e.recordCd || 0) - dt;
+      if (e.recordCd <= 0 && d < 25) {
+        e.recordedAttacks = e.recordedAttacks || [];
+        e.recordedAttacks.push({ x: pos.x, y: pos.y, z: pos.z, vx: vel.x, vy: vel.y, vz: vel.z, t: performance.now() / 1000 });
+        if (e.recordedAttacks.length > 20) e.recordedAttacks.shift();
+        e.recordCd = 0.5;
+      }
+      // Switch to replay after 10s
+      e.tapePhaseT += dt;
+      if (e.tapePhaseT > 10) { e.tapePhase = 1; e.tapePhaseT = 0; e.replayIndex = 0; toast('THE TAPE REPLAYS YOUR MOVES', 2000); }
+    } else {
+      // Replay phase: fire recorded attacks as projectiles
+      e.replayCd = (e.replayCd || 0) - dt;
+      if (e.replayCd <= 0 && e.recordedAttacks && e.recordedAttacks.length > 0) {
+        const atk = e.recordedAttacks[e.replayIndex % e.recordedAttacks.length];
+        const dir = new THREE.Vector3(atk.vx, atk.vy, atk.vz).normalize();
+        fireEnemyShot({ x: e.x, y: e.y + 1.5, z: e.z }, dir, 0xaa88ff);
+        e.replayIndex++;
+        e.replayCd = 0.3;
+      }
+      // Switch back to record after 8s
+      e.tapePhaseT += dt;
+      if (e.tapePhaseT > 8) { e.tapePhase = 0; e.tapePhaseT = 0; }
+    }
+    spd = 1.5;
+  } else if (av === 'uvula') {             // THE UVULA: attacks on heartbeat, off-beat safe; hit inverts gravity
+    e.gulletBeatT = (e.gulletBeatT === undefined ? 0 : e.gulletBeatT) + dt;
+    const beatInterval = 0.8;
+    const onBeat = (e.gulletBeatT % beatInterval) < 0.15;
+    if (onBeat && d < 20) {
+      // Heartbeat attack: shockwave
+      shockRing({ x: e.x, y: e.y, z: e.z }, 8, 0xff6677);
+      if (Math.hypot(pos.x - e.x, pos.z - e.z) < 8 && Math.abs(pos.y - e.y) < 4) hurt(1, e.x, e.z);
+    }
+    // Gravity invert on hit handled in onHit callback
+    spd = onBeat ? 0 : 2; // Stationary on beat, moves off-beat
+  } else if (av === 'thing') {             // THE THING IN THE POOL: eye contact kills; fight via reflection
+    const camDir = camera.getWorldDirection(new THREE.Vector3());
+    const toBoss = new THREE.Vector3(e.x - camera.position.x, e.thingCore ? e.thingCore.position.y : e.y + 1 - camera.position.y, e.z - camera.position.z);
+    const td = toBoss.length() || 1; toBoss.divideScalar(td);
+    e.thingObserved = camDir.dot(toBoss) > 0.85 && d < 30;
+    if (e.thingObserved) {
+      // Direct eye contact: instant kill (or massive damage)
+      hurt(3, e.x, e.z);
+      toast('EYE CONTACT — AVOID ITS GAZE', 1000);
+    }
+    // Can only be damaged via reflection (water plane)
+    e.thingReflectionOnly = true;
+    spd = 0.8;
+  } else if (av === 'scrub') {             // THE SCRUB (D2 surreal): visible only in rewind, right behind player
+    spd = 0; dx = 0; dz = 0; // Position handled in updateVhsRewind
+  } else if (av === 'secondMouth') {       // THE SECOND MOUTH (D3 surreal): mouth inside mouth, swallows space
+    spd = 0; dx = 0; dz = 0; // Position handled in updateTheGullet
+  } else if (av === 'resident') {          // THE RESIDENT (D5 surreal): always one room away, cannot be fought
+    spd = 0; dx = 0; dz = 0; // Position handled in updateLiminalPools
+  } else if (av === 'untitled') {          // D1 surreal: [Untitled] — untextured humanoid teleporting between frames
+    e.untitledTpCd = (e.untitledTpCd === undefined ? 1.5 : e.untitledTpCd) - dt;
+    if (e.untitledTpCd <= 0) {
+      e.untitledTpCd = 1 + Math.random() * 1;
+      const p = e.plat;
+      if (p) { e.x = p.minx + 1.5 + Math.random() * (p.maxx - p.minx - 3); e.z = p.minz + 1.5 + Math.random() * (p.maxz - p.minz - 3); }
+      shockRing({ x: e.x, y: e.y, z: e.z }, 2, 0x888888); betweenTear();
+      // Replaces player inputs for 2s
+      e.untitledInputSwap = true;
+      e.untitledInputSwapT = 2;
+    }
+    if (e.untitledInputSwap) {
+      e.untitledInputSwapT -= dt;
+      if (e.untitledInputSwapT <= 0) e.untitledInputSwap = false;
+    }
+    spd = 0; dx = 0; dz = 0;
+  } else if (av === 'otherPlayer') {       // D4 surreal: The Other Player — perfect copy, dismiss by doing nothing 30s
+    e.otherPlayerIdleT = (e.otherPlayerIdleT === undefined ? 0 : e.otherPlayerIdleT);
+    if (Math.hypot(vel.x, vel.z) < 0.5) e.otherPlayerIdleT += dt; else e.otherPlayerIdleT = 0;
+    if (e.otherPlayerIdleT >= 30) { e.dead = true; e.mesh.removeFromParent(); toast('THE OTHER PLAYER DISMISSED', 3000); }
+    // Mirror player with slight delay
+    e.otherPlayerBuffer = e.otherPlayerBuffer || [];
+    e.otherPlayerBuffer.push({ x: pos.x, y: pos.y, z: pos.z, t: performance.now() / 1000 });
+    if (e.otherPlayerBuffer.length > 120) e.otherPlayerBuffer.shift();
+    const delayed = e.otherPlayerBuffer[Math.max(0, e.otherPlayerBuffer.length - 30)];
+    if (delayed) { e.x = delayed.x; e.z = delayed.z; e.mesh.position.set(e.x, delayed.y, e.z); }
+    spd = 0; dx = 0; dz = 0;
+  } else if (av === 'vertex') {            // D6 surreal: The Vertex — more corners than possible, moves in forbidden directions
+    e.vertexT = (e.vertexT === undefined ? 0 : e.vertexT) + dt;
+    // Moves in directions player's gravity forbids
+    const forbiddenDirs = [
+      new THREE.Vector3(1, 0, 0),   // +X
+      new THREE.Vector3(-1, 0, 0),  // -X
+      new THREE.Vector3(0, 1, 0),   // +Y (up)
+      new THREE.Vector3(0, -1, 0)   // -Y (down)
+    ];
+    const dir = forbiddenDirs[Math.floor(e.vertexT * 0.5) % 4];
+    dx = dir.x; dz = dir.z;
+    spd = 8; // Fast, unpredictable
+    // Cannot be killed; reorient to lengthen path
   }
   return [dx, dz, spd];
 }
@@ -12428,6 +13837,9 @@ function netMessage(m) {
     case 'p': netPeerUpdate(from, m); break;
     case 'mode':                                                              // host announces the room mode (COOP/PVP)
       if ((m.md === 'coop' || m.md === 'pvp') && (net.host || from === net.hostId) && m.md !== netMode) { netMode = m.md; netModeApply(); toast(m.md === 'coop' ? 'Room mode: COOP' : 'Room mode: PVP', 2400); }
+      break;
+    case 'betweenDrop':                                                   // host announces THE BETWEEN drop mode (TEAM/SCATTERED)
+      if ((typeof m.td === 'boolean') && (net.host || from === net.hostId) && m.td !== betweenTeamDrop) { betweenTeamDrop = m.td; betweenDropModeApply(); toast(m.td ? 'Room drop: TEAM DROP' : 'Room drop: SCATTERED DROP', 2400); }
       break;
     case 'mission':
       if (from === net.id) break;
@@ -14157,6 +15569,8 @@ renderer.setAnimationLoop(now => {
         // Player is in beacon radius
         if (!b.touched) { b.touched = true; toast(`BEACON TOUCHED: ${b.name}`, 2000); }
         b.lastTouchTime = nowT;
+        // Grounding anchor: restore sanity
+        betweenRestoreSanityAtBeacon();
         // Grounding anchor visual feedback
         if (b.beam) { b.beam.material.opacity = 0.35 + 0.15 * Math.sin(nowT * 4); }
         // Fast-travel: press 'F' near a touched beacon to warp to another touched beacon
@@ -14169,16 +15583,45 @@ renderer.setAnimationLoop(now => {
         b.corruption = Math.max(0, b.corruption - dt * 0.005);
       }
     }
-    // Downed state handling (co-op) - simplified for Phase 1
-    // In co-op, downed players are tracked per beacon; revive by looking at them
-    if (net.on && betweenBeacons.length) {
-      // This is a stub — full downed/revive logic in Phase 4 co-op pass
+    // ---- Phase 4: Downed state, fast-travel, beacon corruption, return-geyser mapping ---
+    // Downed state: ~10s, revive by looking at downed player
+    // Fast-travel: 30s cooldown, breaks on damage
+    // Beacon corruption: +15% per death, decays slowly, affects sanity reset and Well delay
+    // Return-geyser mapping: D1/D2→Beacon1, D3/D4→Beacon2, D5/D6→Beacon3/4
+    if (net.on) {
+      for (const b of betweenBeacons) {
+        if (b.downedPlayers.size > 0) {
+          if (!b.downedTimers) b.downedTimers = new Map();
+          for (const downedIdx of b.downedPlayers) {
+            const timer = (b.downedTimers.get(downedIdx) || 10) - dt;
+            if (timer <= 0) {
+              // Ground out to this beacon (respawn downed player here)
+              b.downedPlayers.delete(downedIdx);
+              b.downedTimers.delete(downedIdx);
+              // In co-op, host would respawn the downed player at this beacon
+              if (net.host) console.log('[BETWEEN] Downed player ' + downedIdx + ' grounded out to ' + b.name);
+            } else {
+              b.downedTimers.set(downedIdx, timer);
+            }
+          }
+        }
+      }
     }
     // ---- Phase 2: per-dungeon full system updates (D1 GLITCH.EXE, D4 PSYCHOSIS, D6 FRACTAL DESCENT) ----
     updateGlitchExe(dt);
     updatePsychosis(dt);
     updateFractalDescent(dt);
-    if (P) PERF.lap('wiring+beacons+dungeons'); } updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
+    // ---- Phase 3: per-dungeon full system updates (D2 VHS REWIND, D3 THE GULLET, D5 LIMINAL POOLS) ----
+    updateVhsRewind(dt);
+    updateTheGullet(dt);
+    updateLiminalPools(dt);
+    // ---- Phase 3: Presentation layer ----
+    updateBetweenPresentation(dt);
+    // ---- Phase 4: Global sanity system ----
+    updateBetweenSanity(dt);
+    // ---- Phase 4: Gravity Well launch ----
+    updateGravityWellLaunch(dt);
+    if (P) PERF.lap('wiring+beacons+dungeons+presentation+sanity+well'); } updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
   updateVisuals(dt); setHint(); if (P) PERF.lap('visuals+hud');
   if (guideDialogOpen && state !== 'play') closeGuideDialog(false);
   netTick(dt); updatePeers(dt); debugTick(dt); if (P) PERF.lap('net+peers+debug');
