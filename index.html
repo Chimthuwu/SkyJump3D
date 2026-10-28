@@ -2544,16 +2544,29 @@ function buildMarsRoute() {
   jobs.push({ gen: buildAlienRouteGen(), level: true });             // built a few ms per frame (was one ~100 ms hitch); failures are caught per slice and never kill the frame loop
   toast('MARS RISES IN THE DISTANCE — cross the Alien Void', 5000); sfx.psy && sfx.psy();
 }
-// ---------- BEYOND MARS: Jupiter, Saturn, Uranus, Neptune. Each is a ~1000+ platform bridge through a stack of strange biomes (glitch, kaomoji, hell, horror...) ----------
+// ---------- BEYOND MARS: Jupiter, Saturn, Uranus, Neptune. Each is a ~1000+ platform bridge through a stack of strange biomes ----------
+// SPACE_ZONES: kept OUTSIDE ZONES on purpose (same reason as RENT_ZONES/DEPTH_ZONES — ZONES is name-filtered
+// elsewhere and appending would leak into the ground level/THE BETWEEN's sector shuffle). These used to just
+// reuse ground biomes (Hellscape/Horror/Glitch...) verbatim out here, which read as "hell blocks floating in
+// space" — this is a dedicated space-only palette instead.
+const SPACE_ZONES = [
+  { name: 'Starfield',    desc: 'the deep black between worlds', top: '#02010a', mid: '#0a0828', bot: '#241a4a', fog: 0x0c0a2a, hemi: 0.5, hemiCol: 0x7a6adf, sun: 0.4, sunCol: 0xaad4ff, cloud: 0x120e30, plate: 0x6a7aff, weather: 'dust', sky: 0.85 },
+  { name: 'Asteroid Belt', desc: 'rock and debris, tumbling slow', top: '#0a0806', mid: '#2a221a', bot: '#6a5a44', fog: 0x1a140e, hemi: 0.5, hemiCol: 0xb0a088, sun: 0.45, sunCol: 0xe0c8a0, cloud: 0x241e16, plate: 0x8a7a60, weather: 'dust', sky: 0.8 },
+  { name: 'Ion Storm',    desc: 'the magnetic field here is screaming', top: '#020818', mid: '#0a2a5a', bot: '#2a8ac0', fog: 0x0e2a4a, hemi: 0.6, hemiCol: 0x6ad0ff, sun: 0.6, sunCol: 0x9ef0ff, cloud: 0x14305a, plate: 0x36c6ff, weather: 'static', lightning: true, sky: 0.8 },
+  { name: 'Nebula',       desc: 'gas clouds lit from within', top: '#0a0218', mid: '#3a0e5a', bot: '#c03aa0', fog: 0x3a1050, hemi: 0.6, hemiCol: 0xe08aff, sun: 0.55, sunCol: 0xff8ae0, cloud: 0x4a1a66, plate: 0xd84aff, weather: 'spores', sky: 0.85 },
+  { name: 'Solar Wind',   desc: 'radiation streaks past in slow amber lines', top: '#140a02', mid: '#5a2c0a', bot: '#e08a2a', fog: 0x3a1e08, hemi: 0.55, hemiCol: 0xffb860, sun: 0.65, sunCol: 0xffcf80, cloud: 0x401e08, plate: 0xff9a3a, weather: 'embers', sky: 0.8 },
+  { name: 'Void Rift',    desc: 'something out here is tearing', top: '#000000', mid: '#0a0a06', bot: '#1a3a1a', fog: 0x060604, hemi: 0.35, hemiCol: 0x4aff8a, sun: 0.3, sunCol: 0x6affa0, cloud: 0x0a0a08, plate: 0x2aff6a, weather: 'static', outline: true, sky: 0.8 },
+  { name: 'Dead Signal',  desc: 'derelict hulls, dead channels, nobody answers', top: '#040406', mid: '#141418', bot: '#3a3a42', fog: 0x0a0a0e, hemi: 0.4, hemiCol: 0x8a8a9a, sun: 0.3, sunCol: 0xaab0c0, cloud: 0x1a1a20, plate: 0x5a5a68, weather: 'static', sky: 0.75 },
+];
 let marsInfo = null, planetLegBuilt = {}; const planetInfo = [];
 const PLANETS = [
-  { key: 'jupiter', name: 'JUPITER', rad: 1500, cols: ['#c8a27a', '#9c6b45', '#e8d3b0', '#b5703c', '#f0e2c8'], spot: true, biomes: ['Glitch', 'Hellscape', 'Kaomoji', 'Horror'], per: 380, col: 0xffb070 },
-  { key: 'saturn', name: 'SATURN', rad: 1300, cols: ['#e6d29a', '#c9b070', '#f2e4b4', '#b49a5a'], rings: true, biomes: ['Kaomoji', 'Horror', 'Glitch', 'Hellscape'], per: 420, col: 0xffe8a0 },
-  { key: 'uranus', name: 'URANUS', rad: 1100, cols: ['#9ff0f0', '#7fd8e8', '#b8fafa'], biomes: ['Frozen', 'Glitch', 'Kaomoji', 'Hellscape'], per: 460, col: 0x9ff0f0 },
-  { key: 'neptune', name: 'NEPTUNE', rad: 1100, cols: ['#2a4bd8', '#1c2f9c', '#4a6cf0', '#6a8aff'], biomes: ['Storm', 'Horror', 'Hellscape', 'Glitch'], per: 500, col: 0x6a8aff },
-  { key: 'pluto', name: 'PLUTO', rad: 1000, cols: ['#4a0a0a', '#250505', '#6b0a0a', '#a00a0a'], biomes: ['Hellscape', 'Horror', 'Glitch', 'Hellscape'], per: 520, col: 0x2a0a0a },
-  { key: 'charon', name: 'CHARON', rad: 950, cols: ['#1a1a2e', '#0f0f23', '#1b1b3e', '#2c2c5a'], biomes: ['Psychosis', 'Hellscape', 'Horror', 'Glitch'], per: 540, col: 0x151530 },
-  { key: 'osis', name: 'OSIS', rad: 900, cols: ['#0a0a1e', '#050510', '#101025', '#1a1a3e'], biomes: ['Hellscape', 'Psychosis', 'Horror', 'Glitch'], per: 560, col: 0x0d0d2a },
+  { key: 'jupiter', name: 'JUPITER', rad: 1500, cols: ['#c8a27a', '#9c6b45', '#e8d3b0', '#b5703c', '#f0e2c8'], spot: true, biomes: ['Ion Storm', 'Void Rift', 'Nebula', 'Dead Signal'], per: 380, col: 0xffb070 },
+  { key: 'saturn', name: 'SATURN', rad: 1300, cols: ['#e6d29a', '#c9b070', '#f2e4b4', '#b49a5a'], rings: true, biomes: ['Nebula', 'Dead Signal', 'Ion Storm', 'Asteroid Belt'], per: 420, col: 0xffe8a0 },
+  { key: 'uranus', name: 'URANUS', rad: 1100, cols: ['#9ff0f0', '#7fd8e8', '#b8fafa'], biomes: ['Starfield', 'Ion Storm', 'Nebula', 'Void Rift'], per: 460, col: 0x9ff0f0 },
+  { key: 'neptune', name: 'NEPTUNE', rad: 1100, cols: ['#2a4bd8', '#1c2f9c', '#4a6cf0', '#6a8aff'], biomes: ['Ion Storm', 'Dead Signal', 'Void Rift', 'Asteroid Belt'], per: 500, col: 0x6a8aff },
+  { key: 'pluto', name: 'PLUTO', rad: 1000, cols: ['#4a0a0a', '#250505', '#6b0a0a', '#a00a0a'], biomes: ['Void Rift', 'Dead Signal', 'Ion Storm', 'Void Rift'], per: 520, col: 0x2a0a0a },
+  { key: 'charon', name: 'CHARON', rad: 950, cols: ['#1a1a2e', '#0f0f23', '#1b1b3e', '#2c2c5a'], biomes: ['Dead Signal', 'Void Rift', 'Dead Signal', 'Ion Storm'], per: 540, col: 0x151530 },
+  { key: 'osis', name: 'OSIS', rad: 900, cols: ['#0a0a1e', '#050510', '#101025', '#1a1a3e'], biomes: ['Void Rift', 'Dead Signal', 'Dead Signal', 'Void Rift'], per: 560, col: 0x0d0d2a },
 ];
 function planetTexture(spec) {
   const c = document.createElement('canvas'); c.width = 512; c.height = 256; const g = c.getContext('2d');
@@ -2589,7 +2602,7 @@ function* buildPlanetLegGen(i) {
   const spec = PLANETS[i], from = i === 0 ? marsInfo : planetInfo[i - 1]; if (!from) return;
   const hd = Math.atan2(from.uz, from.ux) + i * 0.8, ux = Math.cos(hd), uz = Math.sin(hd), px = -uz, pz = ux;
   const R = missionRandom(((levelSeed | 0) ^ (0x9100 + i * 977)) | 0), LANES = 3, PER = spec.per, r0 = 60, rise = 0.34, SEGS = 4;
-  const segZones = spec.biomes.map(nm => ({ ...ZONES.find(z => z.name === nm), sky: 0.85 }));
+  const segZones = spec.biomes.map(nm => ({ ...SPACE_ZONES.find(z => z.name === nm), sky: 0.85 }));
   const zoneAt = idx => segZones[Math.min(SEGS - 1, Math.floor(idx / PER * SEGS))];
   const cap = Math.ceil(LANES * PER / SEGS * 1.9) + 80, all = [];
   const amp = [24, 32, 38], freq = [0.0105, 0.0085, 0.0125], ph = [0.4 + i, 2.3, 4.4 + i * 0.7];
@@ -2650,7 +2663,7 @@ function* buildPlanetLegGen(i) {
       if (n % 36 === 18 && L === 1) addCheckpoint(x, y, z, Z);
       if (!kind && n > 5 && n % 8 === 4 && L !== 2) spawnBiomeEnemy(x, y, z, sl, Z, 0.9, 1);
       if (!kind && n % 23 === 11 && L === 2) spawnBiomeEnemy(x, y, z, sl, Z, 0.9, 1);
-      if (n > 10 && n % 37 === 18 && (Z.name === 'Glitch' || Z.name === 'Kaomoji')) makeUfo(x + (R() - 0.5) * 8, y + 9, z + (R() - 0.5) * 8);
+      if (n > 10 && n % 37 === 18) makeUfo(x + (R() - 0.5) * 8, y + 9, z + (R() - 0.5) * 8);   // UFOs fit anywhere out here now that the bridge has its own space zones
       if (n % 80 === 40) weaponPickup(2 + ((R() * (WEAPONS.length - 2)) | 0), x, y + 1.2, z);
     }
   }
@@ -2659,10 +2672,9 @@ function* buildPlanetLegGen(i) {
   const segLen = (endD - r0) / SEGS;
   for (let sg = 0; sg < SEGS; sg++) {
     const Z = segZones[sg], dm = r0 + segLen * (sg + 0.5), midY = from.y + (PER * (sg + 0.5) / SEGS) * rise - 70;
-    const sheetCol = { Hellscape: 0xa01000, Glitch: 0x064a22, Kaomoji: 0xffb0e8, Horror: 0x40050f, Frozen: 0x6ac0e0, Storm: 0x1a2e60 }[Z.name] || 0x222244;
+    const sheetCol = { 'Starfield': 0x14103a, 'Asteroid Belt': 0x3a2e1a, 'Ion Storm': 0x0a3a6a, 'Nebula': 0x6a1a8a, 'Solar Wind': 0x6a3a0a, 'Void Rift': 0x0a2a10, 'Dead Signal': 0x222228 }[Z.name] || 0x222244;
     const sheet = new THREE.Mesh(new THREE.PlaneGeometry(segLen * 1.02, 760), new THREE.MeshBasicMaterial({ color: sheetCol, fog: false }));
     sheet.rotation.x = -Math.PI / 2; sheet.rotation.z = -hd; sheet.position.set(from.x + ux * dm, midY, from.z + uz * dm); lvl.add(sheet);
-    if (Z.name === 'Hellscape') for (let k = 0; k < 3; k++) { const pg = pentagramDecal(520, k); pg.position.set(from.x + ux * (dm + (k - 1) * segLen * 0.3), midY + 1, from.z + uz * (dm + (k - 1) * segLen * 0.3)); lvl.add(pg); }
   }
   // END: the planet, a big pad on its summit and a column of light pointing at it
   const lastD = endD + 18, rad = spec.rad, cx = from.x + ux * lastD, cz = from.z + uz * lastD, topY = from.y + (PER + 1) * rise + 3;
@@ -11468,6 +11480,14 @@ const BIOME_ENEMIES = {
   Beach: ['crab', 'crab', 'crab', 'frog', 'gunner', 'drone'],
   Rave: ['raver', 'raver', 'raver', 'gunner', 'drone', 'walker'],
   'Alien Void': ['alien', 'alien', 'alien', 'ufo', 'ufo', 'bomber'],
+  // SPACE_ZONES (Mars-and-beyond planet bridges): existing variants only, picked for fit — no new enemy types.
+  'Starfield': ['drone', 'drone', 'ufo', 'walker'],
+  'Asteroid Belt': ['walker', 'charger', 'charger', 'shield'],
+  'Ion Storm': ['gunner', 'drone', 'stormWraith', 'shield'],
+  'Nebula': ['alien', 'alien', 'drone', 'ufo'],
+  'Solar Wind': ['infernal', 'gunner', 'charger', 'drone'],
+  'Void Rift': ['glitchling', 'stalker', 'drone', 'gunner'],
+  'Dead Signal': ['skeleton', 'stalker', 'drone', 'walker'],
 };
 // RENT'S DUE zones live OUTSIDE ZONES on purpose: ZONES is name-filtered in several places (standardBiomes, laterBiomes, biomeBands) and
 // ZONES[ZONES.length-1] is the Horror boss-arena zone, so appending here would silently change 'Lil Spasticism'. `rent` = severity 1..3
