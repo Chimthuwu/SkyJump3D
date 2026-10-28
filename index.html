@@ -415,7 +415,7 @@ let betweenWarpCd = 0;                        // THE BETWEEN: fast-travel cooldo
 let betweenTeamDrop = true;                   // THE BETWEEN: true = every slot spawns at Beacon 1 (Team Drop), false = 1:1 scattered
 let wireNodes = new Map();                    // THE BETWEEN: wiring-circuit node id -> solid (signalOut/receivers graph)
 const BETWEEN_CIRCUITS = [];                  // THE BETWEEN: build-time circuit bookkeeping [{name, sourceId, nodeIds}]
-const CANOPY_Y = 120;                         // THE BETWEEN: spawn height of the horizontal Canopy spine — module-level since several functions outside buildBetween() need it
+const CANOPY_Y = 300;                         // THE BETWEEN: spawn height of the horizontal Canopy spine — module-level since several functions outside buildBetween() need it. Raised from 120 to push BETWEEN's scale toward descent's (user request); the Moon sits far higher still, at ~1200 (descent's own TOP max).
 let betweenBeacons = [];                      // THE BETWEEN: [{id, name, x, y, z, zone, hub}]
 let betweenVeins = [];                        // THE BETWEEN: per-circuit energy-vein mesh+material
 let betweenDungeonMouths = [];                // THE BETWEEN: Phase 2 — the 6 dungeon-mouth solids, indexed 0..5 (D1..D6)
@@ -6831,8 +6831,9 @@ function buildBetween() {
   // y=0 is a hard floor for this level and buildSkyway() is never called here, so VOID_Y stays at its default
   // -160 (harmless — see the betweenOn() safety-net branch in the fall cascade); the Foundation slab below
   // is the real floor, collided with normally via solids[].
-  const CANOPY_Y = 120;                 // spawn height — horizontal spine
-  const SECTOR_W = 40;                  // each biome sector's full span along the spine
+  // CANOPY_Y uses the module-level const now (no local shadow) — a local 120 here once silently diverged
+  // from the module-level value other functions read, which was a real crash this session; never duplicate it again.
+  const SECTOR_W = 70;                  // each biome sector's full span along the spine — widened from 40 so the Canopy's total length (~1190m) is in descent's ballpark (UNIVERSE_R*2=1200)
   const SECTOR_COUNT = 17;              // 11 ZONES + FleshNest + Shroom + Alien Void + Shallows + Seam
   const BEACON_COUNT = 4;
   const beaconSectorIdx = [0, 4, 12, SECTOR_COUNT - 1];
@@ -6932,7 +6933,7 @@ function buildBetween() {
   // THE BETWEEN's own moon: not a copy of descent's cratered-sphere-with-colosseum, a watching Eye looming
   // directly above the Well, visible from the Canopy, reached by the launch sequence (phase 3 triggers ~y=800).
   {
-    const moonY = 860, moonRad = 190;
+    const moonY = 1250, moonRad = 220;   // past the launch gauntlet's end (~1200, matching descent's own TOP max)
     const moonBody = new THREE.Mesh(new THREE.SphereGeometry(moonRad, 24, 16), new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.ichorBlack, fog: false }));
     moonBody.position.set(0, moonY, 0); scene.add(moonBody);
     const moonGlow = new THREE.Mesh(new THREE.SphereGeometry(moonRad * 1.05, 20, 12), new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.voidPurple, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide, fog: false }));
@@ -6986,6 +6987,35 @@ function buildBetween() {
       const pillar = new THREE.Mesh(new THREE.BoxGeometry(1.2 + rand(), h, 1.2 + rand()), pillarMat);
       pillar.position.set(fx, 4 + h / 2, fz); pillar.rotation.set(lean, rand() * Math.PI, lean); scene.add(pillar);
       if (rand() < 0.4) { const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.3 + rand() * 0.3, 0), accentMat); shard.position.set(fx + (rand() - 0.5), 4 + h + 0.4, fz + (rand() - 0.5)); scene.add(shard); }
+    }
+
+    // THE HELL PIT — a 7th, standalone landmark area on the Foundation, distinct from the 6 dungeon shafts
+    // (user asked for a literal Hell depth like descent's Hellscape). Can't build below y=0 (hard floor for
+    // this level), so it reads as a crater via a sunken-looking lava floor + a rim of real jagged obsidian
+    // spires, not an actual pit. Tucked into one corner, far from the Well/dungeon mouths.
+    {
+      const HZ = ZONES.find(z => z.name === 'Hellscape');
+      const hcx = FR * 0.72, hcz = FR * 0.72, hR = 90;
+      const lavaMat = new THREE.MeshBasicMaterial({ color: 0xff2a10, transparent: true, opacity: 0.85 });
+      const lava = new THREE.Mesh(new THREE.CircleGeometry(hR, 32), lavaMat); lava.rotation.x = -Math.PI / 2; lava.position.set(hcx, 4.3, hcz); scene.add(lava);
+      const rimMat = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x1a0404 })), coreMat = new THREE.MeshBasicMaterial({ color: 0xff5a10, transparent: true, opacity: 0.8 });
+      for (let i = 0; i < 20; i++) {
+        const a = (i / 20) * Math.PI * 2 + rand() * 0.15, r = hR * (0.85 + rand() * 0.3), h = 30 + rand() * 90;
+        const sx = hcx + Math.cos(a) * r, sz = hcz + Math.sin(a) * r;
+        const spire = new THREE.Mesh(new THREE.ConeGeometry(4 + rand() * 5, h, 5), rimMat); spire.position.set(sx, 4 + h / 2, sz); spire.rotation.y = rand() * Math.PI; scene.add(spire);
+        if (i % 3 === 0) { const core = new THREE.Mesh(new THREE.ConeGeometry(1.2, h * 0.5, 5), coreMat); core.position.set(sx, 4 + h * 0.3, sz); core.rotation.y = spire.rotation.y; scene.add(core); }
+      }
+      // central altar — a dark obelisk rising from the lava, no boss, pure landmark
+      const altar = new THREE.Mesh(new THREE.ConeGeometry(8, 60, 6), rimMat); altar.position.set(hcx, 4 + 30, hcz); scene.add(altar);
+      const altarGlow = new THREE.Mesh(new THREE.TorusGeometry(9, 0.8, 5, 16), coreMat); altarGlow.position.set(hcx, 10, hcz); altarGlow.rotation.x = Math.PI / 2; scene.add(altarGlow);
+      // a real walkable ring just outside the lava so the area is actually traversable, not just scenery
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2, r = hR + 6, px = hcx + Math.cos(a) * r, pz = hcz + Math.sin(a) * r;
+        const plat = addSlab(px, 5 + Math.sin(i * 1.7) * 2, pz, 3.5, 3.5, 1.2, HZ, false);
+        if (i % 3 === 0) spawnBiomeEnemy(px, 6.5, pz, plat, HZ, 0.9, 1.1);
+        if (i % 4 === 1) coin(px, 6.7, pz, HZ);
+      }
+      betweenLoreTerminal(hcx, 4, hcz - hR - 14);
     }
   }
 
@@ -7545,7 +7575,7 @@ function updateGravityWellLaunch(dt) {
       // Gravity is reduced during launch (spaceK fade applies)
       // Debris moves toward player
       updateLaunchDebris(dt);
-      if (pos.y > 300) {
+      if (pos.y > 450) {
         betweenLaunchPhase = 2; // Enter gauntlet proper
         betweenLaunchT = 0;
       }
@@ -7553,7 +7583,7 @@ function updateGravityWellLaunch(dt) {
       // Gauntlet phase: dense debris field, must navigate to Moon
       updateLaunchDebris(dt);
       // Moon approach check
-      if (pos.y > 800) {
+      if (pos.y > 1150) {
         betweenLaunchPhase = 3;
         betweenLaunchT = 0;
       }
@@ -7585,7 +7615,7 @@ function spawnLaunchDebris() {
   betweenLaunchDebris.length = 0;
   for (let i = 0; i < 80; i++) {
     const angle = rand() * Math.PI * 2;
-    const height = 50 + rand() * 900;
+    const height = 50 + rand() * 1150;
     const radius = 15 + rand() * 40;
     const d = {
       x: Math.cos(angle) * radius,
@@ -7818,7 +7848,7 @@ function glitchApplyInputSwap(keys) {
 function buildDungeonGlitchExe(mouth, dungeonIndex) {
   if (!mouth) return;
   const zone = ZONES.find(z => z.name === 'Glitch') || ZONES[0];
-  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, zone, 9, 'reactor', glitchDeco);
+  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, zone, 20, 'reactor', glitchDeco);
   const mini = swapArenaBoss(A, 'walker', 'null_pointer', 1.9, 42, 'null_pointer', dungeonIndex);
   // Boss reskin: untextured T-pose, wireframe cage (Lovecraftian palette)
   mini.mat.color.setHex(LOVECRAFT_PALETTE.ichorBlack);
@@ -8087,7 +8117,7 @@ function updatePsychosis(dt) {
 function buildDungeonPsychosis(mouth, dungeonIndex) {
   if (!mouth) return;
   const zone = ZONES.find(z => z.name === 'Psychedelic') || ZONES[0];
-  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, zone, 9, 'pit', null);
+  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, zone, 20, 'pit', null);
   const mini = swapArenaBoss(A, 'walker', 'observer', 2.1, 50, 'THE OBSERVER', dungeonIndex);
   // Boss reskin: floating eye, pupil dilation (Lovecraftian palette)
   mini.mat.color.setHex(LOVECRAFT_PALETTE.pallidFlesh);
@@ -8367,7 +8397,7 @@ function buildDungeonFractalDescent(mouth, dungeonIndex) {
       slab.d6Orientation = i % 4;
     }
   };
-  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, zone, 9, 'pillars', flipDeco);
+  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, zone, 20, 'pillars', flipDeco);
   const mini = swapArenaBoss(A, 'walker', 'architect', 2.2, 4, 'THE ARCHITECT', dungeonIndex);
   // Boss reskin: 4 orientation cubes (Lovecraftian palette)
   mini.mat.color.setHex(LOVECRAFT_PALETTE.voidPurple);
@@ -8627,7 +8657,7 @@ function d2TriggerFastForward() {
 
 function buildDungeonVhsRewind(mouth, dungeonIndex) {
   if (!mouth) return;
-  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, VHS_ZONE, 9, 'reactor', vhsDeco);
+  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, VHS_ZONE, 20, 'reactor', vhsDeco);
   const mini = swapArenaBoss(A, 'walker', 'tape', 2.0, 48, 'THE TAPE', dungeonIndex);
   mini.mat.color.setHex(0xaa88ff);
   mini.mat.emissive && mini.mat.emissive.setHex(0x442266);
@@ -8890,7 +8920,7 @@ function d3FeedSecondMouth() {
 
 function buildDungeonTheGullet(mouth, dungeonIndex) {
   if (!mouth) return;
-  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, GULLET_ZONE, 9, 'pit', gulletDeco);
+  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, GULLET_ZONE, 20, 'pit', gulletDeco);
   d3ArenaCenter = { x: last.x, z: last.z };
   const mini = swapArenaBoss(A, 'walker', 'uvula', 2.5, 60, 'THE UVULA', dungeonIndex);
   mini.mat.color.setHex(0xcc3355);
@@ -9138,7 +9168,7 @@ function d5TriggerObserve() {
 
 function buildDungeonLiminalPools(mouth, dungeonIndex) {
   if (!mouth) return;
-  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, LIMINAL_ZONE, 9, 'pillars', liminalDeco);
+  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, LIMINAL_ZONE, 20, 'pillars', liminalDeco);
   const mini = swapArenaBoss(A, 'walker', 'thing', 2.3, 55, 'THE THING IN THE POOL', dungeonIndex);
   mini.mat.color.setHex(0x3399dd);
   mini.mat.emissive && mini.mat.emissive.setHex(0x0a2a44);
