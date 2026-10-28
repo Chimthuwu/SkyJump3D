@@ -8556,6 +8556,7 @@ let d3GulletBossFloor = null;     // Boss arena floor
 let d3GulletBossOutline = null;   // Tell on real boss
 let d3SecondMouth = null;         // The Second Mouth surreal unique
 let d3ArenaShrink = 0;            // Arena shrink amount from Second Mouth
+let d3ArenaCenter = null;         // {x, z} of THE GULLET's own boss arena — breath forces are relative to THIS, not world origin, and only apply nearby
 
 function gulletDeco(hub, i, levels, slab) {
   if (!slab) return;
@@ -8612,26 +8613,30 @@ function updateTheGullet(dt) {
   const inhaleStrength = d3BreathPhase === 0 ? (1 - cyclePos / 0.4) : 0;
   const exhaleStrength = d3BreathPhase === 1 ? ((cyclePos - 0.4) / 0.4) : 0;
 
-  // Apply breath forces to player
-  if (d3BreathPhase === 0) { // Inhale: pull up and narrow
-    vel.y += dt * 8 * inhaleStrength;
-    // Horizontal pull toward center
-    const toCenterX = -pos.x * 0.1 * inhaleStrength;
-    const toCenterZ = -pos.z * 0.1 * inhaleStrength;
-    vel.x += toCenterX * dt * 10;
-    vel.z += toCenterZ * dt * 10;
-  } else if (d3BreathPhase === 1) { // Exhale: push down and widen
-    vel.y -= dt * 10 * exhaleStrength;
-    // Horizontal push away from center
-    const awayX = pos.x * 0.15 * exhaleStrength;
-    const awayZ = pos.z * 0.15 * exhaleStrength;
-    vel.x += awayX * dt * 10;
-    vel.z += awayZ * dt * 10;
+  // Breath forces (and the digestion meter below) only apply inside THE GULLET's own arena —
+  // this used to run unconditionally everywhere in THE BETWEEN, every ~4s, pulling/pushing the
+  // player toward world origin (0,0) regardless of location. Gate on real proximity instead.
+  const nearGullet = d3ArenaCenter && Math.hypot(pos.x - d3ArenaCenter.x, pos.z - d3ArenaCenter.z) < 60;
+  if (nearGullet) {
+    // Apply breath forces to player (relative to the arena's own center, not world origin)
+    if (d3BreathPhase === 0) { // Inhale: pull up and narrow
+      vel.y += dt * 8 * inhaleStrength;
+      const toCenterX = (d3ArenaCenter.x - pos.x) * 0.1 * inhaleStrength;
+      const toCenterZ = (d3ArenaCenter.z - pos.z) * 0.1 * inhaleStrength;
+      vel.x += toCenterX * dt * 10;
+      vel.z += toCenterZ * dt * 10;
+    } else if (d3BreathPhase === 1) { // Exhale: push down and widen
+      vel.y -= dt * 10 * exhaleStrength;
+      const awayX = (pos.x - d3ArenaCenter.x) * 0.15 * exhaleStrength;
+      const awayZ = (pos.z - d3ArenaCenter.z) * 0.15 * exhaleStrength;
+      vel.x += awayX * dt * 10;
+      vel.z += awayZ * dt * 10;
+    }
   }
 
-  // Digestion meter: fills while player is still
+  // Digestion meter: fills while player is still — only while actually inside the arena
   const speed = Math.hypot(vel.x, vel.z);
-  if (speed < 1) {
+  if (nearGullet && speed < 1) {
     d3DigestionMeter = Math.min(d3DigestionMax, d3DigestionMeter + dt * 5);
   } else {
     d3DigestionMeter = Math.max(0, d3DigestionMeter - dt * 3);
@@ -8736,6 +8741,7 @@ function d3FeedSecondMouth() {
 function buildDungeonTheGullet(mouth, dungeonIndex) {
   if (!mouth) return;
   const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, GULLET_ZONE, 9, 'pit', gulletDeco);
+  d3ArenaCenter = { x: last.x, z: last.z };
   const mini = swapArenaBoss(A, 'walker', 'uvula', 2.5, 60, 'THE UVULA', dungeonIndex);
   mini.mat.color.setHex(0xcc3355);
   mini.mat.emissive && mini.mat.emissive.setHex(0x441118);
