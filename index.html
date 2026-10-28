@@ -757,7 +757,7 @@ const scene = new THREE.Scene(); scene.matrixAutoUpdate = false;        // the s
   scene.background = new THREE.CanvasTexture(c);
 }
 scene.fog = new THREE.Fog(0x1a1038, 60, 260);
-const camera = new THREE.PerspectiveCamera(60, RETRO_WIDTH / RETRO_HEIGHT, 0.3, 2500);
+const camera = new THREE.PerspectiveCamera(60, RETRO_WIDTH / RETRO_HEIGHT, 1.0, 2500);
 resizeRenderer();
 const hemi = new THREE.HemisphereLight(0x7c86df, 0x0a0b18, 0.3);
 scene.add(hemi);
