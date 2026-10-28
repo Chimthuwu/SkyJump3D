@@ -455,6 +455,108 @@ Status: Rent's Due built (uncommitted - see Done). Nostalgia Overdose built the 
 - 2026-10-24 — Retro/NOS pass: bounded CSS fix (line 43 dither) chosen over new egg features. Checkpoint SHA: e6fc920.
 - 2026-10-26 — Scrolling parallax skyline added as CSS-only bounded step (line 46); remaining sprite billboards + floating plates for next worker. No ambiguity, no checkpoint needed.
 
+## CONTEXT (why this exists)
+
+A previous attempt at a new level ("THE BETWEEN") failed. It drifted too far from Lvl1's feel, introduced new mechanics, and added systems that didn't belong in the game. This plan explicitly prevents that.
+
+**The rule: every new level must feel like the same game as Lvl1 (Lil Spasticism).** Same physics, same enemies, same biomes, same fall-and-respawn loop, same moon, same hell platforms, same co-op. The ONLY things that change between levels are:
+1. What the platforms *are* (mountains, trees, clouds — not skyscrapers).
+2. Where the player spawns (e.g. on top of a giant cloud).
+3. The themes inside the dungeons.
+
+Nothing else. No new verbs. No new systems. No reskin of the whole game.
+
+---
+
+## HARD RULES — MUST remain identical to Lvl1
+
+Do not change any of the following in any new level:
+
+- Movement constants: `GRAV 30`, `JUMP 11.5`, `JUMP2 10`, coyote time, mantle, wall-climb, hoverboard glide, double-jump.
+- The **fall-to-bottom → respawn from sky** loop (signature mechanic).
+- The **moon**, skybox, space layer, zero-G band at the top.
+- The **`-1` and `-2` hell platforms** at the bottom.
+- Every biome currently in `ZONES` (Jungle, Frozen, Inferno, Storm, Horror, Psychedelic, Beach, Rave, Hellscape, Glitch, Kaomoji, + any custom biomes locally present).
+- Every existing enemy family — same AI, same behavior. Skins may vary. No forks.
+- Co-op (host-authoritative, seeded generation, no network geometry).
+- Boss framework (Guardian-style arenas).
+- Seeded deterministic level generation.
+
+**No new mechanics. No new physics. No new verbs. No Lovecraftian reskin. No sanity meter. No gravity reorient. No global rewrites.**
+
+---
+
+## LEVEL 1 — Lil Spasticism: Add two dungeons
+
+Do not rebuild Lvl1. Do not touch the existing three dungeons (Pussy Palace, Haunted House, Giant Mushroom). Only add two new ones using the same dungeon framework.
+
+- [ ] **Dungeon A** — unique theme, same framework as existing dungeons. Placeholder ideas: *Bone Cathedral*, *Flesh Pit*, *Meat Maze*.
+- [ ] **Dungeon B** — unique theme, same framework. Placeholder ideas: *Bubble Citadel*, *Clockwork Tower*, *Crystal Void*.
+
+After this, Lvl1 has 5 dungeons total. **All other levels must match this exact count.**
+
+---
+
+## LEVEL 2 — "The Overgrowth" (Forest level)
+
+Platforms are **giant tree trunks, branches, mushroom caps, and hanging vines** instead of skyscrapers.
+
+- Player spawns on top of the tallest tree, above the canopy layer.
+- Layout descends through foliage tiers. Organic, not a tower. Horizontal AND vertical — mixed.
+- Biomes map onto forest variants (Jungle = natural jungle, Frozen = winter forest, Inferno = burning undergrowth, etc.). Every biome in `ZONES` must still be reachable and readable.
+- Same fall-to-sky respawn, same moon, same `-1`/`-2` hell layer at the bottom (rooted through magma).
+- **Same number of dungeons as Lvl1** (5). Same framework. Placeholder themes OK: *Root Hollow*, *Beast Nest*, *Sunken Stump*, *Spore Vault*, *Canopy Temple*.
+
+---
+
+## LEVEL 3 — "The Ascent" (Mountain level)
+
+Platforms are **floating mountain fragments, cliff ledges, rock spires, and snow-capped peaks**.
+
+- Player spawns on the highest summit, above the cloud line.
+- Layout descends through cliff tiers and broken peaks. Rocky, expansive, readable.
+- Biomes re-skinned as alpine variants (same biome gameplay, new geometry and palette).
+- Same fall-to-sky respawn, same moon, same `-1`/`-2` hell layer at the bottom (magma core).
+- **Same number of dungeons as Lvl1** (5). Placeholder themes OK: *Mine Shaft*, *Crystal Grotto*, *Avalanche Vault*, *Eagle's Aerie*, *Deep Cavern*.
+
+---
+
+## LEVEL 4 — "Skyfall" (Cloud level)
+
+Platforms are **solid clouds, floating islands, and weather formations**. Player literally spawns on top of a giant cloud.
+
+- Player spawns on a massive central cloud deck.
+- Layout descends through atmospheric layers (storm band → clear air → lower clouds → bedrock).
+- Biomes re-skinned as sky/weather variants (Storm = storm clouds, Rave = aurora clouds, etc.).
+- Same fall-to-sky respawn, same moon (visible above the cloud deck), same `-1`/`-2` hell layer below the cloud floor.
+- **Same number of dungeons as Lvl1** (5). Placeholder themes OK: *Cloud Castle*, *Sky Temple*, *Aurora Vault*, *Thunder Dock*, *Floating Ruin*.
+
+---
+
+## DELIVERABLES (for future execution — do not start now)
+
+- [ ] Lvl1 has 5 dungeons (3 existing + 2 new).
+- [ ] Lvl2 "The Overgrowth" — full forest level, 5 dungeons.
+- [ ] Lvl3 "The Ascent" — full mountain level, 5 dungeons.
+- [ ] Lvl4 "Skyfall" — full cloud level, 5 dungeons.
+- [ ] All four levels share identical physics, enemies, biomes, moon, hell platforms, and co-op.
+
+---
+
+## ACCEPTANCE CRITERIA (for future execution)
+
+- A player dropped into Lvl2/3/4 cannot tell they are not playing Lvl1 except for what the platforms look like and what's inside the dungeons.
+- Fall-to-sky respawn, moon, space, `-1`/`-2` hell platforms, all biomes — all present and identical to Lvl1.
+- No new mechanics, no new verbs, no new systems, no new physics.
+- Co-op behaves identically to Lvl1 in every new level.
+- Every level has the same number of dungeons as Lvl1 after its two additions.
+
+---
+
+## END OF TODO ADDITION
+
+Agent: stop now. Only `todo.md` should have changed.
+
 ## Minecraft-style building and crafting mechanics (requested 2026-10-29)
 - Hotbar (9 slots, bottom-center, Minecraft styling) — already partially implemented in index.html via `#hotbar` CSS + `slot.sel` white outline; [1]=blade, [2]=builder hand, rest reserved
 - Biome resource system: city STONE, Jungle WOOD, Inferno EMBER, Frozen LEAF, Psy/Storm CYBERITE with `RESLOAD` mine charges
