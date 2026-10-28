@@ -6926,6 +6926,29 @@ function buildBetween() {
   well.isGravityWell = true; well.active = false; well.anchors = []; well.anchorsActive = 0; betweenWell = well;
   for (let d = 0; d < dungeonCount; d++) well.anchors.push({ dungeonIndex: d, active: false });
 
+  // 6b) THE MOON: moonless levels never build the default level's moon sphere (gated `if (!moonless)` in
+  // buildSkyway), so THE BETWEEN had NO visible moon at all despite its entire endgame being "launch to the
+  // Moon" — moonReached()'s eye-blink ending referenced a 'moonEye' object that was never created. This is
+  // THE BETWEEN's own moon: not a copy of descent's cratered-sphere-with-colosseum, a watching Eye looming
+  // directly above the Well, visible from the Canopy, reached by the launch sequence (phase 3 triggers ~y=800).
+  {
+    const moonY = 860, moonRad = 190;
+    const moonBody = new THREE.Mesh(new THREE.SphereGeometry(moonRad, 24, 16), new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.ichorBlack, fog: false }));
+    moonBody.position.set(0, moonY, 0); scene.add(moonBody);
+    const moonGlow = new THREE.Mesh(new THREE.SphereGeometry(moonRad * 1.05, 20, 12), new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.voidPurple, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide, fog: false }));
+    moonGlow.position.copy(moonBody.position); scene.add(moonGlow);
+    // the Eye: a sclera disc facing down toward the Well + an iris/pupil, named 'moonEye' so moonReached()'s
+    // ending (eye.scale.y = 0.01, a blink) actually has something to animate.
+    const sclera = new THREE.Mesh(new THREE.CircleGeometry(moonRad * 0.38, 24), new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.pallidFlesh, fog: false }));
+    sclera.position.set(0, moonY - moonRad * 0.72, 0); sclera.rotation.x = -Math.PI / 2; sclera.name = 'moonEye'; scene.add(sclera);
+    const iris = new THREE.Mesh(new THREE.CircleGeometry(moonRad * 0.16, 20), new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.bioluminescent, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    iris.position.set(0, moonY - moonRad * 0.71, 0); iris.rotation.x = -Math.PI / 2; scene.add(iris);
+    const pupil = new THREE.Mesh(new THREE.CircleGeometry(moonRad * 0.055, 16), new THREE.MeshBasicMaterial({ color: 0x000000, fog: false }));
+    pupil.position.set(0, moonY - moonRad * 0.705, 0); pupil.rotation.x = -Math.PI / 2; scene.add(pupil);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, moonY - 20, 10), new THREE.MeshBasicMaterial({ color: LOVECRAFT_PALETTE.whisperViolet, transparent: true, opacity: 0.08, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    beam.position.set(0, (moonY - 20) / 2 + 10, 0); scene.add(beam);
+  }
+
   // 7) The wiring engine: 5 named combo archetypes + enough filler circuits to reach 20+, 3+ global
   buildBetweenWiring(sectors, sectorCenterX, CANOPY_Y);
 
