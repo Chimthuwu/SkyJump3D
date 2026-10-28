@@ -348,7 +348,7 @@ let TOP = 190;            // roof height of the tower (grows each level)
 let level = 1;
 // LEVEL DEFINITION: which selectable level is live. 'descent' (Lil Spasticism) is the original game and every gate below is a no-op for it.
 // Set by LEVELS[i].startFn before buildLevel(); everything level-specific is gated on rentOn() / levelDef.id so the default level is unchanged.
-const LEVEL_DEFS = { descent: { id: 'descent' }, rent: { id: 'rent' }, nos: { id: 'nos' }, gut: { id: 'gut' }, arena: { id: 'arena' } };
+const LEVEL_DEFS = { descent: { id: 'descent' }, rent: { id: 'rent' }, nos: { id: 'nos' }, gut: { id: 'gut' }, arena: { id: 'arena' }, between: { id: 'between' } };
 let levelDef = LEVEL_DEFS.descent;
 const rentOn = () => levelDef.id === 'rent';
 let nosPipes = [], pipeCd = 0, pipeHeld = true;                                  // Nostalgia Overdose warp pipes (rebuilt with the level)
@@ -390,6 +390,7 @@ addEventListener('keydown', e => {
 const nosOn = () => levelDef.id === 'nos';                     // Nostalgia Overdose (VHS / retro-future)
 const gutOn = () => levelDef.id === 'gut';                       // The Gut (body-horror descent through something alive)
 const arenaOn = () => levelDef.id === 'arena';                   // THE ARENAS: closed deathmatch chambers (UT99/Q3 layouts, rebuilt)
+const betweenOn = () => levelDef.id === 'between';               // THE BETWEEN: Lovecraftian seam between Moon and Mars
 const themeZones = () => rentOn() ? RENT_ZONES : nosOn() ? NOS_ZONES : gutOn() ? GUT_ZONES : null;      // a themed level's own 3-zone ladder (null = the default descent)
 const setLevelDefById = id => { levelDef = LEVEL_DEFS[id] || LEVEL_DEFS.descent; };      // net: adopt the host's selected level definition
 const TH = 16;           // tower half-width
@@ -399,9 +400,12 @@ const MAX_BONUS_HEARTS = 7;                  // commons +1, each mid-band boss +
 let commons = null;                          // the shared launch-pad ring + purge contract, rebuilt with each level
 const GRAV = 30, TERM = 50;
 const JUMP = 11.5, JUMP2 = 10, RUN = 9;
+const BETWEEN_GRAV_MULT = 0.35;                        // THE BETWEEN: permanent low gravity (0.35x)
 const PH = 1.8, PW = 0.45;            // player height / half-width
 const GLIDE_FALL = 3.0, GLIDE_TIME = 8;          // long parachute: levels are tall now
 const SPLAT = 47;                     // impact speed that kills outright
+const BETWEEN_FALL_MUL = Math.sqrt(BETWEEN_GRAV_MULT); // ~0.59 — impact speed scales with sqrt(gravity)
+const BETWEEN_JUMP_MUL = Math.sqrt(BETWEEN_GRAV_MULT); // ~0.59 — jump velocity scaled so max height ~same, air time longer
 
 // ---------- helpers ----------
 let seed = 11, levelSeed = 11;
@@ -817,6 +821,7 @@ const SKY_PROFILES = {
   arena: { skyTop: '#02030c', skyMid: '#0b1030', skyBottom: '#231a4a', fogColor: 0x0b1030, fogDensity: 0.0015, sunVisible: false, sunColor: 0x8a9aff, stars: true, groundRing: false },      // deep starfield void over every duel chamber
   rent: { skyTop: '#32120a', skyMid: '#a74f22', skyBottom: '#f18a45', fogColor: 0x9a4a2d, fogDensity: 0.0018, sunVisible: false, sunColor: 0xff9b4a, stars: false, groundRing: false },
   nos: { skyTop: '#260044', skyMid: '#a32283', skyBottom: '#ff7b63', fogColor: 0x8d276c, fogDensity: 0.0014, sunVisible: true, sunColor: 0xffd23a, stars: false, groundRing: false },
+  between: { skyTop: '#020008', skyMid: '#0a001a', skyBottom: '#1a0030', fogColor: 0x0a001a, fogDensity: 0.0012, sunVisible: false, sunColor: 0x361050, stars: true, groundRing: false }, // abyssal bioluminescent
 };
 const starts = Array.from({ length: HOME_SLOT_COUNT }, () => ({ x: 10, y: TOP, z: 0 }));
 const startHubs = Array.from({ length: HOME_SLOT_COUNT }, (_, slot) => ({ kind: 'start', slot, universe: slot, x: 0, z: 0, top: TOP, hw: TH, hd: TH, zone: null, r: 20, active: true }));
@@ -3333,70 +3338,86 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
         M(bx2, trim, x, 160, -28, 6, 8, 7);
       }
 
-      // THE GATE: sculpted external anatomy, modeled as a framed entrance rather than a single pale oval.
+      // Gate recess sits behind a continuous, broad arch of warm tissue like the mockup.
       const opening = new THREE.Shape();
-      opening.moveTo(-11, 0); opening.lineTo(-11, 47); opening.quadraticCurveTo(-10, 62, 0, 66);
-      opening.quadraticCurveTo(10, 62, 11, 47); opening.lineTo(11, 0); opening.closePath();
-      M(new THREE.ShapeGeometry(opening, 16), glow(0x170714), 0, 0, 31.5);
-      // Gradient vertex colors and softly shaded flesh match the roaming MAW instead of flat neon ellipsoids.
-      const fleshGradient = (top, bottom) => {
-        const geo = new THREE.SphereGeometry(1, 20, 14), P = geo.attributes.position;
-        const colors = new Float32Array(P.count * 3), a = new THREE.Color(top), b = new THREE.Color(bottom), c = new THREE.Color();
-        for (let i = 0; i < P.count; i++) { c.copy(b).lerp(a, (P.getY(i) + 1) * 0.5); colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b; }
-        geo.setAttribute('color', new THREE.BufferAttribute(colors, 3)); return geo;
-      };
-      const softGlow = (opacity = 1) => new THREE.MeshBasicMaterial({ vertexColors: true, transparent: opacity < 1, opacity, toneMapped: false, fog: false });
-      const outerFlesh = softGlow(), innerFlesh = softGlow();
-      const membrane = (side, bottom, top, maxWidth, centerX, centerBend, zBase, bulge, colors) => {
-        const rows = 36, cols = 14, centerY = (bottom + top) * 0.5;
-        const positions = [], vertexColors = [], indices = [];
-        const cTop = new THREE.Color(colors[0]), cBottom = new THREE.Color(colors[1]), color = new THREE.Color(), warmRim = new THREE.Color(0xffd2ad), coolShadow = new THREE.Color(0x8d274f);
-        for (let iy = 0; iy <= rows; iy++) {
-          const t = iy / rows, y = bottom + (top - bottom) * t, taper = Math.pow(Math.sin(Math.PI * t), 0.62);
-          const halfWidth = maxWidth * (0.1 + 0.9 * taper), cx = side * (centerX + centerBend * Math.sin(Math.PI * t));
-          for (let ix = 0; ix <= cols; ix++) {
-            const u = ix / cols * 2 - 1, rounded = Math.sqrt(Math.max(0, 1 - u * u));
-            positions.push(cx + side * u * halfWidth, y - centerY, bulge * taper * rounded);
-            const centerTint = 1 - Math.min(1, Math.abs(u) * 1.35);
-            color.copy(cBottom).lerp(cTop, t).lerp(warmRim, Math.pow(rounded, 5) * 0.22).lerp(coolShadow, centerTint * 0.12).multiplyScalar(0.86 + 0.14 * rounded);
-            vertexColors.push(color.r, color.g, color.b);
-            if (iy < rows && ix < cols) {
-              const a = iy * (cols + 1) + ix, b = a + cols + 1;
-              if (side > 0) indices.push(a, b, a + 1, b, b + 1, a + 1);
-              else indices.push(a, a + 1, b, b, a + 1, b + 1);
-            }
+      opening.moveTo(-12, 7); opening.lineTo(-12, 49); opening.quadraticCurveTo(-10, 65, 0, 67);
+      opening.quadraticCurveTo(10, 65, 12, 49); opening.lineTo(12, 7); opening.closePath();
+      M(new THREE.ShapeGeometry(opening, 20), glow(0x170714), 0, 0, 31.5);
+      const archRows = 40, archCols = 56, archPositions = [], archColors = [], archIndices = [];
+      const archWidths = [[0, 28], [0.08, 34], [0.24, 37], [0.46, 36], [0.66, 32], [0.82, 24], [0.94, 13], [1, 8]];
+      const archTop = new THREE.Color(0xffd5b8), archBase = new THREE.Color(0xc18a74), archHighlight = new THREE.Color(0xffe1c9), archColor = new THREE.Color();
+      for (let iy = 0; iy <= archRows; iy++) {
+        const t = iy / archRows, y = 8 + t * 64;
+        let wi = 0; while (wi < archWidths.length - 2 && t > archWidths[wi + 1][0]) wi++;
+        const ta = archWidths[wi][0], tb = archWidths[wi + 1][0], f0 = THREE.MathUtils.clamp((t - ta) / (tb - ta), 0, 1), f = f0 * f0 * (3 - 2 * f0);
+        const halfWidth = THREE.MathUtils.lerp(archWidths[wi][1], archWidths[wi + 1][1], f);
+        for (let ix = 0; ix <= archCols; ix++) {
+          const u = ix / archCols * 2 - 1, x = u * halfWidth, edge = Math.pow(Math.max(0, 1 - Math.abs(u)), 0.55);
+          const z = 45 + 4.8 * (1 - u * u) * Math.sin(Math.PI * (0.12 + t * 0.78));
+          archPositions.push(x, y - 36, z);
+          archColor.copy(archBase).lerp(archTop, THREE.MathUtils.smoothstep(t, 0, 1)).lerp(archHighlight, edge * 0.18);
+          archColors.push(archColor.r, archColor.g, archColor.b);
+          if (iy < archRows && ix < archCols) { const a = iy * (archCols + 1) + ix, b = a + archCols + 1; archIndices.push(a, b, a + 1, b, b + 1, a + 1); }
+        }
+      }
+      const archGeo = new THREE.BufferGeometry();
+      archGeo.setAttribute('position', new THREE.Float32BufferAttribute(archPositions, 3));
+      archGeo.setAttribute('color', new THREE.Float32BufferAttribute(archColors, 3)); archGeo.setIndex(archIndices); archGeo.computeVertexNormals();
+      const archMesh = new THREE.Mesh(archGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, toneMapped: false, fog: false }));
+      archMesh.position.set(0, 36, 0); archMesh.userData.noCull = true; g.add(archMesh);
+      entranceFolds.push({ mesh: archMesh, x: 0, y: 36, z: 0, sx: 1, sy: 1, sz: 1, lift: 0.18 });
+
+      // Two inset, tapered inner folds sit inside the arch; the open slit remains narrow and centered.
+      const innerRows = 36, innerCols = 18;
+      const innerTop = new THREE.Color(0xffb5c7), innerBase = new THREE.Color(0xa93658), innerShade = new THREE.Color(0x741638), innerColor = new THREE.Color();
+      for (const side of [-1, 1]) {
+        const positions = [], colors = [], indices = [];
+        for (let iy = 0; iy <= innerRows; iy++) {
+          const t = iy / innerRows, y = 13 + t * 49, taper = Math.pow(Math.sin(Math.PI * t), 0.55);
+          const innerX = 3.6 + 0.45 * Math.sin(Math.PI * t), outerX = 5.4 + 10.5 * taper;
+          for (let ix = 0; ix <= innerCols; ix++) {
+            const u = ix / innerCols, x = side * THREE.MathUtils.lerp(innerX, outerX, u);
+            const z = 51.5 + 1.8 * Math.sin(Math.PI * u) * taper;
+            positions.push(x, y - 36, z);
+            innerColor.copy(innerBase).lerp(innerTop, 0.25 + 0.58 * (1 - u)).lerp(innerShade, u * 0.16);
+            colors.push(innerColor.r, innerColor.g, innerColor.b);
+            if (iy < innerRows && ix < innerCols) { const a = iy * (innerCols + 1) + ix, b = a + innerCols + 1; indices.push(a, b, a + 1, b, b + 1, a + 1); }
           }
         }
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-        geo.setAttribute('color', new THREE.Float32BufferAttribute(vertexColors, 3));
-        geo.setIndex(indices); geo.computeVertexNormals(); return { geo, centerY, zBase };
-      };
-      const addMembrane = (side, bottom, top, width, centerX, bend, zBase, bulge, colors, material) => {
-        const made = membrane(side, bottom, top, width, centerX, bend, zBase, bulge, colors);
-        const mesh = new THREE.Mesh(made.geo, material); mesh.position.set(0, made.centerY, made.zBase);
-        mesh.material.side = THREE.DoubleSide; mesh.userData.noCull = true; g.add(mesh); return mesh;
-      };
-      // Keep one broad, clean cleft in front of the doorway; the paired folds meet around it without a separate cap or dangling trim.
-      const cleftShape = new THREE.Shape();
-      cleftShape.moveTo(-2.1, 9); cleftShape.bezierCurveTo(-4.1, 21, -4.6, 39, -3.8, 49);
-      cleftShape.quadraticCurveTo(0, 54, 3.8, 49); cleftShape.bezierCurveTo(4.6, 39, 4.1, 21, 2.1, 9);
-      cleftShape.quadraticCurveTo(0, 6, -2.1, 9);
-      const cleftMat = new THREE.MeshBasicMaterial({ color: 0x4b0925, transparent: true, opacity: 0.92, fog: false, toneMapped: false });
-      const cleft = new THREE.Mesh(new THREE.ShapeGeometry(cleftShape, 16), cleftMat);
-      cleft.position.set(0, 0, 52); cleft.userData.noCull = true; g.add(cleft);
-      // Broader, lower swept membranes form two joined masses around the readable central cleft.
-      for (const side of [-1, 1]) {
-        const outerLip = addMembrane(side, 7, 64, 16, 19, 1.1, 35, 15, [0xffd0ae, 0xb95d69], outerFlesh);
-        entranceFolds.push({ mesh: outerLip, x: 0, y: 35.5, z: 35, sx: 1, sy: 1, sz: 1, lift: 0.3 });
-        const innerLip = addMembrane(side, 10, 56, 4.2, 5.1, 0.55, 44.5, 7.2, [0xffb2c2, 0x9e2248], innerFlesh);
-        entranceFolds.push({ mesh: innerLip, x: 0, y: 33, z: 44.5, sx: 1, sy: 1, sz: 1, lift: 0.2 });
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3)); geo.setIndex(indices); geo.computeVertexNormals();
+        const fold = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, toneMapped: false, fog: false }));
+        fold.userData.noCull = true; g.add(fold);
+        entranceFolds.push({ mesh: fold, x: 0, y: 36, z: 0, sx: 1, sy: 1, sz: 1, lift: 0.12 });
       }
-      // A pair of short, soft sheen marks follows the pulse without adding dangling strings or balloon-like outlines.
-      const wet = new THREE.MeshBasicMaterial({ color: 0xffe0e7, transparent: true, opacity: 0.72, fog: false, toneMapped: false });
+
+      const cleftShape = new THREE.Shape();
+      cleftShape.moveTo(-2.1, 12); cleftShape.bezierCurveTo(-2.8, 22, -2.7, 42, -2.2, 51);
+      cleftShape.quadraticCurveTo(0, 54, 2.2, 51); cleftShape.bezierCurveTo(2.7, 42, 2.8, 22, 2.1, 12);
+      cleftShape.quadraticCurveTo(0, 9, -2.1, 12);
+      const cleftMat = new THREE.MeshBasicMaterial({ color: 0x31091c, transparent: true, opacity: 0.94, fog: false, toneMapped: false });
+      const cleft = new THREE.Mesh(new THREE.ShapeGeometry(cleftShape, 20), cleftMat);
+      cleft.position.set(0, 0, 55.3); cleft.userData.noCull = true; g.add(cleft);
+      const innerRimMat = new THREE.MeshBasicMaterial({ color: 0xffc1d1, transparent: true, opacity: 0.82, fog: false, toneMapped: false });
       for (const side of [-1, 1]) {
-        const highlight = M(sp2, wet, side * 26, 38, 46.5, 0.34, 2.6, 0.32);
-        wetHighlights.push({ mesh: highlight, sx: 0.34, sy: 2.6, sz: 0.32, opacity: 0.72, breathAmount: 0.018 });
+        const curve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(side * 3.1, 13, 55.4), new THREE.Vector3(side * 3.8, 24, 55.7),
+          new THREE.Vector3(side * 4.0, 40, 55.7), new THREE.Vector3(side * 3.2, 52, 55.2)
+        ]);
+        const rim = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.42, 6, false), innerRimMat); rim.userData.noCull = true; g.add(rim);
+        wetHighlights.push({ mesh: rim, sx: 1, sy: 1, sz: 1, opacity: 0.82, breathAmount: 0.015 });
+      }
+      // Small hood blends into the arch crown, rather than reading as a separate round cap.
+      const hoodGeo = new THREE.SphereGeometry(1, 16, 10), hp = hoodGeo.attributes.position, hoodColors = new Float32Array(hp.count * 3);
+      const hoodTop = new THREE.Color(0xffd0dc), hoodBottom = new THREE.Color(0xe56f98), hc = new THREE.Color();
+      for (let i = 0; i < hp.count; i++) { hc.copy(hoodBottom).lerp(hoodTop, (hp.getY(i) + 1) * 0.5); hoodColors[i * 3] = hc.r; hoodColors[i * 3 + 1] = hc.g; hoodColors[i * 3 + 2] = hc.b; }
+      hoodGeo.setAttribute('color', new THREE.BufferAttribute(hoodColors, 3));
+      const hood = M(hoodGeo, new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: false }), 0, 62, 54, 5.2, 3.4, 1.45);
+      entranceFolds.push({ mesh: hood, x: 0, y: 62, z: 54, sx: 5.2, sy: 3.4, sz: 1.45, lift: 0.1 });
+      const wetPink = new THREE.MeshBasicMaterial({ color: 0xff8fb0, transparent: true, opacity: 0.78, fog: false, toneMapped: false });
+      for (const [x, y, len] of [[-4.4, 13, 6], [4.4, 13, 5], [0, 10, 8]]) {
+        const drip = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.055, len, 7).translate(0, -len / 2, 0), wetPink);
+        drip.position.set(x, y, 54.8); drip.userData.noCull = true; g.add(drip);
+        wetDrips.push({ mesh: drip, x, y, rz: 0, phase: y * 0.17 });
       }
 
       // Feminine detailing on the existing castle: rose-window rosette, curved cornices and slim blush banners.
@@ -3450,7 +3471,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
           cloudMotion.push({ mesh: puff, angle, radius, radiusWobble: 1.5, puffX: dx, puffZ: dz, y: dy, sx, sy, sz, phase: i * 0.73 + dx * 0.04 + dz * 0.03, orbitSpeed: 0.012 + (i % 3) * 0.0015, bob: 0.2 });
         }
       }
-      palaceMotions.push({ clouds: cloudMotion, highlights: wetHighlights, drips: wetDrips, folds: entranceFolds, clefts: [{ material: cleftMat, opacity: 0.92 }], breathPhase: palaceMotions.length * 1.7 });
+      palaceMotions.push({ clouds: cloudMotion, highlights: wetHighlights, drips: wetDrips, folds: entranceFolds, clefts: [{ material: cleftMat, opacity: 0.86 }], breathPhase: palaceMotions.length * 1.7 });
       // Masonry frame stones tie the living gate back into the castle wall.
       for (const side of [-1, 1]) M(bx2, deepStone, side * 27, 39, 31, 1.5, 72, 1.5);
     } else if (kind === 'house') {                     // crooked gothic keep: candlelit windows and an unmistakable spired silhouette
@@ -6591,7 +6612,7 @@ function buildLevel() {
   applyTheme();
   TOP = nosOn() ? Math.min(220 + level * 30, 420) : Math.min(480 + level * 100, 1200);       // MUCH taller towers (Nostalgia Overdose is a road level: a short fall)
   syncStartLayout(sixTowerLayout); checkpoint = { ...start };
-  seed = 11 + level * 97 + (rentOn() ? 5003 : nosOn() ? 8009 : gutOn() ? 11003 : arenaOn() ? 13337 : 0); gutVeins = 0; levelSeed = seed;      // each level family gets its own layout seed; the default level's seed is unchanged
+  seed = 11 + level * 97 + (rentOn() ? 5003 : nosOn() ? 8009 : gutOn() ? 11003 : arenaOn() ? 13337 : betweenOn() ? 17003 : 0); gutVeins = 0; levelSeed = seed;      // each level family gets its own layout seed; the default level's seed is unchanged
   arenaResetBuild();                                                            // THE ARENAS: clear chamber state before the body rebuilds it
   commons = null;                                                               // THE COMMONS: rebuilt by buildNetwork for the default level
   palaceMotions.length = 0; palaceMotionClock = 0;
@@ -6649,7 +6670,126 @@ function belowZeroLoop() {
   if (state !== 'play' || y === undefined) { respawn(); return; }
   pos.set(belowZeroEntry.x, y + 3, belowZeroEntry.z); vel.set(0, -4, 0); onGround = false; toast(rentOn() ? 'COLLECTIONS HELL' : 'THE VCR', 1800);
 }
+
+// ===================== THE BETWEEN — buildBetween() =====================
+// Scaffold: horizontal Canopy spine, four Beacons, six dungeon mouths, Foundation at y=0, Gravity Well stub.
+// This is the Phase 0 scaffold — real geometry comes in Phase 1+.
+function buildBetween() {
+  // 1) Disable VOID_Y loop for this level — hard floor at y=0
+  // VOID_Y is still defined globally but we won't call belowZeroLoop; instead we add a hard collider at y=0.
+  // The physics step already clamps to solids; we just need a massive Foundation slab at y=0.
+
+  // 2) Sync start layout for 4 Beacons (not 6 towers) — override the ring layout
+  // We reuse startHubs[] but only activate 4 slots, positioned left-to-right on the Canopy.
+  const CANOPY_Y = 120;                           // spawn height — horizontal spine
+  const CANOPY_LENGTH = 600;                      // total span of the Canopy
+  const BEACON_COUNT = 4;
+  const beaconSpacing = CANOPY_LENGTH / (BEACON_COUNT - 1); // ~200m between beacons
+
+  // Deactivate all 6 start hubs, then activate 4 as Beacons on the Canopy
+  for (let i = 0; i < HOME_SLOT_COUNT; i++) startHubs[i].active = false;
+  for (let b = 0; b < BEACON_COUNT; b++) {
+    const x = -CANOPY_LENGTH / 2 + b * beaconSpacing;
+    const z = 0;
+    const hub = startHubs[b];
+    hub.active = true;
+    hub.kind = 'beacon';
+    hub.x = x; hub.z = z; hub.top = CANOPY_Y;
+    hub.hw = 12; hub.hd = 12; hub.r = 15;
+    hub.zone = ZONES[0]; // default zone, will be overridden per beacon
+    starts[b].x = x; starts[b].y = CANOPY_Y + 1; starts[b].z = z;
+  }
+  // Clamp extra players (5th–8th) to Beacon 1
+  for (let b = BEACON_COUNT; b < HOME_SLOT_COUNT; b++) {
+    starts[b].x = starts[0].x; starts[b].y = starts[0].y; starts[b].z = starts[0].z;
+  }
+  mySlot = Math.min(mySlot, BEACON_COUNT - 1);
+  start = starts[mySlot];
+  checkpoint = { ...start };
+
+  // 3) Build the Canopy spine — a long horizontal platform at CANOPY_Y
+  const canopyHalf = CANOPY_LENGTH / 2;
+  const canopySlab = addSlab(0, CANOPY_Y, 0, canopyHalf, 8, 2, ZONES[0], false);
+  canopySlab.isCanopy = true;
+  // Visual: a distinct spine material
+  canopySlab.slab.material.color.setHex(0x1a0a2e);
+  canopySlab.slab.material.emissive.setHex(0x361050);
+  canopySlab.slab.material.emissiveIntensity = 0.4;
+
+  // 4) Build four Beacons on the Canopy — each is a landmark + grounding anchor
+  const beaconNames = ['The Shallow Landing', 'The Lattice Gate', 'The Drowned Aisle', 'The Seam'];
+  const beaconZones = [ZONES[0], ZONES[ZONES.findIndex(z => z.name === 'Psychedelic') >= 0 ? ZONES.findIndex(z => z.name === 'Psychedelic') : 0], ZONES[ZONES.findIndex(z => z.name === 'Horror') >= 0 ? ZONES.findIndex(z => z.name === 'Horror') : 0], ZONES[ZONES.findIndex(z => z.name === 'Inferno') >= 0 ? ZONES.findIndex(z => z.name === 'Inferno') : 0]];
+  for (let b = 0; b < BEACON_COUNT; b++) {
+    const hub = startHubs[b];
+    const bx = hub.x, bz = hub.z;
+    // Beacon light column
+    const beamGeo = new THREE.CylinderGeometry(0.6, 0.6, 200, 8);
+    const beamMat = new THREE.MeshBasicMaterial({ color: 0x36f6ff, transparent: true, opacity: 0.18, depthWrite: false });
+    const beam = new THREE.Mesh(beamGeo, beamMat); beam.position.set(bx, CANOPY_Y + 100, bz); scene.add(beam);
+    hub.beaconBeam = beam;
+    // Beacon pad on Canopy
+    const pad = addSlab(bx, CANOPY_Y, bz, 6, 6, 1, beaconZones[b] || ZONES[0], false);
+    pad.isBeacon = true; pad.beaconIndex = b; pad.beaconName = beaconNames[b];
+    // Grounding anchor: standing here resets sanity (Phase 8)
+    pad.groundingAnchor = true;
+    hub.slab = pad;
+  }
+
+  // 5) Six dungeon mouths on the Canopy — entry points for D1–D6
+  // Spaced along the Canopy, each leads to a vertical descent shaft
+  const dungeonCount = 6;
+  const dungeonSpacing = CANOPY_LENGTH / (dungeonCount + 1);
+  for (let d = 0; d < dungeonCount; d++) {
+    const dx = -CANOPY_LENGTH / 2 + (d + 1) * dungeonSpacing;
+    const dz = 0;
+    const mouth = addSlab(dx, CANOPY_Y, dz, 10, 10, 2, ZONES[d % ZONES.length], false);
+    mouth.isDungeonMouth = true; mouth.dungeonIndex = d;
+    // Shaft marker — a visible column down to y=0
+    const shaftGeo = new THREE.CylinderGeometry(5, 5, CANOPY_Y, 12);
+    const shaftMat = new THREE.MeshBasicMaterial({ color: 0x100020, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide });
+    const shaft = new THREE.Mesh(shaftGeo, shaftMat); shaft.position.set(dx, CANOPY_Y / 2, dz); scene.add(shaft);
+    mouth.dungeonShaft = shaft;
+  }
+
+  // 6) FOUNDATION at y=0 — massive platform spanning the whole Canopy width
+  const foundationHalf = CANOPY_LENGTH / 2 + 100;
+  const foundation = addSlab(0, 0, 0, foundationHalf, foundationHalf, 4, ZONES[0], false);
+  foundation.isFoundation = true;
+  foundation.slab.material.color.setHex(0x050010);
+  foundation.slab.material.emissive.setHex(0x1a0030);
+  foundation.slab.material.emissiveIntensity = 0.3;
+  // This IS the hard floor — physics will collide with it naturally via solids[]
+
+  // 7) GRAVITY WELL at center of Foundation (inactive until all 6 anchors active)
+  const wellGeo = new THREE.ConeGeometry(8, 60, 16);
+  const wellMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false });
+  const well = new THREE.Mesh(wellGeo, wellMat); well.position.set(0, 30, 0); well.rotation.x = Math.PI; scene.add(well);
+  well.isGravityWell = true; well.active = false;
+  // Anchor slots (one per dungeon) — Phase 2 will wire these
+  well.anchors = []; well.anchorsActive = 0;
+
+  // 8) Return geysers at bottom of each dungeon shaft (stubs)
+  // Phase 2 will position these at the bottom of each dungeon
+  for (let d = 0; d < dungeonCount; d++) {
+    const dx = -CANOPY_LENGTH / 2 + (d + 1) * dungeonSpacing;
+    const geyser = { x: dx, z: 0, y: 4, dungeonIndex: d, active: false };
+    well.anchors.push(geyser);
+  }
+
+  // 9) Sky — use a custom BETWEEN sky profile (abyssal, bioluminescent)
+  buildSky();
+
+  // 10) No skyway, no moon platform chain — Moon is ONLY via Gravity Well launch
+  // buildSkyway is NOT called for this level.
+
+  // 11) No missions, no home bases, no surroundings in the traditional sense
+  // Phase 4+ will add co-op Beacon logic, missions, etc.
+}
+
 function buildLevelBody() {
+  // THE BETWEEN: completely different structure — horizontal Canopy, four Beacons, six dungeons, Foundation at y=0
+  if (betweenOn()) { buildBetween(); return; }
+
   // Home towers: one at the origin in single player, six on a ring in co-op.
   const roofTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
     g.fillStyle = '#23305a'; g.fillRect(0, 0, 256, 256);
@@ -7460,6 +7600,7 @@ const LEVELS_ALL = [
   { id: 'rent', name: "Rent's Due", subtitle: 'Urban decay all the way down - eviction notices, loan sharks, and the rent is overdue.', unlocked: true, startFn: () => startLevelDef('rent') },
   { id: 'nos', name: 'Nostalgia Overdose', subtitle: 'VHS fog, CRT scanlines, cassette platforms and 80s synth bosses - be kind, rewind.', unlocked: true, startFn: () => startLevelDef('nos') },
   { id: 'arena', name: 'THE ARENAS', subtitle: 'Four closed deathmatch chambers - Longest Yard, Deck, Camping Grounds, Facing Worlds - rocket, rail and quad, 2-8 players.', unlocked: true, startFn: () => startLevelDef('arena') },
+  { id: 'between', name: 'THE BETWEEN', subtitle: 'The seam between Moon and Mars. Six organ-dungeons, low gravity, sanity, and a Gravity Well to the Moon.', unlocked: true, startFn: () => startLevelDef('between') },
   { id: 'locked3', name: '???', subtitle: 'LOCKED — COMING SOON', unlocked: false },
 ];
 const LEVELS = SP_ONLY_DESCENT ? LEVELS_ALL.filter(lv => lv.id === 'descent') : LEVELS_ALL;
@@ -8160,9 +8301,9 @@ function onLand(speed, sol) {
     burst(pos, onVehicle.kind === 'buggy' ? 0xffa73a : 0x36f6ff, 10); shockRing(pos, 4, 0xffd23a); sfx.click && sfx.click();
     if (speed > 85) { hurt(1); toast('Suspension bottomed out!'); } else if (speed > 30) toast('SUSPENSION ABSORBED THE DROP', 900);
   }
-  else if (speed >= SPLAT) { if (sol.interiorCatch) toast('THE NET CAUGHT YOU', 1200); else return die('SPLAT!', 'Too far, too fast. Glide (hold SPACE) or ground-pound (SHIFT) before you land.'); }
-  else if (speed > 40) { if (!sol.interiorCatch) hurt(2); toast(sol.interiorCatch ? 'SOFT LANDING' : 'Hard landing!'); combo = 0; }
-  else if (speed > 32) { if (!sol.interiorCatch) hurt(1); toast(sol.interiorCatch ? 'SOFT LANDING' : 'Ouch!'); combo = 0; }
+  else if (speed >= (betweenOn() ? SPLAT * BETWEEN_FALL_MUL : SPLAT)) { if (sol.interiorCatch) toast('THE NET CAUGHT YOU', 1200); else return die('SPLAT!', 'Too far, too fast. Glide (hold SPACE) or ground-pound (SHIFT) before you land.'); }
+  else if (speed > (betweenOn() ? 40 * BETWEEN_FALL_MUL : 40)) { if (!sol.interiorCatch) hurt(2); toast(sol.interiorCatch ? 'SOFT LANDING' : 'Hard landing!'); combo = 0; }
+  else if (speed > (betweenOn() ? 32 * BETWEEN_FALL_MUL : 32)) { if (!sol.interiorCatch) hurt(1); toast(sol.interiorCatch ? 'SOFT LANDING' : 'Ouch!'); combo = 0; }
   else if (speed > 12) burst(pos, 0xcccccc, 4);
   if (sol.ground && groundPad && state === 'play') {
     const d = Math.hypot(pos.x - groundPad.x, pos.z - groundPad.z);
@@ -9132,8 +9273,8 @@ function updateEnv(dt, cp) {
 }
 // gameplay side-effects of the active zone / the surface underfoot
 const iceUnderfoot = () => onGround && standOn && standOn.zone && (standOn.zone.name === 'Frozen' || standOn.zone.ice);
-const jumpMul = () => (onVehicle ? (onVehicle.kind === 'buggy' ? 1.2 : 1.35) : 1) * (standOn && standOn.zone && standOn.zone.name === 'Jungle' ? 0.88 : 1) * (base && base.upgrades.jumpBoots ? 1.08 : 1);
-const gravMul = () => (onVehicle && onVehicle.kind === 'bike' ? 0.55 : 1) * (activeZ && activeZ.name === 'Psychedelic' ? 0.7 : 1) * (psy.t > 0 && psy.kind === 'invert' ? 0.45 : 1) * (1 - 0.65 * spaceK(pos.y));      // lighter and lighter the higher you climb
+const jumpMul = () => (onVehicle ? (onVehicle.kind === 'buggy' ? 1.2 : 1.35) : 1) * (standOn && standOn.zone && standOn.zone.name === 'Jungle' ? 0.88 : 1) * (base && base.upgrades.jumpBoots ? 1.08 : 1) * (betweenOn() ? BETWEEN_JUMP_MUL : 1);
+const gravMul = () => (onVehicle && onVehicle.kind === 'bike' ? 0.55 : 1) * (activeZ && activeZ.name === 'Psychedelic' ? 0.7 : 1) * (psy.t > 0 && psy.kind === 'invert' ? 0.45 : 1) * (betweenOn() ? BETWEEN_GRAV_MULT : 1) * (1 - 0.65 * spaceK(pos.y));      // lighter and lighter the higher you climb
 const thermal = () => !!(activeZ && activeZ.name === 'Inferno');
 function envWind(dt) {
   if (inInterior || !activeZ || activeZ.name !== 'Storm' || onGround || climbing) return;
@@ -9438,6 +9579,9 @@ function playerUpdate(dt) {
   // chambers kill on their arenaKill pit floors instead - see onLand). Gated on arenaOn() so every other level keeps its own fall logic.
   if (arenaOn() && arenaFall && pos.y < arenaFall.y) { die('OUT OF THE ARENA', arenaFall.why || 'You fell out of the arena.'); return; }
   if (themeZones() && pos.y < 0 && !thresholdTouched) { respawn(); return; }   // themed levels only: before the threshold is touched, a fall below y=0 is still a normal respawn; the default level's void loop is untouched
+  // THE BETWEEN: y=0 is a hard floor and buildSkyway() never runs here, so VOID_Y stays at its default -160 —
+  // this is just a safety net for clipping through a sector seam, not the primary floor (the Foundation slab is).
+  if (betweenOn()) { if (pos.y < -5) { pos.set(checkpoint.x, checkpoint.y + 1, checkpoint.z); vel.set(0, 0, 0); onGround = false; } return; }
   if (pos.y < VOID_Y) {
     if (themeZones()) { if (belowZeroBuilt) belowZeroLoop(); else respawn(); }
     else voidLoop();
