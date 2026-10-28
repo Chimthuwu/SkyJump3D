@@ -1673,6 +1673,17 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker', enemyZone 
     }
     const sigil = add(geo('TorusGeometry', 0.62, 0.055, 5, 16), 0, 2.35, 0, new THREE.MeshBasicMaterial({ color: biomeAccent })); sigil.rotation.x = Math.PI / 2;
   }
+  if (variant === 'gunner' || variant === 'alien' || variant === 'collector' || variant === 'crthead' || variant === 'popstar') {
+    // JETPACK: twin boot thrusters — additive flame cones, flicker-animated per-frame in walker()'s tick via g.userData.thrusters
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+    const thrusters = [-1, 1].map(side => {
+      const pack = add(geo('BoxGeometry', 0.14, 0.3, 0.12), side * 0.3, 0.72, -0.22, dark); pack.rotation.x = 0.1;  // pack housing on the back
+      const flame = new THREE.Mesh(geo('ConeGeometry', 0.09, 0.4, 6), flameMat);
+      flame.position.set(side * 0.3, 0.08, -0.22); flame.rotation.x = Math.PI; g.add(flame);
+      return flame;
+    });
+    g.userData.thrusters = thrusters;
+  }
   };
   // A restrained ground halo makes silhouettes legible at range without turning every enemy into a glowing blob.
   const auraMat = new THREE.MeshBasicMaterial({ color: biomeAccent, transparent: true, opacity: isBoss ? .38 : .18, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -1685,7 +1696,10 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker', enemyZone 
     r: 0.65 * scale, h: 1.8 * scale, dir: { x: Math.cos(a), z: Math.sin(a) }, speed: isBoss ? 4.6 : V.sp,
     kx: 0, kz: 0, stun: 0, hit: 0, dead: false, slamT: 0, slamCd: 2.5, pts: isBoss ? 1000 : V.pts,
     variant: isBoss ? 'boss' : variant, zone: plat && plat.zone || null, shield: variant === 'shield', strafe: Math.random() < 0.5 ? 1 : -1,
-    fireCd: 1 + Math.random() * 1.5, aimT: 0, chCd: 1.5, windT: 0, charge: 0, cdx: 0, cdz: 0, commonsGuard: false, dropCoins: false, accent: biomeAccent, aura, auraMat, beacon, beaconMat };
+    fireCd: 1 + Math.random() * 1.5, aimT: 0, chCd: 1.5, windT: 0, charge: 0, cdx: 0, cdz: 0, commonsGuard: false, dropCoins: false, accent: biomeAccent, aura, auraMat, beacon, beaconMat, hoverPh: a };
+  // JETPACK: the ranged/turret archetypes (gunner/alien/collector/crthead/popstar) hold their ground and barely move —
+  // give them a hovering float + thruster flame so they read as airborne instead of stationary.
+  e.jetpack = variant === 'gunner' || variant === 'alien' || variant === 'collector' || variant === 'crthead' || variant === 'popstar';
   e.built = false; e.buildBody = () => { if (e.built) return; e.built = true; buildBody(); };   // LAZY BODY: first relevant frame builds the real mesh (aura/beacon/aggro arrow are already up)
   if (isBoss) { e.bossRole = variant; e.boss = true; }
   if (variant === 'charger') { e.h = 1.3 * scale; e.r = 0.85 * scale; }       // hogs are low and wide
@@ -12480,8 +12494,13 @@ function walker(e, dt, t, pre) {
   const bob = e.variant === 'frog' || e.variant === 'kaomoji' || e.variant === 'pixelghost' || e.variant === 'sporeling'
     ? (e.hopY || 0)    : e.variant === 'cryptGhost' || e.variant === 'prismWraith' ? 0.25 + Math.sin(t * 2.4 + e.ph) * 0.18
     : e.variant === 'watcher' || e.variant === 'whisperer' ? 0.55 + Math.sin(t * 1.7 + (e.ph || 0)) * 0.22      // THE BETWEEN: these two hover, never seem to touch ground
+    : e.jetpack ? 1.1 + Math.sin(t * 1.5 + e.hoverPh) * 0.3 + (moving ? Math.abs(Math.sin(t * 7)) * 0.1 : 0)    // JETPACK: these fly, they don't stand around
     : moving ? Math.abs(Math.sin(t * 9)) * 0.08 : 0;
   e.mesh.position.set(e.x, e.y + bob, e.z);
+  if (e.jetpack && e.built && e.mesh.userData.thrusters) {
+    const flick = 0.6 + 0.4 * Math.abs(Math.sin(t * 22 + e.hoverPh)) + (moving ? 0.3 : 0);
+    for (const fl of e.mesh.userData.thrusters) { fl.scale.set(1, flick, 1); fl.material.opacity = 0.55 + 0.35 * flick; }
+  }
   if (e.variant === 'glitchling') {
     const gt = (t * 14) | 0;
     if (gt !== e.gt) { e.gt = gt; for (const c of e.mesh.children) if (c.userData.gl) { c.position.x += (Math.random() - 0.5) * 0.5; c.position.y = Math.max(0.2, c.position.y + (Math.random() - 0.5) * 0.6); c.position.x *= 0.8; c.rotation.set(Math.random() * 3, Math.random() * 3, 0); } e.mesh.visible = Math.random() > 0.08; }
