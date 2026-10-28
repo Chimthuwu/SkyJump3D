@@ -364,7 +364,7 @@ let nosPipes = [], pipeCd = 0, pipeHeld = true;                                 
 function nosPipeTick(dt) {
   pipeCd -= dt; const held = !!(keys.KeyC || keys.ControlLeft), fresh = held && !pipeHeld; pipeHeld = held;      // warp needs a fresh press: holding crouch must not chain through the pipes
   if (!fresh || pipeCd > 0 || !onGround || !standOn || !standOn.pipe) return;
-  const p = nosPipes.find(q => q.sol === standOn); if (!p || !p.to) return;
+  const p = nosPipes.find(q => q.sol === standOn); if (!p || !p.to) { if (p && p.wz) { p.wz = false; score += 50; if (base) { base.credits += 10; saveBase(); } shockRing(pos, 8, 0x3be05a); try { sfx.clear && sfx.clear(); } catch (_) {} toast('WORLD -1', 1500); pipeCd = 1.2; return; } return; }
   pos.set(p.to.x, p.to.y + 0.05, p.to.z); vel.set(0, 0, 0); pipeCd = 1.2;
   shockRing(pos, 6, 0x3be05a); try { sfx.clear && sfx.clear(); } catch (_) {} toast('WARP!', 900);
 }
@@ -5307,7 +5307,7 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
       } else {                                            // flat segment = jump country
         if (rand() < 0.34 && zone.nos !== 3) { const p = at(0.5); addRail(p.x - Math.cos(bearing) * 6, p.z - Math.sin(bearing) * 6, cursor.y + 1.5, p.x + Math.cos(bearing) * 13, p.z + Math.sin(bearing) * 13, [0xff3fc8, 0x36f6ff, 0xffd23a][i % 3]); }      // kickers were removed entirely; flat segments keep only grind rails
       }
-      if (!dy && i % 3 === 0 && i > 0) { const p = at(0.05), s = i % 2 ? 1 : -1; nosPipe(p.x + nxOf(bearing) * s * 6, cursor.y, p.z + nzOf(bearing) * s * 6, pipeList); }
+      if (!dy && i % 3 === 0 && i > 0) { const p = at(0.05), s = i % 2 ? 1 : -1, pp = nosPipe(p.x + nxOf(bearing) * s * 6, cursor.y, p.z + nzOf(bearing) * s * 6, pipeList); if (i % 13 === 11) pp.wz = true; }
       if (!dy && i % 5 === 1) { const p = at(0.36); nosEggBlocks(p.x, cursor.y, p.z, bearing + Math.PI / 2, i % 10 === 1); }     // ? blocks (bearing + 90deg = across the road)
       if (!dy && i % 7 === 5) { const p = at(0.1); nosEggPac(p.x, cursor.y, p.z, bearing, 12); }
       if (!dy && i % 6 === 4) { const p = at(0.5), s = i % 2 ? 1 : -1, lx = nxOf(bearing) * s, lz = nzOf(bearing) * s; nosEggInvaders(p.x + lx * (width * 0.5 + 16), cursor.y + 10, p.z + lz * (width * 0.5 + 16), -lx, -lz, Math.cos(bearing), Math.sin(bearing)); }
