@@ -3433,7 +3433,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
   // (flesh terraces / front-door steps / rabbit-hole discs), and each keeps its own unique boss + reward.
   // farAnchor tries a couple of radii/angle nudges for open air; the ladder ends at the legacy near-ring spot so a
   // crowded world can still fall back to the old spur layout unchanged.
-  const MID_DIST = { nest: 940, house: 1010, shroom: 1080 };       // staggered so the three lands never bunch up
+  const MID_DIST = { nest: 1100, house: 1010, shroom: 1080 };       // staggered so the three lands never bunch up
   const farAnchor = (node, key) => {
     if (!node) return null;
     const D0 = MID_DIST[key];
