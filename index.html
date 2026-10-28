@@ -11347,6 +11347,8 @@ function shootRay(o, d, dmg, range, st) {
   if (h.peer) hitPeer(h.peer, dmg);
   if (h.phantom) shootPhantom(h.phantom, dmg);
   if (h.invader) { h.invader.dead = true; h.invader.mesh.visible = false; score += 50; if (base) { base.credits += 5; saveBase(); } toast('INVADERS! +50', 1200); shockRing(new THREE.Vector3(h.invader.x, h.invader.y + 1.5, h.invader.z), 4, 0x7dff4a); sfx.coin(); }
+  const _miss = !h.enemy && !h.monkey && !h.peer && !h.phantom && !h.invader && !h.hit;
+  if (_miss && nosOn()) { toast('HEH HEH HEH (DUCK HUNT)', 1100); try { sfx.laugh && sfx.laugh(); } catch (_) {} }
   flashFx(end, st.color, 0.2 + st.width * 5, 0.1);
   if (!h.enemy && h.hit) burst(end, st.color, 4);
 }
