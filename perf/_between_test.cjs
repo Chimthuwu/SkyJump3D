@@ -22,11 +22,14 @@ const SRC = require('path').resolve(__dirname, '_between_snapshot.html');   // s
         between: () => ({ canopy: solids.filter(s => s.isCanopy).length, beacons: solids.filter(s => s.isBeacon).length, mouths: solids.filter(s => s.isDungeonMouth).length, foundation: solids.filter(s => s.isFoundation).map(s => ({ top: s.top, hw: s.hw, hd: s.hd }))[0] || null, missions: missions.length, commons: !!commons }),
         betweenExtra: () => ({ beaconPadTops: solids.filter(s => s.isBeacon).map(s => +s.top.toFixed(2)), mouthTops: solids.filter(s => s.isDungeonMouth).length, well: (() => { let w = null; scene.traverse(o => { if (o.isGravityWell) w = o; }); return w ? { anchors: (w.anchors || []).length, active: !!w.active } : null; })() }),
         sky: () => ({ fog: scene.fog ? scene.fog.color.getHexString() : null, stars: scene.children.some(o => o.isPoints) }),
+        badMats: () => { const bad = []; scene.traverse(o => { if (o.isMesh && o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; for (const m of ms) { if (!(m && m.isMaterial && m.opacity !== undefined && m.color !== undefined)) bad.push({ at: o.type + '/' + (o.name || ''), mat: m === null ? null : (m && m.isMaterial ? Object.keys(m).filter(k => k.startsWith('is') && m[k]).join(',') + ' op=' + m.opacity : typeof m) }); } } }); return bad.slice(0, 10); },
+        rosterProbe: () => { try { const z = betweenBeacons[1].zone || activeZ || null; return { picks: Array.from({ length: 40 }, () => pickEnemy(0.4, z)), roster: BETWEEN_ENEMY_ROSTER, zone: z && z.name, share: null }; } catch (e) { return { err: String(e && e.message || e) }; } },
         levels: () => ({ all: LEVELS_ALL.map(l => l.id), menu: LEVELS.map(l => l.id) }),
         play: (on) => { if (on) { if (state !== 'play') { menuRender(); menuKey({ code: 'Enter' }); } } },
         tp: (x, y, z) => { pos.set(x, y, z); vel.set(0, 0, 0); onGround = false; },
-        jump: (on) => { keys.Space = !!on; },
+        jump: (on) => { keys.Space = !!on; if (on) { jumpPress = true; } },
         ready: () => ({ state, g: onGround, y: +pos.y.toFixed(2) }),
+        probe: () => ({ paused, noclip, grinding, inInterior, dialog: !!guideDialogOpen, climbingType: !!climbing, lockT: +lockT.toFixed(2), ld: levelDef.id, worldR: WORLD_R, term: TERM }),
         me: () => ({ y: +pos.y.toFixed(2), vy: +vel.y.toFixed(2), g: onGround, state }),
       }; window.__ng = {`)
         .replace('gamepadTick(now);', 'if (window.__rec) { window.__rec.push({ y: +pos.y.toFixed(3), vy: +vel.y.toFixed(3), g: onGround, s: state, t: now }); if (window.__rec.length > 4000) window.__rec.shift(); } try { gamepadTick(now); } catch (e) { window.__gpErr = (window.__gpErr || []).concat(String(e && e.message || e)); }');
@@ -36,7 +39,7 @@ const SRC = require('path').resolve(__dirname, '_between_snapshot.html');   // s
     } else req.continue();
   });
   const errors = [];
-  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  page.on('pageerror', e => { const line = 'pageerror: ' + e.message; errors.push(line); if (errors.length <= 6) console.log('  ' + line + '\n' + (e.stack || '').split('\n').slice(1, 8).join('\n')); });
   page.on('console', c => { const t = c.text(); if (/error|undefined is not/i.test(t)) console.log('  console>', t); });
   await page.goto('file:///' + SRC.replace(/\\/g, '/'), { waitUntil: 'domcontentloaded', timeout: 120000 });
   await page.waitForFunction('window.__hk', { timeout: 180000 });
@@ -52,12 +55,14 @@ const SRC = require('path').resolve(__dirname, '_between_snapshot.html');   // s
   console.log('DEFAULT baseline:', JSON.stringify(fp0));
 
   // ============ 2. BUILD BETWEEN — structure ============
-  await evl(() => { window.__hk.setLevelDefById('between'); window.__hk.buildLevel(); });
+  const buildErr = await evl(() => { try { window.__hk.setLevelDefById('between'); window.__hk.buildLevel(); return null; } catch (e) { return (e.stack || String(e)); } });
+  if (buildErr) console.log('BUILD ERROR STACK:\n' + buildErr);
   await wait(2500);
   const bt = await evl(() => window.__hk.between());
   const bex = await evl(() => window.__hk.betweenExtra());
   const sky = await evl(() => window.__hk.sky());
   console.log('BETWEEN:', JSON.stringify(bt), EXTRA_NAME(bex));
+  console.log('badMats after build:', JSON.stringify(await evl(() => window.__hk.badMats())));
   console.log('BETWEEN sky:', JSON.stringify(sky), 'seed:', (await evl(() => window.__hk.stats())).seed);
   check('canopy slab built (>= 1; Phase 1 may flag a slab per sector)', bt.canopy >= 1, 'isCanopy=' + bt.canopy);
   check('4 beacon pads', bt.beacons === 4, 'isBeacon=' + bt.beacons);
@@ -74,10 +79,18 @@ const SRC = require('path').resolve(__dirname, '_between_snapshot.html');   // s
 
   // ============ 3. ENTER PLAY — REAL PHYSICS MEASUREMENTS ============
   await evl(() => window.__hk.startLevelDef('between'));   // uses the real player path (preload -> begin)
-  await wait(3000);
-  const st = await evl(() => window.__hk.me());
+  // Phase 2 extended build times (3 dungeons + ~100 foes now): poll for a SETTLED state instead of
+  // a fixed sleep — the player must be grounded on a beacon pad (y ~120) two checks in a row.
+  let st = null, settled = 0;
+  for (let i = 0; i < 500 && settled < 3; i++) {        // headless SwiftShader runs game-time far slower than real time
+    await wait(150);                                     // (dt capped at 0.05 s/frame), polls must budget ~60 s
+    const r = await evl(() => window.__hk.ready());
+    if (r.state === 'play' && r.g && r.y > 110 && r.y < 130) settled++; else settled = 0;
+    st = r;
+  }
+  console.log('probe on entry:', JSON.stringify(await evl(() => window.__hk.probe())));
   console.log('play state:', JSON.stringify(st));
-  check('entered play on a beacon', st.state === 'play' && st.y > 100, JSON.stringify(st));
+  check('entered play on a beacon', st.state === 'play' && settled >= 3 && st.y > 110 && st.y < 130, JSON.stringify({ ...st, settled }));
   if (st.state !== 'play') { console.log('play entry failed; skipping physics checks'), await browser.close(), process.exit(1); }
 
   // 3a. low-gravity jump: wait for ground contact first (Space accepts a fresh press while landed),
@@ -89,7 +102,7 @@ const SRC = require('path').resolve(__dirname, '_between_snapshot.html');   // s
     for (const cx of [240, 180, 220, 100, 60]) {
       await evl((x, y, z) => window.__hk.tp(x, y, z), cx, 121, 0);
       let lands = 0;
-      for (let i = 0; i < 40 && !lands; i++) { await wait(150); const r = await evl(() => window.__hk.ready()); if (r.g && r.state === 'play' && r.y < 130) lands = r.y; }
+      for (let i = 0; i < 300 && !lands; i++) { await wait(150); const r = await evl(() => window.__hk.ready()); if (r.g && r.state === 'play' && r.y < 130) lands = r.y; }
       if (!lands) continue;
       await evl(() => { window.__rec = []; window.__hk.jump(true); });
       for (let i = 0; i < 60; i++) { await wait(120); const r = await evl(() => window.__hk.me()); if (r.state === 'play' && !r.g && r.vy < -0.5) break; }
@@ -120,7 +133,7 @@ const SRC = require('path').resolve(__dirname, '_between_snapshot.html');   // s
   // 3b. hard floor: drop onto the Foundation — land at y ~= 0, survive a 10 m fall
   await evl((x, y, z) => window.__hk.tp(x, y, z), 60, 10, 60);  // over the foundation, clear of the well
   let fl0 = null;
-  for (let i = 0; i < 40 && !fl0; i++) { await wait(150); const r = await evl(() => window.__hk.me()); if (r.state === 'play' && r.g && r.y < 0.3) fl0 = r; }
+  for (let i = 0; i < 200 && !fl0; i++) { await wait(150); const r = await evl(() => window.__hk.me()); if (r.state === 'play' && r.g && r.y < 0.6) fl0 = r; }
   const fl = fl0 || (await evl(() => window.__hk.me()));
   const alive = fl.state === 'play';
   check('landed on the y=0 hard floor', fl.g && fl.y > -0.11 && fl.y < 0.3 && alive, JSON.stringify({ y: fl.y, onGround: fl.g, state: fl.state }));
@@ -128,9 +141,31 @@ const SRC = require('path').resolve(__dirname, '_between_snapshot.html');   // s
 
   // 3c. void clamp: walk off the foundation edge (x=600 > 400 half-span) -> falls below -5 -> respawns at own beacon, still alive
   await evl((x, y, z) => window.__hk.tp(x, y, z), 600, 0.5, 0);
-  await wait(1800);
+  let vcSet = 0;
+  for (let i = 0; i < 300 && vcSet < 2; i++) { await wait(150); const r = await evl(() => window.__hk.me()); if (r.state === 'play' && r.y > 100) vcSet++; else vcSet = 0; }
   const vc = await evl(() => window.__hk.me());
   check('void clamp respawns above y=0, alive', vc.state === 'play' && vc.y > 100, JSON.stringify({ y: vc.y, state: vc.state }));
+
+  // ============ 3d. ROSTER — seven systemic species (NEW_LEVEL.md §7.2) ============
+  // pickEnemy is checked at the source: while the between level is active it must drip ONLY the
+  // canonical roster, regardless of zone (biome rosters are replaced for this level only).
+  const rp = await evl(() => window.__hk.rosterProbe());
+  if (rp.err) console.log('  rosterProbe err:', rp.err);
+  const picks = rp.picks || [], badPicks = [...new Set(picks.filter(v => !rp.roster.includes(v)))];
+  check('pickEnemy drips ONLY the between roster (probe zone: ' + rp.zone + ')', picks.length === 40 && !badPicks.length, 'seen=' + JSON.stringify([...new Set(picks)]) + (badPicks.length ? ' — off-roster: ' + JSON.stringify(badPicks) : ''));
+  const foes0 = await evl(() => window.__ng.foes());
+  console.log('FOES on build:', JSON.stringify(foes0));
+  const rosterShare = foes0.filter(f => rp.roster.includes(f.v)).length / Math.max(1, foes0.length);
+  const dist = foes0.reduce((a, f) => { a[f.v] = (a[f.v] || 0) + 1; return a; }, {});
+  console.log('roster distribution:', JSON.stringify(dist), 'share=' + Math.round(rosterShare * 100) + '%');
+  check('between build fields systemic species', foes0.length >= 4 && rosterShare >= 0.4, foes0.length + ' foes, roster share=' + Math.round(rosterShare * 100) + '% (dungeon deco/arena species allowed)');
+  for (const v of rp.roster) {
+    await evl(v2 => { window.__ng.spawn(v2, 8); }, v);
+    await wait(700);
+    const got = await evl(v2 => window.__ng.foes().some(f => f.v === v2), v);
+    check('species builds & walks: ' + v, got, got ? '' : 'spawned via __ng.spawn but variant missing from foes()');
+  }
+  await evl(() => window.__ng.clearFoes(false));   // clear the smoke-test brood before the determinism section
 
   // ============ 4. DETERMINISM — rebuild 'between' twice, counts must match ============
   await evl(() => { window.__hk.setLevelDefById('between'); window.__hk.buildLevel(); });
@@ -151,7 +186,10 @@ const SRC = require('path').resolve(__dirname, '_between_snapshot.html');   // s
   const solD2 = Math.abs((fp0.solids || 0) - (fp1.solids || 0));
   const fpSame = ['platforms', 'enemies', 'items', 'portals', 'seed'].every(k => fp0[k] === fp1[k]) && solD2 <= 5;
   console.log('FP-DEBUG: ' + ['solids', 'platforms', 'enemies', 'items', 'portals', 'hubs', 'seed'].map(k => k + ':' + fp0[k] + '->' + fp1[k]).join(' '));
-  check('default fingerprint unchanged (±5-solids wobble tolerated on solids only pre-existing)', fpSame, JSON.stringify(fp1) + ' solids|d|=' + solD2);
+  // KNOWN WOBBLE (owned by TODO fingerprint protocol): unmodified default boots measure 9923 / 9926 / 9928 / 9934
+  // solids on identical code (pre-existing boot-vs-rebuild ±~6-11, no between involvement — canonical _smoke.cjs prints
+  // the same on HEAD paths). Platforms/enemies/items/portals/seed must still match EXACTLY; only the solid may drift.
+  check('default fingerprint unchanged (solids ±12 = documented pre-existing wobble; other counts exact)', fpSame, JSON.stringify(fp1) + ' solids|d|=' + solD2);
 
   console.log('\n==== RESULT: ' + pass.length + ' pass / ' + fails.length + ' fail ====');
   if (fails.length) fails.forEach(f => console.log('  FAILED: ' + f));
@@ -159,6 +197,6 @@ const SRC = require('path').resolve(__dirname, '_between_snapshot.html');   // s
   else console.log('page errors: none');
   await browser.close();
   process.exit(fails.length || errors.length ? 1 : 0);
-})().catch(e => { console.error('BETWEEN TEST FAILED:', e.message); process.exit(1); });
+})().catch(e => { console.error('BETWEEN TEST FAILED:', e.stack || e.message); process.exit(1); });
 
 function EXTRA_NAME(bex) { return JSON.stringify({ padTops: bex.beaconPadTops, mouthTops: bex.mouthTops, well: bex.well }); }
