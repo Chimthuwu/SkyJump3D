@@ -408,6 +408,12 @@ Status: Rent's Due built (uncommitted - see Done). Nostalgia Overdose built the 
 - Headless-verified: lore terminal count 0→8, coins 24→60, zero errors on BETWEEN full pass + default regression.
 - Plan status: Step 1 (atmosphere) done, Step 2 (lore/density) done, Step 4 (roaming threat) confirmed already covered. Remaining: Step 3 (grapple-vein waypoints) and the rest of Step 5 (Foundation decorative structures beyond what's now there).
 
+## THE BETWEEN scale/density polish — Step 3 (grapple-vein waypoints) done (2026-10-28, CLAUDE)
+- `grappleFire()` hooks any solid via a generic `castRay` against `solids[]` — no special tag needed, confirmed via code read (index.html ~15197). Added `buildBetweenGrappleWaypoints()`: small glowing octahedron+halo anchor nodes (cyan, same palette as `betweenVeins`/Beacons) on a thin stub mount, 1-2 per non-beacon Canopy sector, floating 10-32 units above walking height for real swing arcs — not reachable ledges. Each is just a tiny `addSolid()` AABB so grapple can hook it; no new engine code.
+- This gives THE BETWEEN its own traversal identity (swing node-to-node down the glowing Canopy) distinct from descent's rails/vehicles, per the user's "not a clone" constraint.
+- Headless-verified: zero errors on full BETWEEN pass + default regression.
+- Plan status: Steps 1-4 done (Step 4 confirmed already covered). Remaining: the rest of Step 5 (Foundation decorative structures beyond the lore/coin/enemy ring already added in Step 2).
+
 ## Decisions made (review me)
 - 2026-10-24 — Retro/NOS pass: bounded CSS fix (line 43 dither) chosen over new egg features. Checkpoint SHA: e6fc920.
 - 2026-10-26 — Scrolling parallax skyline added as CSS-only bounded step (line 46); remaining sprite billboards + floating plates for next worker. No ambiguity, no checkpoint needed.
