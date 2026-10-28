@@ -393,6 +393,7 @@ function nosEggTick(dt) {
     else if (e.k === 'dot') { score += 10; if (e.last) { if (base) { base.credits += 6; saveBase(); } toast('WAKA WAKA! +6 COINS', 1200); shockRing(e.mesh.position, 4, 0xffe84a); for (const g of nosEggs) if (g.k === 'ghost' && !g.used) { g.vulnerable = true; setTimeout(() => { if (g && !g.used) g.vulnerable = false; }, 6000); } } }
     else if (e.k === 'zelda') { grantAvailableAmmo(); toast("IT'S DANGEROUS TO GO ALONE!  TAKE THIS.  (AMMO)", 2600); shockRing(e.mesh.position, 5, 0xff3a3a); }
     else if (e.k === 'etank') { health = MAXHP; toast('E-TANK! HEALTH FILLED', 1600); shockRing(e.mesh.position, 5, 0x4aa8ff); }
+    else if (e.k === 'contra') { weaponOwned[2] = true; ammo.shells = Math.min(WEAPONS[2].ammoCap, ammo.shells + WEAPONS[2].ammoPickup * 3); toast('SPREAD GUN! (CONTRA)', 1800); shockRing(e.mesh.position, 5, 0xff4af0); }
   }
 }
 addEventListener('keydown', e => {
@@ -5132,6 +5133,11 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     cap.scale.set(1.05, 0.22, 1.05); cap.position.y = 0.75; g.add(body, cap); g.position.set(x, y + 1.3, z); scene.add(g);
     nosEggs.push({ k: 'etank', x, y: y + 1.3, z, r: 2.2, dy: 3, mesh: g });
   }
+  function nosEggContra(x, y, z) {                                // Contra spread-gun pickup: grants the Scatter weapon + ammo
+    const r = nosEggRes(), g = new THREE.Group(), body = new THREE.Mesh(r.box, r.invM), barrel = new THREE.Mesh(r.pad, r.white);
+    body.scale.set(0.9, 0.6, 0.9); barrel.scale.set(0.3, 0.3, 2.4); barrel.position.set(0, 0, 1.2); g.add(body, barrel); g.position.set(x, y + 1.2, z); scene.add(g);
+    nosEggs.push({ k: 'contra', x, y: y + 1.2, z, r: 2.4, dy: 3, mesh: g });
+  }
   function nosBillboard(x, y, z, head, col) {         // neon panel on stalks beside the road
     const d = nosDress(), w = 8, h = 4.4, hgt = 6.5 + rand() * 2.5, g = new THREE.Group();
     for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.5, hgt, 0.5), d.postMat); p.position.set(nxOf(head) * s * w * 0.42, hgt * 0.5, nzOf(head) * s * w * 0.42); g.add(p); }
@@ -5303,6 +5309,7 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
       if (!dy && i % 6 === 4) { const p = at(0.5), s = i % 2 ? 1 : -1, lx = nxOf(bearing) * s, lz = nzOf(bearing) * s; nosEggInvaders(p.x + lx * (width * 0.5 + 16), cursor.y + 10, p.z + lz * (width * 0.5 + 16), -lx, -lz, Math.cos(bearing), Math.sin(bearing)); }
       if (!dy && i % 9 === 7) { const p = at(0.5), s = i % 2 ? -1 : 1, lx = nxOf(bearing) * s, lz = nzOf(bearing) * s; nosEggTetris(p.x + lx * (width * 0.5 + 22), cursor.y + 12, p.z + lz * (width * 0.5 + 22)); }
       if (!dy && i % 6 === 2) { const p = at(0.5), s = i % 2 ? -1 : 1, lx = nxOf(bearing) * s, lz = nzOf(bearing) * s; nosEggPong(p.x + lx * (width * 0.5 + 16), cursor.y + 9, p.z + lz * (width * 0.5 + 16), -lx, -lz); }
+      if (!dy && i % 11 === 9) { const p = at(0.85); nosEggContra(p.x, cursor.y + 1, p.z); }
       if (!dy && i % 4 === 2) { const p = at(0.44); nosBoostArch(p.x, cursor.y, p.z, bearing, width, style.edge); }
       for (let k = 2; k < len - 4; k += 13) coin(cursor.x + Math.cos(bearing) * k + nxOf(bearing) * (k % 26 < 13 ? -3 : 3), yOn(k) + 1.2, cursor.z + Math.sin(bearing) * k + nzOf(bearing) * (k % 26 < 13 ? -3 : 3), zone);
       if (i % 2 === 1) { spawnRiderGroup(seg.cx, segY, seg.cz, seg.solid, Math.min(4, 2 + level), 8); nosRoadAudit.traffic += 2; }
