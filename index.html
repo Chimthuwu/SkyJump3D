@@ -6956,6 +6956,12 @@ function buildBetween() {
     }
   }
 
+  // 7a-2) Grapple-vein waypoints: grappleFire() already hooks any solid (castRay against solids[], no
+  // special tag needed) — these are just visible, intentional anchor nodes tying the ability to the
+  // Canopy's own bioluminescent-vein aesthetic, giving BETWEEN its own traversal identity instead of
+  // descent's rails/vehicles. 1-2 per non-beacon sector, varied height for real swing arcs.
+  buildBetweenGrappleWaypoints(sectorCenterX, CANOPY_Y, sectors, beaconSectorIdx, SECTOR_W);
+
   // 7b) Phase 2: the three reference dungeons (D1/D4/D6)
   buildDungeonGlitchExe(betweenDungeonMouths[0], 0);
   buildDungeonPsychosis(betweenDungeonMouths[3], 3);
@@ -7025,6 +7031,27 @@ buildLevel = function() {
   originalBuildLevel();
 };
 
+// Grapple-vein waypoints: small glowing anchor nodes along the Canopy, grapple-hookable because
+// grappleFire() hooks any solid — these just mark intentional swing points, matching the existing
+// bioluminescent-vein color (0x36f6ff cyan / 0x9a6aff violet, same palette as betweenVeins/beacons).
+function buildBetweenGrappleWaypoints(sectorCenterX, Y, sectors, beaconSectorIdx, sectorW) {
+  const nodeMat = new THREE.MeshBasicMaterial({ color: 0x58e5ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+  const stubMat = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x1a2a3a }));
+  for (let i = 0; i < sectors.length; i++) {
+    if (beaconSectorIdx.includes(i)) continue;   // Beacons already have their own warp pad/beam as a landmark
+    const cx = sectorCenterX(i), halfW = sectorW / 2;
+    const count = 1 + (rand() < 0.5 ? 1 : 0);
+    for (let k = 0; k < count; k++) {
+      const x = cx + (rand() - 0.5) * halfW * 1.4;
+      const z = (rand() - 0.5) * 24;
+      const y = Y + 10 + rand() * 22;   // above normal walking height — a real swing arc, not a reachable ledge
+      const stub = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 1.1, 6), stubMat); stub.position.set(x, y + 0.55, z); scene.add(stub);
+      const orb = new THREE.Mesh(new THREE.OctahedronGeometry(0.4, 0), nodeMat); orb.position.set(x, y, z); scene.add(orb);
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.05, 4, 10), nodeMat.clone()); halo.material.opacity = 0.35; halo.position.copy(orb.position); halo.rotation.x = Math.PI / 2; scene.add(halo);
+      addSolid(x - 0.4, x + 0.4, y - 0.4, y + 0.4, z - 0.4, z + 0.4);   // grappleFire's castRay just needs any solid here
+    }
+  }
+}
 // ===================== CANOPY SECTOR BUILDER (Phase 1) =====================
 // Each biome sector gets a native platform network skinned with the biome's material.
 // Mechanical platforms (mover, orbit, conveyor, gate, crumble, swing, breath, etc.) keep
