@@ -2052,12 +2052,12 @@ function buildSky() {
     const starField = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xb6dfff, size: 2.4, sizeAttenuation: false, fog: false }));
     scene.add(starField); skyProps.push(starField);
   }
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < 40; i++) {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: th.cloud, transparent: true, opacity: 0.24, depthWrite: false }));
     const w = 120 + Math.random() * 160;
     s.scale.set(w, w * 0.4, 1);
     s.position.set((Math.random() - 0.5) * 1400, 30 + Math.random() * (TOP + 120), (Math.random() - 0.5) * 1400);
-    if (Math.hypot(s.position.x, s.position.z) < 80) s.position.x += 200;
+    if (Math.hypot(s.position.x, s.position.z) < 220) { s.position.x += 260; s.position.z += 120; }
     s.userData.speed = 2 + Math.random() * 4;
     scene.add(s); clouds.push(s); skyProps.push(s);
   }
