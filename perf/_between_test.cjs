@@ -78,7 +78,11 @@ const SRC = require('path').resolve(__dirname, '_between_snapshot.html');   // s
   check('LEVELS_ALL has between (menu filter state owned by other sessions)', ls.all.includes('between'), 'menu=' + JSON.stringify(ls.menu));
 
   // ============ 3. ENTER PLAY — REAL PHYSICS MEASUREMENTS ============
-  await evl(() => window.__hk.startLevelDef('between'));   // uses the real player path (preload -> begin)
+  // Force the REAL first-entry path: setLevelDefById('between') earlier for the structure checks means
+  // startLevelDef('between') would take its already-set branch (no build + no pos.set(start)) and spawn
+  // at the stale descent tower. Resetting to 'descent' first makes startLevelDef run pre(), which
+  // builds between and pos-sets the player onto their beacon pad.
+  await evl(() => { window.__hk.setLevelDefById('descent'); window.__hk.startLevelDef('between'); });   // levelDef must still be 'descent' at call time so the build-and-spawn branch runs
   // Phase 2 extended build times (3 dungeons + ~100 foes now): poll for a SETTLED state instead of
   // a fixed sleep — the player must be grounded on a beacon pad (y ~120) two checks in a row.
   let st = null, settled = 0;

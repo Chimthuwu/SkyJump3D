@@ -57,6 +57,22 @@ Status: Rent's Due built (uncommitted - see Done). Nostalgia Overdose built the 
 - Pattern: gate everything on `nosOn()`, seeded `rand()` only, dress via `dressSite`/`nosDress()`, don't touch the default level.
 
 ## Backlog (ordered, top = highest priority)
+- [ ] Build a level designer / dev level builder like GTB's `mapEditor.js`
+  - Hidden cheat-code activation (e.g., `$DEVMODE69xxx` or `#DEVx`)
+  - Free-fly camera (WASD + mouse wheel + right-drag orbit)
+  - Asset library with searchable thumbnails (rendered off-screen, cached)
+  - Three tools: Place / Delete / Select (with drag-box multi-select)
+  - Ghost preview: real object, translucent + wireframe footprint
+  - Undo (Backspace), Copy/Cut/Paste (Ctrl+C/X/V)
+  - Auto-save to localStorage + optional Render server sync
+  - Save/Load/Delete named slots
+  - Export as real code (paste into level build function)
+  - "Ask AI" integration (prompt + grounding → LLM → placements)
+  - Reference: `Z:\GITHUB\GAME · GRAND-THEFT-BAYOU\dist\src\mapEditor.js` (1919 lines)
+  - **Free model integration**: Allow loading free 3D models (GLB/GLTF from sources like Sketchfab, Poly Haven, Kenney) directly in the editor; chat/voice interface with AI to describe changes ("make this area darker", "add more platforms here", "replace these pillars with twisted trees") — AI applies edits to the active selection or placement ghost
+- [ ] Ensure all Lil Spasticism biomes present throughout BETWEEN level
+- [ ] Add more clouds around Pussy Palace; conceal it in distance; move further from spawn
+- [ ] Fix flickering at bottom of screen (enemy/entity visible when looking down from spawn)
 - [x] Voices (2026-10-22): schizo whispers now work on the hosted site: 74 pre-rendered clips in `voices/` (+ `manifest.json`), copied into `cf-public/voices` by `cf:prep`; client falls back to them when `/tts-status` is absent. New `schizo` (16 whispers) and `schizoyell` (4x TRAMPOLINE!?!!!!) categories in `server/voice-lines.json`; whispers fire every ~28-68 s. NOT YET DEPLOYED. To add lines: edit voice-lines.json, run the local server, request `/tts?kind=inner&cat=<cat>&n=<i>`, save as `voices/inner-<cat>-<i>.mp3`, regenerate manifest.
 - [ ] Multiplayer spawn towers: six home towers already exist and the relay assigns one slot per player (code reviewed, not reproduced). If two players still share a roof online, check the deployed Worker/Pages version is current.
 - [ ] Planet legs: no space-cities/cross-links yet (Mars has them); hell/kaomoji decor on instanced platforms is minimal; Void Maw is solo-only; more ramps on planet legs; grinding polish.
@@ -438,3 +454,58 @@ Status: Rent's Due built (uncommitted - see Done). Nostalgia Overdose built the 
 ## Decisions made (review me)
 - 2026-10-24 — Retro/NOS pass: bounded CSS fix (line 43 dither) chosen over new egg features. Checkpoint SHA: e6fc920.
 - 2026-10-26 — Scrolling parallax skyline added as CSS-only bounded step (line 46); remaining sprite billboards + floating plates for next worker. No ambiguity, no checkpoint needed.
+
+## Minecraft-style building and crafting mechanics (requested 2026-10-29)
+- Hotbar (9 slots, bottom-center, Minecraft styling) — already partially implemented in index.html via `#hotbar` CSS + `slot.sel` white outline; [1]=blade, [2]=builder hand, rest reserved
+- Biome resource system: city STONE, Jungle WOOD, Inferno EMBER, Frozen LEAF, Psy/Storm CYBERITE with `RESLOAD` mine charges
+- `spawnOreVein` scatters 2–5 zone cubes along route stones (k%5==1) and at checkpoints, enemies also drop veins
+- Walk-over mining (radius 2.2, shakes while chipped, cube pops into stockpile with +N toast)
+- `placeBlock` (KeyE with slot 2 / Digit2 held) spends 4 of standing zone's resource to build a real `addSolid` 2.8×1×2.8 platform in front of you (refunds if blocked)
+- Wheel/digit selection bridges hotbar and weapon system (`hotbarSel` picks builder hand vs blade)
+- TODO: expand crafting recipes (craftList/craft), ingredient/credit affordability, persistent resources when placing blocks, alignment with valid kill targets
+- TODO: blueprint/schematic system (save/load builds), multiplayer sync for placed blocks, resource sinks/upgrades
+
+## Massive aesthetic & performance audit (requested 2026-10-29)
+- Full audit of: lighting/shadows, fog/atmosphere, post-processing (retro presets, dither, scanlines, color grading), skyboxes/backdrops, particle systems, enemy/prop visuals, HUD/UX polish, draw-call budget, geometry instancing, texture usage, shader complexity, culling/LOD, frame-time profiling
+- Easy wins to implement immediately:
+  - [ ] Instance static platforms (non-special) via InstancedMesh — biggest draw-call win
+  - [ ] Freeze static matrices (`updateMatrixWorld(false)` on immobile objects) — ~12-17 ms/frame savings
+  - [ ] Share enemy geometries/materials via cache (already 99% reuse per 2026-10-26 audit — verify it's active)
+  - [ ] Convert pickups (coins/hearts/ammo) to InstancedMesh
+  - [ ] Add render-scale/DPR cap for high-DPI screens
+  - [ ] Tone-map consistency across presets (MODERN/PS1/N64) — verify ACES curve applied equally
+  - [ ] Fog color blending toward sky (already partially done — verify all zones)
+  - [ ] Skyline emissive windows (living city pulse) — verify active in all levels
+  - [ ] Neon sign halos (additive glow behind signs) — verify active
+  - [ ] City light-haze horizon sprites — verify 12-sprite ring present
+  - [ ] Remove dead code: `betweenBatchPlatforms()` call site disabled but function remains — clean or re-enable after verifying merged mesh renders clean
+  - [ ] Consolidate duplicate `CANOPY_Y` declarations (one module-level, one local in buildBetween — caused crash)
+  - [ ] Verify no `Math.random()` in seeded paths (breaks determinism/co-op)
+  - [ ] HUD innerHTML writes only on change (already done 2026-10-21 — verify still active)
+  - [ ] Player shadow scans `nearSolids` only (already done — verify)
+  - [ ] Far enemy bodies hidden >170m but aura/beacon/arrow stays (verify active)
+  - [ ] Far pickups/vehicles hidden >380m (verify active)
+  - [ ] No pistons/movers/crumblers within 90m of homes (verify active)
+
+## Single Player Level Select Screen
+- [ ] Build a proper single-player level select screen (currently `SP_ONLY_DESCENT = true` bypasses the menu and drops straight into lvl1)
+- [ ] Show all unlocked levels (lvl1, Rent's Due, Nostalgia Overdose, THE ARENAS, lvl2) with thumbnails, names, subtitles, and lock icons for locked ones
+- [ ] Gamepad navigation: d-pad/left stick to scroll, A to confirm, B to go back (already wired via menuKey dispatch)
+- [ ] Keyboard navigation: arrow keys to scroll, Enter to confirm, Escape to go back
+- [ ] Mouse/touch: click to select, double-click or Start button to launch
+- [ ] Visual preview/description panel showing selected level's key features
+- [ ] Unlock progression: locked levels show "???" with unlock criteria
+- [ ] Persist selected level in localStorage so it remembers last choice
+- [ ] Transition animation when launching a level (fade/zoom to gameplay)
+- [ ] Reference: existing `LEVELS_ALL` array + `SP_ONLY_DESCENT` flag + `startLevelDef(id)` function
+
+=== PROPOSED IMPROVEMENTS (added by Hermes /nitesesh prep) ===
+- [FEATURE] Add a session persistence hook: window.__ng.saveSession() + loadSession() so overnight /sesh runs can resume from crash/restart.
+- [PERF] Bundle index.html chunks: currently 922 KB .chk_module.mjs; split into lazy-loaded dungeon modules so initial load < 150 KB.
+- [UI] Add mobile touch controls overlay (.touch-controls div) for handheld overnight play.
+- [BUG] Fix the concurrent session conflict: the other agent's D1/D4/D6 code reads d4SanityT without a guard; add if (typeof d4SanityT === 'undefined') fallback before any mutation.
+- [CREATIVE] Add a twilight palette mode (indigo/violet) matching HERMES-AME's "ame" skin for visual consistency across the overnight suite.
+- [SESH] Overnight spec: 
+itesesh/runs/ will trigger 
+ode server/start-server.bat with --overnight --no-interaction; health probe every 30s; auto-restart on ReferenceError or SyntaxError.
+- [NITESH] Ready: start-server.bat exists; .env configured; server.js listens on port from .env.

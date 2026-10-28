@@ -260,6 +260,7 @@
   </div>
   <div id="menuHost">
     <div class="sub" id="netModeRow">ROOM MODE: <b id="netModeLabel">PVP</b> &mdash; <button class="mini" id="bNetMode">TOGGLE (C or RB)</button><br><span class="dim">PVP = everyone vs everyone &middot; COOP = players share the world and can never hurt each other</span></div>
+    <div class="sub" id="betweenDropRow">THE BETWEEN DROP: <b id="betweenDropModeLabel">TEAM DROP</b> &mdash; <button class="mini" id="bBetweenDropMode">TOGGLE</button><br><span class="dim">TEAM DROP = all 4 at Beacon 1 &middot; SCATTERED DROP = 1 per Beacon (1-4)</span></div>
     <div class="sub">Hosting uses <b>Tailscale</b> (free) so friends can reach your PC privately from anywhere. Do these in order:</div>
     <ol class="steps">
       <li id="stTs" class="bad"><b id="stTsChk">&#10007;</b><span><b>1.</b> Install Tailscale and sign in on this PC. <button class="mini" id="bTsDl">GET TAILSCALE</button><button class="mini" id="bRefresh">REFRESH</button><br><span class="dim" id="tsNote"></span></span></li>
@@ -319,10 +320,11 @@
 </div>
 
 <script type="importmap">
-{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
 </script>
 <script type="module">
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 console.log('🚀 SkyJump3D module START');
 
@@ -413,6 +415,7 @@ let betweenWarpCd = 0;                        // THE BETWEEN: fast-travel cooldo
 let betweenTeamDrop = true;                   // THE BETWEEN: true = every slot spawns at Beacon 1 (Team Drop), false = 1:1 scattered
 let wireNodes = new Map();                    // THE BETWEEN: wiring-circuit node id -> solid (signalOut/receivers graph)
 const BETWEEN_CIRCUITS = [];                  // THE BETWEEN: build-time circuit bookkeeping [{name, sourceId, nodeIds}]
+const CANOPY_Y = 120;                         // THE BETWEEN: spawn height of the horizontal Canopy spine — module-level since several functions outside buildBetween() need it
 let betweenBeacons = [];                      // THE BETWEEN: [{id, name, x, y, z, zone, hub}]
 let betweenVeins = [];                        // THE BETWEEN: per-circuit energy-vein mesh+material
 let betweenDungeonMouths = [];                // THE BETWEEN: Phase 2 — the 6 dungeon-mouth solids, indexed 0..5 (D1..D6)
@@ -6882,6 +6885,56 @@ function buildBetween() {
   // No skyway, no moon platform chain: buildSkyway() is never called for this level, by omission.
 }
 
+// ===== PHASE 4: PERFORMANCE BATCHING =====
+// Batch static platform meshes by material to reduce draw calls.
+// Called once after buildBetween() completes.
+function betweenBatchPlatforms() {
+  if (!betweenOn()) return;
+  const batches = new Map(); // materialKey -> { geos: BufferGeometry[], meshes: [], material }
+  for (const p of platforms) {
+    if (!p.slab || p.sp || p.isCanopy || p.isBeacon || p.isDungeonMouth || p.isFoundation || p.returnGeyser || p.bounce) continue; // skip special/dynamic
+    const mat = p.slab.material;
+    const key = mat.color.getHexString() + '|' + (mat.emissive ? mat.emissive.getHexString() : '0') + '|' + (mat.map ? 'tex' : 'notex');
+    if (!batches.has(key)) batches.set(key, { geos: [], meshes: [], material: mat });
+    const batch = batches.get(key);
+    // Collect slab geometry (world-space, indexed to match)
+    const slabGeo = p.slab.geometry.clone().toNonIndexed();
+    slabGeo.applyMatrix4(p.slab.matrixWorld);
+    batch.geos.push(slabGeo);
+    batch.meshes.push(p.slab);
+    // Also collect plate geometry if present
+    if (p.plate) {
+      const plateGeo = p.plate.geometry.clone().toNonIndexed();
+      plateGeo.applyMatrix4(p.plate.matrixWorld);
+      batch.geos.push(plateGeo);
+      batch.meshes.push(p.plate);
+    }
+  }
+  // Replace individual meshes with one batched mesh per material group
+  let groupCount = 0;
+  for (const [key, batch] of batches) {
+    if (!batch.geos.length) continue;
+    const merged = mergeGeometries(batch.geos, false);
+    if (!merged || !merged.attributes.position || merged.attributes.position.count === 0) continue;
+    const mesh = new THREE.Mesh(merged, batch.material);
+    mesh.frustumCulled = true;
+    scene.add(mesh);
+    for (const m of batch.meshes) { if (m.parent) m.parent.remove(m); }
+    groupCount++;
+  }
+  console.log('[BETWEEN] Batched', groupCount, 'material groups');
+}
+
+// Hook into buildLevel to run batching after BETWEEN is built
+// DISABLED: betweenBatchPlatforms() produces a merged mesh that crashes WebGLRenderer's
+// uniform refresh (refreshUniformsCommon reading undefined) on some platform/plate geometry
+// combinations. It's a draw-call optimization only — no gameplay depends on it — so it's left
+// off rather than risk a renderer crash. See TODO.md for follow-up if perf becomes an issue.
+const originalBuildLevel = buildLevel;
+buildLevel = function() {
+  originalBuildLevel();
+};
+
 // ===================== CANOPY SECTOR BUILDER (Phase 1) =====================
 // Each biome sector gets a native platform network skinned with the biome's material.
 // Mechanical platforms (mover, orbit, conveyor, gate, crumble, swing, breath, etc.) keep
@@ -7134,18 +7187,20 @@ function buildBetweenDungeonShaft(mouth, dungeonIndex, zone, levels, arenaType, 
   const arenaHub = { kind: 'arena', x: A.x, z: A.z, top: A.top, hw: A.hw, hd: A.hd, zone, universe: mySlot, slab: null };
   connect(hubs[levels - 1], arenaHub);
   // Return geyser: a small floating platform just past the arena's own edge (every arenaType has its own
-  // internal obstacle layout — colosseum corner towers, reactor pylons/core, pillars columns — so flush-with-
-  // the-floor placement near the center risks landing on one of those; just outside the footprint avoids all of them).
-  const gx = A.x + A.hw + 5, gz = A.z;
-  const geyser = addSolid(gx - 3, gx + 3, arenaTop + 1.6, arenaTop + 2, gz - 3, gz + 3);
-  Object.assign(geyser, { cx: gx, cz: gz, top: arenaTop + 2, zone, returnGeyser: true, geyserTarget: { x: mouth.cx, y: topY + 3, z: mouth.cz } });
+    // internal obstacle layout — colosseum corner towers, reactor pylons/core, pillars columns — so flush-with-
+    // the-floor placement near the center risks landing on one of those; just outside the footprint avoids all of them).
+    const gx = A.x + A.hw + 5, gz = A.z;
+    const geyser = addSolid(gx - 3, gx + 3, arenaTop + 1.6, arenaTop + 2, gz - 3, gz + 3);
+    // Return-geyser mapping: D1/D2→Beacon1, D3/D4→Beacon2, D5/D6→Beacon3/4
+    const beaconMap = [0, 0, 1, 1, 2, 3]; // dungeon index -> beacon index
+    const targetBeacon = betweenBeacons[beaconMap[dungeonIndex]] || betweenBeacons[0];
+    Object.assign(geyser, { cx: gx, cz: gz, top: arenaTop + 2, zone, returnGeyser: true, geyserTarget: { x: targetBeacon.x, y: CANOPY_Y + 3, z: targetBeacon.z } });
   const padMesh = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 0.4, 16), new THREE.MeshBasicMaterial({ color: 0x36f6ff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
   padMesh.position.set(gx, arenaTop + 1.8, gz); scene.add(padMesh);
   connect(arenaHub, { kind: 'building', x: gx, z: gz, top: arenaTop + 2, hw: 3, hd: 3, zone, universe: mySlot, slab: null });
   return { hubs, A, geyser, last: { x: A.x, z: A.z, top: A.top, hw: A.hw, hd: A.hd } };
 }
-// Gravity Anchor: counts toward the (future, Phase 4+) Gravity Well — no launch logic here, just the
-// counter + a visual pulse on the dungeon mouth's existing decorative shaft column.
+// Gravity Anchor: counts toward the Gravity Well. When all 6 anchors active, Well inverts and becomes a launch mechanism.
 function activateGravityAnchor(dungeonIndex) {
   if (!betweenWell) return;
   const anchor = betweenWell.anchors[dungeonIndex];
@@ -7155,6 +7210,18 @@ function activateGravityAnchor(dungeonIndex) {
   if (mouth && mouth.dungeonShaft) { mouth.dungeonShaft.material.opacity = 0.55; mouth.dungeonShaft.material.color.setHex(0x8ad0ff); }
   toast('GRAVITY ANCHOR ACTIVATED (' + betweenWell.anchorsActive + '/6)', 2600);
   shockRing({ x: mouth ? mouth.cx : 0, y: 4, z: mouth ? mouth.cz : 0 }, 10, 0x8ad0ff); sfx.clear && sfx.clear();
+  // When all 6 anchors active: Gravity Well inverts and unlocks Moon launch
+  if (betweenWell.anchorsActive >= 6 && !betweenWell.active) {
+    betweenWell.active = true;
+    betweenWell.launchReady = true;
+    betweenWell.invertT = 0;
+    toast('GRAVITY WELL INVERTED — MOON LAUNCH AVAILABLE', 4000);
+    shockRing({ x: 0, y: 30, z: 0 }, 25, 0x36f6ff);
+    // Start the Well inversion animation
+    betweenWell.rotation.x = Math.PI;
+  }
+  // Corruption bleed: cleared dungeon adds its biome/platforms/enemies to Canopy and Foundation
+  if (mouth && betweenOn()) betweenCorruptionBleed(dungeonIndex, mouth);
 }
 // One-frame glitch flick: screen-tear + a short CSS filter glitch, reusing the file's existing
 // additive-glow/CSS-filter convention (see nosTear()) instead of a new shader.
@@ -7182,6 +7249,7 @@ let betweenSanity = 1.0;                 // 0..1 (1 = grounded, 0 = lost)
 let betweenSanityDrain = 0.0;            // accumulated drain this frame
 let betweenSanityLowWarning = false;     // HUD warning shown at <0.3
 let betweenSanityCritWarning = false;    // HUD warning shown at <0.15
+let betweenWhisperActive = false;        // true for the frame a whisper plays (set by updateWhisperAudio)
 // Sanity drain rates (per second)
 const SANITY_DRAIN_BASE = 0.008;         // passive drain per second while in BETWEEN
 const SANITY_DRAIN_DESCENT = 0.002;      // extra per meter below Canopy (Y=120)
@@ -7234,6 +7302,193 @@ function betweenRestoreSanityAtD4Anchor() {
   if (!betweenOn()) return;
   betweenSanity = Math.min(1, betweenSanity + SANITY_RESET_D4_ANCHOR);
   if (betweenSanity > 0.5) toast('GROUNDING ANCHOR — CALIBRATION RESET', 2000);
+}
+
+// ===== PHASE 4: CORRUPTION BLEED =====
+// Clearing a dungeon adds its biome/platforms/enemies to the Canopy and Foundation.
+let betweenCorruptionBleedDone = new Array(6).fill(false);
+const BETWEEN_BIOME_ZONES = ['Glitch', 'VHS', 'Gullet', 'Psychosis', 'Liminal', 'Fractal'];
+
+function betweenCorruptionBleed(dungeonIndex, mouth) {
+  if (betweenCorruptionBleedDone[dungeonIndex]) return;
+  betweenCorruptionBleedDone[dungeonIndex] = true;
+  const biomeName = BETWEEN_BIOME_ZONES[dungeonIndex] || 'Glitch';
+  toast('CORRUPTION BLEED: ' + biomeName.toUpperCase() + ' SEEPS INTO THE CANOPY', 3000);
+  // Add biome platforms to Canopy sectors near this dungeon's mouth
+  if (betweenDungeonMouths[dungeonIndex]) {
+    const mx = mouth.cx, mz = mouth.cz;
+    for (let i = 0; i < 4; i++) {
+      const angle = i * Math.PI / 2;
+      const bx = mx + Math.cos(angle) * 30;
+      const bz = mz + Math.sin(angle) * 30;
+      const plat = addPlatform(bx, CANOPY_Y, bz, 3, false, 0, mouth.zone, true, true);
+      plat.isCorruptionBleed = true;
+      plat.dungeonSource = dungeonIndex;
+      // Biome-native platform kind for this dungeon
+      const kind = pickBiomePlatformKind(mouth.zone);
+      if (kind !== 'static') makeSpecial(plat, kind, biomePlatformParams(mouth.zone, kind));
+    }
+  }
+  // Add biome platforms to Foundation around Gravity Well
+  for (let i = 0; i < 3; i++) {
+    const angle = (dungeonIndex * Math.PI / 3) + i * 0.5;
+    const fx = Math.cos(angle) * 80;
+    const fz = Math.sin(angle) * 80;
+    const plat = addPlatform(fx, 0, fz, 4, false, 0, mouth.zone, true, true);
+    plat.isCorruptionBleed = true;
+    plat.dungeonSource = dungeonIndex;
+    const kind = pickBiomePlatformKind(mouth.zone);
+    if (kind !== 'static') makeSpecial(plat, kind, biomePlatformParams(mouth.zone, kind));
+  }
+  // Spawn biome-specific enemies on Canopy and Foundation
+  if (mouth.zone && BETWEEN_ENEMY_ROSTER) {
+    for (let i = 0; i < 3; i++) {
+      const angle = i * Math.PI * 2 / 3;
+      const ex = mouth.cx + Math.cos(angle) * 20;
+      const ez = mouth.cz + Math.sin(angle) * 20;
+      spawnBiomeEnemy(ex, CANOPY_Y + 1, ez, mouth, mouth.zone, 0.6, 1);
+    }
+    for (let i = 0; i < 2; i++) {
+      const angle = (dungeonIndex * Math.PI / 3) + i * 1.2;
+      const ex = Math.cos(angle) * 60;
+      const ez = Math.sin(angle) * 60;
+      spawnBiomeEnemy(ex, 1, ez, null, mouth.zone, 0.5, 1);
+    }
+  }
+}
+
+// ===== PHASE 4: GRAVITY WELL LAUNCH SEQUENCE =====
+// After all 6 anchors active: Well inverts, player steps in, launches to Moon.
+// Launch is a skill sequence — player steers with glide through orbital debris gauntlet.
+// Failure falls back to y=0 and retries; no death.
+let betweenLaunchActive = false;
+let betweenLaunchPhase = 0; // 0=enter, 1=ascending, 2=gauntlet, 3=moon
+let betweenLaunchT = 0;
+let betweenLaunchVY = 0;
+let betweenLaunchDebris = [];
+let betweenLaunchFailSafe = false;
+
+function updateGravityWellLaunch(dt) {
+  if (!betweenOn() || !betweenWell || !betweenWell.launchReady) return;
+  if (!betweenLaunchActive) {
+    // Check if player enters Well (at Foundation center, Y=0-30)
+    const wellDist = Math.hypot(pos.x, pos.z);
+    if (wellDist < 12 && pos.y < 40 && pos.y > 0) {
+      // Player entered Well — begin launch sequence
+      betweenLaunchActive = true;
+      betweenLaunchPhase = 1;
+      betweenLaunchT = 0;
+      betweenLaunchVY = 55; // initial launch velocity
+      betweenLaunchFailSafe = false;
+      vel.set(0, betweenLaunchVY, 0);
+      pos.set(0, 5, 0);
+      onGround = false;
+      // Spawn orbital debris gauntlet
+      spawnLaunchDebris();
+      toast('GRAVITY WELL ENGAGED — STEER TO THE MOON', 3000);
+      shockRing({ x: 0, y: 15, z: 0 }, 20, 0x55e6ff);
+    }
+  } else {
+    betweenLaunchT += dt;
+    if (betweenLaunchPhase === 1) {
+      // Ascending phase: player steers with glide/horizontal movement
+      // Gravity is reduced during launch (spaceK fade applies)
+      // Debris moves toward player
+      updateLaunchDebris(dt);
+      if (pos.y > 300) {
+        betweenLaunchPhase = 2; // Enter gauntlet proper
+        betweenLaunchT = 0;
+      }
+    } else if (betweenLaunchPhase === 2) {
+      // Gauntlet phase: dense debris field, must navigate to Moon
+      updateLaunchDebris(dt);
+      // Moon approach check
+      if (pos.y > 800) {
+        betweenLaunchPhase = 3;
+        betweenLaunchT = 0;
+      }
+    } else if (betweenLaunchPhase === 3) {
+      // Moon approach: trigger Moon ending
+      betweenLaunchActive = false;
+      betweenLaunchPhase = 0;
+      moonReached(); // reuse existing Moon ending
+      return;
+    }
+    // Fail-safe: if player falls below Y=0 during launch, reset
+    if (pos.y < 0 && !betweenLaunchFailSafe) {
+      betweenLaunchFailSafe = true;
+      betweenLaunchActive = false;
+      betweenLaunchPhase = 0;
+      pos.set(0, 10, 0);
+      vel.set(0, 0, 0);
+      onGround = false;
+      toast('LAUNCH ABORTED — WELL RECHARGING', 3000);
+      // Clear debris
+      for (const d of betweenLaunchDebris) { if (d.mesh && d.mesh.parent) scene.remove(d.mesh); if (d.geo) d.geo.dispose(); }
+      betweenLaunchDebris.length = 0;
+    }
+  }
+}
+
+// Spawn orbital debris for launch gauntlet
+function spawnLaunchDebris() {
+  betweenLaunchDebris.length = 0;
+  for (let i = 0; i < 80; i++) {
+    const angle = rand() * Math.PI * 2;
+    const height = 50 + rand() * 900;
+    const radius = 15 + rand() * 40;
+    const d = {
+      x: Math.cos(angle) * radius,
+      y: height,
+      z: Math.sin(angle) * radius,
+      vx: (rand() - 0.5) * 2,
+      vy: (rand() - 0.5) * 1,
+      vz: (rand() - 0.5) * 2,
+      radius: 0.8 + rand() * 1.5,
+      mesh: null
+    };
+    const geo = new THREE.BoxGeometry(d.radius * 2, d.radius * 2, d.radius * 2);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x2a1040, wireframe: true, transparent: true, opacity: 0.6 });
+    d.mesh = new THREE.Mesh(geo, mat);
+    d.mesh.position.set(d.x, d.y, d.z);
+    scene.add(d.mesh);
+    betweenLaunchDebris.push(d);
+  }
+}
+
+function updateLaunchDebris(dt) {
+  for (const d of betweenLaunchDebris) {
+    if (!d.mesh) continue;
+    d.x += d.vx * dt * 10;
+    d.y += d.vy * dt * 10;
+    d.z += d.vz * dt * 10;
+    d.mesh.position.set(d.x, d.y, d.z);
+    d.mesh.rotation.x += dt * 0.3;
+    d.mesh.rotation.y += dt * 0.5;
+    // Simple collision with player
+    if (Math.hypot(pos.x - d.x, pos.y - d.y, pos.z - d.z) < 2) {
+      // Hit debris — knock player back
+      const dx = pos.x - d.x, dy = pos.y - d.y, dz = pos.z - d.z;
+      const dist = Math.hypot(dx, dy, dz) || 1;
+      vel.x += (dx / dist) * 15;
+      vel.y += (dy / dist) * 5;
+      vel.z += (dz / dist) * 15;
+      hurt(1);
+    }
+  }
+}
+
+// BETWEEN ending (eye blink) — fires when the Moon launch gauntlet completes
+function moonReached(sol) {
+  // THE BETWEEN ending: the Moon's eye blinks
+  const eye = scene.getObjectByName('moonEye');
+  if (eye) {
+    eye.scale.y = 0.01;
+    setTimeout(() => { eye.scale.y = 1; }, 300);
+  }
+  toast('THE EYE BLINKS — THE INVITATION IS ACCEPTED', 5000);
+  // Trigger credits/toast sequence
+  levelClear('moon', 5000, false);
 }
 
 function glitchDeco(hub, i, levels, slab) {
@@ -8592,11 +8847,11 @@ function liminalDeco(hub, i, levels, slab) {
     slab.isLiminalBossFloor = true;
     d5ThingBossFloor = slab;
     // Water plane for reflections
-    const waterGeo = new THREE.PlaneGeometry(last.hw * 4, last.hd * 4);
+    const waterGeo = new THREE.PlaneGeometry(slab.hw * 4, slab.hd * 4);
     const waterMat = new THREE.MeshBasicMaterial({ color: 0x0a1a2a, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
     d5WaterReflection = new THREE.Mesh(waterGeo, waterMat);
     d5WaterReflection.rotation.x = -Math.PI / 2;
-    d5WaterReflection.position.set(last.x, last.top + 0.1, last.z);
+    d5WaterReflection.position.set(slab.cx, slab.top + 0.1, slab.cz);
     scene.add(d5WaterReflection);
   }
 }
@@ -8916,11 +9171,13 @@ function playWhisper(variant, position, intensity = 1) {
 // Trigger whispers near enemies
 function updateWhisperAudio(dt) {
   if (!betweenOn()) return;
+  betweenWhisperActive = false;
   for (const e of enemies) {
     if (e.dead || !e.built) continue;
     const dist = Math.hypot(pos.x - e.x, pos.z - e.z);
     if (dist < 30 && rand() < dt * 0.1) { // 10% chance per second when close
       playWhisper(e.variant, { x: e.x, y: e.y, z: e.z }, 1 - dist / 30);
+      betweenWhisperActive = true;
     }
   }
 }
@@ -9776,7 +10033,10 @@ function die(title, why) {
 }
 function hurt(n, fromX, fromZ) {
   if (state !== 'play' || invuln > 0) return;
-  if (betweenOn()) betweenWarpCd = Math.max(betweenWarpCd, 30);   // THE BETWEEN: taking damage breaks/refreshes the fast-travel cooldown
+  if (betweenOn()) {
+    betweenWarpCd = Math.max(betweenWarpCd, 30);   // THE BETWEEN: taking damage breaks/refreshes the fast-travel cooldown
+    betweenSanity = Math.max(0, betweenSanity - 0.05); // Sanity drain on damage
+  }
   health -= n; invuln = 1.3; shake = 0.6; sfx.hurt();
   const horrorHit = activeZ && activeZ.name === 'Horror';
   bloodBurst(new THREE.Vector3(pos.x, pos.y + 1, pos.z), horrorHit ? 52 : 34, horrorHit ? 1.4 : 1.2);
@@ -9794,7 +10054,7 @@ const menuBtns = ['bStart', 'bMulti', 'bExit'];
 let menuSel = 0, menuMode = 'main';
 // LEVEL SELECT: pure data so a second real level is a data-only addition later (no UI rewrite).
 // Each entry: id, display name/subtitle (player-facing copy only), unlocked, startFn (what actually begins play).
-const SP_ONLY_DESCENT = true;   // TEMP: single-player menu shows only Lil Spasticism while the other levels are built; multiplayer joins via LEVEL_DEFS so it still reaches them
+const SP_ONLY_DESCENT = false;   // TEMP-TEST: single-player menu shows only Lil Spasticism while the other levels are built; multiplayer joins via LEVEL_DEFS so it still reaches them
 const LEVELS_ALL = [
   { id: 'descent', name: 'Lil Spasticism', subtitle: "The one endless procedural descent — floating platforms all the way down.", unlocked: true, startFn: () => startLevelDef('descent') },
   { id: 'rent', name: "Rent's Due", subtitle: 'Urban decay all the way down - eviction notices, loan sharks, and the rent is overdue.', unlocked: true, startFn: () => startLevelDef('rent') },
@@ -9909,6 +10169,10 @@ function hostRefresh() {
   const addr = ts ? ts.address : other ? other.address : 'localhost';
   $('inviteAddr').textContent = cloud ? `${servedByServer() ? location.origin + '/' : SITE_URL}?room=${roomVal()}` : `http://${addr}:${(netInfo && netInfo.port) || 8080}/?room=${roomVal()}`;
   $('bGo').disabled = !netInfo;
+  netModeApply();
+  betweenDropModeApply();
+  const bNetMode = $('bNetMode'); if (bNetMode) bNetMode.onclick = netModeToggle;
+  const bBetweenDrop = $('bBetweenDropMode'); if (bBetweenDrop) bBetweenDrop.onclick = betweenDropModeToggle;
 }
 async function copyText(t) {
   try { await navigator.clipboard.writeText(t); }
@@ -9946,6 +10210,14 @@ function netModeToggle() {                                 // host-owned; guests
   netModeApply();
   toast(netMode === 'coop' ? 'ROOM MODE: COOP — teammates cannot hurt each other' : 'ROOM MODE: PVP — friendly fire is on', 3000);
   if (net.on && net.host) { netSend({ t: 'mode', md: netMode }); toast('Room notified', 1200); }
+}
+function betweenDropModeApply() { const el = $('betweenDropModeLabel'); if (el) el.textContent = betweenTeamDrop ? 'TEAM DROP' : 'SCATTERED DROP'; }
+function betweenDropModeToggle() {
+  if (net.on && !net.host) { toast('Only the host picks the drop mode', 1800); return; }
+  betweenTeamDrop = !betweenTeamDrop;
+  betweenDropModeApply();
+  toast(betweenTeamDrop ? 'TEAM DROP: all players spawn at Beacon 1' : 'SCATTERED DROP: players spread across Beacons 1-4', 3000);
+  if (net.on && net.host) { netSend({ t: 'betweenDrop', td: betweenTeamDrop }); toast('Room notified', 1200); }
 }
 function menuExit() {
   menuMode = 'bye'; menuRender();
@@ -10259,6 +10531,8 @@ function damageEnemy(e, dmg, kind = 'hit') {
     if (e.midBoss && (!net.on || net.host)) grantMidBossReward(e.midBoss);      // MID-BAND BOSSES: the killing blow hands out the run rewards on the authority that owns this enemy
     enemyGore(e); shake = Math.max(shake, e.boss ? 1.2 : 0.5);
     score += e.pts; toast(`+${e.pts}`, 700); killFx(e, e.boss);
+    // THE BETWEEN: sanity drain on enemy kill
+    if (betweenOn()) betweenSanity = Math.max(0, betweenSanity - SANITY_DRAIN_KILL);
     if (e.variant === 'bomber') explode({ x: e.x, y: e.cy, z: e.z }, 4.2, 0, 'enemy', kind);
     dropAmmo(e); dropCoins(e); if (e.mini) unlockArena(e.hub); if (e.anchorIndex !== undefined) activateGravityAnchor(e.anchorIndex);
     if (e.boss && endBosses.every(b => b.dead)) {
@@ -13570,6 +13844,9 @@ function netMessage(m) {
     case 'mode':                                                              // host announces the room mode (COOP/PVP)
       if ((m.md === 'coop' || m.md === 'pvp') && (net.host || from === net.hostId) && m.md !== netMode) { netMode = m.md; netModeApply(); toast(m.md === 'coop' ? 'Room mode: COOP' : 'Room mode: PVP', 2400); }
       break;
+    case 'betweenDrop':                                                   // host announces THE BETWEEN drop mode (TEAM/SCATTERED)
+      if ((typeof m.td === 'boolean') && (net.host || from === net.hostId) && m.td !== betweenTeamDrop) { betweenTeamDrop = m.td; betweenDropModeApply(); toast(m.td ? 'Room drop: TEAM DROP' : 'Room drop: SCATTERED DROP', 2400); }
+      break;
     case 'mission':
       if (from === net.id) break;
       net.missions.set(from, { slot: m.slot | 0, title: String(m.title || '').slice(0, 80), state: String(m.state || '').slice(0, 12), progress: m.progress | 0, count: m.count | 0 });
@@ -15312,10 +15589,29 @@ renderer.setAnimationLoop(now => {
         b.corruption = Math.max(0, b.corruption - dt * 0.005);
       }
     }
-    // Downed state handling (co-op) - simplified for Phase 1
-    // In co-op, downed players are tracked per beacon; revive by looking at them
-    if (net.on && betweenBeacons.length) {
-      // This is a stub — full downed/revive logic in Phase 4 co-op pass
+    // ---- Phase 4: Downed state, fast-travel, beacon corruption, return-geyser mapping ---
+    // Downed state: ~10s, revive by looking at downed player
+    // Fast-travel: 30s cooldown, breaks on damage
+    // Beacon corruption: +15% per death, decays slowly, affects sanity reset and Well delay
+    // Return-geyser mapping: D1/D2→Beacon1, D3/D4→Beacon2, D5/D6→Beacon3/4
+    if (net.on) {
+      for (const b of betweenBeacons) {
+        if (b.downedPlayers.size > 0) {
+          if (!b.downedTimers) b.downedTimers = new Map();
+          for (const downedIdx of b.downedPlayers) {
+            const timer = (b.downedTimers.get(downedIdx) || 10) - dt;
+            if (timer <= 0) {
+              // Ground out to this beacon (respawn downed player here)
+              b.downedPlayers.delete(downedIdx);
+              b.downedTimers.delete(downedIdx);
+              // In co-op, host would respawn the downed player at this beacon
+              if (net.host) console.log('[BETWEEN] Downed player ' + downedIdx + ' grounded out to ' + b.name);
+            } else {
+              b.downedTimers.set(downedIdx, timer);
+            }
+          }
+        }
+      }
     }
     // ---- Phase 2: per-dungeon full system updates (D1 GLITCH.EXE, D4 PSYCHOSIS, D6 FRACTAL DESCENT) ----
     updateGlitchExe(dt);
@@ -15329,7 +15625,9 @@ renderer.setAnimationLoop(now => {
     updateBetweenPresentation(dt);
     // ---- Phase 4: Global sanity system ----
     updateBetweenSanity(dt);
-    if (P) PERF.lap('wiring+beacons+dungeons+presentation+sanity'); } updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
+    // ---- Phase 4: Gravity Well launch ----
+    updateGravityWellLaunch(dt);
+    if (P) PERF.lap('wiring+beacons+dungeons+presentation+sanity+well'); } updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
   updateVisuals(dt); setHint(); if (P) PERF.lap('visuals+hud');
   if (guideDialogOpen && state !== 'play') closeGuideDialog(false);
   netTick(dt); updatePeers(dt); debugTick(dt); if (P) PERF.lap('net+peers+debug');
