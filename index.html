@@ -423,11 +423,11 @@ let betweenSectorZones = [];                  // THE BETWEEN: the 17 Canopy sect
 let betweenWell = null;                       // THE BETWEEN: Phase 2 — the Gravity Well mesh + .anchors[], set inside buildBetween()
 let betweenTeleportT = 0;                     // THE BETWEEN: Phase 2 — scripted camera-roll timer for D6 flip panels (seconds remaining)
 let betweenGlitchT = 0;                       // THE BETWEEN: Phase 2 — D1 input-swap timer (seconds remaining)
-const FRACTAL_ZONE = { name: 'Fractal', desc: 'the angles are wrong on purpose', top: '#04020a', mid: '#140a2e', bot: '#2a1046', fog: 0x120a24, hemi: 0.55, hemiCol: 0xb49aff, sun: 0.4, sunCol: 0x8a6aff, cloud: 0x1a1030, plate: 0x9a6aff, weather: 'none' };
+const FRACTAL_ZONE = { name: 'Fractal', desc: 'the angles are wrong on purpose', top: '#04020a', mid: '#140a2e', bot: '#2a1046', fog: 0x120a24, hemi: 0.55, hemiCol: 0xb49aff, sun: 0.4, sunCol: 0x8a6aff, cloud: 0x1a1030, plate: 0x9a6aff, weather: 'glitch' };
 // THE BETWEEN — custom dungeon zones (Phase 3)
-const VHS_ZONE = { name: 'VHS', desc: 'static hiss eats the walls', top: '#0a0a12', mid: '#1a1426', bot: '#2a1e36', fog: 0x141024, hemi: 0.45, hemiCol: 0x8866aa, sun: 0.3, sunCol: 0x664488, cloud: 0x0a0814, plate: 0xaa88ff, weather: 'none' };
-const GULLET_ZONE = { name: 'Gullet', desc: 'you are inside it', top: '#1a0408', mid: '#3a0a14', bot: '#5a121a', fog: 0x2a060c, hemi: 0.65, hemiCol: 0xff6677, sun: 0.2, sunCol: 0xff3344, cloud: 0x1a0408, plate: 0xcc3355, weather: 'none' };
-const LIMINAL_ZONE = { name: 'Liminal', desc: 'the water remembers', top: '#020814', mid: '#081426', bot: '#0e243a', fog: 0x0a0e1a, hemi: 0.75, hemiCol: 0x44aaff, sun: 0.15, sunCol: 0x2288cc, cloud: 0x040a14, plate: 0x3399dd, weather: 'none' };
+const VHS_ZONE = { name: 'VHS', desc: 'static hiss eats the walls', top: '#0a0a12', mid: '#1a1426', bot: '#2a1e36', fog: 0x141024, hemi: 0.45, hemiCol: 0x8866aa, sun: 0.3, sunCol: 0x664488, cloud: 0x0a0814, plate: 0xaa88ff, weather: 'static' };
+const GULLET_ZONE = { name: 'Gullet', desc: 'you are inside it', top: '#1a0408', mid: '#3a0a14', bot: '#5a121a', fog: 0x2a060c, hemi: 0.65, hemiCol: 0xff6677, sun: 0.2, sunCol: 0xff3344, cloud: 0x1a0408, plate: 0xcc3355, weather: 'ash' };
+const LIMINAL_ZONE = { name: 'Liminal', desc: 'the water remembers', top: '#020814', mid: '#081426', bot: '#0e243a', fog: 0x0a0e1a, hemi: 0.75, hemiCol: 0x44aaff, sun: 0.15, sunCol: 0x2288cc, cloud: 0x040a14, plate: 0x3399dd, weather: 'rain' };
 
 // ---------- helpers ----------
 let seed = 11, levelSeed = 11;
@@ -11706,16 +11706,16 @@ function trunkify(on) {
 }
 
 // ---------- SPACE: above the roof the sky fades to black and gravity fades away ----------
-const ALIEN_ZONE = { name: 'Alien Void', desc: 'past the moon: xenos, saucers and drifting space cities', top: '#02010a', mid: '#140a2e', bot: '#1d3a34', fog: 0x0e0a22, hemi: 0.75, hemiCol: 0x9affc4, sun: 0.85, sunCol: 0xc06aff, cloud: 0x1a1030, plate: 0x7dff4a, weather: 'none' };
+const ALIEN_ZONE = { name: 'Alien Void', desc: 'past the moon: xenos, saucers and drifting space cities', top: '#02010a', mid: '#140a2e', bot: '#1d3a34', fog: 0x0e0a22, hemi: 0.75, hemiCol: 0x9affc4, sun: 0.85, sunCol: 0xc06aff, cloud: 0x1a1030, plate: 0x7dff4a, weather: 'static' };
 const MOON_ZONE = { name: 'Moon', desc: 'no air, low gravity - you made it', top: '#000004', mid: '#04050e', bot: '#0d1226', fog: 0x05060f, hemi: 0.9, hemiCol: 0xdfe8ff, sun: 1.4, sunCol: 0xffffff, cloud: 0x222a3a, plate: 0xcfd6e6, weather: 'none' };
 // THE BETWEEN: Canopy sector zones. FLESHNEST/HAUNTED/SHROOM are exact copies of buildNetwork()'s locally-scoped
 // FP/FHT/FSH literals, promoted to top-level so the Canopy can reuse them without touching buildNetwork() at all.
-const FLESHNEST_ZONE = { name: 'FleshNest', desc: 'warm meat under a purring pink dusk', top: '#160a14', mid: '#2c1226', bot: '#42182f', fog: 0x1e0a18, hemi: 0.85, hemiCol: 0xff9ec4, sun: 1.0, sunCol: 0xff6aa2, cloud: 0x2c1228, plate: 0xff5aa0, weather: 'none' };
-const HAUNTED_ZONE = { name: 'HauntedHouse', desc: 'the halls are awake — walk soft', top: '#05070c', mid: '#111722', bot: '#242b31', fog: 0x20262c, hemi: 0.48, hemiCol: 0x879293, sun: 0.28, sunCol: 0xc4a77a, cloud: 0x4b5558, plate: 0xc6a16d, weather: 'none' };
-const SHROOM_ZONE = { name: 'Shroom', desc: 'a storybook cap hides a strange little court', top: '#130b16', mid: '#392630', bot: '#71634d', fog: 0x55453d, hemi: 0.78, hemiCol: 0xe5d5b6, sun: 0.62, sunCol: 0xf0c989, cloud: 0x94826b, plate: 0xd8b88a, weather: 'none' };
+const FLESHNEST_ZONE = { name: 'FleshNest', desc: 'warm meat under a purring pink dusk', top: '#160a14', mid: '#2c1226', bot: '#42182f', fog: 0x1e0a18, hemi: 0.85, hemiCol: 0xff9ec4, sun: 1.0, sunCol: 0xff6aa2, cloud: 0x2c1228, plate: 0xff5aa0, weather: 'petals' };
+const HAUNTED_ZONE = { name: 'HauntedHouse', desc: 'the halls are awake — walk soft', top: '#05070c', mid: '#111722', bot: '#242b31', fog: 0x20262c, hemi: 0.48, hemiCol: 0x879293, sun: 0.28, sunCol: 0xc4a77a, cloud: 0x4b5558, plate: 0xc6a16d, weather: 'soot' };
+const SHROOM_ZONE = { name: 'Shroom', desc: 'a storybook cap hides a strange little court', top: '#130b16', mid: '#392630', bot: '#71634d', fog: 0x55453d, hemi: 0.78, hemiCol: 0xe5d5b6, sun: 0.62, sunCol: 0xf0c989, cloud: 0x94826b, plate: 0xd8b88a, weather: 'spores' };
 // SKYCITY/MARS_RUIN have no existing analog — two new single-purpose atmosphere consts, same literal shape as ALIEN_ZONE/MOON_ZONE.
-const SKYCITY_ZONE = { name: 'Shallows', desc: 'bright cloud-deck, the only sane part of the seam', top: '#6fb8e8', mid: '#aee0f2', bot: '#eaf6ff', fog: 0xcfeaff, hemi: 1.0, hemiCol: 0xffffff, sun: 1.1, sunCol: 0xfff3c0, cloud: 0xffffff, plate: 0x8fd6ff, weather: 'none' };
-const MARS_RUIN_ZONE = { name: 'Seam', desc: 'rust-red ruin, the eye largest here', top: '#1a0604', mid: '#3a0f08', bot: '#5c1c0e', fog: 0x2a0b06, hemi: 0.55, hemiCol: 0xff8a5c, sun: 0.7, sunCol: 0xff6a3c, cloud: 0x4a1a10, plate: 0xb23a1a, weather: 'none' };
+const SKYCITY_ZONE = { name: 'Shallows', desc: 'bright cloud-deck, the only sane part of the seam', top: '#6fb8e8', mid: '#aee0f2', bot: '#eaf6ff', fog: 0xcfeaff, hemi: 1.0, hemiCol: 0xffffff, sun: 1.1, sunCol: 0xfff3c0, cloud: 0xffffff, plate: 0x8fd6ff, weather: 'sunbits' };
+const MARS_RUIN_ZONE = { name: 'Seam', desc: 'rust-red ruin, the eye largest here', top: '#1a0604', mid: '#3a0f08', bot: '#5c1c0e', fog: 0x2a0b06, hemi: 0.55, hemiCol: 0xff8a5c, sun: 0.7, sunCol: 0xff6a3c, cloud: 0x4a1a10, plate: 0xb23a1a, weather: 'embers' };
 const spaceK = y => clamp((y - (TOP + 80)) / 260, 0, 1);
 const SPACE_BLACK = new THREE.Color(0x000006);
 let spaceNow = 0, moonInfo = null;
@@ -14893,6 +14893,12 @@ function buildBackdrop(name) {
     } else if (name === 'Frozen') {                                            // ice spires + aurora ribbons
       const h = 180 + Math.random() * 120, sp = new THREE.Mesh(new THREE.ConeGeometry(22 + Math.random() * 18, h, 5), new THREE.MeshLambertMaterial({ color: 0x9fe6ff, transparent: true, opacity: 0.85 })); sp.position.y = h / 2 - 220; o.add(sp);
       if (i % 3 === 0) { const au = new THREE.Mesh(new THREE.PlaneGeometry(220, 70), addC(0x55ffb0, 0.35)); au.position.y = 110 + Math.random() * 60; au.rotation.y = Math.random() * 3; o.add(au); anims.push({ k: 'aurora', m: au, ph: Math.random() * 6 }); }
+    } else if (name === 'Hellscape') {                                         // jagged black spires with a bleeding sky-crack behind them
+      const h = 140 + Math.random() * 200, sp = new THREE.Mesh(new THREE.ConeGeometry(14 + Math.random() * 16, h, 4), lamC(0x1a0404)); sp.position.y = h / 2 - 220; sp.rotation.y = Math.random() * 3; o.add(sp);
+      if (i % 4 === 0) { const crack = new THREE.Mesh(new THREE.PlaneGeometry(10 + Math.random() * 30, 260), addC(0xff2a10, 0.5)); crack.position.y = 20; crack.rotation.y = Math.random() * 3; crack.rotation.z = (Math.random() - 0.5) * 0.3; o.add(crack); anims.push({ k: 'aurora', m: crack, ph: Math.random() * 6 }); }
+    } else if (name === 'Glitch') {                                            // wireframe geometry glitching between a few shapes, never settling
+      const m = new THREE.Mesh(Math.random() < 0.5 ? new THREE.BoxGeometry(50 + Math.random() * 40, 50 + Math.random() * 40, 50 + Math.random() * 40) : new THREE.OctahedronGeometry(35 + Math.random() * 30), new THREE.MeshBasicMaterial({ color: 0x39ff88, wireframe: true, transparent: true, opacity: 0.55 }));
+      m.position.y = -80 + Math.random() * 220; o.add(m); anims.push({ k: 'spin', m, ph: Math.random() * 6, sx: (Math.random() - 0.5) * 0.6, sy: (Math.random() - 0.5) * 0.6 });
     } else if (name === 'Horror') {                                            // blood moon behind a ring of dead forest
       if (i === 0) {
         const moon = new THREE.Mesh(new THREE.SphereGeometry(38, 10, 8), new THREE.MeshBasicMaterial({ color: 0x780b20, fog: false }));
@@ -14937,6 +14943,8 @@ function zoneGround(name) {
   else if (name === 'Jungle') blobs('#0b3a14', ['#2fa040', '#6fd05a', '#1d6a2a'], 70, 5, 20);
   else if (name === 'Frozen') blobs('#bfe4f6', ['#ffffff', '#8fd0f0', '#e8f8ff'], 60, 6, 22);
   else if (name === 'Storm') blobs('#141a24', ['#26324a', '#3a4a68', '#0a0e16'], 60, 6, 22);
+  else if (name === 'Hellscape') blobs('#120000', ['#ff1a1a', '#4a0000', '#ff5a10'], 65, 5, 20);
+  else if (name === 'Glitch') { blobs('#000a04', ['#39ff88', '#04210f', '#ff2bd6'], 50, 4, 16); for (let i = 0; i < 20; i++) { x.fillStyle = Math.random() < 0.5 ? '#39ff88' : '#000'; x.fillRect(Math.random() * 128, Math.random() * 128, 2 + Math.random() * 18, 1 + Math.random() * 3); } }
   else for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) { x.fillStyle = (i + j) % 2 ? '#ffffff' : '#666666'; x.fillRect(i * 16, j * 16, 16, 16); }
   const t = trackRetroTexture(new THREE.CanvasTexture(c)); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(60, 60);
   return (groundMats[name] = new THREE.MeshBasicMaterial({ map: t }));
@@ -14985,8 +14993,8 @@ function updateWorlds(dt) {
     bd.k += (want - bd.k) * Math.min(1, dt * 1.6); bd.g.visible = bd.k > 0.02; if (!bd.g.visible) continue;
     bd.g.scale.setScalar(Math.max(bd.k, 0.001)); bd.g.position.set(camera.position.x, camera.position.y - 60, camera.position.z); bd.g.rotation.y += dt * 0.004;
     for (const a of bd.anims) {
-      if (a.k === 'spin') { a.m.rotation.x += dt * a.sx; a.m.rotation.y += dt * a.sy; if (nm === 'Psychedelic') a.m.material.color.setHSL((T * 0.15 + a.ph) % 1, 1, 0.55); }
-      else if (a.k === 'aurora') { a.m.rotation.z = Math.sin(T * 0.5 + a.ph) * 0.2; a.m.material.color.setHSL(0.35 + 0.3 * Math.sin(T * 0.3 + a.ph), 0.9, 0.55); }
+      if (a.k === 'spin') { a.m.rotation.x += dt * a.sx; a.m.rotation.y += dt * a.sy; if (nm === 'Psychedelic') a.m.material.color.setHSL((T * 0.15 + a.ph) % 1, 1, 0.55); else if (nm === 'Glitch') a.m.visible = Math.random() > 0.08; }
+      else if (a.k === 'aurora') { a.m.rotation.z = Math.sin(T * 0.5 + a.ph) * 0.2; if (nm === 'Hellscape') a.m.material.color.setHSL(0.02 + 0.03 * Math.sin(T * 0.4 + a.ph), 0.95, 0.5); else a.m.material.color.setHSL(0.35 + 0.3 * Math.sin(T * 0.3 + a.ph), 0.9, 0.55); }
     }
   }
   // the ground swaps to the world's surface
