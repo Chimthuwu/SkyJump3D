@@ -374,6 +374,7 @@ function nosEggTick(dt) {
     const dx = pos.x - e.x, dz = pos.z - e.z, d2 = dx * dx + dz * dz;
     if (e.k === 'invaders') { if (d2 < 22500) { e.mesh.position.x = e.x + Math.sin(t * 0.9) * 1.2 * e.ax; e.mesh.position.z = e.z + Math.sin(t * 0.9) * 1.2 * e.az; } continue; }
     if (e.k === 'pong') { if (d2 < 22500) { const u = Math.abs(((t * 0.55) % 2) - 1); e.ball.position.x = (u * 2 - 1) * e.hw; e.ball.position.y = Math.sin(t * 2.3) * 0.7; e.padA.position.y = e.ball.position.y * 0.8; e.padB.position.y = Math.sin(t * 2.3 + 1.3) * 0.7; } continue; }
+    if (e.k === 'tetris') { e.mesh.rotation.y += dt * 0.4; for (const b of e.blocks) { const y = (b.offY - (t * 1.6 + b.phase) % 12); b.m.position.y = y; } continue; }
     if (e.used) { if (e.mesh && e.k !== 'q') e.mesh.visible = false; continue; }
     if (e.k === 'zelda' || e.k === 'etank') e.mesh.rotation.y += dt * (e.k === 'etank' ? 2 : 0.4);
     if (d2 > (e.r || 2.4) * (e.r || 2.4) || Math.abs(pos.y - e.y) > (e.dy || 3.2) || (e.yMin !== undefined && pos.y < e.yMin)) continue;
@@ -5087,8 +5088,20 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     g.position.set(x, y, z); g.rotation.y = Math.atan2(faceX, faceZ); scene.add(g);
     nosEggs.push({ k: 'invaders', x, y, z, mesh: g, ax: alongX, az: alongZ });
   }
-  function nosEggPong(x, y, z, faceX, faceZ) {                    // two paddles and a bouncing ball
-    const r = nosEggRes(), g = new THREE.Group(), hw = 3, a = new THREE.Mesh(r.pad, r.white), b = new THREE.Mesh(r.pad, r.white), ball = new THREE.Mesh(r.ball, r.white);
+  function nosEggTetris(x, y, z) {                                 // colored blocks falling in the sky (Tetris vibe)
+    const r = nosEggRes(), g = new THREE.Group(), cols = [0xff3a3a, 0x36f6ff, 0xffd23a, 0x4dff6a, 0xb44cff, 0xff8c3a];
+    const blocks = [];
+    for (let i = 0; i < 7; i++) {
+      const m = new THREE.Mesh(r.box, new THREE.MeshBasicMaterial({ color: cols[i % cols.length], toneMapped: false }));
+      const bx = (i % 3 - 1) * 1.7, by = (Math.floor(i / 3)) * 1.7, bz = (i % 2) * 0.6;
+      m.position.set(bx, by, bz); g.add(m);
+      blocks.push({ m, offY: by, phase: i * 0.7 });
+    }
+    g.position.set(x, y + 14, z); scene.add(g);
+    nosEggs.push({ k: 'tetris', x, y, z, mesh: g, blocks, baseY: y + 14 });
+  }
+    function nosEggPong(x, y, z, faceX, faceZ) {                    // two paddles and a bouncing ball
+      const r = nosEggRes(), g = new THREE.Group(), hw = 3, a = new THREE.Mesh(r.pad, r.white), b = new THREE.Mesh(r.pad, r.white), ball = new THREE.Mesh(r.ball, r.white);
     a.position.x = -hw - 0.8; b.position.x = hw + 0.8; g.add(a, b, ball);
     g.position.set(x, y, z); g.rotation.y = Math.atan2(faceX, faceZ); scene.add(g);
     nosEggs.push({ k: 'pong', x, y, z, mesh: g, ball, padA: a, padB: b, hw });
@@ -5272,6 +5285,7 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
       if (!dy && i % 5 === 1) { const p = at(0.36); nosEggBlocks(p.x, cursor.y, p.z, bearing + Math.PI / 2, i % 10 === 1); }     // ? blocks (bearing + 90deg = across the road)
       if (!dy && i % 7 === 5) { const p = at(0.1); nosEggPac(p.x, cursor.y, p.z, bearing, 12); }
       if (!dy && i % 6 === 4) { const p = at(0.5), s = i % 2 ? 1 : -1, lx = nxOf(bearing) * s, lz = nzOf(bearing) * s; nosEggInvaders(p.x + lx * (width * 0.5 + 16), cursor.y + 10, p.z + lz * (width * 0.5 + 16), -lx, -lz, Math.cos(bearing), Math.sin(bearing)); }
+      if (!dy && i % 9 === 7) { const p = at(0.5), s = i % 2 ? -1 : 1, lx = nxOf(bearing) * s, lz = nzOf(bearing) * s; nosEggTetris(p.x + lx * (width * 0.5 + 22), cursor.y + 12, p.z + lz * (width * 0.5 + 22)); }
       if (!dy && i % 6 === 2) { const p = at(0.5), s = i % 2 ? -1 : 1, lx = nxOf(bearing) * s, lz = nzOf(bearing) * s; nosEggPong(p.x + lx * (width * 0.5 + 16), cursor.y + 9, p.z + lz * (width * 0.5 + 16), -lx, -lz); }
       if (!dy && i % 4 === 2) { const p = at(0.44); nosBoostArch(p.x, cursor.y, p.z, bearing, width, style.edge); }
       for (let k = 2; k < len - 4; k += 13) coin(cursor.x + Math.cos(bearing) * k + nxOf(bearing) * (k % 26 < 13 ? -3 : 3), yOn(k) + 1.2, cursor.z + Math.sin(bearing) * k + nzOf(bearing) * (k % 26 < 13 ? -3 : 3), zone);
