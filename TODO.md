@@ -388,6 +388,12 @@ Status: Rent's Due built (uncommitted - see Done). Nostalgia Overdose built the 
   5. Foundation finale polish — it's an 880×880 near-empty slab outside of post-boss corruption-bleed; give it baseline ambient detail.
 - Not started yet as of this entry — the sector-banding/dread-thorn/jetpack fixes above came from live user feedback mid-session and were prioritized first since they're concrete bugs, not the broader density pass.
 
+## Deep space (Mars→Jupiter and beyond): new dedicated space biomes, no more ground-block reuse (2026-10-28, CLAUDE)
+- User-reported: "hella hell blocks" floating between Mars and the following planets, and the recycled ground biomes used out there ("glitchy biomes") looked wrong in a space setting.
+- Root cause: `buildPlanetLegGen()` (index.html ~2592) picked each planet-bridge segment's biome straight from `ZONES` by name — `PLANETS[].biomes` literally listed `'Hellscape'`/`'Horror'`/`'Glitch'` etc. (ground biomes), carrying their ground palette, enemy roster, AND a Hellscape-specific pentagram floor decal, all floating in deep space.
+- Fix: added `SPACE_ZONES` (7 new zones: Starfield, Asteroid Belt, Ion Storm, Nebula, Solar Wind, Void Rift, Dead Signal — kept OUTSIDE `ZONES`, same reason as `RENT_ZONES`/`DEPTH_ZONES`: `ZONES` is name-filtered elsewhere and appending would leak into the ground level/THE BETWEEN's sector shuffle). Every `PLANETS[].biomes` entry now picks from this pool instead, escalating toward Void Rift/Dead Signal (the "scary" ones) the further out you go — same dread arc as before, space-native instead of borrowed. Removed the Hellscape pentagram-in-space special case. Added matching `BIOME_ENEMIES` rosters per space zone (existing variants only — drone/ufo/alien/gunner/stalker/skeleton etc., no new enemy types) so space enemies fit instead of ground monsters (demons/zombies) floating in the void.
+- Headless-verified: built all 7 planet legs (Jupiter through Osis), zero errors; default-level regression clean.
+
 ## Decisions made (review me)
 - 2026-10-24 — Retro/NOS pass: bounded CSS fix (line 43 dither) chosen over new egg features. Checkpoint SHA: e6fc920.
 - 2026-10-26 — Scrolling parallax skyline added as CSS-only bounded step (line 46); remaining sprite billboards + floating plates for next worker. No ambiguity, no checkpoint needed.
