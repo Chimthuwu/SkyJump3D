@@ -108,7 +108,11 @@
   #hp .hp-row{display:flex;gap:6px;justify-content:flex-end}
   #hp .hh{width:38px;height:34px;filter:drop-shadow(1px 0 0 #000) drop-shadow(-1px 0 0 #000) drop-shadow(0 1px 0 #000) drop-shadow(0 -1px 0 #000) drop-shadow(0 0 7px rgba(255,40,90,.75))}
   #hp .hh.e{filter:drop-shadow(1px 0 0 #ff7a9a) drop-shadow(-1px 0 0 #ff7a9a) drop-shadow(0 1px 0 #ff7a9a) drop-shadow(0 -1px 0 #ff7a9a);opacity:.6}
-  #hp.low .hh:not(.e){animation:hpBeat .5s steps(2) infinite}
+  #hp .doom-face{margin-top:6px;font-family:monospace;font-size:18px;text-align:right;letter-spacing:2px;color:#36f6ff;text-shadow:2px 2px 0 #000}
+#hp .doom-face.doom-dead{color:#ff263f}
+#hp .doom-face.doom-hurt{color:#ff8c3a}
+#hp .doom-face.doom-ouch{color:#ffd23a}
+#hp.low .hh:not(.e){animation:hpBeat .5s steps(2) infinite}
   @keyframes hpLow{from{border-color:#ff4f86;box-shadow:4px 4px 0 #000,inset 0 0 0 2px #000,inset 0 0 22px rgba(255,60,120,.32)}to{border-color:#fff;box-shadow:4px 4px 0 #000,0 0 22px #ff1744,inset 0 0 0 2px #000,inset 0 0 30px rgba(255,20,60,.7)}}
   @keyframes hpBeat{from{transform:scale(1)}to{transform:scale(1.14)}}
   #hud .rt-top{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:7px}
@@ -13839,7 +13843,8 @@ function updateVisuals(dt) {
   $('hotbar').style.display = state === 'title' ? 'none' : '';
   const hp = clamp(health, 0, MAXHP);
   const heart = e => `<svg class="hh${e ? ' e' : ''}" viewBox="0 0 7 6" shape-rendering="crispEdges"><path d="M1 0h2v1H1zM4 0h2v1H4zM0 1h7v2H0zM1 3h5v1H1zM2 4h3v1H2zM3 5h1v1H3z" fill="${e ? '#1b0a26' : 'url(#hpg)'}"/>${e ? '' : '<path d="M1 1h1v1H1zM4 1h1v1H4z" fill="#fff" opacity=".9"/>'}</svg>`;
-  const hpHtml = `<div class="hp-row">${Array.from({ length: MAXHP }, (_, i) => heart(i >= hp)).join('')}</div>`;
+  const doomFace = nosOn() ? `<div class="doom-face doom-${hp <= 0 ? 'dead' : hp <= 2 ? 'hurt' : hp < MAXHP ? 'ouch' : 'ok'}">${hp <= 0 ? 'X_X' : hp <= 2 ? '>_<' : hp < MAXHP ? ':|' : ':)'}</div>` : '';
+  const hpHtml = `<div class="hp-row">${Array.from({ length: MAXHP }, (_, i) => heart(i >= hp)).join('')}</div>${doomFace}`;
   radarTick(performance.now());
   const hpEl = $('hp'); if (hpEl) { const lowCls = hp <= 2 ? 'low' : ''; if (hpHtml !== updateVisuals._hp) { updateVisuals._hp = hpHtml; hpEl.innerHTML = hpHtml; } if (hpEl.className !== lowCls) hpEl.className = lowCls; hpEl.style.display = state === 'title' ? 'none' : ''; }
   const bar = (cls, v, label, extra = '') => `<div class="rt-bar ${cls}${v < 0.25 ? ' low' : ''}${extra}"><i>${label}</i><div class="rt-track"><div class="rt-fill" style="width:${clamp(v * 100, 0, 100) | 0}%"></div></div></div>`;
