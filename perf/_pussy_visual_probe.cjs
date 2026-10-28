@@ -11,7 +11,7 @@ const SRC = path.resolve(__dirname, '..', 'index.html');
     page.on('request', req => {
       if (req.url().startsWith('file:') && /index\.html$/.test(req.url())) {
         let html = fs.readFileSync(SRC, 'utf8');
-        html = html.replace('window.__ng = {', `window.__hk = { palace: () => { const a = []; scene.traverse(o => { if (o.isGroup && o.userData.noCull && o.children.length > 150) a.push({ x:o.position.x, y:o.position.y, z:o.position.z, yaw:o.rotation.y, kids:o.children.length }); }); return a; } }; window.__ng = {`);
+        html = html.replace('window.__ng = {', `window.__hk = { palace: () => { const a = []; scene.traverse(o => { if (o.isGroup && o.userData.noCull && o.children.length > 150) a.push({ x:o.position.x, y:o.position.y, z:o.position.z, yaw:o.rotation.y, kids:o.children.length }); }); return a; }, hideWeapon: () => { fpv = false; vm.visible = false; model.visible = false; } }; window.__ng = {`);
         req.respond({ status: 200, contentType: 'text/html', body: html });
       } else req.continue();
     });
@@ -34,10 +34,11 @@ const SRC = path.resolve(__dirname, '..', 'index.html');
     await page.evaluate(({x,y,z,yaw}) => {
       window.dispatchEvent(new KeyboardEvent('keydown', { code: 'F4', bubbles: true }));
       const frontX = Math.sin(yaw), frontZ = Math.cos(yaw);
-      const px = x + frontX * 285, py = y + 112, pz = z + frontZ * 285;
+      const px = x + frontX * 590, py = y + 155, pz = z + frontZ * 590;
       window.__ng.tp(px, py, pz);
-      window.__ng.look(yaw, -0.13);
+      window.__ng.look(yaw, -0.12);
     }, view);
+    await page.evaluate(() => window.__hk.hideWeapon());
     await new Promise(r => setTimeout(r, 250));
     await page.evaluate(() => {
       const style = document.createElement('style');
