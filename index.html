@@ -14801,17 +14801,6 @@ function dressSite(site, zone) {
       spike.scale.set(0.55 + r() * 0.4, h, 0.55 + r() * 0.4); spike.rotation.z = (r() - 0.5) * 0.36;
     }
   }
-  // Each otherwise-distinct biome still carries a little of the same wrongness: black thorns and watching lights.
-  // Not in THE BETWEEN: its own palette/dungeons already carry this dread intentionally — these generic black
-  // spikes just read as out-of-place clutter against the Canopy's pastel sectors (reported by the user).
-  if (zone.name !== 'Horror' && !zone.nos && !betweenOn()) {
-    const dreadM = MM('dreadThorn', () => lamC(0x0b050a)), eyeM = MM('dreadEye', () => addC(0xff173c, 0.95));
-    for (let i = 0, count = n(1, big ? 3 : 2); i < count; i++) {
-      const [x, z] = spot(), h = 1.1 + r() * 2.4, thorn = add(new THREE.Mesh(GG('dreadSpike', () => new THREE.ConeGeometry(.34, 1, 4)), dreadM), x, h / 2, z);
-      thorn.scale.set(.7 + r() * .4, h, .7 + r() * .4); thorn.rotation.z = (r() - .5) * .5;
-      if (i === 0) { const eye = add(new THREE.Mesh(GG('dreadEyeGeo', () => new THREE.SphereGeometry(.13, 6, 5)), eyeM), x, h * .72, z); anims.push({ k: 'watch', m: eye, ph: r() * 6 }); }
-    }
-  }
   return { g, anims, rods };
 }
 const NOS_SCR = [0x7dff4a, 0x36f6ff, 0xff3fc8, 0xffe03a, 0x1a1a4a], NOS_STATIC = [0xe6eeff, 0x3a4660, 0xaab8d8, 0x10141e, 0x8aa0c8];
