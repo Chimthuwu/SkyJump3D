@@ -365,7 +365,7 @@ function nosPipeTick(dt) {
   shockRing(pos, 6, 0x3be05a); try { sfx.clear && sfx.clear(); } catch (_) {} toast('WARP!', 900);
 }
 // OLD-SCHOOL EASTER EGGS (Nostalgia Overdose): ? blocks, Pac-Man dots, Zelda old man, Mega Man E-tank, animated Invaders/Pong billboards, Konami code
-let nosEggs = [], nosKonamiI = 0, nosKonamiDone = false;
+let nosEggs = [], nosInvaders = [], nosKonamiI = 0, nosKonamiDone = false;
 const NOS_KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'KeyB', 'KeyA'];
 function nosEggTick(dt) {
   if (!nosEggs.length) return;
@@ -5087,6 +5087,7 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
     for (let a = 0; a < 3; a++) for (let b = 0; b < 5; b++) { const m = new THREE.Mesh(r.inv, r.invM); m.position.set((b - 2) * 1.1, a * 0.9, 0); g.add(m); }
     g.position.set(x, y, z); g.rotation.y = Math.atan2(faceX, faceZ); scene.add(g);
     nosEggs.push({ k: 'invaders', x, y, z, mesh: g, ax: alongX, az: alongZ });
+    nosInvaders.push({ x, y, z, r: 2.6, mesh: g, dead: false });
   }
   function nosEggTetris(x, y, z) {                                 // colored blocks falling in the sky (Tetris vibe)
     const r = nosEggRes(), g = new THREE.Group(), cols = [0xff3a3a, 0x36f6ff, 0xffd23a, 0x4dff6a, 0xb44cff, 0xff8c3a];
@@ -5335,7 +5336,7 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
   }
   function buildNosNetwork(exitAngle) {
     const hubs = activeStartHubs().map(home => ({ ...home }));
-    nosPipes = []; nosEggs = []; nosKonamiI = 0; nosKonamiDone = false;
+    nosPipes = []; nosEggs = []; nosInvaders = []; nosKonamiI = 0; nosKonamiDone = false;
     nosRoadAudit.chunks = nosRoadAudit.totalLength =nosRoadAudit.arenas = nosRoadAudit.services = nosRoadAudit.traffic = 0; nosRoadAudit.gaps.length = 0; nosRoadAudit.hubs.length = 0;
     const active = activeStartHubs();
     let myFinish = null;
@@ -11245,7 +11246,8 @@ function castRay(o, d, max, ignoreEnemies = false) {
   eachMonkey((a, x, y, z) => { const t = raySphere(o, d, x, y, z, 0.8); if (t < bt) { bt = t; be = null; hit = true; bm = { a, x, y, z }; bp = null; } });
   eachPeer(p => { const t = raySphere(o, d, p.pos.x, p.pos.y + 1.0, p.pos.z, 0.75); if (t < bt) { bt = t; be = null; bm = null; hit = true; bp = p; } });
   let bph = null; eachPhantom((ph, x, y, z, r) => { const t = raySphere(o, d, x, y, z, r); if (t < bt) { bt = t; be = null; bm = null; bp = null; hit = true; bph = ph; } });
-  return { t: bt, enemy: be, hit, monkey: bm, peer: bp, phantom: bph };
+  let binv = null; for (const inv of nosInvaders) { if (inv.dead) continue; const t = raySphere(o, d, inv.x, inv.y + 1.5, inv.z, inv.r); if (t < bt) { bt = t; be = null; bm = null; bp = null; bph = null; hit = true; binv = inv; } }
+  return { t: bt, enemy: be, hit, monkey: bm, peer: bp, phantom: bph, invader: binv };
 }
 // glowing laser beams: an additive coloured sheath around a white-hot core, fading and thinning out
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -11318,6 +11320,7 @@ function shootRay(o, d, dmg, range, st) {
   if (h.monkey) hurtMonkey(h.monkey.a, dmg, h.monkey.x, h.monkey.y, h.monkey.z);
   if (h.peer) hitPeer(h.peer, dmg);
   if (h.phantom) shootPhantom(h.phantom, dmg);
+  if (h.invader) { h.invader.dead = true; h.invader.mesh.visible = false; score += 50; if (base) { base.credits += 5; saveBase(); } toast('INVADERS! +50', 1200); shockRing(new THREE.Vector3(h.invader.x, h.invader.y + 1.5, h.invader.z), 4, 0x7dff4a); sfx.coin(); }
   flashFx(end, st.color, 0.2 + st.width * 5, 0.1);
   if (!h.enemy && h.hit) burst(end, st.color, 4);
 }
@@ -11333,6 +11336,7 @@ function shootRail(o, d) {
   eachMonkey((a, x, y, z) => { if (raySphere(o, d, x, y, z, 0.9) < wall.t) hurtMonkey(a, 3, x, y, z); });
   eachPeer(p => { if (raySphere(o, d, p.pos.x, p.pos.y + 1.0, p.pos.z, 0.9) < wall.t) hitPeer(p, 3); });
   eachPhantom((ph, x, y, z, r) => { if (raySphere(o, d, x, y, z, r) < wall.t) shootPhantom(ph, 3); });
+  for (const inv of nosInvaders) { if (inv.dead) continue; if (raySphere(o, d, inv.x, inv.y + 1.5, inv.z, inv.r) < wall.t) { inv.dead = true; inv.mesh.visible = false; score += 50; if (base) { base.credits += 5; saveBase(); } toast('INVADERS! +50', 1200); shockRing(new THREE.Vector3(inv.x, inv.y + 1.5, inv.z), 4, 0x7dff4a); sfx.coin(); } }
   shockRing(end, 3, 0x6ab8ff); flashFx(end, 0x9fd0ff, 1.2, 0.2); burst(end, 0x9fd0ff, 14);
   vel.x -= d.x * 7; vel.z -= d.z * 7; if (!onGround) vel.y -= d.y * 5; shake = Math.max(shake, 0.5);
 }
@@ -11440,6 +11444,7 @@ function fireBeam(o, d, dt) {
     if (h.monkey) hurtMonkey(h.monkey.a, dmg, h.monkey.x, h.monkey.y, h.monkey.z);
     if (h.peer) hitPeer(h.peer, dmg);
     if (h.phantom) shootPhantom(h.phantom, dmg);
+    if (h.invader) { h.invader.dead = true; h.invader.mesh.visible = false; score += 50; if (base) { base.credits += 5; saveBase(); } toast('INVADERS! +50', 1200); shockRing(new THREE.Vector3(h.invader.x, h.invader.y + 1.5, h.invader.z), 4, 0x7dff4a); sfx.coin(); }
     burst(end, beamColor.getHex(), 1);
   }
   cont.net += dt;
