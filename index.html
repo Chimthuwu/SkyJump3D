@@ -320,10 +320,11 @@
 </div>
 
 <script type="importmap">
-{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
 </script>
 <script type="module">
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 console.log('🚀 SkyJump3D module START');
 
@@ -414,6 +415,7 @@ let betweenWarpCd = 0;                        // THE BETWEEN: fast-travel cooldo
 let betweenTeamDrop = true;                   // THE BETWEEN: true = every slot spawns at Beacon 1 (Team Drop), false = 1:1 scattered
 let wireNodes = new Map();                    // THE BETWEEN: wiring-circuit node id -> solid (signalOut/receivers graph)
 const BETWEEN_CIRCUITS = [];                  // THE BETWEEN: build-time circuit bookkeeping [{name, sourceId, nodeIds}]
+const CANOPY_Y = 120;                         // THE BETWEEN: spawn height of the horizontal Canopy spine — module-level since several functions outside buildBetween() need it
 let betweenBeacons = [];                      // THE BETWEEN: [{id, name, x, y, z, zone, hub}]
 let betweenVeins = [];                        // THE BETWEEN: per-circuit energy-vein mesh+material
 let betweenDungeonMouths = [];                // THE BETWEEN: Phase 2 — the 6 dungeon-mouth solids, indexed 0..5 (D1..D6)
@@ -6888,43 +6890,49 @@ function buildBetween() {
 // Called once after buildBetween() completes.
 function betweenBatchPlatforms() {
   if (!betweenOn()) return;
-  const batches = new Map(); // materialKey -> { geo: BufferGeometry, meshes: [] }
+  const batches = new Map(); // materialKey -> { geos: BufferGeometry[], meshes: [], material }
   for (const p of platforms) {
     if (!p.slab || p.sp || p.isCanopy || p.isBeacon || p.isDungeonMouth || p.isFoundation || p.returnGeyser || p.bounce) continue; // skip special/dynamic
     const mat = p.slab.material;
     const key = mat.color.getHexString() + '|' + (mat.emissive ? mat.emissive.getHexString() : '0') + '|' + (mat.map ? 'tex' : 'notex');
-    if (!batches.has(key)) batches.set(key, { geo: new THREE.BufferGeometry(), meshes: [], material: mat });
+    if (!batches.has(key)) batches.set(key, { geos: [], meshes: [], material: mat });
     const batch = batches.get(key);
-    // Merge slab geometry
-    const slabGeo = p.slab.geometry.clone();
+    // Collect slab geometry (world-space, indexed to match)
+    const slabGeo = p.slab.geometry.clone().toNonIndexed();
     slabGeo.applyMatrix4(p.slab.matrixWorld);
-    batch.geo = THREE.BufferGeometryUtils.mergeBufferGeometries([batch.geo, slabGeo], false);
-    // Also merge plate geometry if present
+    batch.geos.push(slabGeo);
+    batch.meshes.push(p.slab);
+    // Also collect plate geometry if present
     if (p.plate) {
-      const plateGeo = p.plate.geometry.clone();
+      const plateGeo = p.plate.geometry.clone().toNonIndexed();
       plateGeo.applyMatrix4(p.plate.matrixWorld);
-      batch.geo = THREE.BufferGeometryUtils.mergeBufferGeometries([batch.geo, plateGeo], false);
+      batch.geos.push(plateGeo);
+      batch.meshes.push(p.plate);
     }
   }
-  // Replace individual meshes with batched meshes
+  // Replace individual meshes with one batched mesh per material group
+  let groupCount = 0;
   for (const [key, batch] of batches) {
-    if (batch.geo.attributes.position.count === 0) continue;
-    const mesh = new THREE.Mesh(batch.geo, batch.material);
+    if (!batch.geos.length) continue;
+    const merged = mergeGeometries(batch.geos, false);
+    if (!merged || !merged.attributes.position || merged.attributes.position.count === 0) continue;
+    const mesh = new THREE.Mesh(merged, batch.material);
     mesh.frustumCulled = true;
     scene.add(mesh);
-    batch.meshes.push(mesh);
+    for (const m of batch.meshes) { if (m.parent) m.parent.remove(m); }
+    groupCount++;
   }
-  console.log('[BETWEEN] Batched', batches.size, 'material groups');
+  console.log('[BETWEEN] Batched', groupCount, 'material groups');
 }
 
 // Hook into buildLevel to run batching after BETWEEN is built
+// DISABLED: betweenBatchPlatforms() produces a merged mesh that crashes WebGLRenderer's
+// uniform refresh (refreshUniformsCommon reading undefined) on some platform/plate geometry
+// combinations. It's a draw-call optimization only — no gameplay depends on it — so it's left
+// off rather than risk a renderer crash. See TODO.md for follow-up if perf becomes an issue.
 const originalBuildLevel = buildLevel;
 buildLevel = function() {
   originalBuildLevel();
-  if (betweenOn()) {
-    // Run batching after a frame to let all platforms settle
-    setTimeout(betweenBatchPlatforms, 100);
-  }
 };
 
 // ===================== CANOPY SECTOR BUILDER (Phase 1) =====================
@@ -7241,6 +7249,7 @@ let betweenSanity = 1.0;                 // 0..1 (1 = grounded, 0 = lost)
 let betweenSanityDrain = 0.0;            // accumulated drain this frame
 let betweenSanityLowWarning = false;     // HUD warning shown at <0.3
 let betweenSanityCritWarning = false;    // HUD warning shown at <0.15
+let betweenWhisperActive = false;        // true for the frame a whisper plays (set by updateWhisperAudio)
 // Sanity drain rates (per second)
 const SANITY_DRAIN_BASE = 0.008;         // passive drain per second while in BETWEEN
 const SANITY_DRAIN_DESCENT = 0.002;      // extra per meter below Canopy (Y=120)
@@ -7343,7 +7352,7 @@ function betweenCorruptionBleed(dungeonIndex, mouth) {
       const angle = (dungeonIndex * Math.PI / 3) + i * 1.2;
       const ex = Math.cos(angle) * 60;
       const ez = Math.sin(angle) * 60;
-      spawnBiomeEnemy(ex, 1, ez, foundation, mouth.zone, 0.5, 1);
+      spawnBiomeEnemy(ex, 1, ez, null, mouth.zone, 0.5, 1);
     }
   }
 }
@@ -7469,23 +7478,18 @@ function updateLaunchDebris(dt) {
   }
 }
 
-// Hook moonReached for BETWEEN ending (eye blink)
-const originalMoonReached = moonReached;
-moonReached = function(sol) {
-  if (betweenOn()) {
-    // THE BETWEEN ending: the Moon's eye blinks
-    const eye = scene.getObjectByName('moonEye');
-    if (eye) {
-      eye.scale.y = 0.01;
-      setTimeout(() => { eye.scale.y = 1; }, 300);
-    }
-    toast('THE EYE BLINKS — THE INVITATION IS ACCEPTED', 5000);
-    // Trigger credits/toast sequence
-    levelClear('moon', 5000, false);
-    return;
+// BETWEEN ending (eye blink) — fires when the Moon launch gauntlet completes
+function moonReached(sol) {
+  // THE BETWEEN ending: the Moon's eye blinks
+  const eye = scene.getObjectByName('moonEye');
+  if (eye) {
+    eye.scale.y = 0.01;
+    setTimeout(() => { eye.scale.y = 1; }, 300);
   }
-  return originalMoonReached(sol);
-};
+  toast('THE EYE BLINKS — THE INVITATION IS ACCEPTED', 5000);
+  // Trigger credits/toast sequence
+  levelClear('moon', 5000, false);
+}
 
 function glitchDeco(hub, i, levels, slab) {
   if (!slab) return;
@@ -8756,7 +8760,7 @@ function buildDungeonTheGullet(mouth, dungeonIndex) {
   d3SecondMouth.hp = 50;
   d3SecondMouth.maxhp = 50;
   d3SecondMouth.mesh.scale.setScalar(2);
-  d3SecondMouth.mesh.traverse(o => { if (o.material) { o.material = o.material.clone(); o.material.color.setHex(0x880011); o.material.emissive = new THREE.Color(0x440008); } });
+  d3SecondMouth.mesh.traverse(o => { if (o.material) { o.material = o.material.clone(); if (o.material.color) o.material.color.setHex(0x880011); if (o.material.emissive) o.material.emissive.setHex(0x440008); } });
   enemies.push(d3SecondMouth);
   d3ArenaShrink = 0;
 
@@ -8843,11 +8847,11 @@ function liminalDeco(hub, i, levels, slab) {
     slab.isLiminalBossFloor = true;
     d5ThingBossFloor = slab;
     // Water plane for reflections
-    const waterGeo = new THREE.PlaneGeometry(last.hw * 4, last.hd * 4);
+    const waterGeo = new THREE.PlaneGeometry(slab.hw * 4, slab.hd * 4);
     const waterMat = new THREE.MeshBasicMaterial({ color: 0x0a1a2a, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
     d5WaterReflection = new THREE.Mesh(waterGeo, waterMat);
     d5WaterReflection.rotation.x = -Math.PI / 2;
-    d5WaterReflection.position.set(last.x, last.top + 0.1, last.z);
+    d5WaterReflection.position.set(slab.cx, slab.top + 0.1, slab.cz);
     scene.add(d5WaterReflection);
   }
 }
@@ -9167,11 +9171,13 @@ function playWhisper(variant, position, intensity = 1) {
 // Trigger whispers near enemies
 function updateWhisperAudio(dt) {
   if (!betweenOn()) return;
+  betweenWhisperActive = false;
   for (const e of enemies) {
     if (e.dead || !e.built) continue;
     const dist = Math.hypot(pos.x - e.x, pos.z - e.z);
     if (dist < 30 && rand() < dt * 0.1) { // 10% chance per second when close
       playWhisper(e.variant, { x: e.x, y: e.y, z: e.z }, 1 - dist / 30);
+      betweenWhisperActive = true;
     }
   }
 }
