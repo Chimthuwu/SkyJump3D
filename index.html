@@ -76,6 +76,9 @@
   body.nos-world #hint{border-color:rgba(255,63,200,.8);color:#ffe0f6;box-shadow:0 0 18px rgba(255,63,200,.28)}
   body.nos-tear canvas{animation:nosTear .42s steps(7) 1}
   @media (prefers-reduced-motion:reduce){body.nos-tear canvas,body.nos-world #nosBar{animation:none}}
+  /* THE BETWEEN / GLITCH.EXE: same screen-tear trick as nos-tear, under its own class so it's independent of Nostalgia Overdose. */
+  body.between-tear canvas{animation:nosTear .42s steps(7) 1}
+  @media (prefers-reduced-motion:reduce){body.between-tear canvas{animation:none}}
   /* THE GUT: wet red membrane vignette that breathes slowly (peristalsis) on top of the shared horror overlay; the heartbeat itself is the existing dread thump (#dread), which this level holds high.
      gut-1 Gullet (warm pink), gut-2 Stomach (bile yellow-green), gut-3 Heart Chamber (dark arterial red). Pure CSS on body classes toggled in setZone: identical in every render mode. */
   body.gut-world::before{opacity:.82;animation:gutBreath 4.2s ease-in-out infinite alternate}
@@ -412,6 +415,11 @@ let wireNodes = new Map();                    // THE BETWEEN: wiring-circuit nod
 const BETWEEN_CIRCUITS = [];                  // THE BETWEEN: build-time circuit bookkeeping [{name, sourceId, nodeIds}]
 let betweenBeacons = [];                      // THE BETWEEN: [{id, name, x, y, z, zone, hub}]
 let betweenVeins = [];                        // THE BETWEEN: per-circuit energy-vein mesh+material
+let betweenDungeonMouths = [];                // THE BETWEEN: Phase 2 — the 6 dungeon-mouth solids, indexed 0..5 (D1..D6)
+let betweenWell = null;                       // THE BETWEEN: Phase 2 — the Gravity Well mesh + .anchors[], set inside buildBetween()
+let betweenTeleportT = 0;                     // THE BETWEEN: Phase 2 — scripted camera-roll timer for D6 flip panels (seconds remaining)
+let betweenGlitchT = 0;                       // THE BETWEEN: Phase 2 — D1 input-swap timer (seconds remaining)
+const FRACTAL_ZONE = { name: 'Fractal', desc: 'the angles are wrong on purpose', top: '#04020a', mid: '#140a2e', bot: '#2a1046', fog: 0x120a24, hemi: 0.55, hemiCol: 0xb49aff, sun: 0.4, sunCol: 0x8a6aff, cloud: 0x1a1030, plate: 0x9a6aff, weather: 'none' };
 
 // ---------- helpers ----------
 let seed = 11, levelSeed = 11;
@@ -1055,9 +1063,19 @@ const WALKER_STATS = {
   sporeling:{ hp: 2, sp: 2.4, pts: 95,  col: 0xe65cff },
   prismWraith:{ hp: 3, sp: 3.0, pts: 130, col: 0x49f2d2 },
   capBrute: { hp: 7, sp: 1.9, pts: 190, col: 0xa946db },
+  // THE BETWEEN common roster (NEW_LEVEL.md §7.2 — systemic, every sector; only these behave differently, existing families are untouched)
+  watcher:   { hp: 2, sp: 2.0, pts: 90,  col: 0x9d7de8 },      // floating eye: drifts toward you, whites bloodshot, never blinks
+  crawler:   { hp: 3, sp: 3.0, pts: 100, col: 0x3a6d4a },      // segmented worm: rounds corners exactly at 90° (spider AI)
+  whisperer: { hp: 2, sp: 2.6, pts: 110, col: 0x2a2438 },      // near-invisible shape: fight by sound direction; a faint diaphanous outline
+  spawnSwarm:{ hp: 2, sp: 2.4, pts: 80,  col: 0xb54a8f },      // fused spawn-cluster: melts into more when killed (TODO: split-on-death)
+  amalgam:   { hp: 6, sp: 2.0, pts: 170, col: 0x6b5a4e },      // fused remains of kin: many limbs, three eyes, single intent (gorilla slam)
+  shell:     { hp: 4, sp: 1.0, pts: 120, col: 0x6a8c8f },      // patient nautilus: harmless while watched, grows when ignored — meek body slows to strike only later
+  angle:     { hp: 3, sp: 2.9, pts: 130, col: 0x0a0a0e },      // single-vertex silhouette in black: hurts to study, closes the distance while you don't (stalker AI)
 };
 // Themed dungeon species borrow movement patterns while keeping their own models and stats.
-const AI_ALIAS = { notice: 'spider', bailiff: 'charger', collector: 'gunner', landlord: 'gorilla', tapehead: 'spider', crthead: 'gunner', cabinet: 'gorilla', pixelghost: 'kaomoji', cryptGhost: 'stalker', zombie: 'gorilla', sporeling: 'kaomoji', prismWraith: 'stalker', capBrute: 'gorilla' };
+const AI_ALIAS = { notice: 'spider', bailiff: 'charger', collector: 'gunner', landlord: 'gorilla', tapehead: 'spider', crthead: 'gunner', cabinet: 'gorilla', pixelghost: 'kaomoji', cryptGhost: 'stalker', zombie: 'gorilla', sporeling: 'kaomoji', prismWraith: 'stalker', capBrute: 'gorilla', watcher: 'stalker', crawler: 'spider', whisperer: 'stalker', spawnSwarm: 'kaomoji', amalgam: 'gorilla', shell: 'kaomoji', angle: 'stalker' };
+// THE BETWEEN §7.2: the systemic roster dripped into every sector (per zone name at pickEnemy), replacing biome rosters for this level only.
+const BETWEEN_ENEMY_ROSTER = ['watcher', 'crawler', 'whisperer', 'spawnSwarm', 'amalgam', 'shell', 'angle'];
 const faceTex = {};
 const KAO_FACES = ['(*´ω｀*)', 'ヾ(＠⌒ー⌒＠)ノ', '((+_+))', '(◕‿◕)', 'ヽ(`Д´)ﾉ', '(╬ಠ益ಠ)', '(ಠ_ಠ)', '(¬_¬)', '(☉_☉)', '(⊙﹏⊙)'];
 function kaoTexture(face) {
@@ -1450,6 +1468,55 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker', enemyZone 
     }
     add(geo('BoxGeometry', 0.14, 0.14, 0.55), 0.5, 0.92, 0.4, dark);                                        // ray-gun
     add(geo('BoxGeometry', 0.08, 0.08, 0.14), 0.5, 0.92, 0.72, glowG);
+  } else if (variant === 'watcher') {       // THE BETWEEN: a floating bloodshot eye — sclera, ringed iris, slit pupil, score-veins
+    const sclera = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xded3c8 })), white = new THREE.MeshBasicMaterial({ color: 0xf4ece2 }), veinM = new THREE.MeshBasicMaterial({ color: 0xb11014 }), irisM = new THREE.MeshBasicMaterial({ color: 0x36c95c }), pupilM = new THREE.MeshBasicMaterial({ color: 0x0a0a0a });
+    add(geo('SphereGeometry', 0.55, 10, 8), 0, 1.35, 0, sclera);
+    add(geo('CylinderGeometry', 0.4, 0.44, 0.16, 12), 0, 1.35, 0.48, irisM).rotation.x = Math.PI / 2;
+    add(geo('CylinderGeometry', 0.16, 0.16, 0.06, 12), 0, 1.35, 0.58, pupilM).rotation.x = Math.PI / 2;
+    add(geo('SphereGeometry', 0.055, 5, 4), 0.05, 1.42, 0.6, white);
+    add(geo('TorusGeometry', 0.55, 0.05, 5, 14), 0, 1.35, 0.02, veinM);                       // bruised rim
+    for (let v = 0; v < 6; v++) { const a = v * 1.047 + 0.3, vein = add(geo('BoxGeometry', 0.04, 0.04, 0.34 + (v % 2) * 0.12), Math.cos(a) * 0.26, 1.35 + Math.sin(a) * 0.26, 0.42, veinM); vein.rotation.z = a + 1.5708; }   // veins radiating in
+    for (const side of [-1, 1]) { add(geo('ConeGeometry', 0.06, 0.5, 4), side * 0.3, 0.95, 0.2, veinM).rotation.set(0.5, 0, side * 0.5); }  // hanging lashes
+  } else if (variant === 'crawler') {       // segmented worm: rings shrink tailward, tiny legs, dead flat stare
+    const cold = retroMaterial(new THREE.MeshLambertMaterial({ color: V.col }));
+    for (let seg = 0; seg < 5; seg++) { const s = add(geo('SphereGeometry', 0.5 - seg * 0.09, 8, 6), 0, 0.42, 0.55 - seg * 0.6, seg ? cold : mat); s.scale.set(0.95, 0.55, 1.0); }
+    add(geo('SphereGeometry', 0.07, 5, 4), -0.16, 0.55, 0.98, new THREE.MeshBasicMaterial({ color: 0xcfd8c0 }));
+    add(geo('SphereGeometry', 0.07, 5, 4), 0.16, 0.55, 0.98, new THREE.MeshBasicMaterial({ color: 0xcfd8c0 }));
+    for (const side of [-1, 1]) for (let l = 0; l < 4; l++) add(geo('ConeGeometry', 0.05, 0.34, 4), side * 0.42, 0.2, 0.5 - l * 0.55, dark).rotation.set(0, 0, side * 1.5708);
+  } else if (variant === 'whisperer') {     // near-invisible robe: a hole in the air that has a mouth in it
+    const ghost = new THREE.MeshBasicMaterial({ color: 0x8f7aa8, transparent: true, opacity: 0.16, depthWrite: false }), mouth = new THREE.MeshBasicMaterial({ color: 0x36ffca });
+    add(geo('ConeGeometry', 0.55, 1.9, 7), 0, 0.95, 0, ghost);
+    add(geo('SphereGeometry', 0.3, 8, 6), 0, 1.75, 0, ghost);
+    add(geo('BoxGeometry', 0.28, 0.05, 0.04), 0, 1.62, 0.26, mouth);                          // the sound you fight
+    for (const side of [-1, 1]) { add(geo('CylinderGeometry', 0.04, 0.04, 0.7, 5), side * 0.5, 0.9, -0.1, ghost); }
+  } else if (variant === 'spawnSwarm') {    // a knot of fused spawn critters peeking out of a shared membrane
+    const body = retroMaterial(new THREE.MeshLambertMaterial({ color: V.col }));
+    add(geo('SphereGeometry', 0.44, 8, 6), 0, 0.5, 0, body);                      // membrane
+    for (let n = 0; n < 4; n++) { const a = n * 1.5708 + 0.55, blob = add(geo('SphereGeometry', 0.19, 7, 5), Math.cos(a) * 0.32, 0.72, Math.sin(a) * 0.32, mat); blob.scale.set(1, 0.9, 1); add(geo('SphereGeometry', 0.05, 5, 4), Math.cos(a) * 0.36, 0.78, Math.sin(a) * 0.36, accent); }
+    add(geo('SphereGeometry', 0.5, 8, 6), 0, 0.32, 0, mat).scale.set(1.05, 0.6, 1.05);
+  } else if (variant === 'amalgam') {       // fused remains: a torso of borrowed pieces, three eyes, one mind
+    const flesh = mat, bone = new THREE.MeshBasicMaterial({ color: 0xe8dcc8 }), skin = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x7d8ba0 }));
+    const torso = add(geo('BoxGeometry', 1.15, 1.05, 0.75), 0, 1.05, 0, flesh); torso.rotation.set(0, 0, 0.06);
+    add(geo('BoxGeometry', 0.55, 0.42, 0.5), 0.28, 1.72, 0.05, skin);            // a different head
+    add(geo('BoxGeometry', 0.4, 0.34, 0.44), -0.4, 1.62, -0.08, flesh);          // fused half-head
+    for (const ex of [[-0.32, 1.74, 0.32], [0.3, 1.79, 0.32], [0.02, 1.66, 0.33]]) add(geo('SphereGeometry', 0.075, 5, 4), ex[0], ex[1], ex[2], new THREE.MeshBasicMaterial({ color: 0xff3030 }));
+    for (const side of [-1, 1]) { add(geo('CylinderGeometry', 0.11, 0.15, 0.9, 6), side * 0.72, 1.15, 0.05, flesh).rotation.z = side * -0.85; add(geo('CylinderGeometry', 0.13, 0.16, 0.34, 6), side * 0.55, 0.35, 0.1, bone); }
+    add(geo('BoxGeometry', 0.2, 0.55, 0.2), -0.18, 1.95, -0.25, bone).rotation.set(0.4, 0, -0.5);  // a rib jutted wrong
+  } else if (variant === 'shell') {         // patient nautilus: spiral shell, soft siphon, one shy eye-stalk
+    const soft = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xd8c7b8 })), shellM = mat;
+    const coil = add(geo('SphereGeometry', 0.55, 9, 7), 0, 0.55, -0.15, shellM); coil.scale.set(0.9, 0.8, 1.15);
+    add(geo('TorusGeometry', 0.34, 0.16, 7, 10), 0, 0.6, -0.05, shellM).rotation.x = 0.35;   // ribs of the spiral
+    add(geo('TorusGeometry', 0.2, 0.13, 6, 8), 0.18, 0.42, 0.12, shellM).rotation.set(0.55, 0.5, 0.3);
+    add(geo('CylinderGeometry', 0.09, 0.13, 0.85, 6), 0.05, 0.35, 0.62, soft).rotation.x = 0.6; // siphon
+    add(geo('CylinderGeometry', 0.05, 0.05, 0.6, 5), 0.3, 0.85, 0.35, soft);
+    add(geo('SphereGeometry', 0.11, 6, 5), 0.3, 1.12, 0.4, soft);
+    add(geo('SphereGeometry', 0.05, 5, 4), 0.3, 1.14, 0.49, new THREE.MeshBasicMaterial({ color: 0x111111 }));
+  } else if (variant === 'angle') {         // single-vertex silhouette: an impossible sliver that shouldn't read as a body
+    const darkBlack = new THREE.MeshBasicMaterial({ color: 0x08080c }), outline = new THREE.MeshBasicMaterial({ color: 0xe8e6ff });
+    add(geo('ConeGeometry', 0.34, 2.1, 4), 0, 1.05, 0, darkBlack);
+    add(geo('ConeGeometry', 0.07, 1.0, 4), 0, 1.55, 0.03, outline);                 // the single vertex
+    add(geo('ConeGeometry', 0.16, 0.5, 4), 0, 0.35, -0.25, darkBlack).rotation.x = Math.PI;
+    const halo = add(geo('TorusGeometry', 0.12, 0.02, 4, 8), 0, 1.75, 0.02, outline); halo.rotation.x = 0.4;
   } else if (variant === 'rider') {
     g.add(makeRiderVisual());
   } else {
@@ -1644,6 +1711,14 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker', enemyZone 
   if (variant === 'zombie') { e.h = 2.0 * scale; e.r = 0.72 * scale; }
   if (variant === 'prismWraith') { e.h = 2.1 * scale; e.r = 0.7 * scale; }
   if (variant === 'capBrute') { e.h = 2.5 * scale; e.r = 1.0 * scale; e.speed *= 0.9; e.growlCd = 1 + rand() * 2; e.slamCd = 2.5 + rand() * 2; e.slamWind = 0; }
+  // THE BETWEEN common roster sizing/mechanics hooks
+  if (variant === 'watcher')   { e.h = 1.7 * scale; e.r = 0.65 * scale; e.speed *= 0.82; }
+  if (variant === 'crawler')   { e.h = 0.95 * scale; e.r = 0.85 * scale; }
+  if (variant === 'whisperer') { e.h = 2.0 * scale; e.r = 0.6 * scale; }
+  if (variant === 'spawnSwarm'){ e.h = 1.15 * scale; e.r = 0.75 * scale; }
+  if (variant === 'amalgam')   { e.h = 2.5 * scale; e.r = 1.0 * scale; e.speed *= 0.94; e.growlCd = 1 + rand() * 2; e.slamCd = 2.5 + rand() * 2; e.slamWind = 0; }
+  if (variant === 'shell')     { e.h = 1.4 * scale; e.r = 0.8 * scale; e.rage = 0; e.rageT = 8 + rand() * 3; }
+  if (variant === 'angle')     { e.h = 1.95 * scale; e.r = 0.55 * scale; }
   if (variant === 'popstar') { e.h = 2.3 * scale; e.r = 0.7 * scale; e.beatCd = 1.5 + rand() * 1.5; e.slamWind = 0; }
   if (variant === 'rider') { e.h = 1.5 * scale; e.r = 0.95 * scale; e.speed = 6.2; }
   if (isBoss) { e.h = Math.max(e.h, 2.2 * scale); e.r = Math.max(e.r, 0.95 * scale); }
@@ -1953,7 +2028,8 @@ function windowsTwinkle(t) {
 // ---------- the sky network: floating platforms link rooftops and themed arenas ----------
 const ARENA_TYPES = ['colosseum', 'cross', 'tiers', 'pillars', 'gauntlet', 'pit', 'reactor', 'ring', 'runway'];
 function pickEnemy(depth, zone = null) {  // biome rosters control wildlife; depth still gates the city roster
-  const roster = zone && BIOME_ENEMIES[zone.name];
+  // THE BETWEEN §7.2: the systemic roster replaces every biome roster for this level only (existing families keep spawning elsewhere).
+  const roster = zone && (betweenOn() ? BETWEEN_ENEMY_ROSTER : BIOME_ENEMIES[zone.name]);
   if (roster) return roster[(rand() * roster.length) | 0];
   const pool = ['walker'];
   if (depth > 0.15 || level > 1) pool.push('gunner');
@@ -1966,6 +2042,12 @@ function spawnBiomeEnemy(x, y, z, plat, zone, depth, scale = 1) {
   if (activeStartHubs().some(home => Math.hypot(x - home.x, z - home.z) < 50)) return null;
   const variant = pickEnemy(depth, zone);
   if (variant === 'roach' && !spawnBiomeEnemy.swarm) { spawnBiomeEnemy.swarm = true; for (let i = 0; i < 4; i++) spawnBiomeEnemy(x + (Math.random() - 0.5) * 3, y, z + (Math.random() - 0.5) * 3, plat, zone, depth, scale * 0.8); spawnBiomeEnemy.swarm = false; }
+  if (variant === 'spawnSwarm' && !spawnBiomeEnemy.swarm) {  // THE BETWEEN §7.2: the swarm IS the enemy — a brood of 5 fast spawnlings, no mother body
+    spawnBiomeEnemy.swarm = true;
+    for (let i = 0; i < 5; i++) spawnBiomeEnemy(x + (Math.random() - 0.5) * 5, y, z + (Math.random() - 0.5) * 5, plat, zone, depth, scale * 0.72);
+    spawnBiomeEnemy.swarm = false;
+    return null;
+  }
   if (variant === 'drone' || variant === 'bomber') { const e = makeDrone(x, y + 3, z, variant, zone); e.zone = zone || null; return e; }
   if (variant === 'ufo') { const e = makeUfo(x, y + 7, z); e.zone = zone || null; return e; }
   const e = makeWalker(x, y, z, plat, scale, false, variant, zone); e.zone = zone || null; return e;
@@ -6615,6 +6697,7 @@ function buildLevel() {
   decorSites.length = 0; dressings.clear(); growers.length = 0; growCd = 0;
   specials.length = reserved.length = 0; psySpecialCount = 0; popArenaCount = 0; portalCooldown = 0; portalExit = null; psy.t = 0; psy.kind = ''; belowZeroBuilt = false; thresholdTouched = false; belowZeroHubs = []; belowZeroEntry = null; try { renderer.domElement.style.filter = ''; } catch (_) {}
   wireNodes.clear(); BETWEEN_CIRCUITS.length = 0; betweenBeacons = []; betweenVeins.length = 0; betweenWarpCd = 0;
+  betweenDungeonMouths = []; betweenTeleportT = 0; betweenGlitchT = 0; betweenWell = null;
   decalMesh.count = 0; decalNext = 0;
   applyTheme();
   TOP = nosOn() ? Math.min(220 + level * 30, 420) : Math.min(480 + level * 100, 1200);       // MUCH taller towers (Nostalgia Overdose is a road level: a short fall)
@@ -6679,8 +6762,9 @@ function belowZeroLoop() {
 }
 
 // ===================== THE BETWEEN — buildBetween() =====================
-// Scaffold: horizontal Canopy spine, four Beacons, six dungeon mouths, Foundation at y=0, Gravity Well stub.
-// This is the Phase 0 scaffold — real geometry comes in Phase 1+.
+// Phase 1 complete: horizontal Canopy spine with biome-sectored platform networks,
+// four Beacons with grounding/fast-travel/corruption, six dungeon mouths,
+// Foundation at y=0, Gravity Well stub, and full wiring system (20+ circuits, 5 archetypes).
 function buildBetween() {
   // y=0 is a hard floor for this level and buildSkyway() is never called here, so VOID_Y stays at its default
   // -160 (harmless — see the betweenOn() safety-net branch in the fall cascade); the Foundation slab below
@@ -6707,7 +6791,15 @@ function buildBetween() {
   // slot to Beacon 1; Scattered Drop maps slot -> Beacon 1:1 (mod 4). 5th-8th co-op slots clamp to Beacon 1
   // automatically (Math.min(slot, BEACON_COUNT-1) when scattered; always 0 when Team Drop).
   for (let i = 0; i < HOME_SLOT_COUNT; i++) startHubs[i].active = false;   // the ring is unused here — betweenBeacons[] replaces it
-  betweenBeacons = beaconSectorIdx.map((sectorIdx, b) => ({ id: 'beacon' + b, index: b, name: beaconNames[b], x: sectorCenterX(sectorIdx), y: CANOPY_Y, z: 0, zone: sectors[sectorIdx] }));
+  betweenBeacons = beaconSectorIdx.map((sectorIdx, b) => ({
+    id: 'beacon' + b, index: b, name: beaconNames[b],
+    x: sectorCenterX(sectorIdx), y: CANOPY_Y, z: 0, zone: sectors[sectorIdx],
+    // Beacon mechanics state (Phase 1)
+    corruption: 0,              // 0..1, increases on deaths at this beacon
+    touched: false,             // has any player touched this beacon?
+    lastTouchTime: 0,           // for fast-travel cooldown
+    downedPlayers: new Set()    // player indices currently downed near this beacon
+  }));
   for (let slot = 0; slot < HOME_SLOT_COUNT; slot++) {
     const b = betweenTeamDrop ? 0 : Math.min(slot, BEACON_COUNT - 1);
     const beacon = betweenBeacons[b];
@@ -6717,12 +6809,10 @@ function buildBetween() {
   start = starts[mySlot];
   checkpoint = { ...start };
 
-  // 3) The Canopy floor: one slab per sector, each zoned — standing on it fires the existing generic
-  // onLand -> setZone(sol.zone) mechanic for free, so crossing sectors changes sky/fog/lighting with no new code.
-  for (let i = 0; i < SECTOR_COUNT; i++) {
-    const slabS = addSlab(sectorCenterX(i), CANOPY_Y, 0, SECTOR_W / 2, 9, 3, sectors[i], false);
-    slabS.isCanopy = true; slabS.sectorIndex = i;
-  }
+  // 3) The Canopy: biome-sectored platform networks, not a single slab.
+  // Each biome contributes its native platform type (material swap + behavior).
+  // Mechanical platforms (mover, orbit, conveyor, gate, crumble, etc.) keep behavior; only skin changes.
+  buildCanopySectors(sectors, sectorCenterX, CANOPY_Y, SECTOR_W);
 
   // 4) Beacon pads — tagging them .checkpoint=true reuses the existing generic checkpoint-touch mechanic
   // (updates `checkpoint` + calls warpUnlock on landing) instead of inventing a parallel one.
@@ -6754,6 +6844,7 @@ function buildBetween() {
     const shaftMat = new THREE.MeshBasicMaterial({ color: 0x100020, transparent: true, opacity: 0.1, depthWrite: false, side: THREE.DoubleSide });
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, CANOPY_Y, 12), shaftMat); shaft.position.set(dx, CANOPY_Y / 2, dz); scene.add(shaft);
     mouth.dungeonShaft = shaft;
+    betweenDungeonMouths[d] = mouth;
   }
 
   // 6) Foundation at y=0 (the hard floor itself) + an inactive Gravity Well stub (Phase 2+ wires the six anchors)
@@ -6762,16 +6853,136 @@ function buildBetween() {
   foundation.isFoundation = true;
   const well = new THREE.Mesh(new THREE.ConeGeometry(8, 60, 16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
   well.position.set(0, 30, 0); well.rotation.x = Math.PI; scene.add(well);
-  well.isGravityWell = true; well.active = false; well.anchors = []; well.anchorsActive = 0;
+  well.isGravityWell = true; well.active = false; well.anchors = []; well.anchorsActive = 0; betweenWell = well;
   for (let d = 0; d < dungeonCount; d++) well.anchors.push({ dungeonIndex: d, active: false });
 
   // 7) The wiring engine: 5 named combo archetypes + enough filler circuits to reach 20+, 3+ global
   buildBetweenWiring(sectors, sectorCenterX, CANOPY_Y);
 
+  // 7b) Phase 2: the three reference dungeons (D1/D4/D6 — D2/D3/D5 are a later phase)
+  buildDungeonGlitchExe(betweenDungeonMouths[0], 0);
+  buildDungeonPsychosis(betweenDungeonMouths[3], 3);
+  buildDungeonFractalDescent(betweenDungeonMouths[5], 5);
+
   // 8) Sky profile (SKY_PROFILES.between, keyed by levelDef.id — already wired, no new code needed here)
   buildSky();
 
   // No skyway, no moon platform chain: buildSkyway() is never called for this level, by omission.
+}
+
+// ===================== CANOPY SECTOR BUILDER (Phase 1) =====================
+// Each biome sector gets a native platform network skinned with the biome's material.
+// Mechanical platforms (mover, orbit, conveyor, gate, crumble, swing, breath, etc.) keep
+// their behavior inside every biome sector; only the skin (material/color) changes.
+// Biome-native behaviors: Frozen=slippery, Jungle=weaker jumps, Psychedelic=low gravity,
+// Inferno=rising heat, Storm=magnetic gusts, Horror=ash/fog, etc.
+function buildCanopySectors(sectors, sectorCenterX, Y, sectorW) {
+  // Platform density: how many platform "rows" per sector (along Z)
+  const ROWS = 3;            // near, mid, far from spawn line
+  const ROW_Z = [-8, 0, 8];  // Z offsets from spine center (x-axis)
+  const PLATFORMS_PER_ROW = 5; // platforms along X per row within sector
+
+  for (let i = 0; i < sectors.length; i++) {
+    const zone = sectors[i];
+    const cx = sectorCenterX(i);
+    const halfW = sectorW / 2;
+
+    // Build a grid of platforms per sector, each with biome-native behavior
+    for (let r = 0; r < ROWS; r++) {
+      const z = ROW_Z[r];
+      for (let p = 0; p < PLATFORMS_PER_ROW; p++) {
+        // Stagger positions within sector
+        const px = cx - halfW * 0.8 + (p + 0.5) * (halfW * 1.6 / PLATFORMS_PER_ROW);
+        const half = 1.5 + (p % 2) * 0.5; // vary size slightly
+
+        // Choose platform type based on biome — this is the "native platform" per biome
+        const kind = pickBiomePlatformKind(zone);
+        const plat = addPlatform(px, Y, z, half, false, 0, zone, true, true);
+        plat.isCanopy = true; plat.sectorIndex = i; plat.row = r; plat.col = p;
+
+        // Apply biome-native behavior via makeSpecial (mechanical) or zone physics (native)
+        if (kind !== 'static') {
+          makeSpecial(plat, kind, biomePlatformParams(zone, kind));
+        }
+
+        // Add biome dressing (visual only) — reuses existing dressSite logic
+        if (zone && typeof dressSite === 'function') dressSite(plat, zone);
+
+        // THE BETWEEN §7.2: systemic-roster drips. Between hub rosters replace the biome fauna
+        // (pickEnemy -> BETWEEN_ENEMY_ROSTER), ~1 in 3 non-static rows hosts one.
+        if (betweenOn() && r !== 0 && p % 3 === 1 && rand() < 0.6) spawnBiomeEnemy(px, Y + 0.5, z, plat, zone, 0.4);
+      }
+    }
+
+    // Add cross-row connectors (movers/orbits) to make each sector traversable
+    addSectorConnectors(cx, Y, sectorW, zone, i);
+  }
+}
+
+// Pick a biome-appropriate platform kind. Returns 'static' for no special behavior.
+function pickBiomePlatformKind(zone) {
+  if (!zone) return 'static';
+  const name = zone.name;
+  // Biome-native mechanical platforms (one per biome, deterministic by zone name hash)
+  const biomeKindMap = {
+    'Psychedelic': 'orbit',      // orbiting platforms — low gravity feel
+    'Jungle': 'swing',           // vine-like swinging platforms
+    'Frozen': 'breath',          // pulsing ice platforms (slippery physics is native)
+    'Inferno': 'conveyor',       // rising heat pushes you (conveyor)
+    'Storm': 'mover',            // magnetic gusts move platforms linearly
+    'Horror': 'blink',           // phasing platforms (fear mechanic)
+    'Hellscape': 'phase',        // alternating solid/intagible
+    'Glitch': 'unstable',        // randomized behavior
+    'Kaomoji': 'spin',           // rotating happy platforms
+    'Beach': 'breath',           // gentle wave-like pulse
+    'Rave': 'orbit',             // disco orbiters
+    'Alien Void': 'rail',        // rail-guided xeno platforms
+    'FleshNest': 'growth',       // organic pulsing growth
+    'Shroom': 'bounce',          // mushroom bounce (trampoline)
+    'HauntedHouse': 'crumble',   // rotting floors
+    'Shallows': 'static',        // calm cloud-deck — static is fine
+    'Seam': 'pendulum'           // swinging ruin chunks
+  };
+  return biomeKindMap[name] || 'static';
+}
+
+// Parameters for biome platform kinds — keeps behavior, only skin changes via zone material
+function biomePlatformParams(zone, kind) {
+  const base = { ph: rand() * Math.PI * 2 }; // deterministic phase per platform
+  switch (kind) {
+    case 'orbit':   return { ...base, period: 4 + rand() * 2, amp: 3 + rand() * 3 };
+    case 'swing':   return { ...base, period: 3.5 + rand() * 1.5, amp: 3 + rand() * 2, px: 0, pz: 1 };
+    case 'breath':  return { ...base, period: 2.5 + rand() * 1.5 };
+    case 'conveyor':return { dir: { x: rand() < 0.5 ? 1 : -1, z: 0 }, speed: 4 + rand() * 3 };
+    case 'mover':   return { ...base, period: 3 + rand() * 2, amp: 5 + rand() * 3, px: 1, pz: 0, lift: false };
+    case 'blink':   return {};
+    case 'phase':   return { ...base, period: 2 + rand() * 1 };
+    case 'unstable':return {};
+    case 'spin':    return { ...base, period: 4 + rand() * 2 };
+    case 'rail':    return { ...base, period: 5 + rand() * 2, amp: 6, px: 1, pz: 0 };
+    case 'growth':  return { ...base, period: 3 + rand() * 2 };
+    case 'bounce':  return { bounce: 1.8 };
+    case 'crumble': return {};
+    case 'pendulum':return { ...base, period: 4 + rand() * 2, amp: 4, px: 0, pz: 1 };
+    default:        return {};
+  }
+}
+
+// Add connector platforms between rows so each sector is a connected network
+function addSectorConnectors(cx, Y, sectorW, zone, sectorIdx) {
+  const halfW = sectorW / 2;
+  // Two connector lines per sector (left and right side), using mover/orbit
+  for (let side = -1; side <= 1; side += 2) {
+    const px = cx + side * halfW * 0.6;
+    // Vertical connector (along Z) - orbit platform
+    const conn1 = addPlatform(px, Y, -6, 1.8, false, 0, zone, true, true);
+    conn1.isCanopy = true; conn1.sectorIndex = sectorIdx; conn1.isConnector = true;
+    makeSpecial(conn1, 'orbit', { ph: sectorIdx + side, period: 4, amp: 7 });
+    // Horizontal connector (along X) - mover platform
+    const conn2 = addPlatform(cx + side * halfW * 0.3, Y, 6, 1.8, false, 0, zone, true, true);
+    conn2.isCanopy = true; conn2.sectorIndex = sectorIdx; conn2.isConnector = true;
+    makeSpecial(conn2, 'mover', { ph: sectorIdx, period: 3, amp: 4, px: side, pz: 0, lift: false });
+  }
 }
 // The five required combo archetypes (NEW LEVEL.md §5.4) plus filler circuits, built as real interactive
 // platforms using addPlatform()+makeSpecial() so they ride the existing physics/visual pipeline unchanged.
@@ -6867,6 +7078,876 @@ function buildBetweenWiring(sectors, sectorCenterX, Y) {
     wireCircuit('Filler ' + i + (isGlobal ? ' (global)' : ''), idSrc, [idSrc, idDst]);
   }
   resolveWiring();
+}
+
+// ===================== THE BETWEEN — Phase 2: dungeons (D1/D4/D6) =====================
+// Shared infrastructure: a vertical descent shaft (golden-angle spiral of hubs, same skeleton as
+// buildCollectionsHell's "Below Zero" descent) ending in a Guardian boss chamber built via the existing
+// buildArena() framework, with the auto-spawned generic Guardian swapped for a named custom boss.
+
+// Swap buildArena()'s auto-spawned generic Guardian for a named custom boss. Reuses an EXISTING body
+// variant for the mesh (buildBody's if/else chain is ~500 lines; borrowing a body is far safer than
+// extending it) and overrides e.variant afterward so variantAI dispatches on the new name — the body
+// is already built by then, so this is purely a behavior/stat swap, same trick buildArena already uses
+// to add a decorative crown mesh onto a stock body.
+function swapArenaBoss(A, bodyVariant, customVariant, scale, hp, nameStr, dungeonIndex) {
+  if (A.boss) { A.boss.dead = true; A.boss.mesh.removeFromParent(); if (A.boss.warn) A.boss.warn.visible = false; }
+  const sp0 = A.spawn[0];
+  const mini = makeWalker(clamp(sp0.x, sp0.plat.minx + 2.5, sp0.plat.maxx - 2.5), sp0.plat.maxy, clamp(sp0.z, sp0.plat.minz + 2.5, sp0.plat.maxz - 2.5), sp0.plat, scale, false, bodyVariant);
+  mini.hp = mini.maxhp = hp; mini.mini = true; mini.hub = A; mini.name = nameStr; mini.pts = 600; mini.anchorIndex = dungeonIndex;
+  mini.variant = customVariant;           // AI dispatch now uses the custom name; the body mesh above is already built
+  A.boss = mini;
+  return mini;
+}
+// A one-off vertical shaft from a Canopy dungeon mouth down to the Foundation, ending in a boss arena.
+// `deco(hub, i, levels, slab)` lets each dungeon layer its own mechanic onto the shared spiral/connect
+// skeleton (same golden-angle-spiral + connect() pattern as buildCollectionsHell, index.html:6641).
+function buildBetweenDungeonShaft(mouth, dungeonIndex, zone, levels, arenaType, deco) {
+  const hubs = [], topY = mouth.top, arenaTop = 8;
+  const stepY = (topY - 10 - arenaTop) / levels;        // steps from just under the mouth down to just above the arena floor — no overlap
+  for (let i = 0; i < levels; i++) {
+    const y = topY - 10 - i * stepY, a = i * 2.399963229728653, r = 8 + (i % 3) * 4;
+    const x = mouth.cx + Math.cos(a) * r, z = mouth.cz + Math.sin(a) * r;
+    const slab = addSlab(x, y, z, 4, 4, 1.8, zone, false);
+    const hub = { kind: 'building', x, z, top: y, hw: 4, hd: 4, zone, universe: mySlot, slab, between: true, dungeonIndex };
+    hubs.push(hub); if (i) connect(hubs[i - 1], hub);
+    if (deco) deco(hub, i, levels, slab);
+  }
+  const mouthHub = { kind: 'building', x: mouth.cx, z: mouth.cz, top: topY, hw: mouth.hw, hd: mouth.hd, zone, universe: mySlot, slab: mouth };
+  connect(mouthHub, hubs[0]);
+  // The shaft's last hub connects straight into the arena's own floor (built by buildArena) — no separate
+  // overlapping slab here, since stacking one above the arena floor made the floor (and the geyser on it)
+  // unreachable in practice.
+  const A = buildArena(arenaType, hubs[levels - 1].x, arenaTop, hubs[levels - 1].z, zone);
+  const arenaHub = { kind: 'arena', x: A.x, z: A.z, top: A.top, hw: A.hw, hd: A.hd, zone, universe: mySlot, slab: null };
+  connect(hubs[levels - 1], arenaHub);
+  // Return geyser: a small floating platform just past the arena's own edge (every arenaType has its own
+  // internal obstacle layout — colosseum corner towers, reactor pylons/core, pillars columns — so flush-with-
+  // the-floor placement near the center risks landing on one of those; just outside the footprint avoids all of them).
+  const gx = A.x + A.hw + 5, gz = A.z;
+  const geyser = addSolid(gx - 3, gx + 3, arenaTop + 1.6, arenaTop + 2, gz - 3, gz + 3);
+  Object.assign(geyser, { cx: gx, cz: gz, top: arenaTop + 2, zone, returnGeyser: true, geyserTarget: { x: mouth.cx, y: topY + 3, z: mouth.cz } });
+  const padMesh = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 0.4, 16), new THREE.MeshBasicMaterial({ color: 0x36f6ff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+  padMesh.position.set(gx, arenaTop + 1.8, gz); scene.add(padMesh);
+  connect(arenaHub, { kind: 'building', x: gx, z: gz, top: arenaTop + 2, hw: 3, hd: 3, zone, universe: mySlot, slab: null });
+  return { hubs, A, geyser, last: { x: A.x, z: A.z, top: A.top, hw: A.hw, hd: A.hd } };
+}
+// Gravity Anchor: counts toward the (future, Phase 4+) Gravity Well — no launch logic here, just the
+// counter + a visual pulse on the dungeon mouth's existing decorative shaft column.
+function activateGravityAnchor(dungeonIndex) {
+  if (!betweenWell) return;
+  const anchor = betweenWell.anchors[dungeonIndex];
+  if (!anchor || anchor.active) return;
+  anchor.active = true; betweenWell.anchorsActive++;
+  const mouth = betweenDungeonMouths[dungeonIndex];
+  if (mouth && mouth.dungeonShaft) { mouth.dungeonShaft.material.opacity = 0.55; mouth.dungeonShaft.material.color.setHex(0x8ad0ff); }
+  toast('GRAVITY ANCHOR ACTIVATED (' + betweenWell.anchorsActive + '/6)', 2600);
+  shockRing({ x: mouth ? mouth.cx : 0, y: 4, z: mouth ? mouth.cz : 0 }, 10, 0x8ad0ff); sfx.clear && sfx.clear();
+}
+// One-frame glitch flick: screen-tear + a short CSS filter glitch, reusing the file's existing
+// additive-glow/CSS-filter convention (see nosTear()) instead of a new shader.
+function betweenTear() { const b = document.body; b.classList.add('between-tear'); setTimeout(() => b.classList.remove('between-tear'), 430); }
+
+// ---- D1 — GLITCH.EXE: platforms spawn/despawn on a cycle; momentum-gated platforms; HUD lies; input swap with screen-tear tell; fake "crash" freeze ----
+// GLITCH.EXE state
+let glitchCycleT = 0;              // global cycle timer for platform spawn/despawn
+let glitchCyclePhase = 0;          // 0=spawn, 1=despawn
+let glitchPlatforms = [];          // tracked GLITCH platforms {slab, kind, cycleOffset, solid, momentumGate}
+let glitchInputSwapped = false;    // input swap active
+let glitchInputSwapT = 0;          // input swap timer
+let glitchHudLieT = 0;             // HUD lie timer
+let glitchFakeCrashT = 0;          // fake crash timer
+let glitchCrashActive = false;     // fake crash active
+let glitchFakeCrashOsc = null;     // crash audio oscillator
+let glitchMomentumThreshold = 8;   // min speed for momentum-gated platforms
+let glitchBossArena = null;        // reference to boss arena for wiring
+
+function glitchDeco(hub, i, levels, slab) {
+  if (!slab) return;
+  // A separate addPlatform() floating beside the hub, not the hub's own addSlab() walkway
+  if (i % 3 === 1) { const p = addPlatform(slab.cx + 5, slab.top, slab.cz + 5, 2.2, false, 0, slab.zone, true, true); makeSpecial(p, 'blink', {}); }
+  // Add GLITCH.EXE cycle platforms: alternating solid/ghost on a global cycle
+  if (i % 2 === 0 && i > 0 && i < levels - 1) {
+    const cycleOffset = (i * 0.7) % 1;
+    const momentumGate = rand() < 0.4; // 40% are momentum-gated
+    slab.glitchCycle = true;
+    slab.glitchCycleOffset = cycleOffset;
+    slab.glitchMomentumGate = momentumGate;
+    slab.glitchSolid = true;
+    glitchPlatforms.push({ slab, cycleOffset, momentumGate, solid: true, kind: 'cycle' });
+    // Visual tell: wireframe ghost when despawned
+    const ghostGeo = new THREE.BoxGeometry((slab.hw || 4) * 2, 0.3, (slab.hd || 4) * 2);
+    const ghostMat = new THREE.MeshBasicMaterial({ color: 0x39ff88, wireframe: true, transparent: true, opacity: 0, depthWrite: false });
+    const ghost = new THREE.Mesh(ghostGeo, ghostMat);
+    ghost.position.set(slab.cx, slab.top + 0.2, slab.cz);
+    scene.add(ghost);
+    slab.glitchGhost = ghost;
+    // Momentum-gated tell: faint arrow particles when gated
+    if (momentumGate) {
+      slab.glitchMomentumTell = [];
+      for (let a = 0; a < 4; a++) {
+        const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.8, 4), new THREE.MeshBasicMaterial({ color: 0x39ff88, transparent: true, opacity: 0.4 }));
+        arrow.rotation.x = -Math.PI / 2;
+        arrow.rotation.z = a * Math.PI / 2;
+        arrow.position.set(slab.cx, slab.top + 0.5, slab.cz);
+        scene.add(arrow);
+        slab.glitchMomentumTell.push(arrow);
+      }
+    }
+  }
+  // Boss floor (last level): wire the real platform and add fake decoys
+  if (i === levels - 1) {
+    slab.isGlitchBossFloor = true;
+    glitchBossArena = slab;
+  }
+}
+
+// HUD lie system: returns falsified values for health, ammo, score
+function glitchGetHudLie(key) {
+  if (glitchHudLieT <= 0) return null;
+  const lies = {
+    health: () => Math.max(1, health + (rand() < 0.5 ? -rand() * 3 : rand() * 5)),
+    ammo: () => Math.max(0, (ammo[weapon] || 0) + (rand() < 0.5 ? -rand() * 10 : rand() * 20)),
+    score: () => score + (rand() < 0.5 ? -rand() * 1000 : rand() * 500),
+    weapon: () => WEAPONS[(weapon + 1) % WEAPONS.length].name,
+    level: () => level + (rand() < 0.5 ? -1 : 1),
+  };
+  return lies[key] ? lies[key]() : null;
+}
+
+// Input swap with screen-tear tell
+function glitchTriggerInputSwap() {
+  if (glitchInputSwapped) return;
+  glitchInputSwapped = true;
+  glitchInputSwapT = 2 + rand() * 2; // 2-4 seconds
+  betweenTear(); // screen-tear tell
+  toast('INPUT SUBSYSTEM COMPROMISED', 1500);
+  glitchInputSwapOriginal = { left: 'ArrowLeft', right: 'ArrowRight', jump: 'Space', crouch: 'ShiftLeft' };
+}
+
+let glitchInputSwapOriginal = null;
+
+function glitchTriggerFakeCrash() {
+  if (glitchCrashActive) return;
+  glitchCrashActive = true;
+  glitchFakeCrashT = 1.5 + rand() * 1.5; // 1.5-3 seconds
+  // Visual: freeze screen, show "CRASH" overlay
+  const crashOverlay = document.createElement('div');
+  crashOverlay.id = 'glitchCrashOverlay';
+  crashOverlay.style.cssText = 'position:fixed;inset:0;background:#000;color:#39ff88;font:20px monospace;display:flex;align-items:center;justify-content:center;z-index:100;pointer-events:none;';
+  crashOverlay.innerHTML = '<pre style="text-align:center;">GLITCH.EXE HAS STOPPED WORKING\n\n0xDEADBEEF  0xBADFOOD  0xC0FFEE\n\nAttempting memory dump...</pre>';
+  document.body.appendChild(crashOverlay);
+  // Audio: harsh buzz
+  if (actx && !muted) {
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = 'square'; o.frequency.value = 60; g.gain.value = 0.15;
+    o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + glitchFakeCrashT);
+    glitchFakeCrashOsc = o;
+  }
+}
+
+// Update GLITCH.EXE systems (called from betweenOn() block in main tick)
+function updateGlitchExe(dt) {
+  // Global cycle timer (8 second cycle: 4s spawn, 4s despawn)
+  glitchCycleT += dt;
+  const cyclePeriod = 8;
+  const cyclePos = (glitchCycleT % cyclePeriod) / cyclePeriod;
+  const newPhase = cyclePos < 0.5 ? 0 : 1;
+  if (newPhase !== glitchCyclePhase) {
+    glitchCyclePhase = newPhase;
+    // Phase transition: all cycle platforms toggle
+    for (const gp of glitchPlatforms) {
+      if (!gp.slab || gp.slab.glitchCycle !== true) continue;
+      const shouldBeSolid = (gp.cycleOffset < 0.5) === (glitchCyclePhase === 0);
+      if (gp.momentumGate) {
+        // Momentum-gated: only solid if player moving fast enough
+        const playerSpeed = Math.hypot(vel.x, vel.z);
+        gp.solid = shouldBeSolid && playerSpeed > glitchMomentumThreshold;
+      } else {
+        gp.solid = shouldBeSolid;
+      }
+      // Update physics solids array
+      if (gp.solid && !solids.includes(gp.slab)) solids.push(gp.slab);
+      else if (!gp.solid) { const idx = solids.indexOf(gp.slab); if (idx >= 0) solids.splice(idx, 1); solidsVer++; }
+      // Visual: ghost mesh opacity
+      if (gp.slab.glitchGhost) gp.slab.glitchGhost.material.opacity = gp.solid ? 0 : 0.5;
+      // Momentum tell arrows pulse
+      if (gp.slab.glitchMomentumTell) {
+        const show = gp.momentumGate && !gp.solid;
+        for (const arrow of gp.slab.glitchMomentumTell) arrow.visible = show;
+      }
+    }
+  }
+  // Momentum-gated platforms: re-evaluate every frame based on player speed
+  if (glitchCyclePhase === 0) { // spawn phase
+    for (const gp of glitchPlatforms) {
+      if (!gp.momentumGate || !gp.slab || !gp.solid) continue;
+      const playerSpeed = Math.hypot(vel.x, vel.z);
+      if (playerSpeed <= glitchMomentumThreshold) {
+        gp.solid = false;
+        const idx = solids.indexOf(gp.slab); if (idx >= 0) solids.splice(idx, 1); solidsVer++;
+        if (gp.slab.glitchGhost) gp.slab.glitchGhost.material.opacity = 0.5;
+      }
+    }
+  }
+  // Input swap timer
+  if (glitchInputSwapped) {
+    glitchInputSwapT -= dt;
+    if (glitchInputSwapT <= 0) {
+      glitchInputSwapped = false;
+      glitchInputSwapOriginal = null;
+      toast('INPUT RESTORED', 1000);
+    }
+  }
+  // HUD lie timer (random intervals)
+  if (glitchHudLieT > 0) glitchHudLieT -= dt;
+  else if (rand() < dt * 0.1) { // ~10% chance per second
+    glitchHudLieT = 3 + rand() * 4; // 3-7 seconds of lies
+  }
+  // Fake crash timer
+  if (glitchCrashActive) {
+    glitchFakeCrashT -= dt;
+    if (glitchFakeCrashT <= 0) {
+      glitchCrashActive = false;
+      const overlay = document.getElementById('glitchCrashOverlay');
+      if (overlay) overlay.remove();
+      if (glitchFakeCrashOsc) { try { glitchFakeCrashOsc.stop(); } catch(_) {} glitchFakeCrashOsc = null; }
+      toast('SYSTEM RECOVERED', 1500);
+    }
+  }
+  // Random triggers while in GLITCH dungeon
+  const inGlitchDungeon = glitchPlatforms.length > 0 && Math.hypot(pos.x - (glitchBossArena?.cx || 0), pos.z - (glitchBossArena?.cz || 0)) < 60;
+  if (inGlitchDungeon) {
+    if (rand() < dt * 0.02) glitchTriggerInputSwap();     // ~2%/s
+    if (rand() < dt * 0.005) glitchTriggerFakeCrash();    // ~0.5%/s
+  }
+}
+
+// Apply input swap to player controls
+function glitchApplyInputSwap(keys) {
+  if (!glitchInputSwapped || !glitchInputSwapOriginal) return keys;
+  const swapped = { ...keys };
+  // Swap left/right
+  if (keys[glitchInputSwapOriginal.left]) swapped[glitchInputSwapOriginal.right] = true;
+  if (keys[glitchInputSwapOriginal.right]) swapped[glitchInputSwapOriginal.left] = true;
+  // Swap jump/crouch (Space/Shift)
+  if (keys[glitchInputSwapOriginal.jump]) swapped[glitchInputSwapOriginal.crouch] = true;
+  if (keys[glitchInputSwapOriginal.crouch]) swapped[glitchInputSwapOriginal.jump] = true;
+  return swapped;
+}
+
+function buildDungeonGlitchExe(mouth, dungeonIndex) {
+  if (!mouth) return;
+  const zone = ZONES.find(z => z.name === 'Glitch') || ZONES[0];
+  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, zone, 9, 'reactor', glitchDeco);
+  const mini = swapArenaBoss(A, 'walker', 'null_pointer', 1.9, 42, 'null_pointer', dungeonIndex);
+  mini.mat.color.setHex(0x9aa0a8); mini.mat.emissive && mini.mat.emissive.setHex(0x2a2e34);
+  // T-pose: rotate arms out
+  mini.mesh.traverse(o => { if (o.name === 'armL') o.rotation.set(-1.5, 0, 1.5); if (o.name === 'armR') o.rotation.set(-1.5, 0, -1.5); });
+  const cageGeo = new THREE.BoxGeometry(1.1, 2.1, 1.1);
+  const cage = new THREE.Mesh(cageGeo, new THREE.MeshBasicMaterial({ color: 0x39ff88, wireframe: true, transparent: true, opacity: 0.6 }));
+  cage.position.y = 1.05; mini.mesh.add(cage);
+  // Wireframe outline on real platform (tell)
+  const outline = new THREE.Mesh(new THREE.BoxGeometry(last.hw * 2 + 0.4, 0.3, last.hd * 2 + 0.4), new THREE.MeshBasicMaterial({ color: 0x39ff88, wireframe: true, transparent: true, opacity: 0.5 }));
+  outline.position.set(last.x, 8.2, last.z); scene.add(outline);
+  // Fake decoy platforms near boss (non-solid, no wireframe tell)
+  for (let k = 0; k < 3; k++) {
+    const gm = new THREE.Mesh(new THREE.BoxGeometry(last.hw * 1.6, 0.4, last.hd * 1.6), new THREE.MeshBasicMaterial({ color: 0x1b2340, transparent: true, opacity: 0.4 }));
+    gm.position.set(last.x + (k - 1) * 16, 8 + (rand() - 0.5) * 4, last.z + (rand() - 0.5) * 12); scene.add(gm);
+    gm.isGlitchDecoy = true;
+  }
+  // Boss custom behavior data
+  mini.glitchTpTargets = []; // teleport targets (fake platforms)
+  mini.glitchPhase = 0;      // 0=normal, 1=crash teleport, 2=platform spam
+  mini.glitchPhaseT = 0;
+  // Wiring: local circuit for boss floor - pulse on boss hit reveals real platform briefly
+  const bossPlateId = 'glitch_boss_plate_' + dungeonIndex;
+  const bossWireId = 'glitch_boss_wire_' + dungeonIndex;
+  wireRegister(last, bossPlateId, { signalType: 'pulse', pulseLen: 1.0, receivers: [bossWireId] });
+  wireRegister({ wire: { active: false, energy: 0, fake: true } }, bossWireId, { signalType: 'hold', fake: true, receivers: [] });
+  // Flash real platform outline on boss hit
+  mini.onHit = () => {
+    if (outline) { outline.material.opacity = 1; setTimeout(() => { if (outline) outline.material.opacity = 0.5; }, 1000); }
+    // Spawn new fake platforms
+    for (let k = 0; k < 2; k++) {
+      const gm = new THREE.Mesh(new THREE.BoxGeometry(last.hw * 1.4, 0.4, last.hd * 1.4), new THREE.MeshBasicMaterial({ color: 0x1b2340, transparent: true, opacity: 0.4 }));
+      gm.position.set(last.x + (rand() - 0.5) * 20, 8, last.z + (rand() - 0.5) * 20); scene.add(gm);
+      gm.isGlitchDecoy = true; setTimeout(() => gm.removeFromParent(), 8000);
+    }
+  };
+  // Enemy spawns: glitchlings and watchers in shaft
+  for (const hub of hubs) {
+    if (hub.kind !== 'arena' && rand() < 0.3) {
+      spawnBiomeEnemy(hub.x, hub.top + 1, hub.z, hub.slab, zone, 0.5);
+    }
+  }
+  // Return geyser at bottom (already added by buildBetweenDungeonShaft)
+  // Gravity Anchor activation on boss death
+  mini.onDeath = () => {
+    activateGravityAnchor(dungeonIndex);
+    // Clean up GLITCH state
+    glitchPlatforms = []; glitchCycleT = 0; glitchCyclePhase = 0;
+    glitchInputSwapped = false; glitchHudLieT = 0; glitchCrashActive = false;
+  };
+}
+
+// ---- D4 — PSYCHOSIS: Sanity drains on descent; hallucinations spawn ON TOP of real content with 1-frame tells; game learns habits; grounding anchors reset calibration; THE OBSERVER boss exists only while observed, heals when looked away ----
+// PSYCHOSIS state
+let d4SanityT = 1;                 // dungeon-local "sanity" (0..1, drains inside D4)
+let d4HallT = 4;                   // hallucination spawn timer
+let d4Hallucinations = [];         // active hallucinations {mesh, type, tellTimer, tellFrame, targetHabit}
+let d4HabitTracker = {             // learns player habits
+  jumpFreq: 0,       // jumps per second
+  dashFreq: 0,       // dashes per second
+  attackFreq: 0,     // attacks per second
+  moveDir: new THREE.Vector2(), // preferred movement direction
+  lastJump: 0,
+  lastDash: 0,
+  lastAttack: 0,
+  samples: 0
+};
+let d4GroundingAnchors = [];       // beacon-like sanity restorers in dungeon
+let d4ObserverBoss = null;         // reference to boss
+let d4BossFloor = null;            // boss arena floor
+let d4BossOutline = null;          // tell on real boss
+
+// Habit tracking (called from player input handling)
+function d4TrackHabit(action) {
+  const now = performance.now() / 1000;
+  const ht = d4HabitTracker;
+  ht.samples++;
+  if (action === 'jump') { ht.jumpFreq = (ht.jumpFreq * (ht.samples - 1) + 1) / ht.samples; ht.lastJump = now; }
+  else if (action === 'dash') { ht.dashFreq = (ht.dashFreq * (ht.samples - 1) + 1) / ht.samples; ht.lastDash = now; }
+  else if (action === 'attack') { ht.attackFreq = (ht.attackFreq * (ht.samples - 1) + 1) / ht.samples; ht.lastAttack = now; }
+  else if (action === 'move') { ht.moveDir.lerp(new THREE.Vector2(face.x, face.z), 0.1); }
+}
+
+// Spawn a hallucination with a consistent 1-frame tell
+// Types: 'platform', 'enemy', 'deathScreen', 'ui', 'player2', 'geometry', 'audio'
+// Tell: colorShift, wrongShadow, offKeyAudio, mismatchedReflection
+function d4SpawnHallucination() {
+  const tellTypes = ['colorShift', 'wrongShadow', 'offKeyAudio', 'mismatchedReflection'];
+  const tell = tellTypes[(rand() * tellTypes.length) | 0];
+  const hallType = ['platform', 'enemy', 'geometry'][rand() * 3 | 0];
+  
+  let mesh = null;
+  const ox = (rand() - 0.5) * 20, oz = (rand() - 0.5) * 20;
+  const hx = pos.x + ox, hy = pos.y - 1, hz = pos.z + oz;
+  
+  if (hallType === 'platform') {
+    mesh = new THREE.Mesh(new THREE.BoxGeometry(3 + rand() * 3, 0.4, 3 + rand() * 3), 
+      new THREE.MeshBasicMaterial({ color: 0xff66cc, transparent: true, opacity: 0.6 }));
+    mesh.position.set(hx, hy, hz);
+    scene.add(mesh);
+  } else if (hallType === 'enemy') {
+    const ghost = makeWalker(hx, pos.y, hz, null, 1, false, 'walker');
+    ghost.ghost = true; ghost.speed = 0; ghost.hp = 999999;
+    ghost.mesh.traverse(o => { if (o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.5; } });
+    mesh = ghost.mesh;
+    d4Hallucinations.push({ mesh: ghost.mesh, type: 'enemy', ghost, tellTimer: 0, tellFrame: -1, tell, targetHabit: Object.keys(d4HabitTracker).find(k => d4HabitTracker[k] > 0.5) });
+    setTimeout(() => { ghost.dead = true; ghost.mesh.removeFromParent(); d4Hallucinations = d4Hallucinations.filter(h => h.ghost !== ghost); }, 3000);
+    return;
+  } else { // geometry - fake walls, ceilings, etc.
+    mesh = new THREE.Mesh(new THREE.BoxGeometry(2 + rand() * 4, 2 + rand() * 4, 0.5), 
+      new THREE.MeshBasicMaterial({ color: 0xff66cc, transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
+    mesh.position.set(hx, hy + 2, hz);
+    mesh.rotation.y = rand() * Math.PI * 2;
+    scene.add(mesh);
+  }
+  
+  // Apply tell: one-frame visual anomaly
+  const originalColor = mesh.material.color.getHex();
+  const originalOpacity = mesh.material.opacity;
+  
+  d4Hallucinations.push({ 
+    mesh, type: hallType, 
+    tellTimer: 0, tellFrame: -1, tell, 
+    originalColor, originalOpacity,
+    targetHabit: Object.keys(d4HabitTracker).find(k => d4HabitTracker[k] > 0.5)
+  });
+  
+  // Remove after duration
+  setTimeout(() => { 
+    if (mesh.parent) mesh.removeFromParent(); 
+    d4Hallucinations = d4Hallucinations.filter(h => h.mesh !== mesh); 
+  }, 2500 + d4SanityT * 2000); // lower sanity = longer hallucinations
+}
+
+// Update hallucination tells (called every frame)
+function d4UpdateHallucinations(dt) {
+  const frame = (performance.now() / 16.666) | 0; // approximate frame count
+  for (const h of d4Hallucinations) {
+    h.tellTimer += dt;
+    // 1-frame tell at regular intervals (faster at low sanity)
+    const tellInterval = 0.5 + d4SanityT * 1.5; // 0.5s at sanity 0, 2s at sanity 1
+    if (h.tellTimer >= tellInterval) {
+      h.tellTimer = 0;
+      h.tellFrame = frame;
+      // Apply the tell for exactly 1 frame
+      if (h.tell === 'colorShift') {
+        h.mesh.material.color.setHex(h.mesh.material.color.getHex() ^ 0x00ffff); // cyan shift
+        h.mesh.material.needsUpdate = true;
+      } else if (h.tell === 'wrongShadow') {
+        // Shadow direction mismatch - flip mesh scale X for 1 frame
+        h.mesh.scale.x *= -1;
+      } else if (h.tell === 'offKeyAudio' && actx && !muted) {
+        // Play a wrong-pitched sound
+        const o = actx.createOscillator(), g = actx.createGain();
+        o.type = 'sine'; o.frequency.value = 110 + rand() * 880; // random off-key note
+        g.gain.value = 0.05; o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.05);
+      } else if (h.tell === 'mismatchedReflection') {
+        // Material environment map flip (simplified: invert emissive)
+        const em = h.mesh.material.emissive;
+        if (em) { h.mesh.material.emissive = new THREE.Color(1 - em.r, 1 - em.g, 1 - em.b); }
+      }
+    }
+    // Revert tell after 1 frame
+    if (h.tellFrame === frame - 1) {
+      if (h.tell === 'colorShift') h.mesh.material.color.setHex(h.originalColor);
+      else if (h.tell === 'wrongShadow') h.mesh.scale.x *= -1;
+      else if (h.tell === 'mismatchedReflection' && h.mesh.material.emissive) {
+        h.mesh.material.emissive.setHex(0x000000);
+      }
+    }
+  }
+}
+
+// Sanity drain and restoration
+function d4UpdateSanity(dt) {
+  if (d4SanityT <= 0) return;
+  // Drain: faster when moving, in combat, near geometry
+  let drain = dt * 0.01; // base drain
+  if (Math.hypot(vel.x, vel.z) > 2) drain += dt * 0.02; // moving
+  if (enemies.some(e => !e.dead && Math.hypot(e.x - pos.x, e.z - pos.z) < 15)) drain += dt * 0.03; // combat
+  d4SanityT = Math.max(0, d4SanityT - drain);
+  
+  // Grounding anchor restoration
+  for (const anchor of d4GroundingAnchors) {
+    if (Math.hypot(pos.x - anchor.x, pos.z - anchor.z) < 6 && Math.abs(pos.y - anchor.y) < 4) {
+      d4SanityT = Math.min(1, d4SanityT + dt * 0.05);
+      if (anchor.mesh) anchor.mesh.material.emissiveIntensity = 0.5 + 0.5 * Math.sin(performance.now() / 200);
+    }
+  }
+  
+  // Visual sanity indicator (HUD overlay)
+  if (d4SanityT < 0.3 && !document.getElementById('d4SanityWarn')) {
+    const warn = document.createElement('div');
+    warn.id = 'd4SanityWarn';
+    warn.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);color:#ff3366;font:14px monospace;text-shadow:0 0 10px #ff0033;z-index:10;pointer-events:none;animation:pulse 0.5s infinite;';
+    warn.textContent = '⚠ REALITY UNSTABLE ⚠';
+    document.body.appendChild(warn);
+  } else if (d4SanityT >= 0.3) {
+    const warn = document.getElementById('d4SanityWarn');
+    if (warn) warn.remove();
+  }
+}
+
+// Build grounding anchors in the dungeon shaft
+function d4BuildGroundingAnchors(hubs) {
+  for (let i = 0; i < hubs.length; i += 3) { // every 3rd hub
+    const hub = hubs[i];
+    if (!hub || hub.kind === 'arena') continue;
+    const anchor = addSlab(hub.x, hub.top, hub.z, 2, 2, 0.5, hub.zone, false);
+    anchor.isGroundingAnchor = true;
+    anchor.groundingPower = 1;
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.5, 8), 
+      new THREE.MeshBasicMaterial({ color: 0x36f6ff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending }));
+    mesh.position.set(hub.x, hub.top + 0.25, hub.z);
+    scene.add(mesh);
+    anchor.groundingMesh = mesh;
+    // Beam
+    const beamMat = new THREE.MeshBasicMaterial({ color: 0x36f6ff, transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide });
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 100, 8), beamMat);
+    beam.position.set(hub.x, hub.top + 50, hub.z);
+    scene.add(beam);
+    anchor.beam = beam;
+    d4GroundingAnchors.push({ x: hub.x, y: hub.top, z: hub.z, mesh, beam });
+  }
+}
+
+// Main PSYCHOSIS update (called from betweenOn block)
+function updatePsychosis(dt) {
+  if (d4SanityT <= 0 && d4Hallucinations.length === 0 && !d4ObserverBoss) return; // not in D4
+  
+  d4UpdateSanity(dt);
+  d4UpdateHallucinations(dt);
+  d4HallT -= dt;
+  
+  // Spawn hallucinations based on sanity (lower sanity = more frequent, subtler tells)
+  const spawnRate = 0.5 + (1 - d4SanityT) * 2; // 0.5/s at full sanity, 2.5/s at 0
+  if (d4HallT <= 0) {
+    d4HallT = 1 / spawnRate;
+    d4SpawnHallucination();
+  }
+  
+  // Boss-specific: THE OBSERVER handled in variantAI, but we add extra behaviors here
+  if (d4ObserverBoss && !d4ObserverBoss.dead) {
+    // Observer creates fake copies of itself
+    if (!d4ObserverBoss.observerCopies) d4ObserverBoss.observerCopies = [];
+    if (d4ObserverBoss.observerCopies.length < 3 && rand() < dt * 0.5) {
+      const copy = makeWalker(d4ObserverBoss.x + (rand() - 0.5) * 10, d4ObserverBoss.y, d4ObserverBoss.z + (rand() - 0.5) * 10, null, 1, false, 'walker');
+      copy.variant = 'observer'; copy.ghost = true; copy.hp = 1; copy.maxhp = 1;
+      copy.mesh.traverse(o => { if (o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.7; } });
+      d4ObserverBoss.observerCopies.push(copy);
+      enemies.push(copy);
+    }
+    // Real boss has tell: pupil dilation when observed
+    if (d4ObserverBoss.observed && d4BossOutline) {
+      d4BossOutline.material.opacity = 0.8;
+    } else if (d4BossOutline) {
+      d4BossOutline.material.opacity = 0.2;
+    }
+  }
+}
+
+function buildDungeonPsychosis(mouth, dungeonIndex) {
+  if (!mouth) return;
+  const zone = ZONES.find(z => z.name === 'Psychedelic') || ZONES[0];
+  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, zone, 9, 'pit', null);
+  const mini = swapArenaBoss(A, 'walker', 'observer', 2.1, 50, 'THE OBSERVER', dungeonIndex);
+  mini.mat.color.setHex(0xff66cc);
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  eye.position.y = 2.3; mini.mesh.add(eye);
+  const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), new THREE.MeshBasicMaterial({ color: 0x120018 }));
+  pupil.position.set(0, 2.3, 0.4); mini.mesh.add(pupil);
+  // Tell: pupil dilation when observed
+  mini.observerPupil = pupil;
+  
+  // Tell outline on real boss (visible when observed)
+  d4BossOutline = new THREE.Mesh(new THREE.SphereGeometry(2.8, 16, 12), new THREE.MeshBasicMaterial({ color: 0x36f6ff, wireframe: true, transparent: true, opacity: 0.2 }));
+  d4BossOutline.position.set(last.x, last.top + 2, last.z);
+  scene.add(d4BossOutline);
+  
+  d4ObserverBoss = mini;
+  d4BossFloor = last;
+  d4SanityT = 1; d4HallT = 4; d4Hallucinations = [];
+  d4HabitTracker = { jumpFreq: 0, dashFreq: 0, attackFreq: 0, moveDir: new THREE.Vector2(), lastJump: 0, lastDash: 0, lastAttack: 0, samples: 0 };
+  d4GroundingAnchors = [];
+  
+  // Build grounding anchors in shaft
+  d4BuildGroundingAnchors(hubs);
+  
+  // Wiring: local circuit - sanity anchor pulse reveals real boss
+  const anchorId = 'psychosis_anchor_' + dungeonIndex;
+  const bossWireId = 'psychosis_boss_' + dungeonIndex;
+  for (const anchor of d4GroundingAnchors) {
+    wireRegister(anchor, anchorId, { signalType: 'hold', pulseLen: 1.0, receivers: [bossWireId] });
+  }
+  wireRegister(last, bossWireId, { signalType: 'hold', gatedBy: anchorId, receivers: [] });
+  
+  // Enemy spawns in shaft
+  for (const hub of hubs) {
+    if (hub.kind !== 'arena' && rand() < 0.3) {
+      spawnBiomeEnemy(hub.x, hub.top + 1, hub.z, hub.slab, zone, 0.5);
+    }
+  }
+  
+  // Gravity Anchor on boss death
+  mini.onDeath = () => {
+    activateGravityAnchor(dungeonIndex);
+    // Cleanup
+    d4SanityT = 1; d4HallT = 4; d4Hallucinations = [];
+    d4GroundingAnchors = []; d4ObserverBoss = null;
+    if (d4BossOutline) d4BossOutline.removeFromParent();
+    if (document.getElementById('d4SanityWarn')) document.getElementById('d4SanityWarn').remove();
+  };
+}
+
+// ---- D6 — FRACTAL DESCENT: Player ability rotates gravity 90° onto nearby surfaces; non-Euclidean looping tower; THE ARCHITECT boss exists in all 4 orientations at once ----
+// FRACTAL DESCENT state
+let d6GravityOrientation = 0;      // 0=down (-Y), 1=+X, 2=up (+Y), 3=-X (relative to world)
+let d6GravityCooldown = 0;         // cooldown between reorients
+let d6GravityCooldownMax = 1.5;    // 1.5s cooldown
+let d6ReorientTells = [];          // visual tells for reorientable surfaces
+let d6LoopTriggered = false;       // has player looped?
+let d6LoopThreshold = -80;         // Y threshold to trigger loop (below boss arena)
+let d6LoopTargetY = 110;           // Y to teleport to (near canopy)
+let d6ArchitectBoss = null;        // reference to boss
+let d6BossFloor = null;            // boss arena floor
+let d6OrientationIndicators = [];  // UI indicators for 4 orientations
+let d6ReorientParticles = [];      // particle effects on reorient
+
+// Build reorient tell markers on surfaces
+function d6BuildReorientTells(hubs) {
+  for (const hub of hubs) {
+    if (!hub || hub.kind === 'arena') continue;
+    // Mark walls and ceilings as reorientable
+    const tell = new THREE.Mesh(new THREE.RingGeometry(1.5, 2, 8), 
+      new THREE.MeshBasicMaterial({ color: 0x9a6aff, transparent: true, opacity: 0.6, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+    tell.position.set(hub.x, hub.top + 1, hub.z);
+    tell.rotation.x = -Math.PI / 2;
+    tell.userData.d6Reorient = true;
+    tell.userData.targetOrientation = (hub.flipIndex || 0) % 4;
+    scene.add(tell);
+    d6ReorientTells.push({ mesh: tell, hub, orientation: tell.userData.targetOrientation });
+    
+    // Also add wall markers (vertical rings)
+    for (let side = 0; side < 4; side++) {
+      const angle = side * Math.PI / 2;
+      const wallTell = new THREE.Mesh(new THREE.RingGeometry(1.5, 2, 8), 
+        new THREE.MeshBasicMaterial({ color: 0x9a6aff, transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
+      wallTell.position.set(hub.x + Math.cos(angle) * (hub.hw + 1), hub.top, hub.z + Math.sin(angle) * (hub.hd + 1));
+      wallTell.rotation.y = angle + Math.PI / 2;
+      wallTell.userData.d6Reorient = true;
+      wallTell.userData.targetOrientation = (side + 1) % 4; // wall becomes floor
+      scene.add(wallTell);
+      d6ReorientTells.push({ mesh: wallTell, hub, orientation: wallTell.userData.targetOrientation, isWall: true });
+    }
+  }
+}
+
+// Player gravity reorient ability (called on key press)
+function d6TryReorient() {
+  if (d6GravityCooldown > 0) return false;
+  // Find nearest reorientable surface
+  let nearest = null, nearestDist = Infinity;
+  for (const tell of d6ReorientTells) {
+    if (!tell.mesh || !tell.mesh.parent) continue;
+    const dist = Math.hypot(pos.x - tell.mesh.position.x, pos.y - tell.mesh.position.y, pos.z - tell.mesh.position.z);
+    if (dist < nearestDist && dist < 6) { // within 6 units
+      nearestDist = dist;
+      nearest = tell;
+    }
+  }
+  if (!nearest) return false;
+  
+  // Perform reorient
+  d6GravityOrientation = nearest.orientation;
+  d6GravityCooldown = d6GravityCooldownMax;
+  
+  // Visual feedback
+  betweenTear();
+  flashWhite();
+  shockRing(pos, 8, 0x9a6aff);
+  toast(`GRAVITY REORIENTED: ${['DOWN', '+X', 'UP', '-X'][d6GravityOrientation]}`, 1500);
+  
+  // Particle burst
+  for (let i = 0; i < 20; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.15, 4, 3), 
+      new THREE.MeshBasicMaterial({ color: 0x9a6aff, transparent: true, opacity: 0.8 }));
+    const angle = rand() * Math.PI * 2;
+    const speed = 5 + rand() * 10;
+    p.position.copy(pos);
+    p.userData.vel = new THREE.Vector3(Math.cos(angle) * speed, (rand() - 0.5) * speed, Math.sin(angle) * speed);
+    p.userData.life = 1;
+    scene.add(p);
+    d6ReorientParticles.push(p);
+  }
+  
+  // Update orientation indicators
+  d6UpdateOrientationIndicators();
+  
+  return true;
+}
+
+// Update reorient particles
+function d6UpdateParticles(dt) {
+  for (let i = d6ReorientParticles.length - 1; i >= 0; i--) {
+    const p = d6ReorientParticles[i];
+    p.userData.life -= dt;
+    p.position.addScaledVector(p.userData.vel, dt);
+    p.userData.vel.y -= 10 * dt; // gravity affects particles
+    p.material.opacity = p.userData.life;
+    if (p.userData.life <= 0) {
+      p.removeFromParent();
+      d6ReorientParticles.splice(i, 1);
+    }
+  }
+}
+
+// Update orientation UI indicators
+function d6UpdateOrientationIndicators() {
+  // Remove old indicators
+  for (const ind of d6OrientationIndicators) {
+    if (ind.element && ind.element.parentNode) ind.element.parentNode.removeChild(ind.element);
+  }
+  d6OrientationIndicators = [];
+  
+  // Create new indicators (4 compass points)
+  const dirs = ['↓ DOWN', '→ +X', '↑ UP', '← -X'];
+  const colors = ['#36f6ff', '#ff3fc8', '#c4ff4d', '#ffaa00'];
+  for (let i = 0; i < 4; i++) {
+    const div = document.createElement('div');
+    div.style.cssText = `position:fixed;top:${60 + i * 25}px;right:20px;color:${colors[i]};font:12px monospace;text-shadow:0 0 8px ${colors[i]};z-index:10;pointer-events:none;opacity:${i === d6GravityOrientation ? 1 : 0.3};transition:opacity 0.3s;`;
+    div.textContent = dirs[i] + (i === d6GravityOrientation ? ' ◄' : '');
+    document.body.appendChild(div);
+    d6OrientationIndicators.push({ element: div, orientation: i });
+  }
+}
+
+// Non-Euclidean loop: when falling far enough, teleport to top
+function d6CheckLoop() {
+  if (pos.y < d6LoopThreshold && !d6LoopTriggered) {
+    d6LoopTriggered = true;
+    // Teleport to near canopy
+    pos.y = d6LoopTargetY;
+    vel.set(0, -2, 0);
+    onGround = false;
+    flashWhite();
+    shockRing(pos, 12, 0x9a6aff);
+    toast('THE FLOOR WAS NEVER THE FLOOR — DESCENT LOOPS', 2500);
+    // Reset loop trigger after cooldown
+    setTimeout(() => { d6LoopTriggered = false; }, 5000);
+  }
+}
+
+// Apply gravity orientation to player physics (called from physics step)
+// This modifies the effective gravity vector for the player only
+function d6GetEffectiveGravity() {
+  const baseG = BETWEEN_GRAV_MULT * 25; // base gravity magnitude
+  switch (d6GravityOrientation) {
+    case 0: return new THREE.Vector3(0, -baseG, 0);    // normal down
+    case 1: return new THREE.Vector3(baseG, 0, 0);     // +X
+    case 2: return new THREE.Vector3(0, baseG, 0);     // up
+    case 3: return new THREE.Vector3(-baseG, 0, 0);    // -X
+  }
+}
+
+// Check if player is near a reorientable surface (for HUD prompt)
+function d6CheckReorientPrompt() {
+  for (const tell of d6ReorientTells) {
+    if (!tell.mesh || !tell.mesh.parent) continue;
+    const dist = Math.hypot(pos.x - tell.mesh.position.x, pos.y - tell.mesh.position.y, pos.z - tell.mesh.position.z);
+    if (dist < 4) {
+      return { canReorient: true, orientation: tell.orientation, dist };
+    }
+  }
+  return { canReorient: false };
+}
+
+// Main FRACTAL DESCENT update (called from betweenOn block)
+function updateFractalDescent(dt) {
+  if (!d6ArchitectBoss && d6ReorientTells.length === 0) return; // not in D6
+  
+  d6GravityCooldown = Math.max(0, d6GravityCooldown - dt);
+  d6UpdateParticles(dt);
+  d6CheckLoop();
+  
+  // Update reorient tell pulsing
+  for (const tell of d6ReorientTells) {
+    if (tell.mesh && tell.mesh.parent) {
+      const active = tell.orientation === d6GravityOrientation;
+      tell.mesh.material.opacity = active ? 0.8 : 0.4 + 0.2 * Math.sin(performance.now() / 200);
+      tell.mesh.scale.setScalar(active ? 1.2 : 1);
+      // Pulse faster when player is near
+      const dist = Math.hypot(pos.x - tell.mesh.position.x, pos.y - tell.mesh.position.y, pos.z - tell.mesh.position.z);
+      if (dist < 4) {
+        tell.mesh.material.opacity = 1;
+        tell.mesh.material.color.setHex(0xffffff);
+      } else {
+        tell.mesh.material.color.setHex(0x9a6aff);
+      }
+    }
+  }
+  
+  // Boss-specific: THE ARCHITECT handled in variantAI, but add visual sync
+  if (d6ArchitectBoss && !d6ArchitectBoss.dead) {
+    // Sync boss bodies with gravity orientation
+    if (d6ArchitectBoss.bodies) {
+      for (let i = 0; i < 4; i++) {
+        const body = d6ArchitectBoss.bodies[i];
+        if (body) {
+          // Only the orientation matching gravity is "exposed"
+          body.material.opacity = i === d6GravityOrientation ? 0.95 : 0.15;
+          // Scale pulse on active body
+          if (i === d6GravityOrientation) {
+            body.scale.setScalar(1 + 0.1 * Math.sin(performance.now() / 150));
+          } else {
+            body.scale.setScalar(1);
+          }
+        }
+      }
+    }
+    // Boss arena floor tell: wireframe matches orientation
+    if (d6BossFloor && d6BossFloor.glitchGhost) {
+      d6BossFloor.glitchGhost.material.opacity = 0.5;
+    }
+  }
+}
+
+function buildDungeonFractalDescent(mouth, dungeonIndex) {
+  if (!mouth) return;
+  const zone = FRACTAL_ZONE;
+  const flipDeco = (hub, i, levels, slab) => {
+    if (i > 0 && i < levels - 1) { 
+      slab.gravFlip = true; 
+      slab.flipIndex = i; 
+      // Add reorient tell on this slab
+      slab.d6Reorientable = true;
+      slab.d6Orientation = i % 4;
+    }
+  };
+  const { A, last, hubs } = buildBetweenDungeonShaft(mouth, dungeonIndex, zone, 9, 'pillars', flipDeco);
+  const mini = swapArenaBoss(A, 'walker', 'architect', 2.2, 4, 'THE ARCHITECT', dungeonIndex);
+  mini.mat.color.setHex(0x9a6aff); 
+  mini.activeBody = 0; 
+  mini.bodies = [];
+  // Create 4 body cubes (one per orientation)
+  for (let k = 0; k < 4; k++) {
+    const a = k * Math.PI / 2;
+    const cube = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), 
+      new THREE.MeshBasicMaterial({ color: 0x9a6aff, transparent: true, opacity: k === 0 ? 0.95 : 0.25 }));
+    cube.position.set(Math.cos(a) * 1.1, 1.3, Math.sin(a) * 1.1); 
+    mini.mesh.add(cube); 
+    mini.bodies.push(cube);
+  }
+  
+  d6ArchitectBoss = mini;
+  d6BossFloor = last;
+  d6GravityOrientation = 0;
+  d6GravityCooldown = 0;
+  d6ReorientTells = [];
+  d6LoopTriggered = false;
+  d6ReorientParticles = [];
+  d6OrientationIndicators = [];
+  
+  // Build reorient tells in shaft
+  d6BuildReorientTells(hubs);
+  
+  // Add boss floor reorient tell
+  const bossTell = new THREE.Mesh(new THREE.RingGeometry(3, 4, 16), 
+    new THREE.MeshBasicMaterial({ color: 0x9a6aff, transparent: true, opacity: 0.7, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+  bossTell.position.set(last.x, last.top + 0.5, last.z);
+  bossTell.rotation.x = -Math.PI / 2;
+  bossTell.userData.d6Reorient = true;
+  bossTell.userData.targetOrientation = 0; // boss floor is always accessible
+  scene.add(bossTell);
+  d6ReorientTells.push({ mesh: bossTell, hub: last, orientation: 0 });
+  
+  // Wireframe ghost on boss floor (tell)
+  last.glitchGhost = new THREE.Mesh(new THREE.BoxGeometry(last.hw * 2 + 0.4, 0.3, last.hd * 2 + 0.4), 
+    new THREE.MeshBasicMaterial({ color: 0x9a6aff, wireframe: true, transparent: true, opacity: 0.5 }));
+  last.glitchGhost.position.set(last.x, last.top + 0.2, last.z);
+  scene.add(last.glitchGhost);
+  
+  // Wiring: local circuit - reorient triggers pulse on boss floor
+  const reorientId = 'fractal_reorient_' + dungeonIndex;
+  const bossWireId = 'fractal_boss_' + dungeonIndex;
+  wireRegister(last, reorientId, { signalType: 'pulse', pulseLen: 2.0, receivers: [bossWireId] });
+  wireRegister({ wire: { active: false, energy: 0, fake: false } }, bossWireId, { signalType: 'hold', receivers: [] });
+  
+  // Enemy spawns in shaft
+  for (const hub of hubs) {
+    if (hub.kind !== 'arena' && rand() < 0.3) {
+      spawnBiomeEnemy(hub.x, hub.top + 1, hub.z, hub.slab, zone, 0.5);
+    }
+  }
+  
+  // Gravity Anchor on boss death
+  mini.onDeath = () => {
+    activateGravityAnchor(dungeonIndex);
+    // Cleanup
+    d6GravityOrientation = 0;
+    d6GravityCooldown = 0;
+    d6ReorientTells = [];
+    d6LoopTriggered = false;
+    d6ReorientParticles = [];
+    for (const ind of d6OrientationIndicators) {
+      if (ind.element && ind.element.parentNode) ind.element.parentNode.removeChild(ind.element);
+    }
+    d6OrientationIndicators = [];
+    d6ArchitectBoss = null;
+  };
 }
 
 function buildLevelBody() {
@@ -7658,6 +8739,18 @@ function die(title, why) {
   netSend({ t: 'died', x: +pos.x.toFixed(1), y: +pos.y.toFixed(1), z: +pos.z.toFixed(1), big: title === 'SPLAT!' });
   showMsg(title, why, 'Back to your home tower… (checkpoints you found are on the WARP PAD)');
   const h1 = $('msg').querySelector('h1'); if (h1) h1.style.color = '#d6121f';
+  // THE BETWEEN: beacon corruption on death
+  if (betweenOn()) {
+    const nearest = betweenBeacons.reduce((best, b) => {
+      const d = Math.hypot(pos.x - b.x, pos.z - b.z);
+      return d < best.d ? { b, d } : best;
+    }, { b: null, d: Infinity }).b;
+    if (nearest) {
+      nearest.corruption = Math.min(1, nearest.corruption + 0.15);
+      nearest.lastDeathTime = performance.now() / 1000;
+      toast(`BEACON CORRUPTED: ${nearest.name} (${Math.round(nearest.corruption * 100)}%)`, 2500);
+    }
+  }
 }
 function hurt(n, fromX, fromZ) {
   if (state !== 'play' || invuln > 0) return;
@@ -7909,10 +9002,36 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyP' && state !== 'title') cycleRetroPreset();
   if (e.code === 'KeyB' && state !== 'title') toggleCrazy();
   if (e.code === 'KeyG') { goreOn = !goreOn; decalMesh.visible = goreOn; toast(goreOn ? 'Gore on' : 'Gore off', 900); }
-  if (e.code === 'BracketRight' || e.code === 'BracketLeft') { gpSens = Math.min(GP_SENS_MAX, Math.max(GP_SENS_MIN, gpSens + (e.code === 'BracketRight' ? GP_SENS_STEP : -GP_SENS_STEP))); gpStoreLook(); toast(`Gamepad look sensitivity ${Math.round(gpSens * 100)}%  ([\u00A0/ ] to tune)`, 1400); }
+  if (e.code === 'BracketRight' || e.code === 'BracketLeft') { gpSens = Math.min(GP_SENS_MAX, Math.max(GP_SENS_MIN, gpSens + (e.code === 'BracketRight' ? GP_SENS_STEP : -GP_SENS_STEP))); gpStoreLook(); toast(`Gamepad look sensitivity ${Math.round(gpSens * 100)}%  ([\\u00A0/\\u00A0] to tune)`, 1400); }
   if (e.code === 'KeyI') { gpInvertY = !gpInvertY; gpStoreLook(); toast(gpInvertY ? 'Gamepad look Y INVERTED' : 'Gamepad look Y standard', 1400); }
   if (e.code === 'KeyH' && state !== 'title') { schizoOn = !schizoOn; document.body.classList.toggle('schizo', schizoOn); toast(schizoOn ? 'the voices are back' : 'silence', 1400); }
-});
+  // THE BETWEEN: fast-travel between touched Beacons (KeyR)
+  if (betweenOn() && e.code === 'KeyR' && state === 'play') {
+    if (betweenWarpCd > 0) { toast(`Fast-travel recharging — ${Math.ceil(betweenWarpCd)}s`, 1500); return; }
+    const currentBeacon = betweenBeacons.find(b => Math.hypot(pos.x - b.x, pos.z - b.z) < 8);
+    if (!currentBeacon) { toast('Must be at a Beacon to fast-travel', 1500); return; }
+    if (!currentBeacon.touched) { toast('Beacon not yet grounded — touch it first', 1500); return; }
+    const targets = betweenBeacons.filter(b => b !== currentBeacon && b.touched);
+    if (!targets.length) { toast('No other grounded Beacons to travel to', 1500); return; }
+    // Pick nearest touched beacon
+    let target = targets[0], td = Infinity;
+    for (const b of targets) { const d = Math.hypot(pos.x - b.x, pos.z - b.z); if (d < td) { td = d; target = b; } }
+    pos.set(target.x, target.y + 2, target.z); vel.set(0, 0, 0);
+    checkpoint = { x: target.x, y: target.y + 2, z: target.z };
+    betweenWarpCd = 30;
+    toast(`FAST-TRAVEL → ${target.name}`, 2000);
+    shockRing({ x: target.x, y: target.y, z: target.z }, 6, 0x36f6ff);
+  }
+  // THE BETWEEN D6: gravity reorient (KeyO) — only works in FRACTAL DESCENT dungeon
+  if (betweenOn() && e.code === 'KeyO' && state === 'play') {
+    const inFractal = d6ReorientTells.length > 0 && Math.hypot(pos.x - (d6BossFloor?.cx || 0), pos.z - (d6BossFloor?.cz || 0)) < 80;
+    if (inFractal) {
+      d6TryReorient();
+    } else {
+      toast('GRAVITY REORIENT UNAVAILABLE — NOT IN FRACTAL DESCENT', 1200);
+    }
+  }
+  });
 addEventListener('keyup', e => { keys[e.code] = false; kbdKeys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; for (const k in kbdKeys) kbdKeys[k] = false; });
 
@@ -8100,7 +9219,7 @@ function damageEnemy(e, dmg, kind = 'hit') {
     enemyGore(e); shake = Math.max(shake, e.boss ? 1.2 : 0.5);
     score += e.pts; toast(`+${e.pts}`, 700); killFx(e, e.boss);
     if (e.variant === 'bomber') explode({ x: e.x, y: e.cy, z: e.z }, 4.2, 0, 'enemy', kind);
-    dropAmmo(e); dropCoins(e); if (e.mini) unlockArena(e.hub);
+    dropAmmo(e); dropCoins(e); if (e.mini) unlockArena(e.hub); if (e.anchorIndex !== undefined) activateGravityAnchor(e.anchorIndex);
     if (e.boss && endBosses.every(b => b.dead)) {
       if (groundPad && groundPad.seal) { groundPad.seal.material.color.setHex(0x5aff8a); groundPad.seal.material.opacity = 0.4; }
       toast(`ALL ${endBosses.length} SIGNAL BOSSES DOWN — TERMINAL UNLOCKED`, 3500);
@@ -9434,6 +10553,7 @@ function enemyContacts() {
         continue;
       }
       if (e.variant === 'bomber') damageEnemy(e, 99, 'self');     // bombers detonate on contact
+      else if (e.variant === 'shell' && performance.now() - (e.shellBite || 0) > 2400) continue;   // THE BETWEEN: a hidden Shell touching you is just a rock — only one inside its strike window bites
       else hurt(1, e.x, e.z);
     }
   }
@@ -9501,6 +10621,14 @@ function physicsStep(h) {
     checkpoint = { x: standOn.cx, y: standOn.top, z: standOn.cz, zone: standOn.zone };
     const fresh = !(standOn.moon || standOn.mars || standOn.planet) && warpUnlock(`cp:${Math.round(standOn.cx)},${Math.round(standOn.top)},${Math.round(standOn.cz)}`, `${standOn.zone && standOn.zone.name ? standOn.zone.name.toUpperCase() : 'SKY'} CHECKPOINT · ${Math.round(standOn.top)}m`, standOn.cx, standOn.top + 1, standOn.cz, standOn.zone, 'CHECKPOINT FOUND — warp back to it from the pad on your home tower');
     if (!fresh) toast('Checkpoint!', 1500);
+  }
+  if (onGround && standOn && standOn.returnGeyser && state === 'play') {    // THE BETWEEN: Phase 2 — launches back to the Canopy near the dungeon mouth
+    const g = standOn.geyserTarget; pos.set(g.x, g.y, g.z); vel.set(0, 4, 0); onGround = false;
+    flashWhite(); shockRing(pos, 6, 0x36f6ff); toast('RETURNED TO THE CANOPY', 1800);
+  }
+  if (onGround && standOn && standOn.gravFlip && !wasGround && state === 'play') {    // D6 — FRACTAL DESCENT: cosmetic "reorient gravity" flourish; physics stays real-world -Y
+    psy.t = Math.max(psy.t, 0.7); psy.kind = 'trip';          // reuses the existing proven camera-wobble/filter tick (updatePsy) instead of a raw one-shot camera.rotateZ
+    flashWhite(); shockRing(pos, 4, 0x9a6aff); toast('GRAVITY REORIENTED', 1400);
   }
   if (state === 'play') enemyContacts();
 }
@@ -9585,46 +10713,57 @@ function playerUpdate(dt) {
 
   // camera-relative movement
   const fwdX = -Math.sin(camYaw), fwdZ = -Math.cos(camYaw), rX = Math.cos(camYaw), rZ = -Math.sin(camYaw);
-  if (keys.KeyE && !hintProp && !hintNpc && !onVehicle) camYaw -= 1.9 * dt;
-  const ix = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
-  const iz = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
-  let dx = fwdX * iz + rX * ix, dz = fwdZ * iz + rZ * ix;
-  const dl = Math.hypot(dx, dz); if (dl > 0) { dx /= dl; dz /= dl; }
-  const aimEff = aiming && weapon > 0;
-  sprintNow = !!(keys.ShiftLeft || keys.ShiftRight) && !aimEff && !climbing && !pounding && !onVehicle && dl > 0;     // hold SHIFT to sprint (on a vehicle it boosts instead)
-  if (sprintNow && onGround && Math.random() < dt * 8) burst(new THREE.Vector3(pos.x, pos.y + 0.1, pos.z), 0xcfcfcf, 1);
+  // Apply GLITCH.EXE input swap if active
+  const swappedKeys = glitchApplyInputSwap(keys);
+  if (swappedKeys.KeyE && !hintProp && !hintNpc && !onVehicle) camYaw -= 1.9 * dt;
+    const ix = (swappedKeys.KeyD || swappedKeys.ArrowRight ? 1 : 0) - (swappedKeys.KeyA || swappedKeys.ArrowLeft ? 1 : 0);
+    const iz = (swappedKeys.KeyW || swappedKeys.ArrowUp ? 1 : 0) - (swappedKeys.KeyS || swappedKeys.ArrowDown ? 1 : 0);
+    let dx = (fwdX * iz + rX * ix), dz = (fwdZ * iz + rZ * ix);
+    const dl = Math.hypot(dx, dz); if (dl > 0) { dx /= dl; dz /= dl; }
+    const aimEff = aiming && weapon > 0;
+    sprintNow = !!(swappedKeys.ShiftLeft || swappedKeys.ShiftRight) && !aimEff && !climbing && !pounding && !onVehicle && dl > 0;
+    if (sprintNow && onGround && Math.random() < dt * 8) burst(new THREE.Vector3(pos.x, pos.y + 0.1, pos.z), 0xcfcfcf, 1);
 
-  if (onGround) { coyote = 0.1; jumps = 0; airT = 0; glide = Math.min(1, glide + dt * 0.8); }
-  else { coyote -= dt; airT += dt; }
+    if (onGround) { coyote = 0.1; jumps = 0; airT = 0; glide = Math.min(1, glide + dt * 0.8); }
+    else { coyote -= dt; airT += dt; }
 
-  // Jump once from the ground/coyote window, then once more before landing.
-  if (jumpPress) {
-    if (onVehicle && pounding) { pounding = false; vel.y = JUMP * jumpMul(); jumps = Math.max(jumps, 1); onGround = false; coyote = 0; sfx.jump(false); }      // an accidental Ctrl slam while riding: jump cancels it
-    else if (climbing) wallJump();
-    else if ((onGround || coyote > 0) && jumps === 0) {
-      vel.y = JUMP * jumpMul(); jumps = 1; onGround = false; coyote = 0; pounding = false; sfx.jump(false);
-    } else if (!onGround && jumps === 1 && !pounding) {
-      hasUsedHoverboard = true;
-      vel.y = JUMP2 * jumpMul(); jumps = 2; pounding = false; gliding = false;
-      burst(pos, 0xffffff, 5); sfx.jump(true);
+    // D4 PSYCHOSIS: habit tracking
+    if (d4SanityT < 1 && d4SanityT > 0) {
+      d4TrackHabit('move');
     }
-    jumpPress = false;
-  }
-  // ground pound (also lets go of a wall)
-  if (poundPress) {
-    if (climbing) climbing = null;
-    else if (!onGround && !pounding && heightAbove().h > 2.5) { pounding = true; vel.set(0, -TERM, 0); }
-    poundPress = false;
-  }
-  // fire the current weapon (click/F/J; hold for auto-fire)
-  const fireHeld = mouseHeld || keys.KeyF || keys.KeyJ;
-  atkBuf = Math.max(0, atkBuf - dt); if (atkPress) atkBuf = 0.2;      // a click during cooldown still fires when ready
-  atkPress = false;
-  if (WEAPONS[weapon].cont) contFire(dt, !!fireHeld && !pounding && !climbing);        // beam / arc: hold to keep firing
-  else {
-    contFire(dt, false);
-    if ((atkBuf > 0 || fireHeld) && atkCd <= 0 && !pounding && !climbing) { atkBuf = 0; useWeapon(); }
-  }
+
+    // Jump once from the ground/coyote window, then once more before landing.
+    if (jumpPress) {
+      if (d4SanityT < 1 && d4SanityT > 0) d4TrackHabit('jump');
+      if (onVehicle && pounding) { pounding = false; vel.y = JUMP * jumpMul(); jumps = Math.max(jumps, 1); onGround = false; coyote = 0; sfx.jump(false); }
+      else if (climbing) wallJump();
+      else if ((onGround || coyote > 0) && jumps === 0) {
+        vel.y = JUMP * jumpMul(); jumps = 1; onGround = false; coyote = 0; pounding = false; sfx.jump(false);
+      } else if (!onGround && jumps === 1 && !pounding) {
+        hasUsedHoverboard = true;
+        vel.y = JUMP2 * jumpMul(); jumps = 2; pounding = false; gliding = false;
+        burst(pos, 0xffffff, 5); sfx.jump(true);
+      }
+      jumpPress = false;
+    }
+    // ground pound (also lets go of a wall)
+    if (poundPress) {
+      if (climbing) climbing = null;
+      else if (!onGround && !pounding && heightAbove().h > 2.5) { pounding = true; vel.set(0, -TERM, 0); }
+      poundPress = false;
+    }
+    // fire the current weapon (click/F/J; hold for auto-fire)
+    const fireHeld = mouseHeld || swappedKeys.KeyF || swappedKeys.KeyJ;
+    atkBuf = Math.max(0, atkBuf - dt); if (atkPress) atkBuf = 0.2;
+    atkPress = false;
+    if (WEAPONS[weapon].cont) contFire(dt, !!fireHeld && !pounding && !climbing);
+    else {
+      contFire(dt, false);
+      if ((atkBuf > 0 || fireHeld) && atkCd <= 0 && !pounding && !climbing) { 
+        if (d4SanityT < 1 && d4SanityT > 0) d4TrackHabit('attack');
+        atkBuf = 0; useWeapon(); 
+      }
+    }
 
   // grab and climb walls: jump at a wall and push into it (not while riding)
   if (onVehicle) wallT = Math.max(0, wallT - dt); else updateClimb(dt, ix, iz, dx, dz, rX, rZ);
@@ -9773,7 +10912,12 @@ function musicTick(dt) {
 // per-variant behaviour while the player is in range; returns [dirX, dirZ, speed]
 function variantAI(e, dt, d, dxp, dzp) {
   const av = AI_ALIAS[e.variant] || e.variant;     // Rent's Due variants reuse an existing AI branch
+  if (e.variant === 'shell') {                     // THE BETWEEN: docile nautilus most of the time, then a 2.4 s strike window
+    e.shellCd = (e.shellCd || (2 + Math.random() * 2)) - dt;
+    if (e.shellCd <= 0) { e.shellCd = 5 + Math.random() * 4; e.shellBite = performance.now(); e.hit = Math.max(e.hit, 0.25); sfx.growl ? sfx.growl() : sfx.charge && sfx.charge(); }
+  }
   let dx = dxp / d, dz = dzp / d, spd = e.speed;
+  if (e.variant === 'shell') spd *= 0.45;
   if (av === 'gunner' || av === 'alien') {                  // keeps its distance, strafes, fires telegraphed bolts
     if (d < 8) { dx = -dx; dz = -dz; } else if (d < 13) { const tx = dx; dx = -dz * e.strafe; dz = tx * e.strafe; spd = 2; }
     e.fireCd -= dt;
@@ -9839,6 +10983,27 @@ function variantAI(e, dt, d, dxp, dzp) {
     if (e.pounceT > 0) { e.pounceT -= dt; spd = 13; }
     else { if (d < 12 && d > 4.5) { const tx = dx; dx = -dz * e.strafe; dz = tx * e.strafe; spd = e.speed * 0.9; } if (e.pounceCd <= 0 && d < 11) { e.pounceT = 0.5; e.pounceCd = 2.4; sfx.roar(); } }
   } else if (av === 'shield') spd = 1.8;
+  else if (av === 'null_pointer') {        // GLITCH.EXE boss: teleports around its chamber instead of walking ("teleports by crashing")
+    e.tpCd = (e.tpCd === undefined ? 2.5 : e.tpCd) - dt;
+    if (e.tpCd <= 0) {
+      e.tpCd = 2 + Math.random() * 1.5;
+      const p = e.plat;
+      if (p) { e.x = p.minx + 1.5 + Math.random() * (p.maxx - p.minx - 3); e.z = p.minz + 1.5 + Math.random() * (p.maxz - p.minz - 3); }
+      shockRing({ x: e.x, y: e.y, z: e.z }, 3, 0x39ff88); betweenTear();
+    }
+    spd = 0; dx = 0; dz = 0;
+  } else if (av === 'observer') {          // THE OBSERVER: exists only while watched; heals the instant you look away
+    const camDir = camera.getWorldDirection(new THREE.Vector3());
+    const toBoss = new THREE.Vector3(e.x - camera.position.x, e.y + 1 - camera.position.y, e.z - camera.position.z);
+    const td = toBoss.length() || 1; toBoss.divideScalar(td);
+    e.observed = camDir.dot(toBoss) > 0.72 && d < 40;
+    if (!e.observed) e.hp = Math.min(e.maxhp, e.hp + dt * 4);
+    spd = 0.6;
+  } else if (av === 'architect') {         // THE ARCHITECT: cycles through 4 orientations; only the bright one "matters"
+    e.archT = (e.archT === undefined ? 3 : e.archT) - dt;
+    if (e.archT <= 0 && e.bodies) { e.archT = 3; e.activeBody = (e.activeBody + 1) % 4; e.bodies.forEach((b, i) => { b.material.opacity = i === e.activeBody ? 0.95 : 0.25; }); }
+    spd = e.speed * 0.4;
+  }
   return [dx, dz, spd];
 }
 function walker(e, dt, t, pre) {
@@ -9892,7 +11057,9 @@ function walker(e, dt, t, pre) {
   if (active && (e.variant === 'gunner' || e.variant === 'alien' || e.variant === 'collector' || e.variant === 'crthead' || e.variant === 'popstar' || e.bossRole === 'crthead' || e.bossRole === 'popstar' || e.variant === 'shield' || e.bossRole === 'gunner' || e.bossRole === 'collector' || e.bossRole === 'shield' || ((e.variant === 'charger' || e.variant === 'bailiff') && e.charge <= 0) || ((e.bossRole === 'charger' || e.bossRole === 'bailiff') && e.charge <= 0))) e.mesh.rotation.y = Math.atan2(dxp, dzp);
   else if (moving) e.mesh.rotation.y = Math.atan2(dx, dz);
   const bob = e.variant === 'frog' || e.variant === 'kaomoji' || e.variant === 'pixelghost' || e.variant === 'sporeling'
-    ? (e.hopY || 0) : e.variant === 'cryptGhost' || e.variant === 'prismWraith' ? 0.25 + Math.sin(t * 2.4 + e.ph) * 0.18 : moving ? Math.abs(Math.sin(t * 9)) * 0.08 : 0;
+    ? (e.hopY || 0)    : e.variant === 'cryptGhost' || e.variant === 'prismWraith' ? 0.25 + Math.sin(t * 2.4 + e.ph) * 0.18
+    : e.variant === 'watcher' || e.variant === 'whisperer' ? 0.55 + Math.sin(t * 1.7 + (e.ph || 0)) * 0.22      // THE BETWEEN: these two hover, never seem to touch ground
+    : moving ? Math.abs(Math.sin(t * 9)) * 0.08 : 0;
   e.mesh.position.set(e.x, e.y + bob, e.z);
   if (e.variant === 'glitchling') {
     const gt = (t * 14) | 0;
@@ -11194,7 +12361,7 @@ function remoteKill(e) {
   const mine = e.netMineAt && performance.now() - e.netMineAt < 15000;   // only the player who actually hit it gets mission credit
   e.dead = true; if (mine) missionEnemyKilled(e); e.mesh.removeFromParent(); if (e.warn) e.warn.visible = false;
   sfx.kill(); enemyDeathVoice(e); enemyGore(e); score += e.pts; dropAmmo(e); shake = Math.max(shake, e.boss ? 1.2 : 0.3); killFx(e, e.boss);
-  if (e.mini) unlockArena(e.hub);
+  if (e.mini) unlockArena(e.hub); if (e.anchorIndex !== undefined) activateGravityAnchor(e.anchorIndex);
   if (e.boss && endBosses.every(b => b.dead) && groundPad && groundPad.seal) { groundPad.seal.material.color.setHex(0x5aff8a); groundPad.seal.material.opacity = 0.4; }
 }
 function netApplySnap(list) {
@@ -11391,6 +12558,14 @@ function ensureCrackMat() {                  // one shared cracked-glass texture
 function makeSpecial(s, kind, d) {
   if (s.cx !== undefined && activeStartHubs().some(h => Math.hypot(s.cx - h.x, s.cz - h.z) < 90 && s.top > h.top - 70)) return;      // the area around every home stays calm: no pistons/movers/crumblers next to spawn
   s.sp = { kind, ...d, base: baseOf(s), ox: 0, oy: 0, oz: 0, state: 'idle', t: 0 };
+  if (!s.plate || !s.grp) {                                        // addSlab slabs (dungeon shafts etc.) carry no plate/grp — build them so specials tint/move/blink correctly
+    const grp = new THREE.Group();
+    if (!s.plate) {
+      const pm = new THREE.Mesh(new THREE.BoxGeometry((s.hw || 2) * 2 + 0.3, 0.25, (s.hd || 2) * 2 + 0.3), lam(0x36f6ff, { emissive: 0x36f6ff, emissiveIntensity: 0.8 }));
+      pm.position.set(s.cx, (s.top || 0) - 0.06, s.cz); grp.add(pm); s.plate = pm;   // 4 cm above addSlab's own slab plate: no z-fight
+    }
+    lvl.add(grp); s.grp = grp;
+  }
   const m = s.plate.material;
   if (kind === 'mover') { m.color.setHex(0x5affd8); m.emissive.setHex(0x5affd8); }
   else if (kind === 'orbit') { m.color.setHex(0x9b73ff); m.emissive.setHex(0x9b73ff); }   // orbiters glow violet
@@ -12816,7 +13991,7 @@ document.addEventListener('pointerlockchange', () => { if (!document.pointerLock
 // ---------- boot ----------
 buildLevel();
 pos.set(start.x, start.y, start.z);
-showMenu(true);  window.__ng = { ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toFixed(1), z: +q.z.toFixed(1), label: q.label })), mv: () => ({ vy: +vel.y.toFixed(2), onG: onGround, jumps, gliding, glide: +glide.toFixed(2), climbing: !!climbing, pounding, stam: +climbStam.toFixed(2), hp: health, st: state, paused }), bounces: () => solids.filter(s => s.bounce).map(s => ({ x: +(s.cx !== undefined ? s.cx : (s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +(s.cz !== undefined ? s.cz : (s.minz + s.maxz) / 2).toFixed(1), b: +(s.boost || 0).toFixed(1) })), spKinds: () => specials.reduce((a, s) => { const k = (s.sp && s.sp.kind) || s.kind || '?'; a[k] = (a[k] || 0) + 1; return a; }, {}), ladder: () => ({ cur: curPN, top: ladderTop && ladderTop.n, bot: ladderBot && ladderBot.n, len: ladder.length, voidY: VOID_Y }), falls: () => solids.filter(s => s.pn !== undefined).slice(0, 5).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), n: s.pn })), foes: () => enemies.filter(e => !e.dead).map(e => ({ id: e.mesh.id, v: e.variant, hp: +e.hp.toFixed(1), mh: e.maxhp, boss: !!e.boss, d: Math.round(Math.hypot(e.x - pos.x, e.y - pos.y, e.z - pos.z)) })), kit: () => ({ w: weapon, name: WEAPONS[weapon].name, owned: weaponOwned.slice(), ammo: { ...ammo } }), clearFoes: (keepBoss = true) => { let n = 0; for (const e of enemies) if (!e.dead && !(keepBoss && e.boss)) { damageEnemy(e, 99999, 'pound'); n++; } return n; }, setZone: (n, snap = false, quiet = true) => { const z = ZONES.concat(RENT_ZONES).find(x => x.name.toLowerCase() === String(n).toLowerCase()) || null; setZone(z, snap, quiet); return z ? z.name : null; }, get schizo() { return schizoOn; }, set schizo(v) { schizoOn = !!v; document.body.classList.toggle('schizo', schizoOn); }, get betweenTeamDrop() { return betweenTeamDrop; }, set betweenTeamDrop(v) { betweenTeamDrop = !!v; if (betweenOn()) buildLevel(); }, betweenCircuits: () => BETWEEN_CIRCUITS.map(c => ({ name: c.name, nodes: c.nodeIds.length })), betweenBeacons: () => betweenBeacons.map(b => ({ name: b.name, x: Math.round(b.x), z: Math.round(b.z), zone: b.zone && b.zone.name })), giveWeapon: n => { const i = WEAPONS.findIndex(w => w.name.toLowerCase() === String(n).toLowerCase()); if (i < 0) return false; unlockWeapon(i); selectWeapon(i); return !!weaponOwned[i]; }, get killStreak() { return killStreak; }, set killStreak(v) { killStreak = v | 0; killStreakT = killStreak > 0 ? 4 : 0; }, get level() { return level; }, set level(v) { level = Math.max(1, v | 0); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; showMsg(''); toast('LEVEL ' + level + ' — ' + theme().name, 1600); }, rails: () => solids.filter(q => q.rail).map(q => { const a = q.rail.pts[0], b = q.rail.pts[q.rail.pts.length - 1]; return [a.x, a.y, a.z, b.x, b.y, b.z, q.rail.len]; }), grinding: () => !!grinding, dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), duel: (v = 'walker', dist = 4, boss = false) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, boss, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (k !== 'board') return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(zoneByName(n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; },  info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length, propList: props.map(p => ({ k: p.kind, at: p.mesh.position.toArray().map(v => Math.round(v * 10) / 10), taken: p.taken, vis: p.mesh.visible, inLvl: !!(p.mesh.parent && p.mesh.parent !== scene) })) }), missions: () => missionsSnapshot(), acceptMission, completeMission, turnIn, abandonMission, craftList, craft, guideTips, guideGreeting, base: () => ({ ...base, upgrades: { ...base.upgrades }, resources: { ...hotbarRes } }), homeBase: () => ({ guide: !!homeGuide, hintNpc, dialog: guideDialogOpen, slot: mySlot, tower: { x: myStartHub().x, z: myStartHub().z, top: myStartHub().top }, homes: activeStartHubs().map(h => ({ slot: h.slot, x: h.x, z: h.z })), enemiesNearSpawn: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).length, nearSpawns: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).map(e => ({ v: e.variant, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), boss: !!e.boss, mini: !!e.mini, zone: e.zone && e.zone.name })), guides: homeGuides.map(g => ({ slot: g.slot, x: +(g.group.position.x).toFixed(1), z: +(g.group.position.z).toFixed(1) })), parts: homeGuide && homeGuide.group.children.length }), applyNetSlot, missionsSnapshot, monkeys: () => [...dressings.values()].flatMap(d => d.anims.filter(a => a.k === 'monkey' && !a.dead).map(a => ({ x: +(d.site.x + a.mk.g.position.x).toFixed(2), y: +(d.site.y + a.mk.g.position.y).toFixed(2), z: +(d.site.z + a.mk.g.position.z).toFixed(2) }))), coins: () => ({ total: items.filter(i => i.type === 'coin' && !i.taken).length, bananas: items.filter(i => i.type === 'coin' && i.banana).length }), gore: () => ({ decals: decals.length, gibs: gibsList.filter(g => !g.dead).length, nearSpawn: decals.filter(r => spawnGoreBlocked(r[0], r[1], r[2])).length + gibsList.filter(g => !g.dead && spawnGoreBlocked(g.mesh.position.x, g.mesh.position.y, g.mesh.position.z)).length }), towers: () => buildingHubs.map((h, i) => ({ i, x: +h.x.toFixed(1), z: +h.z.toFixed(1), top: +h.top.toFixed(1), hw: +h.hw.toFixed(1), hd: +h.hd.toFixed(1), theme: towerThemeFor(h, i), opened: !!h.opened, alive: h.interior ? h.interior.enemies.filter(e => !e.dead).length : 0 })), openTower: (i = 0, themeKey = null) => { const hub = buildingHubs[i]; if (!hub) return null; const r = openTower(hub, themeKey); return r ? { theme: r.theme.name, floors: r.floors.length, enemies: r.enemies.length, loot: r.loot.length, targets: hub.interiorTargets.length } : null; }, interiors: () => ({ inside: inInterior, theme: activeTowerInterior ? activeTowerInterior.theme.name : null, opened: openedTowers.length, targets: interiorTargets.length }) };   // dev hook (console / test tools)
+showMenu(true);  window.__ng = { ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toFixed(1), z: +q.z.toFixed(1), label: q.label })), mv: () => ({ vy: +vel.y.toFixed(2), onG: onGround, jumps, gliding, glide: +glide.toFixed(2), climbing: !!climbing, pounding, stam: +climbStam.toFixed(2), hp: health, st: state, paused }), bounces: () => solids.filter(s => s.bounce).map(s => ({ x: +(s.cx !== undefined ? s.cx : (s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +(s.cz !== undefined ? s.cz : (s.minz + s.maxz) / 2).toFixed(1), b: +(s.boost || 0).toFixed(1) })), spKinds: () => specials.reduce((a, s) => { const k = (s.sp && s.sp.kind) || s.kind || '?'; a[k] = (a[k] || 0) + 1; return a; }, {}), ladder: () => ({ cur: curPN, top: ladderTop && ladderTop.n, bot: ladderBot && ladderBot.n, len: ladder.length, voidY: VOID_Y }), falls: () => solids.filter(s => s.pn !== undefined).slice(0, 5).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), n: s.pn })), foes: () => enemies.filter(e => !e.dead).map(e => ({ id: e.mesh.id, v: e.variant, hp: +e.hp.toFixed(1), mh: e.maxhp, boss: !!e.boss, d: Math.round(Math.hypot(e.x - pos.x, e.y - pos.y, e.z - pos.z)) })), kit: () => ({ w: weapon, name: WEAPONS[weapon].name, owned: weaponOwned.slice(), ammo: { ...ammo } }), clearFoes: (keepBoss = true) => { let n = 0; for (const e of enemies) if (!e.dead && !(keepBoss && e.boss)) { damageEnemy(e, 99999, 'pound'); n++; } return n; }, setZone: (n, snap = false, quiet = true) => { const z = ZONES.concat(RENT_ZONES).find(x => x.name.toLowerCase() === String(n).toLowerCase()) || null; setZone(z, snap, quiet); return z ? z.name : null; }, get schizo() { return schizoOn; }, set schizo(v) { schizoOn = !!v; document.body.classList.toggle('schizo', schizoOn); }, get betweenTeamDrop() { return betweenTeamDrop; }, set betweenTeamDrop(v) { betweenTeamDrop = !!v; if (betweenOn()) buildLevel(); }, betweenCircuits: () => BETWEEN_CIRCUITS.map(c => ({ name: c.name, nodes: c.nodeIds.length })), betweenBeacons: () => betweenBeacons.map(b => ({ name: b.name, x: Math.round(b.x), z: Math.round(b.z), zone: b.zone && b.zone.name })), betweenMouths: () => betweenDungeonMouths.map(m => m && ({ idx: m.dungeonIndex, cx: Math.round(m.cx), cz: Math.round(m.cz), top: Math.round(m.top) })), betweenAnchors: () => betweenWell ? { anchorsActive: betweenWell.anchorsActive, anchors: betweenWell.anchors.map(a => a.active) } : null, betweenGeysers: () => solids.filter(s => s.returnGeyser).map(s => ({ cx: s.cx, cz: s.cz, top: s.top, target: s.geyserTarget })), giveWeapon: n => { const i = WEAPONS.findIndex(w => w.name.toLowerCase() === String(n).toLowerCase()); if (i < 0) return false; unlockWeapon(i); selectWeapon(i); return !!weaponOwned[i]; }, get killStreak() { return killStreak; }, set killStreak(v) { killStreak = v | 0; killStreakT = killStreak > 0 ? 4 : 0; }, get level() { return level; }, set level(v) { level = Math.max(1, v | 0); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; showMsg(''); toast('LEVEL ' + level + ' — ' + theme().name, 1600); }, rails: () => solids.filter(q => q.rail).map(q => { const a = q.rail.pts[0], b = q.rail.pts[q.rail.pts.length - 1]; return [a.x, a.y, a.z, b.x, b.y, b.z, q.rail.len]; }), grinding: () => !!grinding, dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => i.type === 'lore' && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), duel: (v = 'walker', dist = 4, boss = false) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, boss, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (k !== 'board') return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(zoneByName(n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; },  info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length, propList: props.map(p => ({ k: p.kind, at: p.mesh.position.toArray().map(v => Math.round(v * 10) / 10), taken: p.taken, vis: p.mesh.visible, inLvl: !!(p.mesh.parent && p.mesh.parent !== scene) })) }), missions: () => missionsSnapshot(), acceptMission, completeMission, turnIn, abandonMission, craftList, craft, guideTips, guideGreeting, base: () => ({ ...base, upgrades: { ...base.upgrades }, resources: { ...hotbarRes } }), homeBase: () => ({ guide: !!homeGuide, hintNpc, dialog: guideDialogOpen, slot: mySlot, tower: { x: myStartHub().x, z: myStartHub().z, top: myStartHub().top }, homes: activeStartHubs().map(h => ({ slot: h.slot, x: h.x, z: h.z })), enemiesNearSpawn: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).length, nearSpawns: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).map(e => ({ v: e.variant, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), boss: !!e.boss, mini: !!e.mini, zone: e.zone && e.zone.name })), guides: homeGuides.map(g => ({ slot: g.slot, x: +(g.group.position.x).toFixed(1), z: +(g.group.position.z).toFixed(1) })), parts: homeGuide && homeGuide.group.children.length }), applyNetSlot, missionsSnapshot, monkeys: () => [...dressings.values()].flatMap(d => d.anims.filter(a => a.k === 'monkey' && !a.dead).map(a => ({ x: +(d.site.x + a.mk.g.position.x).toFixed(2), y: +(d.site.y + a.mk.g.position.y).toFixed(2), z: +(d.site.z + a.mk.g.position.z).toFixed(2) }))), coins: () => ({ total: items.filter(i => i.type === 'coin' && !i.taken).length, bananas: items.filter(i => i.type === 'coin' && i.banana).length }), gore: () => ({ decals: decals.length, gibs: gibsList.filter(g => !g.dead).length, nearSpawn: decals.filter(r => spawnGoreBlocked(r[0], r[1], r[2])).length + gibsList.filter(g => !g.dead && spawnGoreBlocked(g.mesh.position.x, g.mesh.position.y, g.mesh.position.z)).length }), towers: () => buildingHubs.map((h, i) => ({ i, x: +h.x.toFixed(1), z: +h.z.toFixed(1), top: +h.top.toFixed(1), hw: +h.hw.toFixed(1), hd: +h.hd.toFixed(1), theme: towerThemeFor(h, i), opened: !!h.opened, alive: h.interior ? h.interior.enemies.filter(e => !e.dead).length : 0 })), openTower: (i = 0, themeKey = null) => { const hub = buildingHubs[i]; if (!hub) return null; const r = openTower(hub, themeKey); return r ? { theme: r.theme.name, floors: r.floors.length, enemies: r.enemies.length, loot: r.loot.length, targets: hub.interiorTargets.length } : null; }, interiors: () => ({ inside: inInterior, theme: activeTowerInterior ? activeTowerInterior.theme.name : null, opened: openedTowers.length, targets: interiorTargets.length }) };   // dev hook (console / test tools)
 
 {   // opened from the relay server with ?room=... -> connect right away
   const qp = new URLSearchParams(location.search || '');
@@ -12971,7 +14146,39 @@ renderer.setAnimationLoop(now => {
   else if (state === 'play') { playerUpdate(dt); if (P) PERF.lap('player'); updateEnemies(dt); if (P) PERF.lap('enemies'); updateShots(dt); if (P) PERF.lap('shots'); }
   else if (state === 'dead') { deadT -= dt; if (deadT <= 0) respawn(); if (net.on) { updateEnemies(dt); updateShots(dt); } }
   else if (state === 'clear') { updateEnemies(dt); clearT -= dt; if (clearT <= 0) nextLevel(); }
-  updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); if (rentOn()) rentClockTick(dt); if (nosOn()) { nosPipeTick(dt); nosEggTick(dt); } evolveTick(dt); updateGrowers(dt); updateRoofArenas(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); goreFadeTick(dt); updateClouds(dt); updatePalaceMotion(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); if (betweenOn()) { updateWiring(dt); if (betweenWarpCd > 0) betweenWarpCd = Math.max(0, betweenWarpCd - dt); let bNear = null, bNd = Infinity; for (const b of betweenBeacons) { const bd = Math.hypot(pos.x - b.x, pos.z - b.z); if (bd < bNd) { bNd = bd; bNear = b; } } if (bNear) warp.pad = bNear.warpVis; if (P) PERF.lap('wiring'); } updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
+  updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); if (rentOn()) rentClockTick(dt); if (nosOn()) { nosPipeTick(dt); nosEggTick(dt); } evolveTick(dt); updateGrowers(dt); updateRoofArenas(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); goreFadeTick(dt); updateClouds(dt); updatePalaceMotion(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); if (betweenOn()) { updateWiring(dt); if (betweenWarpCd > 0) betweenWarpCd = Math.max(0, betweenWarpCd - dt); let bNear = null, bNd = Infinity; for (const b of betweenBeacons) { const bd = Math.hypot(pos.x - b.x, pos.z - b.z); if (bd < bNd) { bNd = bd; bNear = b; } } if (bNear) warp.pad = bNear.warpVis;
+    // --- BEACON MECHANICS (Phase 1) ---
+    // Grounding anchor: standing in beacon light resets sanity (sanity system in Phase 2+)
+    // For now, mark beacon as touched and handle corruption/fast-travel/downed state
+    const nowT = performance.now() / 1000;
+    for (const b of betweenBeacons) {
+      const dist = Math.hypot(pos.x - b.x, pos.z - b.z);
+      if (dist < 8 && pos.y >= b.y - 2 && pos.y <= b.y + 5) {
+        // Player is in beacon radius
+        if (!b.touched) { b.touched = true; toast(`BEACON TOUCHED: ${b.name}`, 2000); }
+        b.lastTouchTime = nowT;
+        // Grounding anchor visual feedback
+        if (b.beam) { b.beam.material.opacity = 0.35 + 0.15 * Math.sin(nowT * 4); }
+        // Fast-travel: press 'F' near a touched beacon to warp to another touched beacon
+        // (handled in key input handler, see betweenWarp logic)
+      } else if (b.beam) {
+        b.beam.material.opacity = 0.18; // reset to default
+      }
+      // Beacon corruption decay (slowly recovers if no recent deaths)
+      if (b.corruption > 0 && nowT - (b.lastDeathTime || 0) > 120) {
+        b.corruption = Math.max(0, b.corruption - dt * 0.005);
+      }
+    }
+    // Downed state handling (co-op) - simplified for Phase 1
+    // In co-op, downed players are tracked per beacon; revive by looking at them
+    if (net.on && betweenBeacons.length) {
+      // This is a stub — full downed/revive logic in Phase 4 co-op pass
+    }
+    // ---- Phase 2: per-dungeon full system updates (D1 GLITCH.EXE, D4 PSYCHOSIS, D6 FRACTAL DESCENT) ----
+    updateGlitchExe(dt);
+    updatePsychosis(dt);
+    updateFractalDescent(dt);
+    if (P) PERF.lap('wiring+beacons+dungeons'); } updateWorlds(dt); innerVoices(dt); updatePortals(dt); schizoTick(dt); updateHotbar(); if (P) PERF.lap('worlds+portals+hotbar');
   updateVisuals(dt); setHint(); if (P) PERF.lap('visuals+hud');
   if (guideDialogOpen && state !== 'play') closeGuideDialog(false);
   netTick(dt); updatePeers(dt); debugTick(dt); if (P) PERF.lap('net+peers+debug');
