@@ -10472,8 +10472,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyE' && state === 'play' && hintNpc && !hintProp && !onVehicle) { eUsedProp = true; openGuideDialog(); return; }
   if ((e.code === 'Enter' || (e.code === 'KeyE' && (hintProp || onVehicle))) && state === 'play') { eUsedProp = e.code === 'KeyE'; useProp(); }
   if (e.code === 'CapsLock' || e.code === 'KeyV') { fpv = !fpv; toast(fpv ? 'First-person view' : 'Third-person view', 900); }
-  if (/^Digit[1-9]$/.test(e.code)) { const i = +e.code[5] - 1; if (i === 1 && state !== 'title') { hotbarSel = 1; updateHotbar(); toast('BUILDER HAND — walk into ore to mine, KeyE to place a block', 1600); }
-    else { hotbarSel = 0; updateHotbar(); selectWeapon(i); } }
+  if (/^Digit[1-9]$/.test(e.code)) { const i = +e.code[5] - 1; if (i === 1 && state !== 'title') { hotbarSel = 0; updateHotbar(); selectWeapon(1); } else { hotbarSel = 0; updateHotbar(); selectWeapon(i); } }
   if (e.code === 'Tab') cycleWeapon(1);
   if (e.code === 'KeyL') { voiceLines = !voiceLines; toast(voiceLines ? 'Enemy voice lines on' : 'Enemy voice lines off', 1200); if (!voiceLines) { try { window.speechSynthesis.cancel(); } catch (_) {} $('subs').textContent = ''; } }
   if (e.code === 'KeyH') { hintT = hintT > 0 ? 0 : 10; hintOn = true; }
