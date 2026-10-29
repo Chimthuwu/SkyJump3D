@@ -1184,9 +1184,10 @@ const WALKER_STATS = {
   amalgam:   { hp: 6, sp: 2.0, pts: 170, col: 0x6b5a4e },      // fused remains of kin: many limbs, three eyes, single intent (gorilla slam)
   shell:     { hp: 4, sp: 1.0, pts: 120, col: 0x6a8c8f },      // patient nautilus: harmless while watched, grows when ignored — meek body slows to strike only later
   angle:     { hp: 3, sp: 2.9, pts: 130, col: 0x0a0a0e },      // single-vertex silhouette in black: hurts to study, closes the distance while you don't (stalker AI)
+  duck:      { hp: 2, sp: 3.1, pts: 75,  col: 0xfff2d0 },      // THE EIFFEL CANARD garrison: a waddling duck, quick and shallow (walker AI)
 };
 // Themed dungeon species borrow movement patterns while keeping their own models and stats.
-const AI_ALIAS = { notice: 'spider', bailiff: 'charger', collector: 'gunner', landlord: 'gorilla', tapehead: 'spider', crthead: 'gunner', cabinet: 'gorilla', pixelghost: 'kaomoji', cryptGhost: 'stalker', zombie: 'gorilla', sporeling: 'kaomoji', prismWraith: 'stalker', capBrute: 'gorilla', watcher: 'stalker', crawler: 'spider', whisperer: 'stalker', spawnSwarm: 'kaomoji', amalgam: 'gorilla', shell: 'kaomoji', angle: 'stalker', scrub: 'stalker', secondMouth: 'stalker', resident: 'stalker', untitled: 'stalker', otherPlayer: 'stalker', vertex: 'stalker' };
+const AI_ALIAS = { notice: 'spider', bailiff: 'charger', collector: 'gunner', landlord: 'gorilla', tapehead: 'spider', crthead: 'gunner', cabinet: 'gorilla', pixelghost: 'kaomoji', cryptGhost: 'stalker', zombie: 'gorilla', sporeling: 'kaomoji', prismWraith: 'stalker', capBrute: 'gorilla', watcher: 'stalker', crawler: 'spider', whisperer: 'stalker', spawnSwarm: 'kaomoji', amalgam: 'gorilla', shell: 'kaomoji', angle: 'stalker', scrub: 'stalker', secondMouth: 'stalker', resident: 'stalker', untitled: 'stalker', otherPlayer: 'stalker', vertex: 'stalker', duck: 'walker' };
 // THE BETWEEN §7.2: the systemic roster dripped into every sector (per zone name at pickEnemy), replacing biome rosters for this level only.
 const BETWEEN_ENEMY_ROSTER = ['watcher', 'crawler', 'whisperer', 'spawnSwarm', 'amalgam', 'shell', 'angle'];
 const faceTex = {};
@@ -1458,6 +1459,15 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker', enemyZone 
     for (let t = 0; t < 5; t++) { const tt = add(geo('ConeGeometry', 0.05, 0.14, 4), -0.32 + t * 0.16, 0.6, 0.1, tooth); tt.rotation.x = Math.PI; }
     const rib = add(geo('BoxGeometry', 0.2, 0.025, 1.3), 0.15, 0.6, -0.78, tapeM); rib.rotation.x = 0.25; rib.rotation.z = 0.3;
     const rib2 = add(geo('BoxGeometry', 0.2, 0.025, 0.9), -0.2, 0.3, -0.5, tapeM); rib2.rotation.x = -0.15; rib2.rotation.z = -0.4;
+  } else if (variant === 'duck') {         // THE EIFFEL CANARD: a plump white duck — rounded body, orange beak/feet, small wings, a curled tail feather
+    const bill = new THREE.MeshBasicMaterial({ color: 0xff9a1a }), eye = new THREE.MeshBasicMaterial({ color: 0x1a1008 }), wing = retroMaterial(new THREE.MeshLambertMaterial({ color: 0xe8dcc0 }));
+    const body = add(geo('SphereGeometry', 0.5, 10, 8), 0, 0.5, 0, mat); body.scale.set(1.05, 0.9, 1.3);
+    add(geo('SphereGeometry', 0.3, 9, 7), 0, 1.05, 0.3, mat);
+    add(geo('BoxGeometry', 0.22, 0.12, 0.32), 0, 1.0, 0.58, bill);
+    for (const side of [-1, 1]) add(geo('SphereGeometry', 0.05, 5, 4), side * 0.14, 1.1, 0.52, eye);
+    for (const side of [-1, 1]) { const w = add(geo('SphereGeometry', 0.26, 7, 5), side * 0.48, 0.5, -0.05, wing); w.scale.set(0.55, 0.9, 1.1); }
+    const tail = add(geo('ConeGeometry', 0.1, 0.4, 5), 0, 0.7, -0.62, mat); tail.rotation.x = -0.9;
+    for (const side of [-1, 1]) add(geo('BoxGeometry', 0.22, 0.05, 0.3), side * 0.18, 0.08, 0.1, bill);
   } else if (variant === 'crthead') {      // Nostalgia Overdose: a CRT television for a head, rabbit-ear antenna, tiny suit
     const cas = retroMaterial(new THREE.MeshLambertMaterial({ color: 0x3a3a44 })), scr = new THREE.MeshBasicMaterial({ color: 0xaecbff }), bar = new THREE.MeshBasicMaterial({ color: 0x1a2a46 }), knob = new THREE.MeshBasicMaterial({ color: 0xffd02a });
     add(geo('BoxGeometry', 0.5, 0.82, 0.3), 0, 0.92, 0, mat); add(geo('BoxGeometry', 0.9, 0.74, 0.72), 0, 1.72, 0, cas);
@@ -1838,6 +1848,7 @@ function makeWalker(x, y, z, plat, scale, isBoss, variant = 'walker', enemyZone 
   if (variant === 'zombie') { e.h = 2.0 * scale; e.r = 0.72 * scale; }
   if (variant === 'prismWraith') { e.h = 2.1 * scale; e.r = 0.7 * scale; }
   if (variant === 'capBrute') { e.h = 2.5 * scale; e.r = 1.0 * scale; e.speed *= 0.9; e.growlCd = 1 + rand() * 2; e.slamCd = 2.5 + rand() * 2; e.slamWind = 0; }
+  if (variant === 'duck') { e.h = 0.8 * scale; e.r = 0.55 * scale; e.speed *= 1.1; }
   // THE BETWEEN common roster sizing/mechanics hooks
   if (variant === 'watcher')   { e.h = 1.7 * scale; e.r = 0.65 * scale; e.speed *= 0.82; }
   if (variant === 'crawler')   { e.h = 0.95 * scale; e.r = 0.85 * scale; }
@@ -3417,7 +3428,7 @@ function buildCommons(launch, ux, uz, px, pz, homes) {
   // MID-BAND SPOKES: the nest goes on the node angularly FARTHEST from the descent shelf, the house on the node
   // angularly OPPOSITE the nest, and the shroom wherever there's the most clear air left, so all three locations
   // hang in open air and never crowd a route.
-  let nestNode = null, houseNode = null, shroomNode = null, boneNode = null, bubbleNode = null;
+  let nestNode = null, houseNode = null, shroomNode = null, boneNode = null, bubbleNode = null, eiffelNode = null;
   {
     const cands = nodes.filter(n => !n.gate && !n.outpost && ad(n.a, ma) > 1.05);
     if (cands.length >= 3) {
@@ -3442,10 +3453,17 @@ function buildCommons(launch, ux, uz, px, pz, homes) {
         const rest2 = pool.filter(n => n !== boneNode);
         const pool2 = rest2.filter(farFrom(picked));
         bubbleNode = (pool2.length ? pool2 : rest2).slice().sort((p, q) => spreadScore(q, picked) - spreadScore(p, picked))[0];
+        // MID-BAND DUNGEON 6: THE EIFFEL CANARD, same leftover-clear-air placement as bone/bubble.
+        if (bubbleNode && cands.length >= 6) {
+          picked.push(bubbleNode);
+          const rest3 = pool2.filter(n => n !== bubbleNode);
+          const pool3 = rest3.filter(farFrom(picked));
+          eiffelNode = (pool3.length ? pool3 : rest3).slice().sort((p, q) => spreadScore(q, picked) - spreadScore(p, picked))[0];
+        }
       }
     }
   }
-  commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubbleNode);
+  commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubbleNode, eiffelNode);
 }
 
 // ---------- COMMONS MID BAND: two fought-over locations below the rim and above LEDGE -1, each with its own unique boss ----------
@@ -3458,11 +3476,13 @@ function buildCommons(launch, ux, uz, px, pz, homes) {
 const FLESH_ZONE = { name: 'FleshNest', plate: 0xff5aa0 };
 const BONE_ZONE = { name: 'BoneCathedral', desc: 'hollow hymns, and a treasury of other people\'s bones', top: '#ddd6c6', mid: '#a89f8f', bot: '#6b6156', fog: 0x8a8174, hemi: 0.7, hemiCol: 0xe8e0cc, sun: 0.78, sunCol: 0xf0e8d8, cloud: 0x7a7168, plate: 0xd8d0c0, weather: 'none' };
 const BUBBLE_ZONEX = { name: 'BubbleCitadel', desc: 'soap-glass spires exhale iridescent flecks', top: '#bfeaff', mid: '#8fd6f2', bot: '#5f9fc8', fog: 0x9fd8f0, hemi: 0.8, hemiCol: 0xbfeeff, sun: 0.85, sunCol: 0xdff6ff, cloud: 0x88c8e8, plate: 0x9fe8ff, weather: 'none' };
+const EIFFEL_ZONE = { name: 'EiffelCanard', desc: 'wrought iron, warm café light, and a great many ducks', top: '#2a1f30', mid: '#6a4a42', bot: '#b8864a', fog: 0x7a5c48, hemi: 0.72, hemiCol: 0xffd9a0, sun: 0.82, sunCol: 0xffb84a, cloud: 0x8a6d4a, plate: 0xd4af6a, weather: 'none' };
 const NEST_KINDS = ['walker', 'gunner', 'shield'];
 const HORROR_KINDS = ['skeleton', 'cryptGhost', 'zombie'];
 const SHROOM_KINDS = ['sporeling', 'prismWraith', 'capBrute'];
 const BONE_KINDS = ['skeleton', 'cryptGhost', 'zombie'];          // the Ossuary garrison: same horror walkers, bone-white livery
 const BUBBLE_KINDS = ['kaomoji', 'alien', 'raver'];               // the Fizz garrison: same families, soapsud palettes
+const DUCK_KINDS = ['duck'];                                      // the Eiffel garrison: canard patrol
 let midWins = { maw: false, nex: false, oss: false, fizz: false };        // survives commons rebuilds (per level); re-fighting a boss re-grants nothing
 let midGen = 0;                                  // debug: which mid-site state instance is live right now
 const palaceMotions = [];
@@ -3504,7 +3524,7 @@ function updatePalaceMotion(dt) {
     }
   }
 }
-function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubbleNode) {
+function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubbleNode, eiffelNode) {
   if (!commons) return;
   const sites = {};
   // FAR-LANDS (2026-10-26): the three sites are no longer ring-side spurs — each is its own far land ~0.95–1.1 km out
@@ -3514,8 +3534,8 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
   // (flesh terraces / front-door steps / rabbit-hole discs), and each keeps its own unique boss + reward.
   // farAnchor tries a couple of radii/angle nudges for open air; the ladder ends at the legacy near-ring spot so a
   // crowded world can still fall back to the old spur layout unchanged.
-  const MID_DIST = { nest: 2200, house: 1850, shroom: 2500, bone: 2050, bubble: 2650 };  // much further out than before (was a tight 1010-1140 band) so the dungeons genuinely spread across the map
-  const ELEV = { nest: 0, house: 170, shroom: -230, bone: 95, bubble: -150 };            // distinct absolute height offsets so the five lands sit at different elevations relative to each other, not just different compass bearings (connectFar's causeway can climb/descend up to ~200 units safely)
+  const MID_DIST = { nest: 2200, house: 1850, shroom: 2500, bone: 2050, bubble: 2650, eiffel: 2350 };  // much further out than before (was a tight 1010-1140 band) so the dungeons genuinely spread across the map
+  const ELEV = { nest: 0, house: 190, shroom: -190, bone: 110, bubble: -150, eiffel: 200 };            // distinct absolute height offsets so the six lands sit at different elevations relative to each other, not just different compass bearings (connectFar's causeway can climb/descend up to ~200 units safely — kept each offset under that cap so the causeway back to spawn stays reliable)
   const farAnchor = (node, key) => {
     if (!node) return null;
     const D0 = MID_DIST[key];
@@ -3535,13 +3555,13 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
     for (let retry = 0; retry < 2 && !ok; retry++) ok = connectFar(A, B);
     if (!ok) console.log('[mids] far causeway to', zone.name, 'found no clear line — the land still sits on its spoke past the skyline');
   };
-  const farMonument = (kind, gx, gz, gy) => {         // spawn-visible monument per far land: skyscraper scale (2x), fog:false + noCull on every mesh so it reads from the descent shelf like the skyline towers do
+  const farMonument = (kind, gx, gz, gy) => {         // discovery monument per far land: skyscraper scale (2x). noCull keeps every mesh rendering (never frustum/distance-culled) so it still exists once reached, but the bulk materials respect scene.fog (unlike the old "spawn-visible landmark" design) so the structure fades into the mist at range — found by exploring, not spotted 360° from spawn. Small glow accents keep fog:false, so a hint of light can still be seen from further out.
     const yaw = Math.atan2(CX - gx, CZ - gz);         // built facing the commons center so the money side is what spawn sees
     const g = new THREE.Group(); g.position.set(gx, gy, gz); g.rotation.y = yaw;
     if (kind === 'pussy') g.scale.set(2.4, 2.3, 2.25); else g.scale.setScalar(2);
     g.userData.noCull = true; scene.add(g);
     const M = (geo, mat, x, y, z, sx = 1, sy = 1, sz = 1, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.set(0, ry, rz); m.userData.noCull = true; g.add(m); return m; };
-    const lamF = (col, e, ei = 0.5) => lam(col, { emissive: e, emissiveIntensity: ei, fog: false });
+    const lamF = (col, e, ei = 0.5) => lam(col, { emissive: e, emissiveIntensity: ei, fog: true });
     const glow = col => new THREE.MeshBasicMaterial({ color: col, fog: false, toneMapped: false });
     const bx2 = new THREE.BoxGeometry(1, 1, 1), sp2 = new THREE.SphereGeometry(1, 9, 7), cy2 = new THREE.CylinderGeometry(1, 1, 1, 9), cn2 = new THREE.ConeGeometry(0.5, 1, 4);
     if (kind === 'pussy') {                            // fleshy gothic keep with its entrance built into the front façade
@@ -3881,7 +3901,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
     const tag = makeLabel(label); tag.position.set(x, y + 2.8, z); tag.scale.set(8.5, 2.1, 1); tag.userData.noCull = true; scene.add(tag);
     return dot;
   };
-  const routeHeading = makeLabel(key === 'nest' ? 'GIANT NEST · FOLLOW THE GLOW TO THE VAULT' : key === 'house' ? 'HAUNTED KEEP · CLIMB THE SPIRE, DESCEND INSIDE' : key === 'bone' ? 'BONE CATHEDRAL · CLIMB THE BUTTRESSES, DESCEND THE OSSUARY' : key === 'bubble' ? 'BUBBLE CITADEL · CLIMB THE DOME, SINK INTO THE FIZZ' : 'GRAND SHROOM · CLIMB THE STEM, DESCEND WITHIN');
+  const routeHeading = makeLabel(key === 'nest' ? 'GIANT NEST · FOLLOW THE GLOW TO THE VAULT' : key === 'house' ? 'HAUNTED KEEP · CLIMB THE SPIRE, DESCEND INSIDE' : key === 'bone' ? 'BONE CATHEDRAL · CLIMB THE BUTTRESSES, DESCEND THE OSSUARY' : key === 'bubble' ? 'BUBBLE CITADEL · CLIMB THE DOME, SINK INTO THE FIZZ' : key === 'eiffel' ? 'THE EIFFEL CANARD · CLIMB THE TOWER, DESCEND THE CELLAR' : 'GRAND SHROOM · CLIMB THE STEM, DESCEND WITHIN');
   routeHeading.position.set(site.x, site.y + 20, site.z); routeHeading.scale.set(20, 4.6, 1); routeHeading.userData.noCull = true; scene.add(routeHeading);
     const wallClearR = shellHalf + 12, innerEndR = discR + 16;   // innerEndR unchanged from before: lands the climb right next to the deck slab
     const baseR = Math.max(r0 + 40, discR + 30, wallClearR + 1);
@@ -3896,7 +3916,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
 
       addRail(px, pz, py + 1.35, sx, sz, col, sy + 1.35, false);
       if (k % 7 === 1) addDashPad(px, py, pz, sx - px, sz - pz);        if (k % 16 === 8) {
-          const sign = makeLabel(key === 'house' ? 'GOTHIC KEEP · CLIMB ↑' : key === 'nest' ? 'GIANT PUSSY · CLIMB ↑' : key === 'bone' ? 'BONE CATHEDRAL · CLIMB ↑' : key === 'bubble' ? 'BUBBLE CITADEL · CLIMB ↑' : 'GRAND SHROOM · CLIMB ↑');
+          const sign = makeLabel(key === 'house' ? 'GOTHIC KEEP · CLIMB ↑' : key === 'nest' ? 'GIANT PUSSY · CLIMB ↑' : key === 'bone' ? 'BONE CATHEDRAL · CLIMB ↑' : key === 'bubble' ? 'BUBBLE CITADEL · CLIMB ↑' : key === 'eiffel' ? 'THE EIFFEL CANARD · CLIMB ↑' : 'GRAND SHROOM · CLIMB ↑');
           sign.position.set(sx, sy + 7, sz); sign.scale.set(10, 2.5, 1); sign.userData.noCull = true; scene.add(sign);
         }
         if (k % 8 === 1) pathCue(sx, sy + 1.8, sz, 'CLIMB ↑', 1.2);
@@ -3910,7 +3930,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
       const dk = addSlab(gx, deckY, gz, deckR, deckR, 2.2, zone, true);
       sn.slabs.push(dk);
       addRail(px, pz, py + 1.35, gx, gz, col, deckY + 1.35, false);
-      const dlbl = makeLabel(key === 'nest' ? 'ENTER THE DEEP HEAT · DESCEND ↓' : key === 'house' ? 'HAUNTED HOUSE · ENTER HERE · DOWN ↓' : key === 'bone' ? 'OSSUARY DOOR · ENTER HERE · DOWN ↓' : key === 'bubble' ? 'SOAPSUD ENTRY · DOWN ↓' : 'RABBIT STEM · DESCEND ↓');
+      const dlbl = makeLabel(key === 'nest' ? 'ENTER THE DEEP HEAT · DESCEND ↓' : key === 'house' ? 'HAUNTED HOUSE · ENTER HERE · DOWN ↓' : key === 'bone' ? 'OSSUARY DOOR · ENTER HERE · DOWN ↓' : key === 'bubble' ? 'SOAPSUD ENTRY · DOWN ↓' : key === 'eiffel' ? 'ENTREZ ICI · DOWN ↓' : 'RABBIT STEM · DESCEND ↓');
       dlbl.position.set(gx, deckY + 6, gz); dlbl.scale.set(13, 3.2, 1); dlbl.userData.noCull = true; scene.add(dlbl);
       pathCue(gx, deckY + 2.2, gz, 'ENTRY · DOWN ↓', 1.5);
       var prev = { x: gx, z: gz, y: deckY };
@@ -3941,11 +3961,12 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
           const roomNames = key === 'house' ? ['CANDLE GALLERY', 'WIDOWS’ ARCHIVE']
             : key === 'nest' ? ['RIBCAGE CHAPEL', 'BROOD CHAMBER']
             : key === 'bone' ? ['RELIC GALLERY', 'OSSUARY STACKS']
-            : key === 'bubble' ? ['SODA PARLOUR', 'FOAM GALLERY'] : ['MOONCAP GALLERY', 'MAD TEA PARLOUR'];
+            : key === 'bubble' ? ['SODA PARLOUR', 'FOAM GALLERY']
+            : key === 'eiffel' ? ['CAFÉ TERRACE', 'POND AVIARY'] : ['MOONCAP GALLERY', 'MAD TEA PARLOUR'];
           for (let ri = 0; ri < roomCenters.length; ri++) {
             const room = roomCenters[ri], roomName = roomNames[ri];
             sn.rooms.push({ name: roomName, x: room.x, y: dy, z: room.z, floor: Math.max(1, Math.ceil((deckY - dy) / 30)) });
-            const detailMat = lam(key === 'house' ? 0x4a3a4c : key === 'nest' ? 0xb34668 : key === 'bone' ? 0xcbc3b2 : key === 'bubble' ? 0x9fd8f0 : 0xc9a981,
+            const detailMat = lam(key === 'house' ? 0x4a3a4c : key === 'nest' ? 0xb34668 : key === 'bone' ? 0xcbc3b2 : key === 'bubble' ? 0x9fd8f0 : key === 'eiffel' ? 0xd9b878 : 0xc9a981,
               { emissive: zone.plate, emissiveIntensity: 0.18 });
             if (key === 'house') {
               const tomb = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.2, 2.8), detailMat);
@@ -3982,6 +4003,18 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
                   const fizz = new THREE.Mesh(new THREE.SphereGeometry(0.42 + fb3 * 0.14, 7, 5), bubble.material);
                   fizz.position.set(room.x + (fb3 - 1) * 1.35, dy + 3.4 + fb3 * 0.8, room.z + (fb3 % 2 ? 0.9 : -0.9)); fizz.userData.noCull = true; scene.add(fizz);
                 }
+              } else if (key === 'eiffel') {
+                const pond = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 0.22, 16), new THREE.MeshBasicMaterial({ color: 0x4a90a4, transparent: true, opacity: 0.75, toneMapped: false }));
+                pond.position.set(room.x, dy + 0.1, room.z); pond.userData.noCull = true; scene.add(pond);
+                for (let lp = 0; lp < 4; lp++) {   // lily pads
+                  const pad = new THREE.Mesh(new THREE.CircleGeometry(0.4, 8), new THREE.MeshBasicMaterial({ color: 0x5fae5f, side: THREE.DoubleSide }));
+                  pad.rotation.x = -Math.PI / 2; pad.position.set(room.x + Math.cos(lp * 1.7) * 1.1, dy + 0.22, room.z + Math.sin(lp * 1.7) * 1.1); pad.userData.noCull = true; scene.add(pad);
+                }
+                const table = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.08, 10), detailMat);   // café bistro table
+                table.position.set(room.x, dy + 1.1, room.z + 2.6); table.userData.noCull = true; scene.add(table);
+                const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.1, 6), detailMat); leg.position.set(room.x, dy + 0.55, room.z + 2.6); leg.userData.noCull = true; scene.add(leg);
+                const baguette = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.3, 8), new THREE.MeshBasicMaterial({ color: 0xd9a84a, toneMapped: false }));
+                baguette.rotation.z = Math.PI / 2; baguette.position.set(room.x, dy + 1.22, room.z + 2.6); baguette.userData.noCull = true; scene.add(baguette);
               } else {
               const cup = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.35, 2.5, 10, 1, true), detailMat);
               cup.position.set(room.x, dy + 1.5, room.z); cup.userData.noCull = true; scene.add(cup);
@@ -3994,13 +4027,13 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
           // One room in every third hall is trapped. The inlaid warning sigil matches the
           // site theme; the pulse is avoidable by crossing the opposite wing or timing a dash.
           if (rung % 18 === 0) {
-            const room = roomCenters[0], hazardColor = key === 'house' ? 0x9dff3a : key === 'nest' ? 0xff416f : key === 'bone' ? 0xcfe8ff : key === 'bubble' ? 0xff9de0 : 0x47f3c2;
+            const room = roomCenters[0], hazardColor = key === 'house' ? 0x9dff3a : key === 'nest' ? 0xff416f : key === 'bone' ? 0xcfe8ff : key === 'bubble' ? 0xff9de0 : key === 'eiffel' ? 0xffb020 : 0x47f3c2;
             const hazardMat = new THREE.MeshBasicMaterial({ color: hazardColor, transparent: true, opacity: 0.55, toneMapped: false });
             const sigil = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.32, 5, 16), hazardMat);
             sigil.rotation.x = Math.PI / 2; sigil.position.set(room.x, dy + 0.18, room.z); sigil.userData.noCull = true; scene.add(sigil);
             const core = new THREE.Mesh(new THREE.CircleGeometry(3.45, 10), new THREE.MeshBasicMaterial({ color: hazardColor, transparent: true, opacity: 0.18, side: THREE.DoubleSide, toneMapped: false }));
             core.rotation.x = -Math.PI / 2; core.position.set(room.x, dy + 0.12, room.z); core.userData.noCull = true; scene.add(core);
-            let hazardName = key === 'house' ? 'CURSED CANDLE RUNE' : key === 'nest' ? 'THORN-BLOOM PATCH' : key === 'bone' ? 'GRAVE-CHILL RUNE' : key === 'bubble' ? 'FIZZ CROWN RUNE' : 'SPORE VENT';
+            let hazardName = key === 'house' ? 'CURSED CANDLE RUNE' : key === 'nest' ? 'THORN-BLOOM PATCH' : key === 'bone' ? 'GRAVE-CHILL RUNE' : key === 'bubble' ? 'FIZZ CROWN RUNE' : key === 'eiffel' ? 'BAGUETTE BARRAGE' : 'SPORE VENT';
             if (key === 'nest') for (let thorn = 0; thorn < 5; thorn++) {
               const angle = thorn * Math.PI * 2 / 5, spike = new THREE.Mesh(new THREE.ConeGeometry(0.38, 1.8, 5), hazardMat);
               spike.position.set(room.x + Math.cos(angle) * 2.6, dy + 1, room.z + Math.sin(angle) * 2.6); spike.userData.noCull = true; scene.add(spike);
@@ -4018,19 +4051,23 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
               const ring = new THREE.Mesh(new THREE.TorusGeometry(2.1, 0.3, 5, 12), hazardMat);
               ring.position.set(room.x + Math.cos(pa3) * 2.4, dy + 0.5, room.z + Math.sin(pa3) * 2.4); ring.userData.noCull = true; scene.add(ring);
             }
+            if (key === 'eiffel') for (let bg3 = 0; bg3 < 5; bg3++) {      // thrown baguettes spin around the sigil
+              const ba3 = bg3 * Math.PI * 2 / 5, bag = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 1.6, 8), hazardMat);
+              bag.rotation.z = Math.PI / 2; bag.position.set(room.x + Math.cos(ba3) * 2.6, dy + 1, room.z + Math.sin(ba3) * 2.6); bag.userData.noCull = true; scene.add(bag);
+            }
             sn.hazards.push({ name: hazardName, x: room.x, y: dy, z: room.z, radius: 4.5, cooldown: 0, sigil, core });
           }
           // A single late-floor cache is tucked into the other wing. It is optional, off
           // the main spiral, and doubles as the dungeon's hidden-secret completion reward.
           if (!sn.secrets.length && (deckY - dy) / Math.max(1, deckY - botY) > 0.84) {
-            const room = roomCenters[1], chestMat = lam(key === 'house' ? 0x28202d : key === 'nest' ? 0x61243a : key === 'bone' ? 0x8a8174 : key === 'bubble' ? 0x7fc4e0 : 0x765438,
+            const room = roomCenters[1], chestMat = lam(key === 'house' ? 0x28202d : key === 'nest' ? 0x61243a : key === 'bone' ? 0x8a8174 : key === 'bubble' ? 0x7fc4e0 : key === 'eiffel' ? 0x8a6d3a : 0x765438,
               { emissive: zone.plate, emissiveIntensity: 0.24 });
             const chest = new THREE.Group();
             const box = new THREE.Mesh(new THREE.BoxGeometry(2.7, 1.7, 1.8), chestMat); box.position.y = 0.9; chest.add(box);
             const lid = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.42, 2), chestMat); lid.position.set(0, 1.95, 0); chest.add(lid);
-            const jewel = new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 0), new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffd48a : key === 'nest' ? 0xff668b : key === 'bone' ? 0xdfe8ff : key === 'bubble' ? 0xfff2f8 : 0xf7e4a7, toneMapped: false }));
+            const jewel = new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 0), new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffd48a : key === 'nest' ? 0xff668b : key === 'bone' ? 0xdfe8ff : key === 'bubble' ? 0xfff2f8 : key === 'eiffel' ? 0xffd700 : 0xf7e4a7, toneMapped: false }));
             jewel.position.set(0, 2.8, 0); chest.add(jewel); chest.position.set(room.x, dy, room.z); chest.userData.noCull = true; scene.add(chest);
-            const secret = { name: key === 'house' ? 'WIDOW’S LAST WILL' : key === 'nest' ? 'HEART OF THE BROOD' : key === 'bone' ? 'THE CHOIR MASTER’S PAY' : key === 'bubble' ? 'THE UNSPOILED TITHE' : 'THE WHITE QUEEN’S TEACUP', x: room.x, y: dy + 2.8, z: room.z, found: false };
+            const secret = { name: key === 'house' ? 'WIDOW’S LAST WILL' : key === 'nest' ? 'HEART OF THE BROOD' : key === 'bone' ? 'THE CHOIR MASTER’S PAY' : key === 'bubble' ? 'THE UNSPOILED TITHE' : key === 'eiffel' ? 'THE GOLDEN CROISSANT' : 'THE WHITE QUEEN’S TEACUP', x: room.x, y: dy + 2.8, z: room.z, found: false };
             sn.secrets.push(secret); items.push({ mesh: chest, type: 'dungeonSecret', taken: false, secretLabel: secret.name, secret });
             secret.pickup = items[items.length - 1];
           }
@@ -4047,7 +4084,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
         }
         if (rung % 6 === 3) {
           const floor = Math.max(1, Math.ceil((deckY - dy) / 30));
-          const sign = makeLabel(`${key === 'house' ? 'HOUSE' : key === 'nest' ? 'NEST' : key === 'bone' ? 'OSSUARY' : key === 'bubble' ? 'CITADEL' : 'SHROOM'} LEVEL ${floor} · DOWN ↓`);
+          const sign = makeLabel(`${key === 'house' ? 'HOUSE' : key === 'nest' ? 'NEST' : key === 'bone' ? 'OSSUARY' : key === 'bubble' ? 'CITADEL' : key === 'eiffel' ? 'TOUR' : 'SHROOM'} LEVEL ${floor} · DOWN ↓`);
           sign.position.set(dx + Math.cos(a) * (discR + 2), dy + 4, dz + Math.sin(a) * (discR + 2));
           sign.scale.set(8, 2, 1); sign.userData.noCull = true; scene.add(sign);
         }
@@ -4065,9 +4102,9 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
       if (prev && (prev.x !== gx || prev.z !== gz)) addRail(prev.x, prev.z, prev.y + 1.35, gx, gz, col, botY + 1.35, false);
       const rim = new THREE.Mesh(new THREE.TorusGeometry(discR + 2.4, 0.5, 6, 22), new THREE.MeshBasicMaterial({ color: col, fog: false, toneMapped: false }));
       rim.rotation.x = Math.PI / 2; rim.position.set(gx, botY + 1.4, gz); rim.userData.noCull = true; scene.add(rim);
-      const vl = makeLabel(key === 'nest' ? 'LOWEST LEVEL · VAULT OF THE DEEP HEAT' : key === 'house' ? 'LOWEST LEVEL · NEXUS CRYPT' : key === 'bone' ? 'LOWEST LEVEL · OSSUARY CRYPT' : key === 'bubble' ? 'LOWEST LEVEL · FIZZ PARLOUR' : 'LOWEST LEVEL · CHESHIRE PARLOUR');
+      const vl = makeLabel(key === 'nest' ? 'LOWEST LEVEL · VAULT OF THE DEEP HEAT' : key === 'house' ? 'LOWEST LEVEL · NEXUS CRYPT' : key === 'bone' ? 'LOWEST LEVEL · OSSUARY CRYPT' : key === 'bubble' ? 'LOWEST LEVEL · FIZZ PARLOUR' : key === 'eiffel' ? 'LOWEST LEVEL · THE ROTISSERIE' : 'LOWEST LEVEL · CHESHIRE PARLOUR');
       vl.position.set(gx, botY + 9, gz); vl.scale.set(15, 3.4, 1); scene.add(vl);
-      pathCue(gx, botY + 2.2, gz, key === 'house' ? 'NEXUS CRYPT' : key === 'bone' ? 'OSSUARY CRYPT' : key === 'bubble' ? 'FIZZ PARLOUR' : 'BOSS VAULT', 1.6);
+      pathCue(gx, botY + 2.2, gz, key === 'house' ? 'NEXUS CRYPT' : key === 'bone' ? 'OSSUARY CRYPT' : key === 'bubble' ? 'FIZZ PARLOUR' : key === 'eiffel' ? 'THE ROTISSERIE' : 'BOSS VAULT', 1.6);
       vl.userData.noCull = true;
     }
 
@@ -4077,9 +4114,9 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
     // floating in open air. Distinct materials keep each landmark's interior on-theme.
     const shellThickness = 1.8, shellBand = 28;   // shellHalf itself is computed earlier (before the climb spiral) so the climb can be kept outside it
     const shellBottom = botY, shellTop = deckY + 14;
-    const shellMat = lam(key === 'house' ? 0x191520 : key === 'shroom' ? 0x694c40 : key === 'bone' ? 0x8f887c : key === 'bubble' ? 0x4f88a8 : 0x421b30,
-      { emissive: key === 'house' ? 0x120b19 : key === 'shroom' ? 0x28120e : key === 'bone' ? 0x2a2620 : key === 'bubble' ? 0x14283a : 0x220813, emissiveIntensity: 0.4 });
-    const paneMat = new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffc47a : key === 'shroom' ? 0xf4d8a4 : key === 'bone' ? 0xfff2d8 : key === 'bubble' ? 0xcff4ff : 0xff668b, transparent: true, opacity: 0.78, fog: false, toneMapped: false });
+    const shellMat = lam(key === 'house' ? 0x191520 : key === 'shroom' ? 0x694c40 : key === 'bone' ? 0x8f887c : key === 'bubble' ? 0x4f88a8 : key === 'eiffel' ? 0x5a4428 : 0x421b30,
+      { emissive: key === 'house' ? 0x120b19 : key === 'shroom' ? 0x28120e : key === 'bone' ? 0x2a2620 : key === 'bubble' ? 0x14283a : key === 'eiffel' ? 0x3a2a14 : 0x220813, emissiveIntensity: 0.4 });
+    const paneMat = new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffc47a : key === 'shroom' ? 0xf4d8a4 : key === 'bone' ? 0xfff2d8 : key === 'bubble' ? 0xcff4ff : key === 'eiffel' ? 0xffcf7a : 0xff668b, transparent: true, opacity: 0.78, fog: false, toneMapped: false });
     const addDungeonWall = (x0, x1, z0, z1, y0, y1) => {
       addSolid(x0, x1, y0, y1, z0, z1);
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), shellMat);
@@ -4132,7 +4169,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
         pane.position.set(gx + offset, paneY, gz + side * (half + 0.12)); pane.userData.noCull = true; scene.add(pane);
       }
       // Vertical corner ribs emphasize the height and reinforce the gothic / storybook silhouette.
-      const ribMat = lam(key === 'house' ? 0x554055 : key === 'shroom' ? 0xd8b88a : key === 'bone' ? 0xe8e0cc : key === 'bubble' ? 0x8fd6f2 : 0xc34a70,
+      const ribMat = lam(key === 'house' ? 0x554055 : key === 'shroom' ? 0xd8b88a : key === 'bone' ? 0xe8e0cc : key === 'bubble' ? 0x8fd6f2 : key === 'eiffel' ? 0xb8905a : 0xc34a70,
         { emissive: zone.plate, emissiveIntensity: 0.32 });
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
         const rib = new THREE.Mesh(new THREE.BoxGeometry(2.2, ceilY - floorY, 2.2), ribMat);
@@ -4364,6 +4401,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
   const dungeonSites = [
     { node: boneNode, key: 'bone', zone: BONE_ZONE, kinds: BONE_KINDS, col: 0xd8d0c0, deckLocal: 200, botLocal: -100, discR: 15, name: 'THE BONE CATHEDRAL' },
     { node: bubbleNode, key: 'bubble', zone: BUBBLE_ZONEX, kinds: BUBBLE_KINDS, col: 0x9fe8ff, deckLocal: 184, botLocal: -100, discR: 13, name: 'THE BUBBLE CITADEL' },
+    { node: eiffelNode, key: 'eiffel', zone: EIFFEL_ZONE, kinds: DUCK_KINDS, col: 0xd4af6a, deckLocal: 230, botLocal: -100, discR: 14, name: 'THE EIFFEL CANARD' },
   ];
   for (const ds of dungeonSites) {
     if (!ds.node) continue;
@@ -4413,8 +4451,9 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
     shroom: sites.shroom ? { ...sites.shroom, woken: false, waves: 0, guardCd: 6, bossSpawned: false, bossDead: false, gen: midGen++ } : null,
     bone: sites.bone ? { ...sites.bone, dungeonOnly: true, gen: midGen++ } : null,
     bubble: sites.bubble ? { ...sites.bubble, dungeonOnly: true, gen: midGen++ } : null,
+    eiffel: sites.eiffel ? { ...sites.eiffel, dungeonOnly: true, gen: midGen++ } : null,
   };
-  for (const k of ['nest', 'house', 'shroom', 'bone', 'bubble']) if (commons.mid[k]) commons.mid[k].key = k;
+  for (const k of ['nest', 'house', 'shroom', 'bone', 'bubble', 'eiffel']) if (commons.mid[k]) commons.mid[k].key = k;
   for (const k of ['nest', 'house', 'shroom']) {                   // seat the outrider platoon on the lead-in platforms the moment the world exists
     const s2 = commons.mid[k]; const lead = s2 && s2.lead ? s2.lead : [];
     if (lead.length < 2) continue;
@@ -4422,7 +4461,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
   }
   {                                  // the far lands live past the stock world edge: widen the bounds like the other far builders do
     let farD = 0;
-    for (const k of ['nest', 'house', 'shroom', 'bone', 'bubble']) if (commons.mid[k]) farD = Math.max(farD, Math.hypot(commons.mid[k].x, commons.mid[k].z));
+    for (const k of ['nest', 'house', 'shroom', 'bone', 'bubble', 'eiffel']) if (commons.mid[k]) farD = Math.max(farD, Math.hypot(commons.mid[k].x, commons.mid[k].z));
     if (farD) { WORLD_R = Math.max(WORLD_R, farD + 320); camera.far = Math.max(camera.far, (farD + 400) * 1.7); camera.updateProjectionMatrix(); }
   }
 }
@@ -6720,7 +6759,7 @@ function buildTowerWindows() {
 }
 function towerWindowCheck() {
   if (inInterior || state !== 'play' || towerEnterCd > 0) return;
-  if (commons && commons.mid && ['nest', 'house', 'shroom', 'bone', 'bubble'].some(k => { const s = commons.mid[k]; return s && Math.abs(pos.x - s.x) < 130 && Math.abs(pos.z - s.z) < 130 && Math.abs(pos.y - s.y) < 80; })) return;      // FAR LANDS GATE: the sites live inside the skyline-tower field — tower interiors must never swallow the player (inInterior freezes the mid tick)
+  if (commons && commons.mid && ['nest', 'house', 'shroom', 'bone', 'bubble', 'eiffel'].some(k => { const s = commons.mid[k]; return s && Math.abs(pos.x - s.x) < 130 && Math.abs(pos.z - s.z) < 130 && Math.abs(pos.y - s.y) < 80; })) return;      // FAR LANDS GATE: the sites live inside the skyline-tower field — tower interiors must never swallow the player (inInterior freezes the mid tick)
   for (const h of buildingHubs) {
     if (!h.windows || !h.windows.length || Math.abs(pos.x - h.x) > h.hw + 4 || Math.abs(pos.z - h.z) > h.hd + 4 || pos.y > h.top) continue;
     for (const w of h.windows) {
