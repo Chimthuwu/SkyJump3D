@@ -12,3 +12,7 @@ cf-public/
 !.env.example
 
 music_raw/
+
+# transient perf run artifacts (test logs + headless screenshots)
+perf/_*.log
+perf/_shots/
