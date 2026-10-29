@@ -7711,7 +7711,13 @@ function buildBetween() {
   // 2-4-sector RUNS, not one random zone per individual 40m sector — a biome flipping every single sector
   // read as "sudden" with no clear sections (reported by the user); grouped runs give the Canopy the same
   // walk-through-a-region feel as descent's distance-banded biomes, without copying its exact layout.
-  const shufflePool = ZONES.concat([FLESHNEST_ZONE, SHROOM_ZONE]);
+  // THE BETWEEN-only addition: the pool previously only drew from ZONES+FleshNest+Shroom (13 entries), so
+  // RENT_ZONES (Foreclosure/Condemned/Collections) and NOS_ZONES (Sunset Strip/Tracking Error/Arcade Overdrive)
+  // never had a chance to appear in Canopy sectors even though addSlab/buildCanopySectors key off the zone
+  // object's existing fields (top/mid/bot/plate/weather) the same way Lil Spasticism's renderer does, so no
+  // extra rendering support is needed — this is purely widening the draw pool, gated inside buildBetween()
+  // (only ever called for THE BETWEEN) so no other level's behavior changes.
+  const shufflePool = ZONES.concat([FLESHNEST_ZONE, SHROOM_ZONE, ...RENT_ZONES, ...NOS_ZONES]);
   for (let i = shufflePool.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); const t = shufflePool[i]; shufflePool[i] = shufflePool[j]; shufflePool[j] = t; }
   const sectors = new Array(SECTOR_COUNT);
   sectors[beaconSectorIdx[0]] = SKYCITY_ZONE; sectors[beaconSectorIdx[1]] = ALIEN_ZONE; sectors[beaconSectorIdx[2]] = HAUNTED_ZONE; sectors[beaconSectorIdx[3]] = MARS_RUIN_ZONE;
