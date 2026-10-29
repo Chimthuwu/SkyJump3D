@@ -485,6 +485,7 @@ const gutOn = () => levelDef.id === 'gut';                       // The Gut (bod
 const arenaOn = () => levelDef.id === 'arena';                   // THE ARENAS: closed deathmatch chambers (UT99/Q3 layouts, rebuilt)
 const betweenOn = () => levelDef.id === 'between';               // THE BETWEEN: Lovecraftian seam between Moon and Mars
 const themeZones = () => rentOn() ? RENT_ZONES : nosOn() ? NOS_ZONES : gutOn() ? GUT_ZONES : null;      // a themed level's own 3-zone ladder (null = the default descent)
+const levelZones = () => overgrowthOn() ? OVERGROWTH_ZONES : ascentOn() ? ASCENT_ZONES : skyfallOn() ? SKYFALL_ZONES : null;      // like themeZones(), but deliberately NOT read by moonless/below-zero/threshold logic, so the moon/space/-1/-2 hell ladder stay intact on these 3 levels
 const setLevelDefById = id => { levelDef = LEVEL_DEFS[id] || LEVEL_DEFS.descent; };      // net: adopt the host's selected level definition
 const TH = 16;           // tower half-width
 const RAD = 28;           // spiral radius
@@ -5220,7 +5221,7 @@ function connect(A, B) {
     coin(x, y + 1.2, z, zone);
     if (prev && k % 2 === 0) for (let u = 0.33; u < 0.9; u += 0.33) coin(prev.cx + (x - prev.cx) * u, prev.top + (y - prev.top) * u + 1.5 + 3 * Math.sin(Math.PI * u), prev.cz + (z - prev.cz) * u, zone);
     // weird platforms: movers, crumblers and psychedelic warpers (never the first/last stepping stone)
-    const roll = rand(), weird = canMorph && k > 0 && k < n - 1 ? (nosOn() ? nosKind(zone, roll) : gutOn() ? gutKind(zone, roll) : rentOn() && rentCrumbleRoll(zone) ? 'crumble' : roll < 0.10 ? 'mover' : roll < 0.19 ? 'orbit' : roll < 0.28 ? 'crumble' : roll < 0.37 ? 'piston' : roll < 0.46 ? 'breath' : roll < 0.472 && psyPlatformEligible() ? 'psy' : roll < 0.56 ? 'blink' : roll < 0.65 ? 'swing' : roll < 0.74 ? 'spin' : '') : '';
+    const roll = rand(), weird = canMorph && k > 0 && k < n - 1 ? (nosOn() ? nosKind(zone, roll) : gutOn() ? gutKind(zone, roll) : rentOn() && rentCrumbleRoll(zone) ? 'crumble' : zone && zone.decay && zoneCrumbleRoll(zone) ? 'crumble' : roll < 0.10 ? 'mover' : roll < 0.19 ? 'orbit' : roll < 0.28 ? 'crumble' : roll < 0.37 ? 'piston' : roll < 0.46 ? 'breath' : roll < 0.472 && psyPlatformEligible() ? 'psy' : roll < 0.56 ? 'blink' : roll < 0.65 ? 'swing' : roll < 0.74 ? 'spin' : '') : '';
     if (weird === 'psy') tryPsySpecial(p, { ph: rand() * 6.28, period: 4 + rand() * 3, amp: 4 + rand() * 2.5, lift: rand() < 0.35, px: -uz, pz: ux, fx: ['trip', 'warp', 'invert'][(rand() * 3) | 0] });
     else if (weird) makeSpecial(p, weird, { ph: rand() * 6.28, period: weird === 'piston' ? 2.6 + rand() * 1.6 : 4 + rand() * 3, amp: weird === 'orbit' ? 5 + rand() * 3.5 : weird === 'piston' ? 3.5 + rand() * 2.5 : 4 + rand() * 2.5, lift: rand() < 0.35, px: -uz, pz: ux });
     else {
@@ -5392,7 +5393,7 @@ function buildNetwork(exitAngle) {
   const types = ARENA_TYPES.slice(); for (let i = types.length - 1; i > 0; i--) { const j = (rand() * (i + 1)) | 0; [types[i], types[j]] = [types[j], types[i]]; }
 const prevActiveZone = () => activeZ;   // biome-evolution helper (used by setZone crossings)
 const EARLY_BIOMES = ['Jungle', 'Beach', 'Rave', 'Jungle'];
-const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub(i) : level <= 2 ? ZONES.find(z => z.name === EARLY_BIOMES[(i + slot) % EARLY_BIOMES.length]) : biomeForRegion(level, region);      // early levels mix the common biomes per building instead of one region-wide biome
+const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub(i) : levelZones() ? levelZoneForHub(i) : level <= 2 ? ZONES.find(z => z.name === EARLY_BIOMES[(i + slot) % EARLY_BIOMES.length]) : biomeForRegion(level, region);      // early levels mix the common biomes per building instead of one region-wide biome
   const regionSpan = level <= 2 ? 3 : level <= 4 ? 12 : Math.max(6, 12 - Math.floor((level - 4) / 2));
   const regionForHub = i => Math.floor(Math.max(0, i - 1) / regionSpan);
   const biomeBands = ZONES.filter(zone => zone.name !== 'Jungle' && zone.name !== 'Psychedelic').length;
@@ -7489,7 +7490,7 @@ function walkBranch(src, mode, len, aim) {
   if (aim) heading = Math.atan2(aim.z - src.cz, aim.x - src.cx) + (rand() - 0.5) * 0.5;
   let x = src.cx, y = src.top, z = src.cz, last = src, pending = null;
   const decorate = (p, dir, canMorph) => {
-    const roll = nosOn() ? nosWalkRoll(p.zone) : gutOn() ? gutWalkRoll(p.zone) : rentOn() && rentCrumbleRoll(p.zone) ? 0.2 : rand();      // Rent's Due: extra crumblers, more of them the deeper the zone (0.2 lands in the 'crumble' band below)
+    const roll = nosOn() ? nosWalkRoll(p.zone) : gutOn() ? gutWalkRoll(p.zone) : rentOn() && rentCrumbleRoll(p.zone) ? 0.2 : p.zone && p.zone.decay && zoneCrumbleRoll(p.zone) ? 0.2 : rand();      // Rent's Due: extra crumblers, more of them the deeper the zone (0.2 lands in the 'crumble' band below)
     if (roll < 0.09) makeSpecial(p, 'mover', { ph: rand() * 6.28, period: 4 + rand() * 3, amp: 4 + rand() * 2.5, lift: rand() < 0.35, px: -Math.sin(dir), pz: Math.cos(dir) });
     else if (roll < 0.17) makeSpecial(p, 'orbit', { ph: rand() * 6.28, period: 5 + rand() * 4, amp: 5 + rand() * 3.5 });
     else if (roll < 0.23) makeSpecial(p, 'crumble', {});
@@ -12625,7 +12626,7 @@ function depthZoneFor(k) {
   if (_dHash(k) < Math.min(1, Math.max(0, (k - 40) / 120))) return DEPTH_ZONES.psychosis;
   return ZONES.find(z => z.name === (Math.floor((k - 15) / 10) % 2 ? 'Horror' : 'Hellscape'));
 }
-const zoneByName = nm => ZONES.find(z => z.name === nm) || DEPTH_ZONES[nm.toLowerCase()] || RENT_ZONES.find(z => z.name === nm) || NOS_ZONES.find(z => z.name === nm) || ARENA_ZONE_LIST.find(z => z.name === nm) || null;      // ARENA_ZONE_LIST is a const declared later in module scope - fine, lookups only run at runtime
+const zoneByName = nm => ZONES.find(z => z.name === nm) || DEPTH_ZONES[nm.toLowerCase()] || RENT_ZONES.find(z => z.name === nm) || NOS_ZONES.find(z => z.name === nm) || OVERGROWTH_ZONES.find(z => z.name === nm) || ASCENT_ZONES.find(z => z.name === nm) || SKYFALL_ZONES.find(z => z.name === nm) || ARENA_ZONE_LIST.find(z => z.name === nm) || null;      // ARENA_ZONE_LIST/OVERGROWTH/ASCENT/SKYFALL_ZONES are consts declared later in module scope - fine, lookups only run at runtime
 Object.assign(BIOME_ENEMIES, {
   Caverns: ['spider', 'spider', 'roach', 'roach', 'skeleton', 'stalker', 'charger'],
   Psychosis: ['demon', 'glitchling', 'glitchling', 'stalker', 'skeleton', 'spider', 'roach', 'infernal'],
@@ -12651,44 +12652,45 @@ const RENT_BOSSES = [
 ];
 // LEVEL 2 "THE OVERGROWTH" boss roster: same 10-biome-champion shape as the default descent's own bossRoster
 // (buildLevelBody, ~line 9747), reusing existing enemy variants/AI verbatim (HARD RULES: no new AI) with
-// forest-flavored names/colors. `biome` names real ZONES entries (Overgrowth has no zone array of its own —
-// it reuses the global ZONES/BIOME_ENEMIES exactly, per the 2026-10-29 DELIVERABLES note superseding the
-// older "own zone array" plan).
+// forest-flavored names/colors. `biome` now names OVERGROWTH_ZONES' own 3 zones (Canopy/Understory/Rootrot,
+// defined above) rather than the global ZONES — those are the zones that actually appear on this level now
+// that it has its own `levelZones()` ladder, so scatterBosses' biome-match bonus (index.html ~10368) lands
+// correctly instead of silently never matching.
 const OVERGROWTH_BOSSES = [
-  { variant: 'gorilla', biome: 'Jungle', name: 'THE CANOPY KING', color: 0x6adf4a },
-  { variant: 'dinosaur', biome: 'Jungle', name: 'ROOT TYRANT', color: 0x9bdf2a },
-  { variant: 'stegosaurus', biome: 'Jungle', name: 'BARKBACK', color: 0x4ab85a },
-  { variant: 'charger', biome: 'Inferno', name: 'THE KINDLING', color: 0xff6a2a },
-  { variant: 'infernal', biome: 'Inferno', name: 'EMBER STAG', color: 0xff8a3a },
-  { variant: 'frozenStalker', biome: 'Frozen', name: 'FROSTBARK', color: 0x6adfff },
-  { variant: 'stormWraith', biome: 'Storm', name: 'THE GALE OAK', color: 0x6a9aff },
-  { variant: 'stalker', biome: 'Horror', name: 'THE HOLLOW MAN', color: 0xff2a4a },
-  { variant: 'shield', biome: 'Horror', name: 'MOSSBACK WARDEN', color: 0xb0c08a },
-  { variant: 'stegosaurus', biome: 'Psychedelic', name: 'THE SPORE QUEEN', color: 0xd45aff },
+  { variant: 'gorilla', biome: 'Canopy', name: 'THE CANOPY KING', color: 0x6adf4a },
+  { variant: 'dinosaur', biome: 'Canopy', name: 'ROOT TYRANT', color: 0x9bdf2a },
+  { variant: 'stegosaurus', biome: 'Canopy', name: 'BARKBACK', color: 0x4ab85a },
+  { variant: 'stormWraith', biome: 'Canopy', name: 'THE GALE OAK', color: 0x6a9aff },
+  { variant: 'charger', biome: 'Rootrot', name: 'THE KINDLING', color: 0xff6a2a },
+  { variant: 'infernal', biome: 'Rootrot', name: 'EMBER STAG', color: 0xff8a3a },
+  { variant: 'stalker', biome: 'Rootrot', name: 'THE HOLLOW MAN', color: 0xff2a4a },
+  { variant: 'shield', biome: 'Rootrot', name: 'MOSSBACK WARDEN', color: 0xb0c08a },
+  { variant: 'frozenStalker', biome: 'Understory', name: 'FROSTBARK', color: 0x6adfff },
+  { variant: 'stegosaurus', biome: 'Understory', name: 'THE SPORE QUEEN', color: 0xd45aff },
 ];
 const ASCENT_BOSSES = [
-  { variant: 'frozenStalker', biome: 'Frozen', name: 'THE RIME KING', color: 0x9adfff },
-  { variant: 'frozenStalker', biome: 'Frozen', name: 'GLACIER WIDOW', color: 0x6ab4da },
-  { variant: 'charger', biome: 'Inferno', name: 'THE AVALANCHE', color: 0xd89a4a },
-  { variant: 'shield', biome: 'Horror', name: 'STONE SENTINEL', color: 0x8f887c },
-  { variant: 'stalker', biome: 'Horror', name: 'THE CREVASSE', color: 0x4a4458 },
-  { variant: 'stormWraith', biome: 'Storm', name: "THE SUMMIT'S BREATH", color: 0x7aaaf0 },
-  { variant: 'gunner', biome: 'Storm', name: 'RIDGE SNIPER', color: 0x9adfff },
-  { variant: 'infernal', biome: 'Inferno', name: 'MAGMA VEIN', color: 0xff6a2a },
-  { variant: 'stegosaurus', biome: 'Psychedelic', name: 'THE PRISM WYRM', color: 0xb05aff },
-  { variant: 'dinosaur', biome: 'Jungle', name: "THE PEAK'S OLD BONES", color: 0xaecbe8 },
+  { variant: 'frozenStalker', biome: 'Summit', name: 'THE RIME KING', color: 0x9adfff },
+  { variant: 'frozenStalker', biome: 'Summit', name: 'GLACIER WIDOW', color: 0x6ab4da },
+  { variant: 'dinosaur', biome: 'Summit', name: "THE PEAK'S OLD BONES", color: 0xaecbe8 },
+  { variant: 'shield', biome: 'Cliffs', name: 'STONE SENTINEL', color: 0x8f887c },
+  { variant: 'stalker', biome: 'Cliffs', name: 'THE CREVASSE', color: 0x4a4458 },
+  { variant: 'stormWraith', biome: 'Cliffs', name: "THE SUMMIT'S BREATH", color: 0x7aaaf0 },
+  { variant: 'gunner', biome: 'Cliffs', name: 'RIDGE SNIPER', color: 0x9adfff },
+  { variant: 'charger', biome: 'Magma Core', name: 'THE AVALANCHE', color: 0xd89a4a },
+  { variant: 'infernal', biome: 'Magma Core', name: 'MAGMA VEIN', color: 0xff6a2a },
+  { variant: 'stegosaurus', biome: 'Magma Core', name: 'THE PRISM WYRM', color: 0xb05aff },
 ];
 const SKYFALL_BOSSES = [
-  { variant: 'stormWraith', biome: 'Storm', name: 'THE JETSTREAM', color: 0x7aaaf0 },
-  { variant: 'drone', biome: 'Storm', name: 'THE SQUALL', color: 0x9adfff },
-  { variant: 'bomber', biome: 'Storm', name: 'THUNDERHEAD', color: 0x6ab4ea },
-  { variant: 'gunner', biome: 'Storm', name: 'CLOUDBREAKER', color: 0xd8e8ff },
-  { variant: 'shield', biome: 'Horror', name: 'THE CUMULONIMBUS', color: 0x8f887c },
-  { variant: 'stalker', biome: 'Horror', name: 'THE VOID DRAFT', color: 0x4a4458 },
-  { variant: 'kaomoji', biome: 'Psychedelic', name: 'THE AURORA FACE', color: 0x5af0a8 },
-  { variant: 'prismWraith', biome: 'Psychedelic', name: 'THE PRISM GALE', color: 0xb05aff },
-  { variant: 'alien', biome: 'Psychedelic', name: 'SKYBORNE VISITOR', color: 0xd85aff },
-  { variant: 'raver', biome: 'Rave', name: 'DISCO ZEPHYR', color: 0xff5ad8 },
+  { variant: 'stormWraith', biome: 'Storm Band', name: 'THE JETSTREAM', color: 0x7aaaf0 },
+  { variant: 'drone', biome: 'Storm Band', name: 'THE SQUALL', color: 0x9adfff },
+  { variant: 'bomber', biome: 'Storm Band', name: 'THUNDERHEAD', color: 0x6ab4ea },
+  { variant: 'gunner', biome: 'Storm Band', name: 'CLOUDBREAKER', color: 0xd8e8ff },
+  { variant: 'kaomoji', biome: 'Clear Air', name: 'THE AURORA FACE', color: 0x5af0a8 },
+  { variant: 'prismWraith', biome: 'Clear Air', name: 'THE PRISM GALE', color: 0xb05aff },
+  { variant: 'alien', biome: 'Clear Air', name: 'SKYBORNE VISITOR', color: 0xd85aff },
+  { variant: 'shield', biome: 'Cloud Floor', name: 'THE CUMULONIMBUS', color: 0x8f887c },
+  { variant: 'stalker', biome: 'Cloud Floor', name: 'THE VOID DRAFT', color: 0x4a4458 },
+  { variant: 'raver', biome: 'Cloud Floor', name: 'DISCO ZEPHYR', color: 0xff5ad8 },
 ];
 const rentZoneForY = y => RENT_ZONES[y > TOP * 0.55 ? 0 : y > 0 ? 1 : 2];
 // NOSTALGIA OVERDOSE zones: also OUTSIDE ZONES (same reasons as RENT_ZONES). nos = severity 1..3: Sunset Strip (synthwave dusk, cassette platforms) ->
@@ -12715,6 +12717,41 @@ const NOS_BOSSES = [      // the 80s synth court. Variants are the new tape / CR
   { variant: 'popstar', biome: 'Arcade Overdrive', name: 'THE LAST ARPEGGIO', color: 0xff2bd6 },
 ];
 const nosZoneForY = y => NOS_ZONES[y > TOP * 0.55 ? 0 : y > 0 ? 1 : 2];
+// LEVELS 2-4's own 3-zone ladders (OVERGROWTH/ASCENT/SKYFALL_ZONES), same shape as RENT_ZONES/NOS_ZONES, kept OUTSIDE ZONES for the
+// same reason. Unlike RENT/NOS, these are read via `levelZones()` (not `themeZones()`), which is deliberately NOT wired into
+// moonless/below-zero/threshold-respawn logic, so these 3 levels keep the real moon/space column and the -1/-2 hell ladder.
+// They carry the new generic zone-mechanic flags added alongside `ice` (weakJump/lowGrav/thermal/wind) and an optional `decay`
+// severity (reuses the same crumble-roll boost mechanism as RENT_ZONES' `rent` field, see zoneCrumbleRoll below).
+const OVERGROWTH_ZONES = [
+  { name: 'Canopy',    desc: 'sunlit boughs high above the forest floor - the branches give less underfoot', top: '#061f0a', mid: '#0f5c1e', bot: '#5a9a2c', fog: 0x123a16, hemi: 0.68, hemiCol: 0x9fe07a, sun: 0.68, sunCol: 0xd8f08a, cloud: 0x1c4a22, plate: 0x7aff4a, weather: 'leaves', weakJump: true },
+  { name: 'Understory', desc: 'spore-light and hanging moss - the air itself is thinner down here', top: '#0a1208', mid: '#1c3a1a', bot: '#4a6a2e', fog: 0x16281a, hemi: 0.5, hemiCol: 0x8ad888, sun: 0.4, sunCol: 0xb8e08a, cloud: 0x1a2e1c, plate: 0x5aff8a, weather: 'spores', lowGrav: true },
+  { name: 'Rootrot',   desc: 'the roots go on forever and most of them have given up holding anything together', top: '#0c0603', mid: '#241408', bot: '#5a3a18', fog: 0x1e1208, hemi: 0.4, hemiCol: 0xa07850, sun: 0.32, sunCol: 0xc09050, cloud: 0x1a1008, plate: 0x8a5a2a, weather: 'ash', decay: 2 },
+];
+const ASCENT_ZONES = [
+  { name: 'Summit',    desc: 'black ice and thin air above the tree line - every ledge is slicker than it looks', top: '#02081a', mid: '#1a3a5a', bot: '#7ab8e0', fog: 0x1a3850, hemi: 0.6, hemiCol: 0xb0e0ff, sun: 0.55, sunCol: 0xe0f4ff, cloud: 0x2a4a68, plate: 0x9ae0ff, weather: 'snow', ice: true },
+  { name: 'Cliffs',    desc: 'bare rock faces and a crosswind that never stops pushing', top: '#0a0e14', mid: '#283038', bot: '#5a6470', fog: 0x242a30, hemi: 0.5, hemiCol: 0xaab4c0, sun: 0.42, sunCol: 0xd0dce8, cloud: 0x303840, plate: 0x8a9aaa, weather: 'rain', wind: true },
+  { name: 'Magma Core', desc: 'the mountain is hollow and it is on fire underneath - the heat slows your glide', top: '#140402', mid: '#5a1608', bot: '#c05a1a', fog: 0x3a1206, hemi: 0.55, hemiCol: 0xff9a4a, sun: 0.6, sunCol: 0xffb050, cloud: 0x4a1a0a, plate: 0xff6a2a, weather: 'embers', thermal: true },
+];
+const SKYFALL_ZONES = [
+  { name: 'Storm Band', desc: 'the clouds are solid here and furious about it - constant crosswind, lightning overhead', top: '#06081a', mid: '#1c2850', bot: '#4a5aa0', fog: 0x1a2448, hemi: 0.5, hemiCol: 0x9ab0f0, sun: 0.4, sunCol: 0xb8c8ff, cloud: 0x222a4a, plate: 0x6a8aff, weather: 'rain', wind: true, lightning: true },
+  { name: 'Clear Air',  desc: 'above the weather, where the air is thin and nothing weighs quite as much as it should', top: '#0a1830', mid: '#2a5a8a', bot: '#9adaf0', fog: 0x2a5068, hemi: 0.75, hemiCol: 0xcaf0ff, sun: 0.85, sunCol: 0xffffff, cloud: 0x3a6a90, plate: 0xaef0ff, weather: 'none', lowGrav: true },
+  { name: 'Cloud Floor', desc: 'the bottom of the sky - everything down here is soft enough to land on', top: '#14101e', mid: '#3a2e4a', bot: '#cabce0', fog: 0x2a2238, hemi: 0.7, hemiCol: 0xe8d8ff, sun: 0.6, sunCol: 0xf0e0ff, cloud: 0xd8c8ea, plate: 0xe0d0ff, weather: 'none' },
+];
+Object.assign(BIOME_ENEMIES, {
+  Canopy: ['dinosaur', 'gorilla', 'stegosaurus', 'frog', 'frog', 'charger'],
+  Understory: ['sporeling', 'sporeling', 'prismWraith', 'capBrute', 'prismWraith'],
+  Rootrot: ['roach', 'roach', 'spider', 'skeleton', 'charger'],
+  Summit: ['frozenStalker', 'frozenStalker', 'shield', 'walker', 'drone'],
+  Cliffs: ['stormWraith', 'stormWraith', 'gunner', 'shield', 'drone'],
+  'Magma Core': ['infernal', 'infernal', 'charger', 'gunner', 'bomber'],
+  'Storm Band': ['stormWraith', 'stormWraith', 'gunner', 'drone', 'bomber'],
+  'Clear Air': ['alien', 'alien', 'drone', 'ufo', 'kaomoji'],
+  'Cloud Floor': ['raver', 'raver', 'drone', 'kaomoji', 'kaomoji'],
+});
+// hub-order severity pick for levelZones(), same formula/shape as rentZoneForHub above.
+const levelZoneForHub = i => levelZones()[Math.min(2, Math.floor(Math.max(0, i) / (2 + (level >> 1))))];
+// generic crumble-roll boost keyed on a zone's own `decay` field (mirrors rentCrumbleRoll's `rent` tiers) - 0 for any zone without `decay`, so every existing level's odds are untouched.
+const zoneCrumbleRoll = zone => rand() < (zone && zone.decay ? [0.22, 0.42, 0.62][zone.decay - 1] : 0);
 // THE ARENAS: four ZONES-shaped palette objects kept OUTSIDE ZONES (same reason as RENT_ZONES / NOS_ZONES - appending would
 // change 'Lil Spasticism'). One tight dueling palette per chamber family, all weather:'none':
 //   Longest Yard  ->stral void: black void, starlight cyan plates, no floor, fall = death
@@ -12756,6 +12793,7 @@ const nosWalkRoll = zone => { const s = zone && zone.nos || 0, q = rand(); if (!
 function nosTear() { const b = document.body; b.classList.add('nos-tear'); setTimeout(() => b.classList.remove('nos-tear'), 430); }
 function pickAmbientZone(region = 0) {
   if (themeZones()) return themeZones()[2 - Math.min(2, Math.max(0, region | 0))];       // region rises with height, so region 0 (lowest) = Collections
+  if (levelZones()) return levelZones()[2 - Math.min(2, Math.max(0, region | 0))];
   const standard = ZONES.filter(zone => zone.name !== 'Psychedelic' && zone.name !== 'Jungle');
   if (level >= 5 && rand() < 0.004) return ZONES.find(zone => zone.name === 'Psychedelic');
   return biomeForRegion(level, region) || standard[(rand() * standard.length) | 0];
@@ -12771,7 +12809,7 @@ const zoneFor = idx => {
   if (themeZones()) { const Z = themeZones(); return idx <= -72 ? Z[2] : idx <= -24 ? Z[1] : idx < 3 ? (idx <= -3 ? Z[0] : null) : Z[0]; }      // Rent's Due: the further down the ladder, the worse it gets
   if (idx <= -1) return depthZoneFor(-idx);                                  // below platform 0: caves -> strictly hell / horror -> psychosis (never the surface biomes, never Kaomoji)
   if (idx < 3) return null;
-  const standardBiomes = ZONES.filter(zone => zone.name !== 'Psychedelic');
+  const standardBiomes = levelZones() || ZONES.filter(zone => zone.name !== 'Psychedelic');
   return standardBiomes[Math.floor((idx - 3) / 24) % standardBiomes.length];
 };
 const WEATHER = {
@@ -13090,11 +13128,11 @@ function updateEnv(dt, cp) {
 }
 // gameplay side-effects of the active zone / the surface underfoot
 const iceUnderfoot = () => onGround && standOn && standOn.zone && (standOn.zone.name === 'Frozen' || standOn.zone.ice);
-const jumpMul = () => (onVehicle ? (onVehicle.kind === 'buggy' ? 1.2 : 1.35) : 1) * (standOn && standOn.zone && standOn.zone.name === 'Jungle' ? 0.88 : 1) * (base && base.upgrades.jumpBoots ? 1.08 : 1) * (betweenOn() ? BETWEEN_JUMP_MUL : 1);
-const gravMul = () => (onVehicle && onVehicle.kind === 'bike' ? 0.55 : 1) * (activeZ && activeZ.name === 'Psychedelic' ? 0.7 : 1) * (psy.t > 0 && psy.kind === 'invert' ? 0.45 : 1) * (betweenOn() ? BETWEEN_GRAV_MULT : 1) * (1 - 0.65 * spaceK(pos.y));      // lighter and lighter the higher you climb
-const thermal = () => !!(activeZ && activeZ.name === 'Inferno');
+const jumpMul = () => (onVehicle ? (onVehicle.kind === 'buggy' ? 1.2 : 1.35) : 1) * (standOn && standOn.zone && (standOn.zone.name === 'Jungle' || standOn.zone.weakJump) ? 0.88 : 1) * (base && base.upgrades.jumpBoots ? 1.08 : 1) * (betweenOn() ? BETWEEN_JUMP_MUL : 1);
+const gravMul = () => (onVehicle && onVehicle.kind === 'bike' ? 0.55 : 1) * (activeZ && (activeZ.name === 'Psychedelic' || activeZ.lowGrav) ? 0.7 : 1) * (psy.t > 0 && psy.kind === 'invert' ? 0.45 : 1) * (betweenOn() ? BETWEEN_GRAV_MULT : 1) * (1 - 0.65 * spaceK(pos.y));      // lighter and lighter the higher you climb
+const thermal = () => !!(activeZ && (activeZ.name === 'Inferno' || activeZ.thermal));
 function envWind(dt) {
-  if (inInterior || !activeZ || activeZ.name !== 'Storm' || onGround || climbing) return;
+  if (inInterior || !activeZ || !(activeZ.name === 'Storm' || activeZ.wind) || onGround || climbing) return;
   const t = performance.now() / 1000;
   vel.x += Math.sin(t * 0.6) * 9 * dt; vel.z += Math.cos(t * 0.45) * 6 * dt;
 }
@@ -13260,7 +13298,7 @@ function ladderExtend(dir) {        // dir +1 = upward, -1 = downward
     for (let k = 0; k < 14; k++) {
       n += dir; if (n === 0) n = dir;                                                            // there is no #0: ... 2, 1, -1, -2 ...
       y += dir * (15 + R() * 8);
-      const a = R() * 6.283, r = Math.sqrt(R()) * 55, zone = (dir < 0 && n < 0 && !themeZones()) ? depthZoneFor(-n) : R() < 0.4 ? (themeZones() ? themeZones()[Math.floor(R() * 3)] : ZONES[Math.floor(R() * ZONES.length)]) : (themeZones() ? themeZones()[2] : null);
+      const a = R() * 6.283, r = Math.sqrt(R()) * 55, zone = (dir < 0 && n < 0 && !themeZones()) ? depthZoneFor(-n) : R() < 0.4 ? (themeZones() ? themeZones()[Math.floor(R() * 3)] : levelZones() ? levelZones()[Math.floor(R() * 3)] : ZONES[Math.floor(R() * ZONES.length)]) : (themeZones() ? themeZones()[2] : levelZones() ? levelZones()[2] : null);
       const sl = addSlab(ladderLoop.x + Math.cos(a) * r, y, ladderLoop.z + Math.sin(a) * r, 2.5 + R() * 4, 2.5 + R() * 4, 1.5, zone, true);
       sl.pn = n; ladder.push(sl); if (R() < 0.4) coin(sl.cx, y + 1.2, sl.cz, zone);
       if (dir > 0) ladderTop = { n, y }; else { ladderBot = { n, y }; VOID_Y = Math.min(VOID_Y, y - 60); }
