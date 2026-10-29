@@ -424,6 +424,22 @@ function nosPipeTick(dt) {
   pos.set(p.to.x, p.to.y + 0.05, p.to.z); vel.set(0, 0, 0); pipeCd = 1.2;
   shockRing(pos, 6, 0x3be05a); try { sfx.clear && sfx.clear(); } catch (_) {} toast('WARP!', 900);
 }
+// MARIO-STYLE PIRANHA PLANT: lives atop a subset of NOS warp pipes, periodically rises out of the opening and bites on contact (gated by nosOn() via nosPiranhas only ever being populated inside buildNosHighway)
+let nosPiranhas = [];
+function nosPiranhaTick(dt) {
+  if (!nosPiranhas.length) return;
+  const t = performance.now() / 1000;
+  for (const pr of nosPiranhas) {
+    const raise = Math.max(0, Math.sin(t * 0.8 + pr.phase));      // 0 = retracted in the pipe, 1 = fully risen
+    pr.mesh.position.y = pr.y + raise * 2.1;
+    pr.mesh.visible = raise > 0.02;
+    pr.up = raise > 0.55;
+    if (pr.up) {
+      const dx = pos.x - pr.x, dz = pos.z - pr.z;
+      if (dx * dx + dz * dz < 4.4 && Math.abs(pos.y - pr.mesh.position.y) < 2.2) hurt(1, pr.x, pr.z);
+    }
+  }
+}
 // OLD-SCHOOL EASTER EGGS (Nostalgia Overdose): ? blocks, Pac-Man dots, Zelda old man, Mega Man E-tank, animated Invaders/Pong billboards, Konami code
 let nosEggs = [], nosInvaders = [], nosKonamiI = 0, nosKonamiDone = false;
 const NOS_KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'KeyB', 'KeyA'];
@@ -5844,6 +5860,29 @@ function buildSkyfallNetwork(exitAngle) { return buildNetwork(exitAngle); }
     const sol = addSolid(x - 1.7, x + 1.7, y, y + 3.2, z - 1.7, z + 1.7); Object.assign(sol, { cx: x, cz: z, top: y + 3.2, pipe: true });
     const p = { x, y: y + 3.2, z, sol, to: null }; list.push(p); nosPipes.push(p); return p;
   }
+  // PIRANHA PLANT: sits inside a pipe's opening, rises/retracts on a sine cycle, bites on contact when up. Shared geometry/materials, ticked by nosPiranhaTick.
+  function nosPiranha(x, y, z) {
+    const d = nosDress(); if (!d.piranhaHead) { d.piranhaHead = new THREE.SphereGeometry(0.85, 8, 6); d.piranhaCollar = new THREE.ConeGeometry(1.05, 0.6, 8); d.piranhaHeadMat = new THREE.MeshBasicMaterial({ color: 0xff2a2a, toneMapped: false }); d.piranhaCollarMat = new THREE.MeshBasicMaterial({ color: 0x1fb53a, toneMapped: false }); }
+    const g = new THREE.Group(), head = new THREE.Mesh(d.piranhaHead, d.piranhaHeadMat), collar = new THREE.Mesh(d.piranhaCollar, d.piranhaCollarMat);
+    head.position.y = 0.95; collar.position.y = 0.1; g.add(collar, head); g.position.set(x, y, z); scene.add(g); g.userData.noCull = true;
+    nosPiranhas.push({ x, y, z, mesh: g, phase: rand() * 6.283, up: false });
+  }
+  // BONUS COIN ROOM: a secluded pocket off to the side of the road's start tower, reachable only by warping out of the road's final pipe. Coin ring + grid + a heart, with its own return pipe back to the road start.
+  function nosBonusRoom(slot, startX, startY, startZ) {
+    const bx = startX + 240, by = startY - 120, bz = startZ + 240, hw = 13, hd = 13;
+    const floor = addSolid(bx - hw, bx + hw, by - 2, by, bz - hd, bz + hd);
+    Object.assign(floor, { cx: bx, cz: bz, top: by, hw, hd, zone: NOS_ZONES[0], road: true, nosRoadChunk: true, bonus: true, universe: slot });
+    const fm = new THREE.Mesh(new THREE.BoxGeometry(hw * 2, 2, hd * 2), lam(0x1a0a2e)); fm.position.set(bx, by - 1, bz); scene.add(fm); fm.userData.noCull = true;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(hw * 0.82, 0.3, 6, 20), new THREE.MeshBasicMaterial({ color: 0xffe84a, toneMapped: false }));
+    ring.rotation.x = Math.PI / 2; ring.position.set(bx, by + 9, bz); scene.add(ring);
+    const label = makeLabel('BONUS ROOM'); label.position.set(bx, by + 7, bz); label.scale.set(10, 2.5, 1); scene.add(label); label.userData.noCull = true;
+    for (let i = 0; i < 16; i++) { const a = i / 16 * 6.283; coin(bx + Math.cos(a) * (hw - 3), by + 1.4, bz + Math.sin(a) * (hw - 3), NOS_ZONES[0], true); }
+    for (let gx = -1; gx <= 1; gx++) for (let gz = -1; gz <= 1; gz++) coin(bx + gx * 4, by + 1.4, bz + gz * 4, NOS_ZONES[0], true);
+    heart(bx, by + 1.6, bz);
+    const back = nosPipe(bx, by, bz - hd + 3, []);     // return pipe, kept out of the road's own pipeList so the sequential linking pass below doesn't touch it
+    back.to = { x: startX, y: startY + 0.3, z: startZ };
+    return { x: bx, y: by + 0.5, z: bz };
+  }
   // ---- easter-egg builders (shared geometry/materials, no textures; ticked by nosEggTick) ----
   function nosEggRes() {
     const d = nosDress(); if (d.egg) return d.egg;
@@ -6077,7 +6116,7 @@ function buildSkyfallNetwork(exitAngle) { return buildNetwork(exitAngle); }
       } else {                                            // flat segment = jump country
         if (rand() < 0.34 && zone.nos !== 3) { const p = at(0.5); addRail(p.x - Math.cos(bearing) * 6, p.z - Math.sin(bearing) * 6, cursor.y + 1.5, p.x + Math.cos(bearing) * 13, p.z + Math.sin(bearing) * 13, [0xff3fc8, 0x36f6ff, 0xffd23a][i % 3]); }      // kickers were removed entirely; flat segments keep only grind rails
       }
-      if (!dy && i % 3 === 0 && i > 0) { const p = at(0.05), s = i % 2 ? 1 : -1, pp = nosPipe(p.x + nxOf(bearing) * s * 6, cursor.y, p.z + nzOf(bearing) * s * 6, pipeList); if (i % 13 === 11) pp.wz = true; }
+      if (!dy && i % 3 === 0 && i > 0) { const p = at(0.05), s = i % 2 ? 1 : -1, pp = nosPipe(p.x + nxOf(bearing) * s * 6, cursor.y, p.z + nzOf(bearing) * s * 6, pipeList); if (i % 13 === 11) pp.wz = true; else if (i % 6 === 0) nosPiranha(pp.x, pp.y, pp.z); }
       if (!dy && i % 5 === 1) { const p = at(0.36); nosEggBlocks(p.x, cursor.y, p.z, bearing + Math.PI / 2, i % 10 === 1); }     // ? blocks (bearing + 90deg = across the road)
       if (!dy && i % 7 === 5) { const p = at(0.1); nosEggPac(p.x, cursor.y, p.z, bearing, 12); }
       if (!dy && i % 6 === 4) { const p = at(0.5), s = i % 2 ? 1 : -1, lx = nxOf(bearing) * s, lz = nzOf(bearing) * s; nosEggInvaders(p.x + lx * (width * 0.5 + 16), cursor.y + 10, p.z + lz * (width * 0.5 + 16), -lx, -lz, Math.cos(bearing), Math.sin(bearing)); }
@@ -6097,6 +6136,7 @@ function buildSkyfallNetwork(exitAngle) { return buildNetwork(exitAngle); }
       cursor = { x: seg.b.x, y: seg.b.y, z: seg.b.z };      // seg.b.y already includes this segment's drop
     }
     pipeList.forEach((p, k) => { p.to = pipeList[Math.min(k + 2, pipeList.length - 1)]; if (p.to === p) p.to = null; });
+    if (pipeList.length) { const last = pipeList[pipeList.length - 1]; if (!last.to) last.to = nosBonusRoom(slot, startX, startY, startZ); }      // fixes the "last pipe has no exit" gap: it now warps into the bonus coin room instead of dead-ending
     nosRetroFlush(nosRQ); nosRQ = null;
     return nosFinishPlaza(cursor, bearing, slot, hubs);   // FINISH plaza is the level-clear target
   }
@@ -6132,7 +6172,7 @@ function buildSkyfallNetwork(exitAngle) { return buildNetwork(exitAngle); }
   }
   function buildNosNetwork(exitAngle) {
     const hubs = activeStartHubs().map(home => ({ ...home }));
-    nosPipes = []; nosEggs = []; nosInvaders = []; nosKonamiI = 0; nosKonamiDone = false;
+    nosPipes = []; nosPiranhas = []; nosEggs = []; nosInvaders = []; nosKonamiI = 0; nosKonamiDone = false;
     nosRoadAudit.chunks = nosRoadAudit.totalLength =nosRoadAudit.arenas = nosRoadAudit.services = nosRoadAudit.traffic = 0; nosRoadAudit.gaps.length = 0; nosRoadAudit.hubs.length = 0;
     const active = activeStartHubs();
     let myFinish = null;
@@ -16871,7 +16911,7 @@ renderer.setAnimationLoop(now => {
   else if (state === 'play') { playerUpdate(dt); if (P) PERF.lap('player'); updateEnemies(dt); if (P) PERF.lap('enemies'); updateShots(dt); if (P) PERF.lap('shots'); }
   else if (state === 'dead') { deadT -= dt; if (deadT <= 0) respawn(); if (net.on) { updateEnemies(dt); updateShots(dt); } }
   else if (state === 'clear') { updateEnemies(dt); clearT -= dt; if (clearT <= 0) nextLevel(); }
-  updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); if (rentOn()) rentClockTick(dt); if (nosOn()) { nosPipeTick(dt); nosEggTick(dt); } evolveTick(dt); updateGrowers(dt); updateRoofArenas(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); goreFadeTick(dt); updateClouds(dt); updatePalaceMotion(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); if (betweenOn()) { updateWiring(dt); if (betweenWarpCd > 0) betweenWarpCd = Math.max(0, betweenWarpCd - dt); let bNear = null, bNd = Infinity; for (const b of betweenBeacons) { const bd = Math.hypot(pos.x - b.x, pos.z - b.z); if (bd < bNd) { bNd = bd; bNear = b; } } if (bNear) warp.pad = bNear.warpVis;
+  updateItems(dt); updateStreet(dt); if (P) PERF.lap('items+street'); updateMissions(dt); if (rentOn()) rentClockTick(dt); if (nosOn()) { nosPipeTick(dt); nosPiranhaTick(dt); nosEggTick(dt); } evolveTick(dt); updateGrowers(dt); updateRoofArenas(dt); dreadTick(dt); musicTick(dt); if (P) PERF.lap('missions+evolve+music'); updateLadderLabels(dt); updateFx(dt); updateGibs(dt); goreFadeTick(dt); updateClouds(dt); updatePalaceMotion(dt); if (P) PERF.lap('fx'); updateSpecials(dt); if (P) PERF.lap('specials'); if (betweenOn()) { updateWiring(dt); if (betweenWarpCd > 0) betweenWarpCd = Math.max(0, betweenWarpCd - dt); let bNear = null, bNd = Infinity; for (const b of betweenBeacons) { const bd = Math.hypot(pos.x - b.x, pos.z - b.z); if (bd < bNd) { bNd = bd; bNear = b; } } if (bNear) warp.pad = bNear.warpVis;
     // --- BEACON MECHANICS (Phase 1) ---
     // Grounding anchor: standing in beacon light resets sanity (sanity system in Phase 2+)
     // For now, mark beacon as touched and handle corruption/fast-travel/downed state
