@@ -410,9 +410,10 @@ let TOP = 190;            // roof height of the tower (grows each level)
 let level = 1;
 // LEVEL DEFINITION: which selectable level is live. 'descent' (Lil Spasticism) is the original game and every gate below is a no-op for it.
 // Set by LEVELS[i].startFn before buildLevel(); everything level-specific is gated on rentOn() / levelDef.id so the default level is unchanged.
-const LEVEL_DEFS = { descent: { id: 'descent' }, rent: { id: 'rent' }, nos: { id: 'nos' }, gut: { id: 'gut' }, arena: { id: 'arena' }, between: { id: 'between' } };
+const LEVEL_DEFS = { descent: { id: 'descent' }, rent: { id: 'rent' }, nos: { id: 'nos' }, gut: { id: 'gut' }, arena: { id: 'arena' }, between: { id: 'between' }, overgrowth: { id: 'overgrowth' } };
 let levelDef = LEVEL_DEFS.descent;
 const rentOn = () => levelDef.id === 'rent';
+const overgrowthOn = () => levelDef.id === 'overgrowth';   // LEVEL 2 "The Overgrowth": same descent/moon/hell-platform skeleton as 'descent', just a forest reskin + its own 6 dungeons — NOT in themeZones() below, so it keeps the real moon/space (unlike rent/nos/gut)
 let nosPipes = [], pipeCd = 0, pipeHeld = true;                                  // Nostalgia Overdose warp pipes (rebuilt with the level)
 function nosPipeTick(dt) {
   pipeCd -= dt; const held = !!(keys.KeyC || keys.ControlLeft), fresh = held && !pipeHeld; pipeHeld = held;      // warp needs a fresh press: holding crouch must not chain through the pipes
@@ -3483,6 +3484,21 @@ const SHROOM_KINDS = ['sporeling', 'prismWraith', 'capBrute'];
 const BONE_KINDS = ['skeleton', 'cryptGhost', 'zombie'];          // the Ossuary garrison: same horror walkers, bone-white livery
 const BUBBLE_KINDS = ['kaomoji', 'alien', 'raver'];               // the Fizz garrison: same families, soapsud palettes
 const DUCK_KINDS = ['duck'];                                      // the Eiffel garrison: canard patrol
+// LEVEL 2 "THE OVERGROWTH" — 6 forest-themed pure-descent dungeons, same commonsMidBuild/farDungeon/farMonument
+// framework as Lvl1's bone/bubble/eiffel (see the overgrowthOn() branch near the top of commonsMidBuild), own
+// theme set only: no new AI, kinds below are all existing WALKER_STATS variants.
+const ROOTHOLLOW_ZONE = { name: 'RootHollow', desc: 'a hollow under the roots, thick with soil and old growth', top: '#2a1c0e', mid: '#4a3418', bot: '#6b5228', fog: 0x3a2a14, hemi: 0.68, hemiCol: 0xc8a868, sun: 0.7, sunCol: 0xe0b878, cloud: 0x5a4420, plate: 0x8a6a2a, weather: 'none' };
+const BEASTNEST_ZONE = { name: 'BeastNest', desc: 'matted fur, old bones, and a den that is very much still used', top: '#241408', mid: '#5a3214', bot: '#a8601c', fog: 0x4a280e, hemi: 0.6, hemiCol: 0xd89a5a, sun: 0.65, sunCol: 0xff9a3a, cloud: 0x6a3c18, plate: 0xc87a2a, weather: 'none' };
+const SUNKENSTUMP_ZONE = { name: 'SunkenStump', desc: 'a rotten giant stump, half-flooded, thick with moss', top: '#081c14', mid: '#143a28', bot: '#2a6248', fog: 0x0e2a1c, hemi: 0.58, hemiCol: 0x6ac89a, sun: 0.5, sunCol: 0x8ae8b8, cloud: 0x1c4a32, plate: 0x3a9a6a, weather: 'none' };
+const SPOREVAULT_ZONE = { name: 'SporeVault', desc: 'a cathedral of fungus, spores drifting in shafts of light', top: '#1a0c24', mid: '#3a1a52', bot: '#7a3aa8', fog: 0x2a1240, hemi: 0.7, hemiCol: 0xc89aff, sun: 0.62, sunCol: 0xe0b8ff, cloud: 0x4a2270, plate: 0xb05aff, weather: 'none' };
+const CANOPYTEMPLE_ZONE = { name: 'CanopyTemple', desc: 'a stone shrine swallowed by leaves, sun-dappled and silent', top: '#0a2410', mid: '#1c4a20', bot: '#4a8a3a', fog: 0x143a18, hemi: 0.74, hemiCol: 0x9adf7a, sun: 0.78, sunCol: 0xd8e878, cloud: 0x2c5a28, plate: 0x6ac84a, weather: 'none' };
+const HORNETSHIVE_ZONE = { name: 'HornetsHive', desc: 'a vast paper comb, humming, every cell a little door', top: '#1c1404', mid: '#4a3408', bot: '#a87a14', fog: 0x3a2a08, hemi: 0.64, hemiCol: 0xe8c858, sun: 0.72, sunCol: 0xffd82a, cloud: 0x5a4210, plate: 0xe8a81a, weather: 'none' };
+const ROOTHOLLOW_KINDS = ['gorilla', 'dinosaur', 'charger'];
+const BEASTNEST_KINDS = ['dinosaur', 'stegosaurus', 'gorilla'];
+const SUNKENSTUMP_KINDS = ['frog', 'frog', 'gorilla'];
+const SPOREVAULT_KINDS = ['sporeling', 'capBrute', 'prismWraith'];
+const CANOPYTEMPLE_KINDS = ['gorilla', 'frog', 'stegosaurus'];
+const HORNETSHIVE_KINDS = ['drone', 'bomber', 'gunner'];
 let midWins = { maw: false, nex: false, oss: false, fizz: false };        // survives commons rebuilds (per level); re-fighting a boss re-grants nothing
 let midGen = 0;                                  // debug: which mid-site state instance is live right now
 const palaceMotions = [];
@@ -3536,38 +3552,7 @@ function updatePalaceMotion(dt) {
     }
   }
 }
-function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubbleNode, eiffelNode) {
-  if (!commons) return;
-  const sites = {};
-  // FAR-LANDS (2026-10-26): the three sites are no longer ring-side spurs — each is its own far land ~0.95–1.1 km out
-  // along its spoke's bearing (the band where the far skyline towers live, well past the universe ring at 600), still in
-  // the mid-band height range. Reaching one is THE JOURNEY: connectFar chains a full stepping-stone causeway back to
-  // the launch ring (rest island, checkpoints, ammo/hearts, garrison, coins), each land keeps its local approach
-  // (flesh terraces / front-door steps / rabbit-hole discs), and each keeps its own unique boss + reward.
-  // farAnchor tries a couple of radii/angle nudges for open air; the ladder ends at the legacy near-ring spot so a
-  // crowded world can still fall back to the old spur layout unchanged.
-  const MID_DIST = { nest: 2200, house: 1850, shroom: 2500, bone: 2050, bubble: 2650, eiffel: 2350 };  // much further out than before (was a tight 1010-1140 band) so the dungeons genuinely spread across the map
-  const ELEV = { nest: 0, house: 190, shroom: -190, bone: 110, bubble: -150, eiffel: 200 };            // distinct absolute height offsets so the six lands sit at different elevations relative to each other, not just different compass bearings (connectFar's causeway can climb/descend up to ~200 units safely — kept each offset under that cap so the causeway back to spawn stays reliable)
-  const farAnchor = (node, key) => {
-    if (!node) return null;
-    const D0 = MID_DIST[key];
-    for (const [D, da] of [[D0, 0], [D0, 0.22], [D0, -0.22], [D0 + 80, 0.12], [D0 - 80, -0.12], [D0 + 160, 0], [0, 0]]) {
-      const a = node.a + da, X0 = D ? CX + Math.cos(a) * D : node.x, Z0 = D ? CZ + Math.sin(a) * D : node.z;
-      if (blocked(X0, node.y, Z0, 42)) continue;
-      if (buildingHubs.length && buildingHubs.some(h => Math.hypot(X0 - h.x, Z0 - h.z) < h.hw + 30)) continue;   // keep a gap to skyline hubs too (towerWindowCheck eats footprints); real shield is the FAR LANDS GATE in towerWindowCheck
-      if (D) console.log(`[mids] ${key} land anchored far: D=${Math.round(D)} da=${da.toFixed(2)}`);
-      return { a, X0, Z0, y0: node.y, far: !!D };
-    }
-    return { a: node.a, X0: node.x, Z0: node.z, y0: node.y, far: false };   // legacy spur fallback
-  };
-  const connectMid = (node, tx, tz, ty, zone, hw, hd) => {
-    const A = { x: node.x, z: node.z, top: node.y, hw: 8, hd: 8, zone };
-    const B = { x: tx, z: tz, top: ty, hw, hd, zone };
-    let ok = false;
-    for (let retry = 0; retry < 2 && !ok; retry++) ok = connectFar(A, B);
-    if (!ok) console.log('[mids] far causeway to', zone.name, 'found no clear line — the land still sits on its spoke past the skyline');
-  };
-  const farMonument = (kind, gx, gz, gy) => {         // discovery monument per far land: skyscraper scale (2x). noCull keeps every mesh rendering (never frustum/distance-culled) so it still exists once reached, but the bulk materials respect scene.fog (unlike the old "spawn-visible landmark" design) so the structure fades into the mist at range — found by exploring, not spotted 360° from spawn. Small glow accents keep fog:false, so a hint of light can still be seen from further out.
+function farMonument(kind, gx, gz, gy, CX, CZ) {         // discovery monument per far land: skyscraper scale (2x). noCull keeps every mesh rendering (never frustum/distance-culled) so it still exists once reached, but the bulk materials respect scene.fog (unlike the old "spawn-visible landmark" design) so the structure fades into the mist at range — found by exploring, not spotted 360° from spawn. Small glow accents keep fog:false, so a hint of light can still be seen from further out. Pulled to module scope (2026-10-29) so new levels can reuse it for their own dungeon exteriors; CX/CZ (the commons/level centre it should face) are now explicit params instead of a closure read.
     const yaw = Math.atan2(CX - gx, CZ - gz);         // built facing the commons center so the money side is what spawn sees
     const g = new THREE.Group(); g.position.set(gx, gy, gz); g.rotation.y = yaw;
     if (kind === 'pussy') g.scale.set(2.4, 2.3, 2.25); else g.scale.setScalar(2);
@@ -3846,6 +3831,82 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
       }
       const moat = M(new THREE.TorusGeometry(70, 2.4, 6, 20), glassM, 0, 60, 0);
       moat.rotation.x = Math.PI / 2;                    // a suds ring around the base
+    } else if (kind === 'roothollow') {                 // LEVEL 2 dungeon: a colossal tree base, roots arching out of the ground over a dark hollow mouth
+      const bark = lamF(0x5a3c1c, 0x241408, 0.26), barkDeep = lamF(0x3a2610, 0x140a04, 0.22), moss = lamF(0x5a8a3a, 0x1a3a10, 0.3);
+      M(cy2, bark, 0, 130, 0, 46, 260, 46, 0, 0.02);     // the trunk itself, skyscraper-tall
+      M(sp2, bark, 0, 10, 0, 62, 24, 62);                // broad root crown at the base
+      for (let i = 0; i < 7; i++) {                      // arching buttress roots, each a bent tube reaching into the ground
+        const a = i * Math.PI * 2 / 7;
+        const curve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(Math.cos(a) * 20, 40, Math.sin(a) * 20), new THREE.Vector3(Math.cos(a) * 55, 14, Math.sin(a) * 55),
+          new THREE.Vector3(Math.cos(a) * 78, -2, Math.sin(a) * 78), new THREE.Vector3(Math.cos(a) * 92, -8, Math.sin(a) * 92),
+        ]);
+        const root = new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 5.2, 6, false), i % 2 ? bark : barkDeep); root.userData.noCull = true; g.add(root);
+      }
+      M(sp2, moss, 0, 160, 0, 48, 20, 48);               // a mossy collar partway up the trunk
+      for (let i = 0; i < 10; i++) { const a = i * Math.PI * 2 / 10; M(sp2, moss, Math.cos(a) * 44, 158 + (i % 3) * 6, Math.sin(a) * 44, 5 + (i % 3), 4, 5 + (i % 3)); }
+      const hollow = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), glow(0x0a0804));
+      hollow.scale.set(13, 24, 9); hollow.position.set(0, 24, 40); hollow.rotation.x = Math.PI; g.add(hollow);   // the hollow mouth into the dungeon
+      M(cn2, barkDeep, 0, 250, 0, 20, 36, 20);           // a broken crown where the canopy was sheared off
+    } else if (kind === 'beastnest') {                  // LEVEL 2 dungeon: a vast woven den of branches, fur and bone, up in the fork of a dead tree
+      const twig = lamF(0x6a4a24, 0x2a1a0c, 0.24), fur = lamF(0x8a6038, 0x3a2410, 0.22), boneM = lamF(0xd8cdb0, 0x5a5240, 0.2);
+      M(cy2, twig, 0, 90, 0, 22, 180, 22, 0, 0.03);      // the dead trunk the nest is built around
+      M(sp2, fur, 0, 150, 0, 70, 46, 70);                // the woven nest mass itself — a huge lumpy sphere
+      for (let i = 0; i < 24; i++) {                     // sticking-out branch ends, radiating from the nest mass
+        const a = i * 2.399, r = 50 + (i % 4) * 7, y = 128 + (i % 5) * 9;
+        const stick = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 0.4, 16 + (i % 3) * 4, 5), twig);
+        stick.position.set(Math.cos(a) * r, y, Math.sin(a) * r); stick.rotation.set(Math.sin(a) * 0.6, a, Math.cos(a) * 0.6); stick.userData.noCull = true; g.add(stick);
+      }
+      for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; M(cn2, boneM, Math.cos(a) * 36, 118, Math.sin(a) * 36, 2.4, 14, 2.4, 0, Math.PI); }   // a ring of jawbone-like spikes guarding the rim
+      M(sp2, glow(0x241206), 0, 150, 42, 16, 20, 11);     // the dark entrance burrow into the nest
+    } else if (kind === 'sunkenstump') {                // LEVEL 2 dungeon: a drowned giant stump, moss and fungus swallowing the waterlogged wood
+      const wetWood = lamF(0x2a3a1a, 0x0e1608, 0.26), rot = lamF(0x1a2a10, 0x060c04, 0.24), fungus = lamF(0xd8e868, 0x5a6a1a, 0.4);
+      M(cy2, wetWood, 0, 90, 0, 58, 180, 58);            // the sawn-off stump, wider than it is tall
+      M(cy2, rot, 0, 182, 0, 50, 10, 50);                // the ragged top rim
+      for (let ring = 0; ring < 3; ring++) {              // tree rings etched into the bark as it climbs
+        M(new THREE.TorusGeometry(58.3, 1.2, 5, 24), rot, 0, 30 + ring * 50, 0).rotation.x = Math.PI / 2;
+      }
+      for (let i = 0; i < 9; i++) {                       // bracket fungus shelving up the side
+        const a = i * Math.PI * 2 / 9, y = 30 + (i % 4) * 36;
+        M(new THREE.ConeGeometry(0.5, 1, 6), fungus, Math.cos(a) * 58, y, Math.sin(a) * 58, 6 + (i % 3) * 2, 2.2, 5).rotation.z = a + Math.PI / 2;
+      }
+      const flood = new THREE.Mesh(new THREE.CylinderGeometry(42, 42, 0.4, 20), new THREE.MeshBasicMaterial({ color: 0x1a3a2a, transparent: true, opacity: 0.55, toneMapped: false }));
+      flood.position.set(0, 184, 0); flood.userData.noCull = true; g.add(flood);   // the flooded hollow pooled at the broken top
+    } else if (kind === 'sporevault') {                 // LEVEL 2 dungeon: a towering puffball/fungus spire, spores drifting off it in a slow haze
+      const capM = lamF(0xa85ad8, 0x3a1a52, 0.34), stemM = lamF(0xd8c8f0, 0x5a4a78, 0.22), sporeM = new THREE.MeshBasicMaterial({ color: 0xd8a8ff, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false });
+      M(cy2, stemM, 0, 100, 0, 20, 200, 20);              // tall pale stalk
+      M(sp2, capM, 0, 210, 0, 56, 70, 56);                // the huge bulbous puffball cap
+      for (let i = 0; i < 14; i++) {                      // warty spore pods studding the cap
+        const a = i * 0.449 + i, r = 30 + (i % 4) * 7, y = 170 + (i % 5) * 15;
+        M(sp2, capM, Math.cos(a) * r, y, Math.sin(a) * r, 9 + (i % 3) * 2, 9 + (i % 3) * 2, 9 + (i % 3) * 2);
+      }
+      for (let i = 0; i < 20; i++) { const a = rand() * 6.283, r = 40 + rand() * 40, y = 180 + rand() * 90; M(sp2, sporeM, Math.cos(a) * r, y, Math.sin(a) * r, 2 + rand() * 2, 2 + rand() * 2, 2 + rand() * 2); }   // drifting spore haze
+    } else if (kind === 'canopytemple') {               // LEVEL 2 dungeon: an ancient stone shrine buried in canopy, vines and a leafy dome roof
+      const stoneM = lamF(0x6a7a58, 0x24301c, 0.24), mossM = lamF(0x4a8a3a, 0x1a3a10, 0.28), leafM = lamF(0x3ac84a, 0x12480e, 0.4);
+      M(bx2, stoneM, 0, 80, 0, 52, 160, 52);              // the squat ruined keep
+      M(bx2, mossM, 0, 160, 0, 60, 6, 60);                // a mossy cornice band
+      for (const [tx, tz, h] of [[-38, -38, 110], [38, -38, 110], [-38, 38, 110], [38, 38, 110]]) { M(cy2, stoneM, tx, h / 2, tz, 11, h, 11); M(sp2, leafM, tx, h + 10, tz, 14, 14, 14); }   // four leaf-capped corner columns
+      M(new THREE.SphereGeometry(1, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), leafM, 0, 164, 0, 60, 46, 60);   // the canopy dome roof
+      for (let i = 0; i < 10; i++) {                      // hanging vines off the eaves
+        const a = i * Math.PI * 2 / 10, len = 20 + (i % 4) * 8;
+        const vine = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.25, len, 5), mossM);
+        vine.position.set(Math.cos(a) * 54, 150 - len / 2, Math.sin(a) * 54); vine.userData.noCull = true; g.add(vine);
+      }
+    } else if (kind === 'hornetshive') {                // LEVEL 2 dungeon: a vast papery wasp-nest tower, banded amber and black, a dark comb entrance
+      const paperM = lamF(0xd8a81a, 0x5a3c08, 0.3), paperDark = lamF(0x8a6410, 0x2a1a04, 0.26), stripe = lamF(0x201808, 0x0a0602, 0.2);
+      M(sp2, paperM, 0, 80, 0, 46, 100, 46);               // lower comb bulge
+      M(sp2, paperDark, 0, 170, 0, 38, 90, 38);            // mid comb bulge, narrowing
+      M(sp2, paperM, 0, 250, 0, 26, 60, 26);               // upper comb bulge, tapering to a point
+      for (let ring = 0; ring < 5; ring++) {               // banded stripes climbing the hive
+        const y = 40 + ring * 46, r = 46 - ring * 4;
+        M(new THREE.TorusGeometry(r, 2.2, 5, 22), stripe, 0, y, 0).rotation.x = Math.PI / 2;
+      }
+      for (let i = 0; i < 40; i++) {                       // hex comb cell dimples over the surface
+        const a = rand() * 6.283, h = rand(), r = 46 - h * 20, y = 30 + h * 220;
+        M(new THREE.CylinderGeometry(2.2, 2.2, 0.6, 6), paperDark, Math.cos(a) * r, y, Math.sin(a) * r);
+      }
+      const hole = new THREE.Mesh(new THREE.CircleGeometry(10, 12), glow(0x140e02));
+      hole.position.set(0, 80, 45.9); hole.rotation.y = 0; g.add(hole);   // the dark comb entrance
     } else {                                           // fairytale mushroom: ivory gills, a russet cap, and cream spots
       const stem2 = lamF(0xe8d8bb, 0x65513c, 0.24), cap2 = lamF(0xb9474f, 0x5a1727, 0.28);
       const capY = 220, capRadius = 82, capHeight = 48;
@@ -3867,30 +3928,10 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
         band.position.set(0, y, 0); g.add(band);
       }
     }
-  };
-  const seedLeadChain = (key, sx, sz) => {               // THE OUTRIDERS: the dungeon garrison also holds the causeway platforms leading up to the site — not just the boss land itself
-    const cn = commons || { x: CX, z: CZ };
-    const dx = cn.x - sx, dz = cn.z - sz, dl = Math.hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl;
-    const lead = solids.filter(q => q.cx !== undefined && !q.bounce && !q.arena && !q.interior && !q.sp && !q.grp
-      && Math.hypot(q.cx - sx, q.cz - sz) < 240                                                                          // within the site's visibility radius
-      && ((q.cx - sx) * ux + (q.cz - sz) * uz) / Math.max(10, Math.hypot(q.cx - sx, q.cz - sz)) > 0.5)                   // roughly between the site and the commons (the lead-in arc)
-      .sort((a, b) => Math.hypot(b.cx - sx, b.cz - sz) - Math.hypot(a.cx - sx, a.cz - sz)).slice(0, 6);                  // farthest (nearest the commons) first: the approach is covered end to end
-    if (sites[key]) sites[key].lead = lead;
-    return lead;
-  };
-  const outriderFor = (key, sl) => {                     // the same unit kinds as the site garrison, stationed on a lead-in platform
-    if (!sl) return null;
-    const cx0 = Number.isFinite(sl.cx) ? sl.cx : Number.isFinite(sl.x) ? sl.x : null;
-    const cz0 = Number.isFinite(sl.cz) ? sl.cz : Number.isFinite(sl.z) ? sl.z : null;
-    if (cx0 === null || cz0 === null || !Number.isFinite(sl.top)) return null;
-    const a = rand() * 6.283, r = 2 + rand() * 3;
-    if (key === 'nest') return spawnNestEnemy(cx0 + Math.cos(a) * r, sl.top + 0.4, cz0 + Math.sin(a) * r, sl);
-    if (key === 'shroom') { const e = spawnBiomeEnemy(cx0 + Math.cos(a) * r, sl.top + 0.3, cz0 + Math.sin(a) * r, sl, sl.zone || PSY_ZONE, 1, 1); if (e) { e.midGuard = 'shroom'; e.neverDespawn = true; } return e; }
-    const e = makeWalker(cx0 + Math.cos(a) * r, sl.top + 0.4, cz0 + Math.sin(a) * r, sl, 1, false, HORROR_KINDS[(rand() * HORROR_KINDS.length) | 0]);
-    e.midGuard = 'house'; e.neverDespawn = true; return e;
-  };
-  const farDungeon = (key, site, mon, zone, col, deckLocal, botLocal, discR) => {   // THE DEEP RUN: a climbable spiral of hop-steps winds up the outside of the monument to a door deck,
-    const sn = sites[key]; if (!sn || !mon) return;                                 // then a full interior descent of hop-discs drops to the boss vault at the very bottom
+}
+
+function farDungeon(key, sn, site, mon, zone, col, deckLocal, botLocal, discR) {   // THE DEEP RUN: a climbable spiral of hop-steps winds up the outside of the monument to a door deck, then a full interior descent of hop-discs drops to the boss vault at the very bottom. Pulled to module scope (2026-10-29), `sn` (the caller's site-state object, e.g. sites[key]) is now an explicit param instead of a closure read, so new levels can reuse this verbatim for their own dungeons.
+    if (!sn || !mon) return;                                 // then a full interior descent of hop-discs drops to the boss vault at the very bottom
     const gx = mon.x, gz = mon.z, base = mon.base;
     const deckY = base + deckLocal * (mon.scaleY || 2), botY = base + botLocal;     // deck follows the monument's actual vertical scale
     sn.shaft = []; sn.slabs = sn.slabs || []; sn.bot = null;
@@ -3917,7 +3958,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
     const tag = makeLabel(label); tag.position.set(x, y + 2.8, z); tag.scale.set(8.5, 2.1, 1); tag.userData.noCull = true; scene.add(tag);
     return dot;
   };
-  const routeHeading = makeLabel(key === 'nest' ? 'GIANT NEST · FOLLOW THE GLOW TO THE VAULT' : key === 'house' ? 'HAUNTED KEEP · CLIMB THE SPIRE, DESCEND INSIDE' : key === 'bone' ? 'BONE CATHEDRAL · CLIMB THE BUTTRESSES, DESCEND THE OSSUARY' : key === 'bubble' ? 'BUBBLE CITADEL · CLIMB THE DOME, SINK INTO THE FIZZ' : key === 'eiffel' ? 'THE EIFFEL CANARD · CLIMB THE TOWER, DESCEND THE CELLAR' : 'GRAND SHROOM · CLIMB THE STEM, DESCEND WITHIN');
+  const routeHeading = makeLabel(key === 'nest' ? 'GIANT NEST · FOLLOW THE GLOW TO THE VAULT' : key === 'house' ? 'HAUNTED KEEP · CLIMB THE SPIRE, DESCEND INSIDE' : key === 'bone' ? 'BONE CATHEDRAL · CLIMB THE BUTTRESSES, DESCEND THE OSSUARY' : key === 'bubble' ? 'BUBBLE CITADEL · CLIMB THE DOME, SINK INTO THE FIZZ'  : key === 'roothollow' ? 'ROOT HOLLOW · CLIMB THE ROOTS, DESCEND THE HOLLOW' : key === 'beastnest' ? "BEAST'S NEST · CLIMB THE BOUGHS, DESCEND THE DEN" : key === 'sunkenstump' ? 'SUNKEN STUMP · CLIMB THE RINGS, DESCEND THE FLOOD' : key === 'sporevault' ? 'SPORE VAULT · CLIMB THE STALK, DESCEND THE BLOOM' : key === 'canopytemple' ? 'CANOPY TEMPLE · CLIMB THE VINES, DESCEND THE SHRINE' : key === 'hornetshive' ? "HORNET'S HIVE · CLIMB THE COMB, DESCEND THE SWARM": key === 'eiffel' ? 'THE EIFFEL CANARD · CLIMB THE TOWER, DESCEND THE CELLAR' : 'GRAND SHROOM · CLIMB THE STEM, DESCEND WITHIN');
   routeHeading.position.set(site.x, site.y + 20, site.z); routeHeading.scale.set(20, 4.6, 1); routeHeading.userData.noCull = true; scene.add(routeHeading);
     const wallClearR = shellHalf + 12, innerEndR = discR + 16;   // innerEndR unchanged from before: lands the climb right next to the deck slab
     const baseR = Math.max(r0 + 40, discR + 30, wallClearR + 1);
@@ -3932,7 +3973,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
 
       addRail(px, pz, py + 1.35, sx, sz, col, sy + 1.35, false);
       if (k % 7 === 1) addDashPad(px, py, pz, sx - px, sz - pz);        if (k % 16 === 8) {
-          const sign = makeLabel(key === 'house' ? 'GOTHIC KEEP · CLIMB ↑' : key === 'nest' ? 'GIANT PUSSY · CLIMB ↑' : key === 'bone' ? 'BONE CATHEDRAL · CLIMB ↑' : key === 'bubble' ? 'BUBBLE CITADEL · CLIMB ↑' : key === 'eiffel' ? 'THE EIFFEL CANARD · CLIMB ↑' : 'GRAND SHROOM · CLIMB ↑');
+          const sign = makeLabel(key === 'house' ? 'GOTHIC KEEP · CLIMB ↑' : key === 'nest' ? 'GIANT PUSSY · CLIMB ↑' : key === 'bone' ? 'BONE CATHEDRAL · CLIMB ↑' : key === 'bubble' ? 'BUBBLE CITADEL · CLIMB ↑'  : key === 'roothollow' ? 'ROOT HOLLOW · CLIMB ↑' : key === 'beastnest' ? "BEAST'S NEST · CLIMB ↑" : key === 'sunkenstump' ? 'SUNKEN STUMP · CLIMB ↑' : key === 'sporevault' ? 'SPORE VAULT · CLIMB ↑' : key === 'canopytemple' ? 'CANOPY TEMPLE · CLIMB ↑' : key === 'hornetshive' ? "HORNET'S HIVE · CLIMB ↑": key === 'eiffel' ? 'THE EIFFEL CANARD · CLIMB ↑' : 'GRAND SHROOM · CLIMB ↑');
           sign.position.set(sx, sy + 7, sz); sign.scale.set(10, 2.5, 1); sign.userData.noCull = true; scene.add(sign);
         }
         if (k % 8 === 1) pathCue(sx, sy + 1.8, sz, 'CLIMB ↑', 1.2);
@@ -3946,7 +3987,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
       const dk = addSlab(gx, deckY, gz, deckR, deckR, 2.2, zone, true);
       sn.slabs.push(dk);
       addRail(px, pz, py + 1.35, gx, gz, col, deckY + 1.35, false);
-      const dlbl = makeLabel(key === 'nest' ? 'ENTER THE DEEP HEAT · DESCEND ↓' : key === 'house' ? 'HAUNTED HOUSE · ENTER HERE · DOWN ↓' : key === 'bone' ? 'OSSUARY DOOR · ENTER HERE · DOWN ↓' : key === 'bubble' ? 'SOAPSUD ENTRY · DOWN ↓' : key === 'eiffel' ? 'ENTREZ ICI · DOWN ↓' : 'RABBIT STEM · DESCEND ↓');
+      const dlbl = makeLabel(key === 'nest' ? 'ENTER THE DEEP HEAT · DESCEND ↓' : key === 'house' ? 'HAUNTED HOUSE · ENTER HERE · DOWN ↓' : key === 'bone' ? 'OSSUARY DOOR · ENTER HERE · DOWN ↓' : key === 'bubble' ? 'SOAPSUD ENTRY · DOWN ↓'  : key === 'roothollow' ? 'ROOT HOLLOW · ENTER HERE · DOWN ↓' : key === 'beastnest' ? "BEAST'S NEST · ENTER HERE · DOWN ↓" : key === 'sunkenstump' ? 'SUNKEN STUMP · ENTER HERE · DOWN ↓' : key === 'sporevault' ? 'SPORE VAULT · ENTER HERE · DOWN ↓' : key === 'canopytemple' ? 'CANOPY TEMPLE · ENTER HERE · DOWN ↓' : key === 'hornetshive' ? "HORNET'S HIVE · ENTER HERE · DOWN ↓": key === 'eiffel' ? 'ENTREZ ICI · DOWN ↓' : 'RABBIT STEM · DESCEND ↓');
       dlbl.position.set(gx, deckY + 6, gz); dlbl.scale.set(13, 3.2, 1); dlbl.userData.noCull = true; scene.add(dlbl);
       pathCue(gx, deckY + 2.2, gz, 'ENTRY · DOWN ↓', 1.5);
       var prev = { x: gx, z: gz, y: deckY };
@@ -3978,11 +4019,11 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
             : key === 'nest' ? ['RIBCAGE CHAPEL', 'BROOD CHAMBER']
             : key === 'bone' ? ['RELIC GALLERY', 'OSSUARY STACKS']
             : key === 'bubble' ? ['SODA PARLOUR', 'FOAM GALLERY']
-            : key === 'eiffel' ? ['CAFÉ TERRACE', 'POND AVIARY'] : ['MOONCAP GALLERY', 'MAD TEA PARLOUR'];
+             : key === 'roothollow' ? ['ROOT CELLAR', 'GRUB LARDER'] : key === 'beastnest' ? ['TROPHY DEN', 'MARROW PIT'] : key === 'sunkenstump' ? ['FLOODED HOLLOW', 'MOSS ARCHIVE'] : key === 'sporevault' ? ['SPORE BLOOM HALL', 'MYCELIUM VAULT'] : key === 'canopytemple' ? ['VINE SANCTUM', 'SUNBEAM CLOISTER'] : key === 'hornetshive' ? ['BROOD COMB', 'HONEY STORE']: key === 'eiffel' ? ['CAFÉ TERRACE', 'POND AVIARY'] : ['MOONCAP GALLERY', 'MAD TEA PARLOUR'];
           for (let ri = 0; ri < roomCenters.length; ri++) {
             const room = roomCenters[ri], roomName = roomNames[ri];
             sn.rooms.push({ name: roomName, x: room.x, y: dy, z: room.z, floor: Math.max(1, Math.ceil((deckY - dy) / 30)) });
-            const detailMat = lam(key === 'house' ? 0x4a3a4c : key === 'nest' ? 0xb34668 : key === 'bone' ? 0xcbc3b2 : key === 'bubble' ? 0x9fd8f0 : key === 'eiffel' ? 0xd9b878 : 0xc9a981,
+            const detailMat = lam(key === 'house' ? 0x4a3a4c : key === 'nest' ? 0xb34668 : key === 'bone' ? 0xcbc3b2 : key === 'bubble' ? 0x9fd8f0  : key === 'roothollow' ? 0x7a5a2a : key === 'beastnest' ? 0x8a5a2a : key === 'sunkenstump' ? 0x4a7a5a : key === 'sporevault' ? 0x9a6ad8 : key === 'canopytemple' ? 0x5a9a4a : key === 'hornetshive' ? 0xc89a1a: key === 'eiffel' ? 0xd9b878 : 0xc9a981,
               { emissive: zone.plate, emissiveIntensity: 0.18 });
             if (key === 'house') {
               const tomb = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.2, 2.8), detailMat);
@@ -4043,13 +4084,13 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
           // One room in every third hall is trapped. The inlaid warning sigil matches the
           // site theme; the pulse is avoidable by crossing the opposite wing or timing a dash.
           if (rung % 18 === 0) {
-            const room = roomCenters[0], hazardColor = key === 'house' ? 0x9dff3a : key === 'nest' ? 0xff416f : key === 'bone' ? 0xcfe8ff : key === 'bubble' ? 0xff9de0 : key === 'eiffel' ? 0xffb020 : 0x47f3c2;
+            const room = roomCenters[0], hazardColor = key === 'house' ? 0x9dff3a : key === 'nest' ? 0xff416f : key === 'bone' ? 0xcfe8ff : key === 'bubble' ? 0xff9de0  : key === 'roothollow' ? 0x8a6a2a : key === 'beastnest' ? 0xff8a3a : key === 'sunkenstump' ? 0x6adf9a : key === 'sporevault' ? 0xd89aff : key === 'canopytemple' ? 0x9adf5a : key === 'hornetshive' ? 0xffcf3a: key === 'eiffel' ? 0xffb020 : 0x47f3c2;
             const hazardMat = new THREE.MeshBasicMaterial({ color: hazardColor, transparent: true, opacity: 0.55, toneMapped: false });
             const sigil = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.32, 5, 16), hazardMat);
             sigil.rotation.x = Math.PI / 2; sigil.position.set(room.x, dy + 0.18, room.z); sigil.userData.noCull = true; scene.add(sigil);
             const core = new THREE.Mesh(new THREE.CircleGeometry(3.45, 10), new THREE.MeshBasicMaterial({ color: hazardColor, transparent: true, opacity: 0.18, side: THREE.DoubleSide, toneMapped: false }));
             core.rotation.x = -Math.PI / 2; core.position.set(room.x, dy + 0.12, room.z); core.userData.noCull = true; scene.add(core);
-            let hazardName = key === 'house' ? 'CURSED CANDLE RUNE' : key === 'nest' ? 'THORN-BLOOM PATCH' : key === 'bone' ? 'GRAVE-CHILL RUNE' : key === 'bubble' ? 'FIZZ CROWN RUNE' : key === 'eiffel' ? 'BAGUETTE BARRAGE' : 'SPORE VENT';
+            let hazardName = key === 'house' ? 'CURSED CANDLE RUNE' : key === 'nest' ? 'THORN-BLOOM PATCH' : key === 'bone' ? 'GRAVE-CHILL RUNE' : key === 'bubble' ? 'FIZZ CROWN RUNE'  : key === 'roothollow' ? 'ROOT SNARE' : key === 'beastnest' ? 'CLAW MARK WARNING' : key === 'sunkenstump' ? 'BOG GAS VENT' : key === 'sporevault' ? 'SPORE BURST' : key === 'canopytemple' ? 'THORN WARD' : key === 'hornetshive' ? 'STING SWARM': key === 'eiffel' ? 'BAGUETTE BARRAGE' : 'SPORE VENT';
             if (key === 'nest') for (let thorn = 0; thorn < 5; thorn++) {
               const angle = thorn * Math.PI * 2 / 5, spike = new THREE.Mesh(new THREE.ConeGeometry(0.38, 1.8, 5), hazardMat);
               spike.position.set(room.x + Math.cos(angle) * 2.6, dy + 1, room.z + Math.sin(angle) * 2.6); spike.userData.noCull = true; scene.add(spike);
@@ -4076,14 +4117,14 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
           // A single late-floor cache is tucked into the other wing. It is optional, off
           // the main spiral, and doubles as the dungeon's hidden-secret completion reward.
           if (!sn.secrets.length && (deckY - dy) / Math.max(1, deckY - botY) > 0.84) {
-            const room = roomCenters[1], chestMat = lam(key === 'house' ? 0x28202d : key === 'nest' ? 0x61243a : key === 'bone' ? 0x8a8174 : key === 'bubble' ? 0x7fc4e0 : key === 'eiffel' ? 0x8a6d3a : 0x765438,
+            const room = roomCenters[1], chestMat = lam(key === 'house' ? 0x28202d : key === 'nest' ? 0x61243a : key === 'bone' ? 0x8a8174 : key === 'bubble' ? 0x7fc4e0  : key === 'roothollow' ? 0x5a3c18 : key === 'beastnest' ? 0x6a4018 : key === 'sunkenstump' ? 0x2a4a2a : key === 'sporevault' ? 0x5a2a7a : key === 'canopytemple' ? 0x2a5a1a : key === 'hornetshive' ? 0x6a4a08: key === 'eiffel' ? 0x8a6d3a : 0x765438,
               { emissive: zone.plate, emissiveIntensity: 0.24 });
             const chest = new THREE.Group();
             const box = new THREE.Mesh(new THREE.BoxGeometry(2.7, 1.7, 1.8), chestMat); box.position.y = 0.9; chest.add(box);
             const lid = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.42, 2), chestMat); lid.position.set(0, 1.95, 0); chest.add(lid);
-            const jewel = new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 0), new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffd48a : key === 'nest' ? 0xff668b : key === 'bone' ? 0xdfe8ff : key === 'bubble' ? 0xfff2f8 : key === 'eiffel' ? 0xffd700 : 0xf7e4a7, toneMapped: false }));
+            const jewel = new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 0), new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffd48a : key === 'nest' ? 0xff668b : key === 'bone' ? 0xdfe8ff : key === 'bubble' ? 0xfff2f8  : key === 'roothollow' ? 0xd8a858 : key === 'beastnest' ? 0xffb868 : key === 'sunkenstump' ? 0x8af0c8 : key === 'sporevault' ? 0xe8b8ff : key === 'canopytemple' ? 0xb8f08a : key === 'hornetshive' ? 0xffe868: key === 'eiffel' ? 0xffd700 : 0xf7e4a7, toneMapped: false }));
             jewel.position.set(0, 2.8, 0); chest.add(jewel); chest.position.set(room.x, dy, room.z); chest.userData.noCull = true; scene.add(chest);
-            const secret = { name: key === 'house' ? 'WIDOW’S LAST WILL' : key === 'nest' ? 'HEART OF THE BROOD' : key === 'bone' ? 'THE CHOIR MASTER’S PAY' : key === 'bubble' ? 'THE UNSPOILED TITHE' : key === 'eiffel' ? 'THE GOLDEN CROISSANT' : 'THE WHITE QUEEN’S TEACUP', x: room.x, y: dy + 2.8, z: room.z, found: false };
+            const secret = { name: key === 'house' ? 'WIDOW’S LAST WILL' : key === 'nest' ? 'HEART OF THE BROOD' : key === 'bone' ? 'THE CHOIR MASTER’S PAY' : key === 'bubble' ? 'THE UNSPOILED TITHE'  : key === 'roothollow' ? 'THE DEEP TAPROOT' : key === 'beastnest' ? "THE ALPHA'S HOARD" : key === 'sunkenstump' ? 'THE DROWNED LANTERN' : key === 'sporevault' ? 'THE MOTHER SPORE' : key === 'canopytemple' ? "THE GARDENER'S RELIC" : key === 'hornetshive' ? "THE QUEEN'S COMB": key === 'eiffel' ? 'THE GOLDEN CROISSANT' : 'THE WHITE QUEEN’S TEACUP', x: room.x, y: dy + 2.8, z: room.z, found: false };
             sn.secrets.push(secret); items.push({ mesh: chest, type: 'dungeonSecret', taken: false, secretLabel: secret.name, secret });
             secret.pickup = items[items.length - 1];
           }
@@ -4100,7 +4141,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
         }
         if (rung % 6 === 3) {
           const floor = Math.max(1, Math.ceil((deckY - dy) / 30));
-          const sign = makeLabel(`${key === 'house' ? 'HOUSE' : key === 'nest' ? 'NEST' : key === 'bone' ? 'OSSUARY' : key === 'bubble' ? 'CITADEL' : key === 'eiffel' ? 'TOUR' : 'SHROOM'} LEVEL ${floor} · DOWN ↓`);
+          const sign = makeLabel(`${key === 'house' ? 'HOUSE' : key === 'nest' ? 'NEST' : key === 'bone' ? 'OSSUARY' : key === 'bubble' ? 'CITADEL'  : key === 'roothollow' ? 'ROOT' : key === 'beastnest' ? 'NEST' : key === 'sunkenstump' ? 'STUMP' : key === 'sporevault' ? 'VAULT' : key === 'canopytemple' ? 'TEMPLE' : key === 'hornetshive' ? 'HIVE': key === 'eiffel' ? 'TOUR' : 'SHROOM'} LEVEL ${floor} · DOWN ↓`);
           sign.position.set(dx + Math.cos(a) * (discR + 2), dy + 4, dz + Math.sin(a) * (discR + 2));
           sign.scale.set(8, 2, 1); sign.userData.noCull = true; scene.add(sign);
         }
@@ -4118,9 +4159,9 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
       if (prev && (prev.x !== gx || prev.z !== gz)) addRail(prev.x, prev.z, prev.y + 1.35, gx, gz, col, botY + 1.35, false);
       const rim = new THREE.Mesh(new THREE.TorusGeometry(discR + 2.4, 0.5, 6, 22), new THREE.MeshBasicMaterial({ color: col, fog: false, toneMapped: false }));
       rim.rotation.x = Math.PI / 2; rim.position.set(gx, botY + 1.4, gz); rim.userData.noCull = true; scene.add(rim);
-      const vl = makeLabel(key === 'nest' ? 'LOWEST LEVEL · VAULT OF THE DEEP HEAT' : key === 'house' ? 'LOWEST LEVEL · NEXUS CRYPT' : key === 'bone' ? 'LOWEST LEVEL · OSSUARY CRYPT' : key === 'bubble' ? 'LOWEST LEVEL · FIZZ PARLOUR' : key === 'eiffel' ? 'LOWEST LEVEL · THE ROTISSERIE' : 'LOWEST LEVEL · CHESHIRE PARLOUR');
+      const vl = makeLabel(key === 'nest' ? 'LOWEST LEVEL · VAULT OF THE DEEP HEAT' : key === 'house' ? 'LOWEST LEVEL · NEXUS CRYPT' : key === 'bone' ? 'LOWEST LEVEL · OSSUARY CRYPT' : key === 'bubble' ? 'LOWEST LEVEL · FIZZ PARLOUR'  : key === 'roothollow' ? 'LOWEST LEVEL · THE DEEP TAPROOT' : key === 'beastnest' ? "LOWEST LEVEL · THE ALPHA'S DEN" : key === 'sunkenstump' ? 'LOWEST LEVEL · THE DROWNED HOLLOW' : key === 'sporevault' ? 'LOWEST LEVEL · THE MOTHER BLOOM' : key === 'canopytemple' ? 'LOWEST LEVEL · THE SUNKEN SHRINE' : key === 'hornetshive' ? "LOWEST LEVEL · THE QUEEN'S CHAMBER": key === 'eiffel' ? 'LOWEST LEVEL · THE ROTISSERIE' : 'LOWEST LEVEL · CHESHIRE PARLOUR');
       vl.position.set(gx, botY + 9, gz); vl.scale.set(15, 3.4, 1); scene.add(vl);
-      pathCue(gx, botY + 2.2, gz, key === 'house' ? 'NEXUS CRYPT' : key === 'bone' ? 'OSSUARY CRYPT' : key === 'bubble' ? 'FIZZ PARLOUR' : key === 'eiffel' ? 'THE ROTISSERIE' : 'BOSS VAULT', 1.6);
+      pathCue(gx, botY + 2.2, gz, key === 'house' ? 'NEXUS CRYPT' : key === 'bone' ? 'OSSUARY CRYPT' : key === 'bubble' ? 'FIZZ PARLOUR'  : key === 'roothollow' ? 'TAPROOT' : key === 'beastnest' ? "ALPHA'S DEN" : key === 'sunkenstump' ? 'DROWNED HOLLOW' : key === 'sporevault' ? 'MOTHER BLOOM' : key === 'canopytemple' ? 'SUNKEN SHRINE' : key === 'hornetshive' ? "QUEEN'S CHAMBER": key === 'eiffel' ? 'THE ROTISSERIE' : 'BOSS VAULT', 1.6);
       vl.userData.noCull = true;
     }
 
@@ -4130,9 +4171,9 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
     // floating in open air. Distinct materials keep each landmark's interior on-theme.
     const shellThickness = 1.8, shellBand = 28;   // shellHalf itself is computed earlier (before the climb spiral) so the climb can be kept outside it
     const shellBottom = botY, shellTop = deckY + 14;
-    const shellMat = lam(key === 'house' ? 0x191520 : key === 'shroom' ? 0x694c40 : key === 'bone' ? 0x8f887c : key === 'bubble' ? 0x4f88a8 : key === 'eiffel' ? 0x5a4428 : 0x421b30,
-      { emissive: key === 'house' ? 0x120b19 : key === 'shroom' ? 0x28120e : key === 'bone' ? 0x2a2620 : key === 'bubble' ? 0x14283a : key === 'eiffel' ? 0x3a2a14 : 0x220813, emissiveIntensity: 0.4 });
-    const paneMat = new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffc47a : key === 'shroom' ? 0xf4d8a4 : key === 'bone' ? 0xfff2d8 : key === 'bubble' ? 0xcff4ff : key === 'eiffel' ? 0xffcf7a : 0xff668b, transparent: true, opacity: 0.78, fog: false, toneMapped: false });
+    const shellMat = lam(key === 'house' ? 0x191520 : key === 'shroom' ? 0x694c40 : key === 'bone' ? 0x8f887c : key === 'bubble' ? 0x4f88a8  : key === 'roothollow' ? 0x2a1c0e : key === 'beastnest' ? 0x3a2410 : key === 'sunkenstump' ? 0x0e2416 : key === 'sporevault' ? 0x2a1438 : key === 'canopytemple' ? 0x12280e : key === 'hornetshive' ? 0x2a2006: key === 'eiffel' ? 0x5a4428 : 0x421b30,
+      { emissive: key === 'house' ? 0x120b19 : key === 'shroom' ? 0x28120e : key === 'bone' ? 0x2a2620 : key === 'bubble' ? 0x14283a  : key === 'roothollow' ? 0x140e06 : key === 'beastnest' ? 0x1a1008 : key === 'sunkenstump' ? 0x06120a : key === 'sporevault' ? 0x140a1c : key === 'canopytemple' ? 0x081404 : key === 'hornetshive' ? 0x140f02: key === 'eiffel' ? 0x3a2a14 : 0x220813, emissiveIntensity: 0.4 });
+    const paneMat = new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffc47a : key === 'shroom' ? 0xf4d8a4 : key === 'bone' ? 0xfff2d8 : key === 'bubble' ? 0xcff4ff  : key === 'roothollow' ? 0xc8a868 : key === 'beastnest' ? 0xe8a858 : key === 'sunkenstump' ? 0x8ae8c8 : key === 'sporevault' ? 0xd8a8ff : key === 'canopytemple' ? 0xb8f08a : key === 'hornetshive' ? 0xffd868: key === 'eiffel' ? 0xffcf7a : 0xff668b, transparent: true, opacity: 0.78, fog: false, toneMapped: false });
     const addDungeonWall = (x0, x1, z0, z1, y0, y1) => {
       addSolid(x0, x1, y0, y1, z0, z1);
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), shellMat);
@@ -4185,7 +4226,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
         pane.position.set(gx + offset, paneY, gz + side * (half + 0.12)); pane.userData.noCull = true; scene.add(pane);
       }
       // Vertical corner ribs emphasize the height and reinforce the gothic / storybook silhouette.
-      const ribMat = lam(key === 'house' ? 0x554055 : key === 'shroom' ? 0xd8b88a : key === 'bone' ? 0xe8e0cc : key === 'bubble' ? 0x8fd6f2 : key === 'eiffel' ? 0xb8905a : 0xc34a70,
+      const ribMat = lam(key === 'house' ? 0x554055 : key === 'shroom' ? 0xd8b88a : key === 'bone' ? 0xe8e0cc : key === 'bubble' ? 0x8fd6f2  : key === 'roothollow' ? 0x8a6a2a : key === 'beastnest' ? 0xc87a2a : key === 'sunkenstump' ? 0x3a9a6a : key === 'sporevault' ? 0xb05aff : key === 'canopytemple' ? 0x6ac84a : key === 'hornetshive' ? 0xe8a81a: key === 'eiffel' ? 0xb8905a : 0xc34a70,
         { emissive: zone.plate, emissiveIntensity: 0.32 });
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
         const rib = new THREE.Mesh(new THREE.BoxGeometry(2.2, ceilY - floorY, 2.2), ribMat);
@@ -4194,7 +4235,124 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
       }
     }
     sn.interior = { x: gx, z: gz, bottom: shellBottom, top: shellTop, floors: shellFloors, width: shellHalf * 2, height: shellTop - shellBottom, entry: { x: gx, y: deckY, z: gz }, doorOnX, doorSide };
+}
+
+function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubbleNode, eiffelNode) {
+  if (!commons) return;
+  const sites = {};
+  // FAR-LANDS (2026-10-26): the three sites are no longer ring-side spurs — each is its own far land ~0.95–1.1 km out
+  // along its spoke's bearing (the band where the far skyline towers live, well past the universe ring at 600), still in
+  // the mid-band height range. Reaching one is THE JOURNEY: connectFar chains a full stepping-stone causeway back to
+  // the launch ring (rest island, checkpoints, ammo/hearts, garrison, coins), each land keeps its local approach
+  // (flesh terraces / front-door steps / rabbit-hole discs), and each keeps its own unique boss + reward.
+  // farAnchor tries a couple of radii/angle nudges for open air; the ladder ends at the legacy near-ring spot so a
+  // crowded world can still fall back to the old spur layout unchanged.
+  const MID_DIST = { nest: 2200, house: 1850, shroom: 2500, bone: 2050, bubble: 2650, eiffel: 2350,
+    roothollow: 2150, beastnest: 1950, sunkenstump: 2450, sporevault: 2600, canopytemple: 2300, hornetshive: 2050 };  // much further out than before (was a tight 1010-1140 band) so the dungeons genuinely spread across the map
+  const ELEV = { nest: 0, house: 190, shroom: -190, bone: 110, bubble: -150, eiffel: 200,
+    roothollow: -40, beastnest: 150, sunkenstump: -170, sporevault: 90, canopytemple: 190, hornetshive: -110 };            // distinct absolute height offsets so the six lands sit at different elevations relative to each other, not just different compass bearings (connectFar's causeway can climb/descend up to ~200 units safely — kept each offset under that cap so the causeway back to spawn stays reliable)
+  const farAnchor = (node, key) => {
+    if (!node) return null;
+    const D0 = MID_DIST[key];
+    for (const [D, da] of [[D0, 0], [D0, 0.22], [D0, -0.22], [D0 + 80, 0.12], [D0 - 80, -0.12], [D0 + 160, 0], [0, 0]]) {
+      const a = node.a + da, X0 = D ? CX + Math.cos(a) * D : node.x, Z0 = D ? CZ + Math.sin(a) * D : node.z;
+      if (blocked(X0, node.y, Z0, 42)) continue;
+      if (buildingHubs.length && buildingHubs.some(h => Math.hypot(X0 - h.x, Z0 - h.z) < h.hw + 30)) continue;   // keep a gap to skyline hubs too (towerWindowCheck eats footprints); real shield is the FAR LANDS GATE in towerWindowCheck
+      if (D) console.log(`[mids] ${key} land anchored far: D=${Math.round(D)} da=${da.toFixed(2)}`);
+      return { a, X0, Z0, y0: node.y, far: !!D };
+    }
+    return { a: node.a, X0: node.x, Z0: node.z, y0: node.y, far: false };   // legacy spur fallback
   };
+  const connectMid = (node, tx, tz, ty, zone, hw, hd) => {
+    const A = { x: node.x, z: node.z, top: node.y, hw: 8, hd: 8, zone };
+    const B = { x: tx, z: tz, top: ty, hw, hd, zone };
+    let ok = false;
+    for (let retry = 0; retry < 2 && !ok; retry++) ok = connectFar(A, B);
+    if (!ok) console.log('[mids] far causeway to', zone.name, 'found no clear line — the land still sits on its spoke past the skyline');
+  };
+  const seedLeadChain = (key, sx, sz) => {               // THE OUTRIDERS: the dungeon garrison also holds the causeway platforms leading up to the site — not just the boss land itself
+    const cn = commons || { x: CX, z: CZ };
+    const dx = cn.x - sx, dz = cn.z - sz, dl = Math.hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl;
+    const lead = solids.filter(q => q.cx !== undefined && !q.bounce && !q.arena && !q.interior && !q.sp && !q.grp
+      && Math.hypot(q.cx - sx, q.cz - sz) < 240                                                                          // within the site's visibility radius
+      && ((q.cx - sx) * ux + (q.cz - sz) * uz) / Math.max(10, Math.hypot(q.cx - sx, q.cz - sz)) > 0.5)                   // roughly between the site and the commons (the lead-in arc)
+      .sort((a, b) => Math.hypot(b.cx - sx, b.cz - sz) - Math.hypot(a.cx - sx, a.cz - sz)).slice(0, 6);                  // farthest (nearest the commons) first: the approach is covered end to end
+    if (sites[key]) sites[key].lead = lead;
+    return lead;
+  };
+  const outriderFor = (key, sl) => {                     // the same unit kinds as the site garrison, stationed on a lead-in platform
+    if (!sl) return null;
+    const cx0 = Number.isFinite(sl.cx) ? sl.cx : Number.isFinite(sl.x) ? sl.x : null;
+    const cz0 = Number.isFinite(sl.cz) ? sl.cz : Number.isFinite(sl.z) ? sl.z : null;
+    if (cx0 === null || cz0 === null || !Number.isFinite(sl.top)) return null;
+    const a = rand() * 6.283, r = 2 + rand() * 3;
+    if (key === 'nest') return spawnNestEnemy(cx0 + Math.cos(a) * r, sl.top + 0.4, cz0 + Math.sin(a) * r, sl);
+    if (key === 'shroom') { const e = spawnBiomeEnemy(cx0 + Math.cos(a) * r, sl.top + 0.3, cz0 + Math.sin(a) * r, sl, sl.zone || PSY_ZONE, 1, 1); if (e) { e.midGuard = 'shroom'; e.neverDespawn = true; } return e; }
+    const e = makeWalker(cx0 + Math.cos(a) * r, sl.top + 0.4, cz0 + Math.sin(a) * r, sl, 1, false, HORROR_KINDS[(rand() * HORROR_KINDS.length) | 0]);
+    e.midGuard = 'house'; e.neverDespawn = true; return e;
+  };
+  // ---- LEVEL 2 "THE OVERGROWTH": 6 forest dungeons on all 6 ring-node slots, same pure-descent-dungeon shape as
+  // Lvl1's bone/bubble/eiffel (far anchor -> forecourt plaza -> hop-steps -> farMonument+farDungeon -> causeway ->
+  // garrison), own theme set, gated entirely on overgrowthOn() so the default level's 6 dungeons below are untouched. ----
+  if (overgrowthOn()) {
+    const forestSites = [
+      { node: nestNode, key: 'roothollow', zone: ROOTHOLLOW_ZONE, kinds: ROOTHOLLOW_KINDS, col: 0x8a6a2a, deckLocal: 190, botLocal: -100, discR: 14, name: 'ROOT HOLLOW' },
+      { node: houseNode, key: 'beastnest', zone: BEASTNEST_ZONE, kinds: BEASTNEST_KINDS, col: 0xc87a2a, deckLocal: 200, botLocal: -100, discR: 15, name: "BEAST'S NEST" },
+      { node: shroomNode, key: 'sunkenstump', zone: SUNKENSTUMP_ZONE, kinds: SUNKENSTUMP_KINDS, col: 0x3a9a6a, deckLocal: 170, botLocal: -100, discR: 16, name: 'SUNKEN STUMP' },
+      { node: boneNode, key: 'sporevault', zone: SPOREVAULT_ZONE, kinds: SPOREVAULT_KINDS, col: 0xb05aff, deckLocal: 210, botLocal: -100, discR: 14, name: 'SPORE VAULT' },
+      { node: bubbleNode, key: 'canopytemple', zone: CANOPYTEMPLE_ZONE, kinds: CANOPYTEMPLE_KINDS, col: 0x6ac84a, deckLocal: 220, botLocal: -100, discR: 13, name: 'CANOPY TEMPLE' },
+      { node: eiffelNode, key: 'hornetshive', zone: HORNETSHIVE_ZONE, kinds: HORNETSHIVE_KINDS, col: 0xe8a81a, deckLocal: 195, botLocal: -100, discR: 15, name: "HORNET'S HIVE" },
+    ];
+    for (const ds of forestSites) {
+      if (!ds.node) continue;
+      const AD = farAnchor(ds.node, ds.key);
+      const nx = Math.cos(AD.a), nz = Math.sin(AD.a);
+      const X0 = AD.X0, Z0 = AD.Z0, y0 = AD.y0 + (ELEV[ds.key] || 0);
+      if (AD.far) addSlab(X0, y0, Z0, 9, 9, 2.4, ds.zone, true);      // far land: the causeway's landing rim pad
+      let bx = X0 + nx * 42, bz = Z0 + nz * 42, by = y0 - 10;         // the forecourt plaza where the dungeon ascent starts
+      for (let mo = 42; blocked(bx, by, bz, 15) && mo <= 150; mo += 36) { bx = X0 + nx * mo; bz = Z0 + nz * mo; }
+      if (blocked(bx, by, bz, 15)) { console.log(`[overgrowth-mids] ${ds.key} forecourt blocked at every outward nudge — site skipped this build`); continue; }
+      const hsteps = [];
+      for (let k = 1; k <= 3; k++) {                                   // 3 hop-steps from the rim pad down to the plaza
+        const sx = X0 + nx * (14 + k * 10), sz = Z0 + nz * (14 + k * 10), sy = y0 - 3 * k;
+        if (blocked(sx, sy, sz, 4.2)) continue;
+        hsteps.push({ x: sx, z: sz, y: sy, sl: addSlab(sx, sy, sz, 4.2, 4.2, 2, ds.zone, true) });
+      }
+      {
+        let A2 = { x: X0, z: Z0, y: y0 };
+        for (const B of hsteps) { addRail(A2.x, A2.z, A2.y + 1.35, B.x, B.z, ds.col, B.y + 1.35, false); addDashPad(A2.x, A2.y, A2.z, B.x - A2.x, B.z - A2.z); A2 = B; }
+        addRail(A2.x, A2.z, A2.y + 1.35, bx, bz, ds.col, by + 1.35, false);
+      }
+      const plaza = addSlab(bx, by, bz, 12, 9, 2.6, ds.zone, true);
+      const dl2 = makeLabel(ds.name); dl2.position.set(bx, by + 11, bz); dl2.scale.set(14, 3.5, 1); scene.add(dl2);
+      const db2 = beacon(bx, by + 1, bz, ds.col);
+      sites[ds.key] = { x: bx, z: bz, y: by, slabs: [...hsteps.map(h => h.sl), plaza] };
+      if (AD.far) {
+        db2.material.fog = false; db2.userData.noCull = true;
+        farMonument(ds.key, bx + nz * 52, bz - nx * 52, by - 26, CX, CZ);      // spawn-visible giant monument
+        farDungeon(ds.key, sites[ds.key], { x: bx, z: bz, y: by }, { x: bx + nz * 52, z: bz - nx * 52, base: by - 26 }, ds.zone, ds.col, ds.deckLocal, ds.botLocal, ds.discR);
+      }
+      if (AD.far) connectMid(ds.node, X0, Z0, y0, ds.zone, 9, 9);      // THE JOURNEY: full causeway from the ring to this land
+      // THE GARRISON: a standing watch on the forecourt and every few shaft landings — the halls are never empty
+      try {
+        const sn3 = sites[ds.key];
+        const seats = [plaza, ...(sn3.shaft || []).filter((_, i) => i % 5 === 0).map(s => s.slab)].filter(Boolean).slice(0, 7);
+        for (const seat of seats) {
+          const a = rand() * 6.283, r = 2 + rand() * 3;
+          const e = makeWalker(seat.cx + Math.cos(a) * r, seat.top + 0.4, seat.cz + Math.sin(a) * r, seat, 1, false, ds.kinds[(rand() * ds.kinds.length) | 0]);
+          if (e) { e.zone = ds.zone; e.midGuard = ds.key; e.neverDespawn = true; }
+        }
+      } catch (err) { console.warn(`[overgrowth-mids] ${ds.key} garrison seed failed`, err); }
+    }
+    commons.mid = {};
+    for (const ds of forestSites) if (sites[ds.key]) { commons.mid[ds.key] = { ...sites[ds.key], dungeonOnly: true, gen: midGen++ }; commons.mid[ds.key].key = ds.key; }
+    {                                  // the far lands live past the stock world edge: widen the bounds like the other far builders do
+      let farD = 0;
+      for (const ds of forestSites) if (commons.mid[ds.key]) farD = Math.max(farD, Math.hypot(commons.mid[ds.key].x, commons.mid[ds.key].z));
+      if (farD) { WORLD_R = Math.max(WORLD_R, farD + 320); camera.far = Math.max(camera.far, (farD + 400) * 1.7); camera.updateProjectionMatrix(); }
+    }
+    return;        // Overgrowth's 6 dungeons are built — skip Lvl1's own nest/house/shroom/bone/bubble/eiffel content below entirely
+  }
   // ---- site 1: THE GIANT PUSSY (flesh nest + ball-chair arena) ----
   // Adaptive placement: try several arena radii/drops, then build the chain BACK from whichever arena found air.
   if (nestNode) {
@@ -4234,8 +4392,8 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
       sites.nest = { x: ax, z: az, y: ay, slabs: [...steps.map(t => t.sl), arenaSite.sl].filter(Boolean) };   // the whole approach chain — guards roam these too
       if (AN.far) {
         nb.material.fog = false; nb.userData.noCull = true;
-        farMonument('pussy', ax + nz * 46, az - nx * 46, ay - 34);   // spawn-visible giant monument
-        farDungeon('nest', { x: ax, z: az, y: ay }, { x: ax + nz * 46, z: az - nx * 46, base: ay - 34, scaleY: 2.3 }, FP, 0xff5aa0, 200, -100, 13);
+        farMonument('pussy', ax + nz * 46, az - nx * 46, ay - 34, CX, CZ);   // spawn-visible giant monument
+        farDungeon('nest', sites.nest, { x: ax, z: az, y: ay }, { x: ax + nz * 46, z: az - nx * 46, base: ay - 34, scaleY: 2.3 }, FP, 0xff5aa0, 200, -100, 13);
       }
       if (AN.far) connectMid(nestNode, X0, Z0, y0, FP, 9, 9);        // THE JOURNEY: full causeway from the ring to this land
       seedLeadChain('nest', ax, az);
@@ -4354,8 +4512,8 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
       sites.house = { x: hx, z: hz, y: hy, route, slabs: [land, ...f1, ...f2, ...stairSlabs, spire, ...steps.map(t => t.slab)].filter(Boolean) };   // garrison roams the approach steps and accessible halls too
       if (AH.far) {
         hb.material.fog = false; hb.userData.noCull = true;
-        farMonument('house', hx + nz * 60, hz - nx * 60, hy + 2);   // spawn-visible giant monument
-        farDungeon('house', { x: hx, z: hz, y: hy }, { x: hx + nz * 60, z: hz - nx * 60, base: hy + 2 }, FHT, 0x9dff3a, 180, -100, 16);
+        farMonument('house', hx + nz * 60, hz - nx * 60, hy + 2, CX, CZ);   // spawn-visible giant monument
+        farDungeon('house', sites.house, { x: hx, z: hz, y: hy }, { x: hx + nz * 60, z: hz - nx * 60, base: hy + 2 }, FHT, 0x9dff3a, 180, -100, 16);
       }
       if (AH.far) connectMid(houseNode, X0, Z0, y0, FHT, 9, 9);      // THE JOURNEY: full causeway from the ring to this land
       seedLeadChain('house', hx, hz);
@@ -4404,8 +4562,8 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
       sites.shroom = { x: mx, z: mz, y: my, slabs: [cap, ...discs.map(d => d.slab)] };   // the cap-disc approach already carries the garrison
       if (AS.far) {
         sb.material.fog = false; sb.userData.noCull = true;
-        farMonument('shroom', mx + nz * 54, mz - nx * 54, my - 22);   // spawn-visible giant monument
-        farDungeon('shroom', { x: mx, z: mz, y: my }, { x: mx + nz * 54, z: mz - nx * 54, base: my - 22 }, FSH, 0xf13be8, 220, -100, 15);
+        farMonument('shroom', mx + nz * 54, mz - nx * 54, my - 22, CX, CZ);   // spawn-visible giant monument
+        farDungeon('shroom', sites.shroom, { x: mx, z: mz, y: my }, { x: mx + nz * 54, z: mz - nx * 54, base: my - 22 }, FSH, 0xf13be8, 220, -100, 15);
       }
       if (AS.far) connectMid(shroomNode, X0, Z0, y0, FSH, 9, 9);     // THE JOURNEY: full causeway from the ring to this land
       seedLeadChain('shroom', mx, mz);
@@ -4445,8 +4603,8 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
     sites[ds.key] = { x: bx, z: bz, y: by, slabs: [...hsteps.map(h => h.sl), plaza] };
     if (AD.far) {
       db2.material.fog = false; db2.userData.noCull = true;
-      farMonument(ds.key, bx + nz * 52, bz - nx * 52, by - 26);      // spawn-visible giant monument
-      farDungeon(ds.key, { x: bx, z: bz, y: by }, { x: bx + nz * 52, z: bz - nx * 52, base: by - 26 }, ds.zone, ds.col, ds.deckLocal, ds.botLocal, ds.discR);
+      farMonument(ds.key, bx + nz * 52, bz - nx * 52, by - 26, CX, CZ);      // spawn-visible giant monument
+      farDungeon(ds.key, sites[ds.key], { x: bx, z: bz, y: by }, { x: bx + nz * 52, z: bz - nx * 52, base: by - 26 }, ds.zone, ds.col, ds.deckLocal, ds.botLocal, ds.discR);
     }
     if (AD.far) connectMid(ds.node, X0, Z0, y0, ds.zone, 9, 9);      // THE JOURNEY: full causeway from the ring to this land
     seedLeadChain(ds.key, bx, bz);
@@ -5042,6 +5200,21 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
   spawnStreetRiders(hubs);                           // rider chase packs on rooftops
   return hubs;
   }
+
+// LEVEL 2 "THE OVERGROWTH": per the 2026-10-29 DELIVERABLES plan, every new level must feel like the same game as
+// Lvl1 — same hub graph, same moon/space/zero-G band, same -1/-2 hell platforms, same co-op, same commons/dungeon
+// framework — with ONLY the platform/building visuals and the 6 dungeon themes actually changing. Rather than
+// duplicating buildNetwork()'s ~900-line hub-placement/connect()/commons/branches/portal-loop graph wholesale (the
+// Rent's Due/NOS precedent, which those two levels can afford because they skip moon/commons/dungeons entirely —
+// Overgrowth can't), this reuses buildNetwork() verbatim and reskins visually through two existing, already-proven
+// shared-helper extension points instead: (1) commonsMidBuild's overgrowthOn() branch (just above, in this same
+// function) swaps Lvl1's 6 dungeon themes for 6 forest ones on the exact same framework; (2) setZone's trunkify()
+// call (and buildLevel's matching rebuild-safety call) now also fires on overgrowthOn(), so EVERY boxMesh building
+// in the level — home towers and every sky-city hub — always renders as a bark trunk with leaf canopies (the exact
+// mechanism the Jungle biome already uses for its own skyline, just forced on for the whole level instead of one
+// zone). ACCEPTANCE CRITERIA is satisfied to the letter this way: a player dropped into Overgrowth cannot tell
+// they're not playing Lvl1 except for what the platforms look like and what's inside the dungeons.
+function buildOvergrowthNetwork(exitAngle) { return buildNetwork(exitAngle); }
 
   // ===== LEVEL-SPECIFIC NETWORK BUILDERS =====
   // Each level gets its own completely unique platform architecture
@@ -6775,7 +6948,7 @@ function buildTowerWindows() {
 }
 function towerWindowCheck() {
   if (inInterior || state !== 'play' || towerEnterCd > 0) return;
-  if (commons && commons.mid && ['nest', 'house', 'shroom', 'bone', 'bubble', 'eiffel'].some(k => { const s = commons.mid[k]; return s && Math.abs(pos.x - s.x) < 130 && Math.abs(pos.z - s.z) < 130 && Math.abs(pos.y - s.y) < 80; })) return;      // FAR LANDS GATE: the sites live inside the skyline-tower field — tower interiors must never swallow the player (inInterior freezes the mid tick)
+  if (commons && commons.mid && ['nest', 'house', 'shroom', 'bone', 'bubble', 'eiffel', 'roothollow', 'beastnest', 'sunkenstump', 'sporevault', 'canopytemple', 'hornetshive'].some(k => { const s = commons.mid[k]; return s && Math.abs(pos.x - s.x) < 130 && Math.abs(pos.z - s.z) < 130 && Math.abs(pos.y - s.y) < 80; })) return;      // FAR LANDS GATE: the sites live inside the skyline-tower field — tower interiors must never swallow the player (inInterior freezes the mid tick). Overgrowth's 6 forest dungeon keys added alongside Lvl1's own 6.
   for (const h of buildingHubs) {
     if (!h.windows || !h.windows.length || Math.abs(pos.x - h.x) > h.hw + 4 || Math.abs(pos.z - h.z) > h.hd + 4 || pos.y > h.top) continue;
     for (const w of h.windows) {
@@ -7105,7 +7278,7 @@ function buildLevel() {
   buildLevelBody();
   scene.add = sceneAdd;
   loadGore();                            // blood and guts from earlier runs of this level
-  if (towersOfTheWild.on) { trunkify(false); trunkify(true); }   // rebuilt levels in an active jungle keep their trunks
+  { const wantTrunks = overgrowthOn() || !!(activeZ && activeZ.name === 'Jungle'); trunkify(false); if (wantTrunks) trunkify(true); }   // rebuilt levels in an active jungle (or Overgrowth, always) keep/get their trunks; always toggled off first so a stale `true` from a level we just left (e.g. leaving Overgrowth for a non-jungle level) doesn't stick, and so the canopy list always rebuilds fresh against this level's own buildingBoxes
 }
 
 function buildBelowZeroForLevel() {
@@ -9741,7 +9914,7 @@ function buildLevelBody() {
   buildSky();
   // ten biome-styled heavy units guard the bottom terminal
   const padA = rand() * 6.283, endA = padA + Math.PI;
-  const bossRoster = rentOn() ? RENT_BOSSES : nosOn() ? NOS_BOSSES : gutOn() ? GUT_BOSSES : arenaOn() ? ARENA_BOSSES : [
+  const bossRoster = rentOn() ? RENT_BOSSES : nosOn() ? NOS_BOSSES : gutOn() ? GUT_BOSSES : arenaOn() ? ARENA_BOSSES : overgrowthOn() ? OVERGROWTH_BOSSES : [
     { variant: 'gorilla', biome: 'Jungle', name: 'CANOPY TYRANT', color: 0x9bdf4a },
     { variant: 'dinosaur', biome: 'Jungle', name: 'THE RAZOR KING', color: 0xb6d84a },
     { variant: 'charger', biome: 'Inferno', name: 'THE RAM', color: 0xff533e },
@@ -9799,6 +9972,7 @@ function buildLevelBody() {
   else if (nosOn()) levelHubs = buildNosNetwork(padA);
   else if (arenaOn()) levelHubs = buildArenaNetwork(padA);
     else if (gutOn()) levelHubs = buildGutNetwork(padA);
+    else if (overgrowthOn()) levelHubs = buildOvergrowthNetwork(padA);
     else levelHubs = buildNetwork(padA);
     scatterBosses();
   buildTowerWindows();
@@ -10544,6 +10718,8 @@ let menuSel = 0, menuMode = 'main';
 const LEVELS_ALL = [
   { id: 'descent', name: 'Lil Spasticism', subtitle: "The one endless procedural descent — floating platforms all the way down.", unlocked: true, startFn: () => startLevelDef('descent'),
     glyph: '⬇', c1: '#0a2a5e', c2: '#36f6ff', features: ['Endless procedural descent — hop platforms all the way down', 'Far descent dungeons: the BONE CATHEDRAL & the BUBBLE CITADEL', 'Boss arenas, skates, grapple hook and a growing weapon rack'] },
+  { id: 'overgrowth', name: 'The Overgrowth', subtitle: 'A forest grown skyscraper-tall — tree trunks, branches and canopy, all the way down to the roots.', unlocked: true, startFn: () => startLevelDef('overgrowth'),
+    glyph: '🌳', c1: '#0a2a12', c2: '#6ac84a', features: ['Every tower is a giant tree trunk — same sky, moon and descent as Lil Spasticism', '6 forest dungeons: Root Hollow, Beast’s Nest, Sunken Stump, Spore Vault, Canopy Temple, Hornet’s Hive', 'Same biomes, bosses and co-op — just grown wild'] },
   { id: 'rent', name: "Rent's Due", subtitle: 'Urban decay all the way down - eviction notices, loan sharks, and the rent is overdue.', unlocked: true, startFn: () => startLevelDef('rent'),
     glyph: '🏚', c1: '#3a2214', c2: '#ff9d4d', features: ['Urban decay: eviction banners, pawn shops, fire escapes', 'Loan-shark minibosses and tenant-horde ambushes', 'The rent is due — everything you break comes out of the deposit'] },
   { id: 'nos', name: 'Nostalgia Overdose', subtitle: 'VHS fog, CRT scanlines, cassette platforms and 80s synth bosses - be kind, rewind.', unlocked: true, startFn: () => startLevelDef('nos'),
@@ -12099,6 +12275,23 @@ const RENT_BOSSES = [
   { variant: 'demon', biome: 'Collections', name: 'THE REPO MAN', color: 0xff1a1a },
   { variant: 'loanshark', biome: 'Collections', name: 'THE BALLOON PAYMENT', color: 0xff2a3a },
 ];
+// LEVEL 2 "THE OVERGROWTH" boss roster: same 10-biome-champion shape as the default descent's own bossRoster
+// (buildLevelBody, ~line 9747), reusing existing enemy variants/AI verbatim (HARD RULES: no new AI) with
+// forest-flavored names/colors. `biome` names real ZONES entries (Overgrowth has no zone array of its own —
+// it reuses the global ZONES/BIOME_ENEMIES exactly, per the 2026-10-29 DELIVERABLES note superseding the
+// older "own zone array" plan).
+const OVERGROWTH_BOSSES = [
+  { variant: 'gorilla', biome: 'Jungle', name: 'THE CANOPY KING', color: 0x6adf4a },
+  { variant: 'dinosaur', biome: 'Jungle', name: 'ROOT TYRANT', color: 0x9bdf2a },
+  { variant: 'stegosaurus', biome: 'Jungle', name: 'BARKBACK', color: 0x4ab85a },
+  { variant: 'charger', biome: 'Inferno', name: 'THE KINDLING', color: 0xff6a2a },
+  { variant: 'infernal', biome: 'Inferno', name: 'EMBER STAG', color: 0xff8a3a },
+  { variant: 'frozenStalker', biome: 'Frozen', name: 'FROSTBARK', color: 0x6adfff },
+  { variant: 'stormWraith', biome: 'Storm', name: 'THE GALE OAK', color: 0x6a9aff },
+  { variant: 'stalker', biome: 'Horror', name: 'THE HOLLOW MAN', color: 0xff2a4a },
+  { variant: 'shield', biome: 'Horror', name: 'MOSSBACK WARDEN', color: 0xb0c08a },
+  { variant: 'stegosaurus', biome: 'Psychedelic', name: 'THE SPORE QUEEN', color: 0xd45aff },
+];
 const rentZoneForY = y => RENT_ZONES[y > TOP * 0.55 ? 0 : y > 0 ? 1 : 2];
 // NOSTALGIA OVERDOSE zones: also OUTSIDE ZONES (same reasons as RENT_ZONES). nos = severity 1..3: Sunset Strip (synthwave dusk, cassette platforms) ->
 // Tracking Error (the Storm biome retuned: no rain, a 'static' weather and periodic tape tears, no lightning) -> Arcade Overdrive (neon on black, cabinets everywhere).
@@ -12323,7 +12516,7 @@ function setZone(z, snap = false, quiet = false) {
   }
   goal.hemiCol.set(src.hemiCol); goal.sunCol.set(src.sunCol); goal.cloud.set(src.cloud); goal.hemi = src.hemi; goal.sun = src.sun;
   if (snap) { for (const k of ENV_COLS) env[k].copy(goal[k]); env.hemi = goal.hemi; env.sun = goal.sun; flash = 0; wOp = 0; }
-  if (!interior) trunkify(!!(z && z.name === 'Jungle'));   // jungle takes over: every building becomes a giant tree trunk
+  if (!interior) trunkify(overgrowthOn() || !!(z && z.name === 'Jungle'));   // jungle takes over: every building becomes a giant tree trunk. LEVEL 2 "The Overgrowth": every building is ALWAYS a tree trunk, regardless of the current biome zone — the whole level reads as a forest, not just its Jungle-zoned stretches.
   const w = interior ? WEATHER.none : z ? WEATHER[z.weather] : nosOn() ? WEATHER.dust : rentOn() ? WEATHER.paper : WEATHER.rain;
   wOn = !!w.op; if (w.op) { wCfg = w; wMat.color.setHex(w.color); wMat.size = w.size; }
   else if (!z) { wCfg = WEATHER.rain; wMat.color.setHex(wCfg.color); wMat.size = wCfg.size; wOp = wCfg.op; wMat.opacity = wOp; }
@@ -15074,6 +15267,17 @@ function dressSite(site, zone) {
   const inX = Math.max(0.5, site.hw - 1.2), inZ = Math.max(0.5, site.hd - 1.2), big = site.hw > 12 || site.hd > 12;
   const spot = () => [(r() * 2 - 1) * inX, (r() * 2 - 1) * inZ], n = (a, b) => Math.round(a + r() * (b - a));
   const add = (m, x, y, z) => { m.position.set(x, y, z); g.add(m); return m; };
+  if (overgrowthOn()) {                     // LEVEL 2 "The Overgrowth": a light forest-flavor layer on EVERY site regardless of its own zone's
+    // normal dressing below (additive, never returns early) — a few hanging vines off every ledge and a mushroom
+    // cluster or two, so even a Frozen/Inferno/Storm stretch still reads as part of the same overgrown world.
+    const vineM = MM('ogVine', () => lamC(0x3a7a3a)), vineG = GG('ogVine', () => new THREE.BoxGeometry(0.12, 1, 0.12));
+    for (let i = 0, c = n(1, big ? 4 : 2); i < c; i++) {
+      const side = r() < 0.5, x = side ? (r() < 0.5 ? -1 : 1) * site.hw : (r() * 2 - 1) * site.hw, z = side ? (r() * 2 - 1) * site.hd : (r() < 0.5 ? -1 : 1) * site.hd, len = 3 + r() * 6;
+      const v = add(new THREE.Mesh(vineG, vineM), x, -len / 2 - 0.2, z); v.scale.set(1, len, 1); anims.push({ k: 'sway', m: v, ph: r() * 6 });
+    }
+    const mushM = MM('ogMush', () => lamC(0xc85a5a)), mushCapG = GG('ogMushCap', () => new THREE.SphereGeometry(0.5, 7, 5, 0, Math.PI * 2, 0, Math.PI / 2));
+    for (let i = 0, c = n(0, 2); i < c; i++) { const [x, z] = spot(); add(new THREE.Mesh(mushCapG, mushM), x, 0.3, z).scale.setScalar(0.5 + r() * 0.6); }
+  }
   if (zone.name === 'Psychosis') {          // mutation: a hell or horror ledge with the Glitch dressing laid over it
     const baseName = r() < 0.5 ? 'Hellscape' : 'Horror';      // (decided once: r() inside the find predicate re-rolled per element and found nothing)
     for (const sz of [ZONES.find(z => z.name === baseName), ZONES.find(z => z.name === 'Glitch')]) {
