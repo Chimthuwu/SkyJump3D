@@ -16237,11 +16237,14 @@ renderer.setAnimationLoop(now => {
       renderer.setViewport(0, 0, outputWidth, outputHeight);
       renderer.clear(true, true, true);
       renderer.render(scene, camera);
-      renderer.clearDepth(); renderer.render(vmScene, vmCamera);
+      // renderer.render() auto-clears color+depth+stencil by default (autoClear=true) before drawing —
+      // without disabling that first, this second pass wipes the whole world image we just rendered,
+      // leaving only the viewmodel gun on a blank frame (the "world is black" bug). Clear ONLY depth.
+      renderer.autoClear = false; renderer.clearDepth(); renderer.render(vmScene, vmCamera); renderer.autoClear = true;
     } else {
       renderer.setRenderTarget(sceneTarget);
       renderer.render(scene, camera);
-      renderer.clearDepth(); renderer.render(vmScene, vmCamera);
+      renderer.autoClear = false; renderer.clearDepth(); renderer.render(vmScene, vmCamera); renderer.autoClear = true;
       renderer.setRenderTarget(null);
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, outputWidth, outputHeight);
