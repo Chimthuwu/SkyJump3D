@@ -3491,14 +3491,26 @@ function updatePalaceMotion(dt) {
   palaceMotionClock += dt;
   const t = palaceMotionClock;
   for (const palace of palaceMotions) {
+    // Proximity reveal: clouds nearest the gate part/thin out when the player is close to the entrance,
+    // and close back up once they back away (ramped, not a hard cut, so it reads as the clouds drifting).
+    if (palace.entranceWorld) {
+      const near = pos.distanceTo(palace.entranceWorld) < 15 ? 1 : 0;
+      palace.reveal = THREE.MathUtils.clamp((palace.reveal || 0) + (near - (palace.reveal || 0)) * Math.min(1, dt * 1.5), 0, 1);
+    }
     for (const c of palace.clouds) {
       const angle = c.angle + t * c.orbitSpeed;
       const radius = c.radius + Math.sin(t * 0.12 + c.phase) * c.radiusWobble;
       const puffX = c.puffX * Math.cos(angle) - c.puffZ * Math.sin(angle);
       const puffZ = c.puffX * Math.sin(angle) + c.puffZ * Math.cos(angle);
       const bob = Math.sin(t * 0.32 + c.phase) * c.bob;
-      c.mesh.position.set(Math.cos(angle) * radius + puffX, c.y + bob, Math.sin(angle) * radius + puffZ);
-      const pulse = 1 + Math.sin(t * 0.24 + c.phase) * 0.018;
+      let px = Math.cos(angle) * radius + puffX, pz = Math.sin(angle) * radius + puffZ;
+      const partAmt = (palace.reveal > 0.001 && c.gateDist !== undefined) ? palace.reveal * Math.max(0, 1 - c.gateDist / 95) : 0;
+      if (partAmt > 0) {
+        const dirLen = Math.hypot(px, pz) || 1;
+        px += (px / dirLen) * partAmt * 50; pz += (pz / dirLen) * partAmt * 50;
+      }
+      c.mesh.position.set(px, c.y + bob + partAmt * 6, pz);
+      const pulse = (1 + Math.sin(t * 0.24 + c.phase) * 0.018) * (1 - partAmt * 0.55);
       c.mesh.scale.set(c.sx * pulse, c.sy * pulse, c.sz * pulse);
     }
     const breath = Math.sin(t * 0.72 + palace.breathPhase);  // slower, softer pulse like the roaming Maw
@@ -3559,13 +3571,15 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
     const yaw = Math.atan2(CX - gx, CZ - gz);         // built facing the commons center so the money side is what spawn sees
     const g = new THREE.Group(); g.position.set(gx, gy, gz); g.rotation.y = yaw;
     if (kind === 'pussy') g.scale.set(2.4, 2.3, 2.25); else g.scale.setScalar(2);
-    g.userData.noCull = true; scene.add(g);
+    g.userData.noCull = true; scene.add(g); g.updateMatrixWorld(true);
     const M = (geo, mat, x, y, z, sx = 1, sy = 1, sz = 1, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.set(0, ry, rz); m.userData.noCull = true; g.add(m); return m; };
     const lamF = (col, e, ei = 0.5) => lam(col, { emissive: e, emissiveIntensity: ei, fog: true });
     const glow = col => new THREE.MeshBasicMaterial({ color: col, fog: false, toneMapped: false });
     const bx2 = new THREE.BoxGeometry(1, 1, 1), sp2 = new THREE.SphereGeometry(1, 9, 7), cy2 = new THREE.CylinderGeometry(1, 1, 1, 9), cn2 = new THREE.ConeGeometry(0.5, 1, 4);
     if (kind === 'pussy') {                            // fleshy gothic keep with its entrance built into the front façade
       const cloudMotion = [], wetHighlights = [], wetDrips = [], entranceFolds = [];
+      const gateLocal = new THREE.Vector3(0, 37, 40);   // approximate centre of the gate recess/arch, in g's local space (see the opening/arch/cleft meshes below)
+      const gateDistOf = (lx, lz) => Math.hypot(lx - gateLocal.x, lz - gateLocal.z);   // horizontal-only: the cloud rings sit well above/below the gate's own y, so a 3D distance would never call any of them "near"
       const stone = lamF(0x9f536c, 0x431526, 0.28), lightStone = lamF(0xc8798e, 0x572336, 0.25);   // castle stonework back to its own palette
       const deepStone = lamF(0x673247, 0x290c1b, 0.25), trim = lamF(0xe09aaa, 0x682a40, 0.22);
       const softGeo = new THREE.SphereGeometry(1, 12, 9);
@@ -3739,8 +3753,9 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
         for (let i = 0; i < count; i++) {
           const angle = i * Math.PI * 2 / count;
           for (const [dx, dy, dz, sx, sy, sz, mat] of [[0, -2, 0, 18, 7, 13, mat1], [-8, 1, 1, 12, 8, 11, mat2], [8, 0, -2, 13, 7, 10, mat1], [0, 3, 4, 10, 6, 9, mat2]]) {
-            const puff = M(softGeo, mat, Math.cos(angle) * radius + dx, ringY + dy, Math.sin(angle) * radius + dz, sx, sy, sz);
-            cloudMotion.push({ mesh: puff, angle, radius, radiusWobble: 1.5, puffX: dx, puffZ: dz, y: ringY + dy, sx, sy, sz, phase: i * 0.73 + dx * 0.04 + dz * 0.03, orbitSpeed: 0.012 + (i % 3) * 0.0015, bob: 0.2 });
+            const baseX = Math.cos(angle) * radius + dx, baseZ = Math.sin(angle) * radius + dz;
+            const puff = M(softGeo, mat, baseX, ringY + dy, baseZ, sx, sy, sz);
+            cloudMotion.push({ mesh: puff, angle, radius, radiusWobble: 1.5, puffX: dx, puffZ: dz, y: ringY + dy, sx, sy, sz, phase: i * 0.73 + dx * 0.04 + dz * 0.03, orbitSpeed: 0.012 + (i % 3) * 0.0015, bob: 0.2, gateDist: gateDistOf(baseX, baseZ) });
           }
         }
       }
@@ -3748,10 +3763,11 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
       // the descent shelf / spawn side so the keep is genuinely hard to make out at range, not just framed.
       for (let i = 0; i < 18; i++) {
         const angle = i * Math.PI * 2 / 18 + 0.17, radius = 190 + (i % 3) * 14;
-        const puff = M(softGeo, cloudFar, Math.cos(angle) * radius, 60 + (i % 4) * 34, Math.sin(angle) * radius, 30, 14, 22);
-        cloudMotion.push({ mesh: puff, angle, radius, radiusWobble: 2.2, puffX: 0, puffZ: 0, y: 60 + (i % 4) * 34, sx: 30, sy: 14, sz: 22, phase: i * 0.91, orbitSpeed: 0.008 + (i % 3) * 0.001, bob: 0.3 });
+        const hazeY = 60 + (i % 4) * 34, hazeX = Math.cos(angle) * radius, hazeZ = Math.sin(angle) * radius;
+        const puff = M(softGeo, cloudFar, hazeX, hazeY, hazeZ, 30, 14, 22);
+        cloudMotion.push({ mesh: puff, angle, radius, radiusWobble: 2.2, puffX: 0, puffZ: 0, y: hazeY, sx: 30, sy: 14, sz: 22, phase: i * 0.91, orbitSpeed: 0.008 + (i % 3) * 0.001, bob: 0.3, gateDist: gateDistOf(hazeX, hazeZ) });
       }
-      palaceMotions.push({ clouds: cloudMotion, highlights: wetHighlights, drips: wetDrips, folds: entranceFolds, clefts: [{ material: cleftMat, opacity: 0.86 }], breathPhase: palaceMotions.length * 1.7 });
+      palaceMotions.push({ clouds: cloudMotion, highlights: wetHighlights, drips: wetDrips, folds: entranceFolds, clefts: [{ material: cleftMat, opacity: 0.86 }], breathPhase: palaceMotions.length * 1.7, entranceWorld: g.localToWorld(gateLocal.clone()), reveal: 0 });
       // Masonry frame stones tie the living gate back into the castle wall.
       for (const side of [-1, 1]) M(bx2, deepStone, side * 27, 39, 31, 1.5, 72, 1.5);
     } else if (kind === 'house') {                     // crooked gothic keep: candlelit windows and an unmistakable spired silhouette
