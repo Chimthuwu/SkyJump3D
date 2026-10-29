@@ -10571,8 +10571,9 @@ function showMenu(v) {
   if (v) menuRender(); 
   updateTouchUI();
 }
-function menuStart() {                                        // START now opens the single-player level select (levelSel is already the remembered last choice)
-  menuMode = 'levels'; levelSel = Math.min(Math.max(levelSel, 0), LEVELS.length - 1); menuRender();
+function menuStart() {                                        // START drops straight into the remembered/last-selected level (levelSel) — no level-select screen for single player
+  levelSel = Math.min(Math.max(levelSel, 0), LEVELS.length - 1);
+  launchLevel(levelSel);
 }
 // PRELOAD: show a loading screen, finish the platform merge, then compile EVERY shader variant that exists anywhere in the level (hidden objects included),
 // so nothing hitches the first time a new enemy, biome or effect comes into view.
