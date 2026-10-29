@@ -511,7 +511,7 @@ Platforms are **giant tree trunks, branches, mushroom caps, and hanging vines** 
 - Layout descends through foliage tiers. Organic, not a tower. Horizontal AND vertical — mixed.
 - Biomes map onto forest variants (Jungle = natural jungle, Frozen = winter forest, Inferno = burning undergrowth, etc.). Every biome in `ZONES` must still be reachable and readable.
 - Same fall-to-sky respawn, same moon, same `-1`/`-2` hell layer at the bottom (rooted through magma).
-- **Same number of dungeons as Lvl1** (5). Same framework. Placeholder themes OK: *Root Hollow*, *Beast Nest*, *Sunken Stump*, *Spore Vault*, *Canopy Temple*.
+- **Same number of dungeons as Lvl1** (6, updated 2026-10-29 — Lvl1 gained a 6th). Same framework. Placeholder themes OK: *Root Hollow*, *Beast Nest*, *Sunken Stump*, *Spore Vault*, *Canopy Temple*, *Hornet's Hive*.
 
 ---
 
@@ -523,7 +523,7 @@ Platforms are **floating mountain fragments, cliff ledges, rock spires, and snow
 - Layout descends through cliff tiers and broken peaks. Rocky, expansive, readable.
 - Biomes re-skinned as alpine variants (same biome gameplay, new geometry and palette).
 - Same fall-to-sky respawn, same moon, same `-1`/`-2` hell layer at the bottom (magma core).
-- **Same number of dungeons as Lvl1** (5). Placeholder themes OK: *Mine Shaft*, *Crystal Grotto*, *Avalanche Vault*, *Eagle's Aerie*, *Deep Cavern*.
+- **Same number of dungeons as Lvl1** (6, updated 2026-10-29 — Lvl1 gained a 6th). Placeholder themes OK: *Mine Shaft*, *Crystal Grotto*, *Avalanche Vault*, *Eagle's Aerie*, *Deep Cavern*, *Frozen Keep*.
 
 ---
 
@@ -535,7 +535,7 @@ Platforms are **solid clouds, floating islands, and weather formations**. Player
 - Layout descends through atmospheric layers (storm band → clear air → lower clouds → bedrock).
 - Biomes re-skinned as sky/weather variants (Storm = storm clouds, Rave = aurora clouds, etc.).
 - Same fall-to-sky respawn, same moon (visible above the cloud deck), same `-1`/`-2` hell layer below the cloud floor.
-- **Same number of dungeons as Lvl1** (5). Placeholder themes OK: *Cloud Castle*, *Sky Temple*, *Aurora Vault*, *Thunder Dock*, *Floating Ruin*.
+- **Same number of dungeons as Lvl1** (6, updated 2026-10-29 — Lvl1 gained a 6th). Placeholder themes OK: *Cloud Castle*, *Sky Temple*, *Aurora Vault*, *Thunder Dock*, *Floating Ruin*, *Lightning Spire*.
 
 ---
 
@@ -543,12 +543,17 @@ Platforms are **solid clouds, floating islands, and weather formations**. Player
 
 **UPDATE 2026-10-29 (same session, continued):** Added a 6th base-level dungeon, **THE EIFFEL CANARD** (user request: "Eiffel tower french canard dungeon defended by canard duck enemy NPCs"), on the exact same shared `farDungeon`/`farMonument`/`commonsMidBuild` framework as Bone Cathedral/Bubble Citadel — wrought-iron tower monument, new `duck` enemy variant (own mesh in `buildBody`, `WALKER_STATS`/`AI_ALIAS` entry aliased to the base walker AI), Café Terrace + Pond Aviary rooms, Baguette Barrage hazard, Golden Croissant secret, Rotisserie vault. Lvl1 now has **6** dungeons, not 5 — the design doc's "exactly 5, all other levels must match" rule is superseded by this explicit user request; future levels should match 6 dungeons now, not 5. Also fixed a real complaint from live testing (user screenshot): all 6 dungeon monuments were deliberately built with `fog: false` so they'd read as permanent landmarks visible from spawn — that's exactly what let the player see every dungeon entrance at once by looking around 360°, defeating any sense of exploration. Flipped `farMonument`'s shared `lamF` material helper to respect `scene.fog` (kept small glow/window accents fog-exempt, so a hint of light is still visible from afar without giving away the full structure) and widened each dungeon's `ELEV` offset. Verified via `__ng.midRoute(key)` for all 6 keys: real interior/rooms/secret/hazards/deck/bot, 0 runtime errors. NOT yet done, left for next session (also requested by the user, same conversation): **Pussy Palace's cloud ring should actively conceal the entrance and only PART OPEN when the player is within ~15m**, revealing it dynamically — right now the clouds are static decoration only (see `palaceMotions`/`cloudMotion` tick, and the entrance position is the gap in the front curtain wall built in `farMonument`'s `kind==='pussy'` branch). This needs a proximity check in the clouds' per-frame update (wherever `palaceMotions` is ticked each frame) that parts/fades the nearest cloud puffs when `Math.hypot(pos.x-entranceX, pos.z-entranceZ, pos.y-entranceY) < 15`, and un-parts them again once the player backs away. NOT deployed to Cloudflare yet — this was pushed to GitHub only; user is stepping away from local wrangler deploys for now and said they'd push with `npm run deploy:pages` later, or do it from another agent/session that has `CLOUDFLARE_API_TOKEN` available.
 
-**HANDOFF for whoever picks this up next:** research for Lvl2 "The Overgrowth" was started 2026-10-29 (an Explore agent was mapping the exact LEVEL_DEFS/zone/dressSite/dungeon-framework pattern used by Rent's Due and Nostalgia Overdose, as a blueprint to copy) but the session was cut short before any Overgrowth code was written — no `LEVEL_DEFS.overgrowth`, no `OVERGROWTH_ZONES`, nothing exists yet. Follow the exact Rent's Due/NOS pattern (see their 2026-10-23 log entries above for the template: own zone array, `overgrowthOn()` gate, `buildOvergrowthNetwork()`, tree/branch/mushroom-cap/vine dressing in `dressSite`, reuse the existing enemy roster via `AI_ALIAS`, reuse the shared dungeon framework (`commonsMidBuild`/`farDungeon`/`farMonument`) for its own 5 forest-themed dungeons gated to this level only). Build ONE level per session per this file's own established convention (line ~39) — do not attempt Lvl2+3+4 together.
-- [x] Lvl1 has 5 dungeons (3 existing + 2 new) — Bone Cathedral + Bubble Citadel landed 2026-10-29.
-- [ ] Lvl2 "The Overgrowth" — full forest level, 5 dungeons.
-- [ ] Lvl3 "The Ascent" — full mountain level, 5 dungeons.
-- [ ] Lvl4 "Skyfall" — full cloud level, 5 dungeons.
+**THE PLAN, confirmed with the user 2026-10-29 (read this before picking up any of the below):**
+- The single-player **menu** now shows ONLY Lil Spasticism (`LEVELS` in `index.html` filters `LEVELS_ALL` down to `['descent','overgrowth','ascent','skyfall']` — add each level's `id` to that array the moment it's built and ready). Rent's Due / Nostalgia Overdose / THE ARENAS / THE BETWEEN are **not deleted** — their code, `LEVEL_DEFS` entries, and `LEVELS_ALL` cards are untouched, just filtered out of the reachable menu roster. This was a deliberate, explicit, reversible choice (not a bug-fix side effect) — do not "restore" them unless the user asks.
+- **All three remaining levels get built**, not just one: Lvl2 "The Overgrowth" (forest), Lvl3 "The Ascent" (mountain), Lvl4 "Skyfall" (cloud) — build ONE at a time, fully working and committed before starting the next (this file's own established convention, line ~39).
+- **Every level, including Lvl1, now has 6 dungeons, not 5** — THE EIFFEL CANARD was added to Lvl1 on 2026-10-29 as a 6th, superseding the original design doc's "exactly 5" text above. Lvl2/3/4 each need their own 6 themed dungeons on the same shared `commonsMidBuild`/`farDungeon`/`farMonument` framework (see the node-picking ladder in `buildCommons` — it already goes up to 6 candidate slots: nest/house/shroom/bone/bubble/eiffel-equivalent).
+- Lvl2 "The Overgrowth": no code exists yet (an Explore agent mapped the Rent's Due/NOS pattern 2026-10-29 but the session ended before writing any Overgrowth code). Follow that exact pattern (see the 2026-10-23 log entries above for Rent's Due/NOS as the template: own zone array, `overgrowthOn()` gate, `buildOvergrowthNetwork()`, tree/branch/mushroom-cap/vine dressing in `dressSite`, reuse the existing enemy roster via `AI_ALIAS`, 6 forest-themed dungeons gated to this level only).
+- [x] Lvl1 has 6 dungeons (3 existing + Bone Cathedral + Bubble Citadel + THE EIFFEL CANARD, landed 2026-10-29).
+- [ ] Lvl2 "The Overgrowth" — full forest level, 6 dungeons.
+- [ ] Lvl3 "The Ascent" — full mountain level, 6 dungeons.
+- [ ] Lvl4 "Skyfall" — full cloud level, 6 dungeons.
 - [ ] All four levels share identical physics, enemies, biomes, moon, hell platforms, and co-op.
+- [ ] Each level's `id` added to the `LEVELS` menu filter in `index.html` the moment it's done.
 
 ---
 
@@ -558,7 +563,7 @@ Platforms are **solid clouds, floating islands, and weather formations**. Player
 - Fall-to-sky respawn, moon, space, `-1`/`-2` hell platforms, all biomes — all present and identical to Lvl1.
 - No new mechanics, no new verbs, no new systems, no new physics.
 - Co-op behaves identically to Lvl1 in every new level.
-- Every level has the same number of dungeons as Lvl1 after its two additions.
+- Every level has the same number of dungeons as Lvl1 (6, as of 2026-10-29).
 
 ---
 
