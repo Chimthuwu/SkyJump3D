@@ -5383,7 +5383,7 @@ function buildUniverseLinks(hubs) {
   linkGraphFn = () => ({ links: farLinks.map(e => ({ a: hubNode(e.a), b: hubNode(e.b), ok: e.ok, kind: e.kind, from: [e.a.x | 0, e.a.z | 0], to: [e.b.x | 0, e.b.z | 0] })), unreachable: missing() });
 }
 // lay out rooftops and arenas around the tower, then link them into a network
-function buildNetwork(exitAngle) {
+function buildNetwork(exitAngle, shape) {
   const hubs = activeStartHubs().map(home => ({ ...home }));   // one roof in solo, all six co-op homes
   const keepOut = buildSkyway(hubs);                 // build the stairway to the moon FIRST so nothing else is placed on top of it
   hubs.push(buildRidePark());                        // the ride park joins the hub network, gets connectivity for free
@@ -5397,25 +5397,48 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
   const regionSpan = level <= 2 ? 3 : level <= 4 ? 12 : Math.max(6, 12 - Math.floor((level - 4) / 2));
   const regionForHub = i => Math.floor(Math.max(0, i - 1) / regionSpan);
   const biomeBands = ZONES.filter(zone => zone.name !== 'Jungle' && zone.name !== 'Psychedelic').length;
+  // `shape` (LEVEL_SHAPES.overgrowth/ascent/skyfall, see below) replaces the default's uniform radial-band
+  // scatter with a genuinely different per-universe spatial pattern (branching tree / switchback trail /
+  // archipelago) for Levels 2-4. It only changes WHERE hubs are placed (and which of its own 3 zones they get) -
+  // everything downstream (connect() passes, buildUniverseLinks, buildCommons, buildBranches, buildHubPortalLoop,
+  // the moon skyway, home towers staying at universeCentre(slot)) is untouched shared code, so co-op spawn math,
+  // missions and the moon/-1/-2 hell ladder all keep working exactly as before.
   for (let slot = 0; slot < HOME_SLOT_COUNT; slot++) {
     const centre = universeCentre(slot), want = [];
     for (let i = 0; i < nAu; i++) { const region = regionForHub(i + 1); want.push({ arena: true, type: types[(i + slot * 3) % types.length], region, zone: zoneForRegion(region, i, slot) }); }
     for (let i = 0; i < nBu; i++) { const region = regionForHub(nAu + i + 1); want.push({ arena: false, region, zone: zoneForRegion(region, nAu + i, slot) }); }
-    for (const w of want) {
+    const M = want.length, clusterRep = shape && shape.islands ? new Array(shape.islands).fill(null) : null;
+    for (let j = 0; j < M; j++) {
+      const w = want[j];
       const ext = w.arena ? ((w.type === 'gauntlet' || w.type === 'runway') ? 46 : (w.type === 'ring' || w.type === 'reactor') ? 32 : 26) : 20;
+      let placed = null;
       for (let tries = 0; tries < 250; tries++) {
-        const biomeBand = (Math.floor(w.region / (level < 6 ? 2 : 1)) + level - 4 + slot) % biomeBands;      // each universe rotates its biome bands
-        const bandWidth = 6.283 / biomeBands, ang = (biomeBand + 0.5) * bandWidth + (rand() - 0.5) * bandWidth * 0.72;
-        const dist = 60 + rand() * (150 + level * 10), x = centre.x + Math.cos(ang) * dist, z = centre.z + Math.sin(ang) * dist;
+        let ang, dist, zone;
+        if (shape) { const s = shape.place(j, M, slot, rand); ang = s.ang; dist = s.dist + (tries > 60 ? (tries - 60) * 0.7 : 0); zone = shape.zones[s.zoneIdx]; }
+        else {
+          const biomeBand = (Math.floor(w.region / (level < 6 ? 2 : 1)) + level - 4 + slot) % biomeBands;      // each universe rotates its biome bands
+          const bandWidth = 6.283 / biomeBands; ang = (biomeBand + 0.5) * bandWidth + (rand() - 0.5) * bandWidth * 0.72;
+          dist = 60 + rand() * (150 + level * 10); zone = w.zone;
+        }
+        const x = centre.x + Math.cos(ang) * dist, z = centre.z + Math.sin(ang) * dist;
         if (hubs.some(h => Math.hypot(h.x - x, h.z - z) < h.r + ext + 18)) continue;
         if (Math.hypot(x - groundPad.x, z - groundPad.z) < 34 + ext || Math.hypot(x - boss.x, z - boss.z) < 30 + ext) continue;
         if (keepOut.some(kk => Math.hypot(kk.x - x, kk.z - z) < kk.r + ext)) continue;
         let hub;
-        if (w.arena) hub = buildArena(w.type, x, 45 + rand() * (TOP - 90), z, w.zone);
-        else hub = buildBuildingHub(x, z, 18 + rand() * 14, 18 + rand() * 14, 35 + rand() * (TOP - 60), w.zone);
+        if (w.arena) hub = buildArena(w.type, x, 45 + rand() * (TOP - 90), z, zone);
+        else hub = buildBuildingHub(x, z, 18 + rand() * 14, 18 + rand() * 14, 35 + rand() * (TOP - 60), zone);
         hub.region = w.region; hub.universe = slot; hubs.push(hub);
+        placed = hub;
         break;
       }
+      if (shape && shape.islands && placed) { const isl = j % shape.islands; if (!clusterRep[isl]) clusterRep[isl] = placed; }
+    }
+    // archipelago shapes (Skyfall) deliberately space islands far enough apart that the generic distance-capped
+    // connect() passes below may not bridge every pair - force an explicit ring of wind-bridges between
+    // consecutive islands so the whole universe stays reachable from the home tower.
+    if (shape && shape.islands && clusterRep) {
+      const reps = clusterRep.filter(Boolean);
+      for (let k = 0; k < reps.length; k++) connect(reps[k], reps[(k + 1) % reps.length]);
     }
   }
   hubs.sort((a, b) => b.top - a.top || ((b.kind === 'start') - (a.kind === 'start')));   // spawn roofs stay the highest point and sort first
@@ -5533,7 +5556,7 @@ const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub
 // mechanism the Jungle biome already uses for its own skyline, just forced on for the whole level instead of one
 // zone). ACCEPTANCE CRITERIA is satisfied to the letter this way: a player dropped into Overgrowth cannot tell
 // they're not playing Lvl1 except for what the platforms look like and what's inside the dungeons.
-function buildOvergrowthNetwork(exitAngle) { return buildNetwork(exitAngle); }
+function buildOvergrowthNetwork(exitAngle) { return buildNetwork(exitAngle, OVERGROWTH_SHAPE); }
 
 // LEVEL 3 "THE ASCENT": same reasoning as Overgrowth just above — reuse buildNetwork() verbatim (hub graph, moon/
 // space, hell platforms, co-op, commons/dungeon framework all untouched) and reskin visually through the same two
@@ -5541,7 +5564,7 @@ function buildOvergrowthNetwork(exitAngle) { return buildNetwork(exitAngle); }
 // far-anchor/forecourt/climb/descend/garrison shape; (2) a new rockify() (sibling of trunkify(), wired the same way
 // into setZone and buildLevel's rebuild-safety call) turns every boxMesh building into a jagged rock spire with a
 // snow cap, firing unconditionally while ascentOn() is true regardless of the current biome zone.
-function buildAscentNetwork(exitAngle) { return buildNetwork(exitAngle); }
+function buildAscentNetwork(exitAngle) { return buildNetwork(exitAngle, ASCENT_SHAPE); }
 
 // LEVEL 4 "SKYFALL": same reasoning as Overgrowth/Ascent just above — reuse buildNetwork() verbatim (hub graph,
 // moon/space, hell platforms, co-op, commons/dungeon framework all untouched) and reskin visually through the same
@@ -5551,7 +5574,7 @@ function buildAscentNetwork(exitAngle) { return buildNetwork(exitAngle); }
 // into a solid cloud-mass platform with wispy edges, firing unconditionally while skyfallOn() is true regardless
 // of the current biome zone. The existing updateClouds()/cloudMotion decorative sky-sprite systems are flat
 // billboards with no 3D geometry to reskin buildings with, so this is new code rather than a dial-up of those.
-function buildSkyfallNetwork(exitAngle) { return buildNetwork(exitAngle); }
+function buildSkyfallNetwork(exitAngle) { return buildNetwork(exitAngle, SKYFALL_SHAPE); }
 
   // ===== LEVEL-SPECIFIC NETWORK BUILDERS =====
   // Each level gets its own completely unique platform architecture
@@ -12752,6 +12775,43 @@ Object.assign(BIOME_ENEMIES, {
 const levelZoneForHub = i => levelZones()[Math.min(2, Math.floor(Math.max(0, i) / (2 + (level >> 1))))];
 // generic crumble-roll boost keyed on a zone's own `decay` field (mirrors rentCrumbleRoll's `rent` tiers) - 0 for any zone without `decay`, so every existing level's odds are untouched.
 const zoneCrumbleRoll = zone => rand() < (zone && zone.decay ? [0.22, 0.42, 0.62][zone.decay - 1] : 0);
+// LEVELS 2-4's macro-shape generators, passed as buildNetwork's `shape` param (see buildNetwork, ~index.html:5386).
+// Each `place(j, M, slot, rand)` maps a want-list index (0..M-1) within one universe to {ang, dist, zoneIdx} -
+// genuinely different spatial patterns from the default's uniform radial-band scatter, while reusing buildNetwork's
+// own hub-building/collision-avoidance/connect() machinery verbatim (only the WHERE changes, not the HOW).
+const OVERGROWTH_SHAPE = {        // branching tree: BOUGHS boughs per universe, hubs climb outward rung by rung,
+  zones: OVERGROWTH_ZONES,        // alternating boughs drift opposite ways so they read as separate limbs, not one ring.
+  place(j, M, slot, rand) {
+    const BOUGHS = 5, rungsTotal = Math.ceil(M / BOUGHS);
+    const b = j % BOUGHS, rung = Math.floor(j / BOUGHS);
+    const baseAngle = slot * 0.73 + b * (6.28318 / BOUGHS);
+    const ang = baseAngle + (b % 2 ? 1 : -1) * rung * 0.13 + (rand() - 0.5) * 0.2;
+    const dist = 72 + rung * 54 + rand() * 20;
+    const zoneIdx = rung < rungsTotal / 3 ? 0 : rung < rungsTotal * 2 / 3 ? 1 : 2;
+    return { ang, dist, zoneIdx };
+  }
+};
+const ASCENT_SHAPE = {        // single switchback trail: a zigzagging path per universe, hairpinning left/right every
+  zones: ASCENT_ZONES,        // leg while still net-drifting forward so it winds most of the way around the massif.
+  place(j, M, slot, rand) {
+    const leg = Math.floor(j / 2), legDir = (leg % 2 === 0) ? 1 : -1;
+    const ang = slot * 0.73 + leg * 0.22 + legDir * 0.46 + (rand() - 0.5) * 0.1;
+    const dist = 80 + j * 23 + rand() * 12;
+    const thirds = Math.ceil(M / 3), zoneIdx = j < thirds ? 0 : j < thirds * 2 ? 1 : 2;
+    return { ang, dist, zoneIdx };
+  }
+};
+const SKYFALL_SHAPE = {        // archipelago: ISLANDS tight clusters per universe, each its own little floating
+  zones: SKYFALL_ZONES, islands: 5,        // island, spaced far enough apart that buildNetwork force-bridges them (see `shape.islands`).
+  place(j, M, slot, rand) {
+    const ISLANDS = 5, c = j % ISLANDS, k = Math.floor(j / ISLANDS);
+    const clusterAngle = slot * 0.73 + c * (6.28318 / ISLANDS), clusterDist = 130 + c * 68;
+    const ang = clusterAngle + k * 1.7 + (rand() - 0.5) * 0.5;
+    const dist = clusterDist + 10 + k * 7 + rand() * 4;
+    const zoneIdx = c < ISLANDS / 3 ? 0 : c < ISLANDS * 2 / 3 ? 1 : 2;
+    return { ang, dist, zoneIdx };
+  }
+};
 // THE ARENAS: four ZONES-shaped palette objects kept OUTSIDE ZONES (same reason as RENT_ZONES / NOS_ZONES - appending would
 // change 'Lil Spasticism'). One tight dueling palette per chamber family, all weather:'none':
 //   Longest Yard  ->stral void: black void, starlight cyan plates, no floor, fall = death
