@@ -2777,7 +2777,7 @@ function* buildPlanetLegGen(i) {
       if (pick < 0.16 && canSpecial) kind = 'mover'; else if (pick < 0.22 && canSpecial) kind = 'orbit'; else if (pick < 0.30 && canSpecial) kind = 'crumble';
       else if (pick < 0.35 && canSpecial) kind = 'piston'; else if (pick < 0.40 && canSpecial) kind = 'breath';
       else if (pick < 0.46 && canSpecial) kind = 'blink'; else if (pick < 0.52 && canSpecial) kind = 'swing'; else if (pick < 0.58 && canSpecial) kind = 'spin';
-      else if (pick < 0.62) shape = 'disc'; else if (pick < 0.74) { if (Math.abs(ux) > Math.abs(uz)) { hw = 5.6; hd = 1.25; } else { hw = 1.25; hd = 5.6; } }
+      else if (pick < 0.62) shape = 'disc'; else if (pick < 0.80) { if (Math.abs(ux) > Math.abs(uz)) { hw = 5.6; hd = 1.25; } else { hw = 1.25; hd = 5.6; } }
       let sl;
       if (kind) {
         sl = addPlatform(x, y, z, 2.7 + R() * 0.9, false, 0, Z, true, true); sl.zone = Z; sl.alien = true;
@@ -2794,12 +2794,24 @@ function* buildPlanetLegGen(i) {
         }
       }
       if (n % 5 === 2) coin(x, y + 1.2, z, Z);
+      if (!kind && n % 5 === 2) decorSites.push({ x, z, y, hw, hd, grp: null });   // ~1-in-6 instanced statics get dressed too (mirrors addPlatform's decorSites push)
       if (n % 70 === 35) { heart(x + 1, y + 1.3, z); ammoBox(x - 1.5, y + 0.8, z); }
       if (n % 36 === 18 && L === 1) addCheckpoint(x, y, z, Z);
       if (!kind && n > 5 && n % 8 === 4 && L !== 2) spawnBiomeEnemy(x, y, z, sl, Z, 0.9, 1);
       if (!kind && n % 23 === 11 && L === 2) spawnBiomeEnemy(x, y, z, sl, Z, 0.9, 1);
       if (n > 10 && n % 37 === 18) makeUfo(x + (R() - 0.5) * 8, y + 9, z + (R() - 0.5) * 8);   // UFOs fit anywhere out here now that the bridge has its own space zones
       if (n % 80 === 40) weaponPickup(2 + ((R() * (WEAPONS.length - 2)) | 0), x, y + 1.2, z);
+    }
+  }
+  // CROSS-LINKS: where two lanes weave near each other, bridge them so the three lanes form a network you can switch between (mirrors buildAlienRouteGen's Mars cross-links)
+  { const linkSeen = new Set();
+    for (let a = 0; a < all.length; a++) for (let b = a + 1; b < all.length; b++) {
+      const A = all[a], B = all[b]; if (A.L === B.L || Math.abs(A.n - B.n) > 4) continue;
+      const dd = Math.hypot(A.x - B.x, A.z - B.z); if (dd < 15 || dd > 27 || Math.abs(A.y - B.y) > 5) continue;
+      const key = A.L + '-' + B.L + '-' + ((A.n / 14) | 0); if (linkSeen.has(key)) continue; linkSeen.add(key);
+      const mxp = (A.x + B.x) / 2, mzp = (A.z + B.z) / 2, myp = (A.y + B.y) / 2 + 0.5, sp = freeSpot(mxp, mzp, myp); if (!sp) continue;
+      const seg = Math.min(SEGS - 1, Math.floor(A.n / PER * SEGS));
+      addStatic(sp[0], myp, sp[1], 2.3, 2.3, 'disc', seg);
     }
   }
   for (const k in batches) { const b = batches[k]; b.body.count = b.nb; b.plate.count = b.np; const ms = [b.body, b.plate]; if (b.cap) { b.cap.count = b.nc; ms.push(b.cap); } for (const m of ms) { m.instanceMatrix.needsUpdate = true; lvl.add(m); } }
