@@ -28,6 +28,28 @@
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
   :root{--neon-cyan:#36f6ff;--neon-pink:#ff3fc8;--neon-lime:#c4ff4d;--panel:rgba(5,10,27,.82)}
+  /* twilight palette (F6 / __ng.twilight): indigo/violet accent set matching the HERMES-AME "ame" skin */
+  html.twilight{--neon-cyan:#8d7bff;--neon-pink:#c95bff;--neon-lime:#6fb7ff;--panel:rgba(14,10,34,.85)}
+  html.twilight #menu h1{text-shadow:0 0 12px #8d7bff,0 0 34px #c95bff}
+  html.twilight #menu button{border-color:#8d7bff;text-shadow:0 0 8px #8d7bff;box-shadow:0 0 12px #8d7bff55 inset;color:#ece9ff}
+  html.twilight #menu button.sel,html.twilight #menu button:hover{background:#8d7bff;color:#0a0620;text-shadow:none;box-shadow:0 0 24px #8d7bff}
+  html.twilight #toast{background:linear-gradient(180deg,#241056,#0d0733)}
+  html.twilight #hint{background:linear-gradient(180deg,#1d0a44,#0c0626)}
+  html.twilight #menuLevels button.lvlCard.sel{border-color:#c95bff;box-shadow:0 0 18px #c95bff}
+  html.inmenu #touchUI{display:none}   /* keep the touch circles off the menu screens */
+  /* touch-controls overlay: shown automatically on coarse-pointer devices, toggled via __ng.touchToggle() */
+  #touchUI{position:fixed;inset:0;display:none;pointer-events:none;z-index:12;font:700 11px system-ui,Segoe UI,sans-serif;color:#dff6ff;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;text-align:center;letter-spacing:.08em}
+  #touchUI.on{display:block}
+  #touchUI .tbtn{position:absolute;pointer-events:auto;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(24,14,54,.55);border:2px solid rgba(141,123,255,.6);box-shadow:0 0 10px rgba(141,123,255,.25);touch-action:none}
+  #touchUI .tbtn:active{background:rgba(141,123,255,.5)}
+  #touchUI .bFire{right:26px;bottom:96px;width:76px;height:76px;font-size:13px}
+  #touchUI .bJump{right:116px;bottom:36px;width:64px;height:64px}
+  #touchUI .bAim{right:34px;bottom:22px;width:52px;height:52px;font-size:10px}
+  #touchUI .bWpn{right:216px;bottom:140px;width:48px;height:48px;font-size:10px}
+  #touchUI .bPause{right:12px;top:14px;width:46px;height:46px;font-size:10px;border-radius:10px}
+  #touchUI .stick{position:absolute;left:26px;bottom:26px;width:130px;height:130px;pointer-events:auto;touch-action:none;background:rgba(24,14,54,.4);border:2px solid rgba(141,123,255,.45)}
+  #touchUI .stick .knob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:rgba(141,123,255,.55);pointer-events:none}
+  html.touchmode canvas{touch-action:none}
   html,body{margin:0;height:100%;overflow:hidden;background:#050817;font-family:ui-monospace,Consolas,monospace;color:#e9faff;user-select:none}
   canvas{display:block;image-rendering:auto;position:fixed;inset:0;width:100vw;height:100vh;z-index:0}
   body::before,body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:1}
@@ -189,9 +211,30 @@
   #menu.main{justify-content:space-between;padding:7vh 0 13vh}
   #menu .hint{margin-top:22px;font-size:13px;opacity:.6;letter-spacing:.1em}
   #menuMulti,#menuHost,#menuJoin,#menuBye,#menuLevels{display:none}
-  #menuLevels button{text-align:left;padding:12px 18px}
-  #menuLevels button span.lvlSub{display:block;font-size:12px;font-weight:400;letter-spacing:.04em;opacity:.75;margin-top:4px;text-shadow:none}
-  #menuLevels button:disabled span.lvlSub{opacity:.55}
+  #menuLevels .sub{margin:6px auto 14px}
+  #lvlWrap{display:flex;gap:18px;align-items:stretch;justify-content:center;max-width:min(980px,94vw);width:100%}
+  #lvlCards{display:flex;flex-direction:column;gap:8px;width:min(400px,46vw);max-height:52vh;overflow:auto;flex:none}
+  #menuLevels button.lvlCard{display:flex;align-items:center;gap:12px;width:100%;margin:0;padding:8px 12px;text-align:left;font:700 17px system-ui,Segoe UI,sans-serif;letter-spacing:.04em;box-sizing:border-box;transition:box-shadow .12s,border-color .12s}
+  #menuLevels .lvlThumb{flex:none;width:64px;height:44px;display:flex;align-items:center;justify-content:center;font-size:22px;border:1px solid #ffffff2e;box-shadow:inset 0 0 12px #000a}
+  #menuLevels .lvlTxt{display:flex;flex-direction:column;gap:2px;min-width:0;text-align:left}
+  #menuLevels .lvlName{color:#e9fbff;text-shadow:0 0 8px #36f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #menuLevels .lvlSub{display:block;font-size:11px;font-weight:400;letter-spacing:.04em;opacity:.75;margin-top:2px;text-shadow:none}
+  #menuLevels .lvlSub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #menuLevels .lvlLock{margin-left:auto;flex:none;font-size:16px}
+  #menuLevels button.lvlCard:hover:not(.sel){background:rgba(30,44,80,.88);color:#e9fbff;text-shadow:0 0 6px #36f6ff;box-shadow:0 0 10px #36f6ff55}
+  #menuLevels button.lvlCard.sel{background:rgba(36,52,96,.95);border-color:#ff3fc8;color:#ffe9fb;box-shadow:0 0 18px #ff3fc8}
+  #menuLevels .lvlCard.locked{opacity:.55;filter:grayscale(.5)}
+  #lvlPreview{flex:1;min-width:0;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;padding:14px 16px;text-align:left;background:rgba(8,14,32,.85);border:1px solid #36f6ff66;border-radius:6px;box-shadow:inset 0 0 24px #36f6ff26,0 0 14px #0008}
+  #lvlPrevThumb{flex:none;height:64px;display:flex;align-items:center;justify-content:center;font-size:32px;border-radius:4px;border:1px solid #ffffff2e}
+  #lvlPrevName{font:800 clamp(18px,2.4vw,24px) system-ui,Segoe UI,sans-serif;letter-spacing:.1em;color:#e9fbff;text-shadow:0 0 10px #36f6ff}
+  #lvlPrevSub{font-size:13px;line-height:1.5;opacity:.85}
+  #lvlPrevFeat{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-direction:column;gap:5px}
+  #lvlPrevFeat li{font-size:12px;line-height:1.45;opacity:.85;padding-left:14px;position:relative}
+  #lvlPrevFeat li::before{content:"\25B8";position:absolute;left:0;color:#ff3fc8}
+  #lvlPrevHint{margin-top:auto;font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.6}
+  @media(max-width:700px){#lvlWrap{flex-direction:column}#lvlCards{width:100%;max-height:38vh}#lvlPreview{flex:none}}
+  #menu.launching{animation:menuLaunch .42s cubic-bezier(.5,0,.9,.4) forwards;pointer-events:none}
+  @keyframes menuLaunch{to{opacity:0;transform:scale(1.18);filter:blur(6px)}}
   #menu .steps{list-style:none;padding:0;margin:0 auto 14px;max-width:660px;text-align:left}
   #menu .steps li{display:flex;gap:12px;align-items:flex-start;margin:10px 0;line-height:1.5}
   #menu .steps li>b:first-child{flex:none;width:22px;text-align:center;color:#ff3fc8}
@@ -249,13 +292,23 @@
 <div id="ride"></div>
 <div id="dbg"></div>
 <div id="subs"></div>
+<div id="touchUI"></div>
 <div id="menu">
   <h1>SkyJump3D</h1>
   <div class="sub" id="menuSub">You're on the roof of a towering neon city. The only way is down &mdash; hop between floating platforms, stomp or blast the bots, beat each arena's Guardian, and reach the street.</div>
   <div id="menuMain"><button id="bStart" class="sel" style="animation:pulse 1.2s ease-in-out infinite alternate">CLICK TO START</button><button id="bMulti" style="font-size:12px;opacity:.7">MULTIPLAYER (P)</button><button id="bExit" style="display:none">EXIT</button></div>
   <div id="menuLevels">
-    <div class="sub">Choose a level.</div>
-    <div id="lvlList"></div>
+    <div class="sub">SINGLE PLAYER &mdash; CHOOSE A LEVEL</div>
+    <div id="lvlWrap">
+      <div id="lvlCards"></div>
+      <div id="lvlPreview">
+        <div id="lvlPrevThumb"></div>
+        <div id="lvlPrevName"></div>
+        <div id="lvlPrevSub"></div>
+        <ul id="lvlPrevFeat"></ul>
+        <div id="lvlPrevHint"></div>
+      </div>
+    </div>
     <button id="bLevelsBack">BACK</button>
   </div>
   <div id="menuMulti">
@@ -3356,7 +3409,7 @@ function buildCommons(launch, ux, uz, px, pz, homes) {
   // MID-BAND SPOKES: the nest goes on the node angularly FARTHEST from the descent shelf, the house on the node
   // angularly OPPOSITE the nest, and the shroom wherever there's the most clear air left, so all three locations
   // hang in open air and never crowd a route.
-  let nestNode = null, houseNode = null, shroomNode = null;
+  let nestNode = null, houseNode = null, shroomNode = null, boneNode = null, bubbleNode = null;
   {
     const cands = nodes.filter(n => !n.gate && !n.outpost && ad(n.a, ma) > 1.05);
     if (cands.length >= 3) {
@@ -3367,8 +3420,24 @@ function buildCommons(launch, ux, uz, px, pz, homes) {
       nestNode = cands.slice().sort((p, q) => ad(q.a, ma) - ad(p.a, ma))[0];
       houseNode = cands.filter(n => n !== nestNode).sort((p, q) => ad(q.a, nestNode.a) - ad(p.a, nestNode.a))[0];
     }
+    // MID-BAND DUNGEONS 4+5: THE BONE CATHEDRAL and THE BUBBLE CITADEL take whatever clear-air ring
+    // nodes remain after the first three sites claim theirs; fewer than four unlocked sites just build less.
+    if (cands.length >= 4) {
+      const picked = [nestNode, houseNode, shroomNode].filter(Boolean);
+      const spreadScore = (o, from) => ad(o.a, ma) + from.reduce((s, p) => s + ad(o.a, p.a), 0);
+      const farFrom = from => n => from.every(p => ad(n.a, p.a) > 0.55);
+      const rest = cands.filter(n => !picked.includes(n));
+      const pool = rest.filter(farFrom(picked));
+      boneNode = (pool.length ? pool : rest).slice().sort((p, q) => spreadScore(q, picked) - spreadScore(p, picked))[0];
+      if (boneNode && cands.length >= 5) {
+        picked.push(boneNode);
+        const rest2 = pool.filter(n => n !== boneNode);
+        const pool2 = rest2.filter(farFrom(picked));
+        bubbleNode = (pool2.length ? pool2 : rest2).slice().sort((p, q) => spreadScore(q, picked) - spreadScore(p, picked))[0];
+      }
+    }
   }
-  commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode);
+  commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubbleNode);
 }
 
 // ---------- COMMONS MID BAND: two fought-over locations below the rim and above LEDGE -1, each with its own unique boss ----------
@@ -3379,10 +3448,14 @@ function buildCommons(launch, ux, uz, px, pz, homes) {
 // Everything is universal (solo / co-op / PvP): the structures build on every client; spawns and boss progress run
 // on the host, and guests see the units through the normal enemy-snapshot channels (enemy-kill server does the rest).
 const FLESH_ZONE = { name: 'FleshNest', plate: 0xff5aa0 };
+const BONE_ZONE = { name: 'BoneCathedral', desc: 'hollow hymns, and a treasury of other people\'s bones', top: '#ddd6c6', mid: '#a89f8f', bot: '#6b6156', fog: 0x8a8174, hemi: 0.7, hemiCol: 0xe8e0cc, sun: 0.78, sunCol: 0xf0e8d8, cloud: 0x7a7168, plate: 0xd8d0c0, weather: 'none' };
+const BUBBLE_ZONEX = { name: 'BubbleCitadel', desc: 'soap-glass spires exhale iridescent flecks', top: '#bfeaff', mid: '#8fd6f2', bot: '#5f9fc8', fog: 0x9fd8f0, hemi: 0.8, hemiCol: 0xbfeeff, sun: 0.85, sunCol: 0xdff6ff, cloud: 0x88c8e8, plate: 0x9fe8ff, weather: 'none' };
 const NEST_KINDS = ['walker', 'gunner', 'shield'];
 const HORROR_KINDS = ['skeleton', 'cryptGhost', 'zombie'];
 const SHROOM_KINDS = ['sporeling', 'prismWraith', 'capBrute'];
-let midWins = { maw: false, nex: false };        // survives commons rebuilds (per level); re-fighting a boss re-grants nothing
+const BONE_KINDS = ['skeleton', 'cryptGhost', 'zombie'];          // the Ossuary garrison: same horror walkers, bone-white livery
+const BUBBLE_KINDS = ['kaomoji', 'alien', 'raver'];               // the Fizz garrison: same families, soapsud palettes
+let midWins = { maw: false, nex: false, oss: false, fizz: false };        // survives commons rebuilds (per level); re-fighting a boss re-grants nothing
 let midGen = 0;                                  // debug: which mid-site state instance is live right now
 const palaceMotions = [];
 let palaceMotionClock = 0;
@@ -3423,7 +3496,7 @@ function updatePalaceMotion(dt) {
     }
   }
 }
-function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
+function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubbleNode) {
   if (!commons) return;
   const sites = {};
   // FAR-LANDS (2026-10-26): the three sites are no longer ring-side spurs — each is its own far land ~0.95–1.1 km out
@@ -3433,7 +3506,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
   // (flesh terraces / front-door steps / rabbit-hole discs), and each keeps its own unique boss + reward.
   // farAnchor tries a couple of radii/angle nudges for open air; the ladder ends at the legacy near-ring spot so a
   // crowded world can still fall back to the old spur layout unchanged.
-  const MID_DIST = { nest: 1100, house: 1010, shroom: 1080 };       // staggered so the three lands never bunch up
+  const MID_DIST = { nest: 1100, house: 1010, shroom: 1080, bone: 1040, bubble: 1140 };  // staggered so the lands never bunch up
   const farAnchor = (node, key) => {
     if (!node) return null;
     const D0 = MID_DIST[key];
@@ -3676,6 +3749,46 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
         mist.position.set(Math.cos(a) * r, 36 + band * 42 + (i % 3) * 9, Math.sin(a) * r);
         mist.scale.set(76 + (i % 3) * 18, 42 + (i % 2) * 16, 1); mist.userData.noCull = true; g.add(mist);
       }
+    } else if (kind === 'bone') {                      // colossal bone cathedral: a bone-white nave, rib arches flying out over the aisles, a spine spire
+      const boneM = lamF(0xe8e0cc, 0x8a8174, 0.3), shadeM = lamF(0xcfc6b8, 0x554e44, 0.26), darkM = lamF(0x8a8174, 0x2f2a24, 0.2), hymnGlow = glow(0xdfe8ff);
+      M(bx2, boneM, 0, 26, -2, 118, 52, 82);          // broad ossuary base (the crypt mass)
+      M(bx2, shadeM, 0, 100, -8, 84, 118, 56);        // the nave
+      for (const s2f of [-1, 1]) for (const az2 of [-22, 12]) {
+        M(cy2, shadeM, s2f * 52, 62, az2, 14, 124, 14);            // side aisles
+        M(cn2, darkM, s2f * 52, 164, az2, 19, 34, 19, Math.PI / 4);
+      }
+      for (const s2f of [-1, 1]) for (const zz2 of [-16, 6, 24]) { // fly-buttress rib arches on each flank
+        const arch = M(new THREE.TorusGeometry(34, 2.2, 6, 14, Math.PI), boneM, s2f * 44, 112, zz2);
+        arch.rotation.y = Math.PI / 2;
+      }
+      M(cn2, shadeM, 0, 186, -8, 46, 40, 46, Math.PI / 4);         // steep choir roof
+      M(cy2, boneM, 0, 216, -8, 9, 36, 9);                          // the spine spire
+      M(sp2, hymnGlow, 0, 236, -8, 3.4, 4.4, 3.4);                  // the Sanctus bulb
+      const rose = M(new THREE.TorusGeometry(12, 1.4, 6, 18), hymnGlow, 0, 128, 20.2);
+      rose.rotation.x = 0;                                          // the front rose window
+      M(bx2, glow(0x17130e), 0, 20, 38, 16, 34, 3);                 // the jaw-gate's black opening
+      for (const s2f of [-1, 1]) for (const ty2 of [16, 30]) {
+        M(cn2, boneM, s2f * 10, ty2, 37, 3.4, 9, 3.4, Math.PI / 4); // fangs flanking the gate
+      }
+      for (let c2i = 0; c2i < 6; c2i++) {
+        M(bx2, glow(c2i % 2 ? 0xfff6e2 : 0x2f2a24), -30 + c2i * 12, 96, 20.4, 3.2, 9, 1.6);  // lancet windows down the nave
+      }
+    } else if (kind === 'bubble') {                    // colossal soap citadel: glass towers under one iridescent dome, fizz bulbs all around
+      const glassM = lamF(0x8fd6f2, 0x2a6a8a, 0.4), deepM = lamF(0x5f9fc8, 0x1c4256, 0.3);
+      const soapM = new THREE.MeshBasicMaterial({ color: 0xa5e6ff, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false });
+      M(cy2, glassM, 0, 150, 0, 30, 300, 30);           // the main tower: 300 tall
+      M(cy2, deepM, 0, 300, 0, 12, 70, 12);             // the spout mast
+      M(sp2, glow(0xdff6ff), 0, 338, 0, 4.5, 5.5, 4.5); // the blown-glass crown
+      for (const [tx2, tz2, th, r] of [[-58, 22, 170, 15], [58, 22, 170, 15], [-40, -28, 128, 12], [40, -28, 128, 12], [0, 34, 92, 11]]) {
+        M(cy2, glassM, tx2, th / 2, tz2, r, th, r);
+        M(sp2, soapM, tx2, th + r * 0.9, tz2, r + 9, (r + 9) * 0.8, r + 9);   // every turret keeps its own soap bubble
+      }
+      M(sp2, soapM, 0, 320, 0, 98, 60, 98);             // the great dome bubble caps the tower
+      for (const [bx3, by3, bz3] of [[-30, 250, 26], [26, 275, -22], [40, 130, 30], [-44, 90, -18], [20, 60, 40]]) {
+        M(new THREE.SphereGeometry(1, 10, 8), soapM, bx3, by3, bz3, 7 + (by3 % 5), (7 + (by3 % 5)) * 0.75, 7 + (by3 % 5));
+      }
+      const moat = M(new THREE.TorusGeometry(70, 2.4, 6, 20), glassM, 0, 60, 0);
+      moat.rotation.x = Math.PI / 2;                    // a suds ring around the base
     } else {                                           // fairytale mushroom: ivory gills, a russet cap, and cream spots
       const stem2 = lamF(0xe8d8bb, 0x65513c, 0.24), cap2 = lamF(0xb9474f, 0x5a1727, 0.28);
       const capY = 220, capRadius = 82, capHeight = 48;
@@ -3737,7 +3850,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
     const tag = makeLabel(label); tag.position.set(x, y + 2.8, z); tag.scale.set(8.5, 2.1, 1); tag.userData.noCull = true; scene.add(tag);
     return dot;
   };
-  const routeHeading = makeLabel(key === 'nest' ? 'GIANT NEST · FOLLOW THE GLOW TO THE VAULT' : key === 'house' ? 'HAUNTED KEEP · CLIMB THE SPIRE, DESCEND INSIDE' : 'GRAND SHROOM · CLIMB THE STEM, DESCEND WITHIN');
+  const routeHeading = makeLabel(key === 'nest' ? 'GIANT NEST · FOLLOW THE GLOW TO THE VAULT' : key === 'house' ? 'HAUNTED KEEP · CLIMB THE SPIRE, DESCEND INSIDE' : key === 'bone' ? 'BONE CATHEDRAL · CLIMB THE BUTTRESSES, DESCEND THE OSSUARY' : key === 'bubble' ? 'BUBBLE CITADEL · CLIMB THE DOME, SINK INTO THE FIZZ' : 'GRAND SHROOM · CLIMB THE STEM, DESCEND WITHIN');
   routeHeading.position.set(site.x, site.y + 20, site.z); routeHeading.scale.set(20, 4.6, 1); routeHeading.userData.noCull = true; scene.add(routeHeading);
     const baseR = Math.max(r0 + 40, discR + 30), endR = discR + 16;
     const steps = Math.max(24, Math.min(140, Math.round((deckY - site.y) / 3.6)));
@@ -3749,7 +3862,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
 
       addRail(px, pz, py + 1.35, sx, sz, col, sy + 1.35, false);
       if (k % 7 === 1) addDashPad(px, py, pz, sx - px, sz - pz);        if (k % 16 === 8) {
-          const sign = makeLabel(key === 'house' ? 'GOTHIC KEEP · CLIMB ↑' : key === 'nest' ? 'GIANT PUSSY · CLIMB ↑' : 'GRAND SHROOM · CLIMB ↑');
+          const sign = makeLabel(key === 'house' ? 'GOTHIC KEEP · CLIMB ↑' : key === 'nest' ? 'GIANT PUSSY · CLIMB ↑' : key === 'bone' ? 'BONE CATHEDRAL · CLIMB ↑' : key === 'bubble' ? 'BUBBLE CITADEL · CLIMB ↑' : 'GRAND SHROOM · CLIMB ↑');
           sign.position.set(sx, sy + 7, sz); sign.scale.set(10, 2.5, 1); sign.userData.noCull = true; scene.add(sign);
         }
         if (k % 8 === 1) pathCue(sx, sy + 1.8, sz, 'CLIMB ↑', 1.2);
@@ -3763,7 +3876,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
       const dk = addSlab(gx, deckY, gz, deckR, deckR, 2.2, zone, true);
       sn.slabs.push(dk);
       addRail(px, pz, py + 1.35, gx, gz, col, deckY + 1.35, false);
-      const dlbl = makeLabel(key === 'nest' ? 'ENTER THE DEEP HEAT · DESCEND ↓' : key === 'house' ? 'HAUNTED HOUSE · ENTER HERE · DOWN ↓' : 'RABBIT STEM · DESCEND ↓');
+      const dlbl = makeLabel(key === 'nest' ? 'ENTER THE DEEP HEAT · DESCEND ↓' : key === 'house' ? 'HAUNTED HOUSE · ENTER HERE · DOWN ↓' : key === 'bone' ? 'OSSUARY DOOR · ENTER HERE · DOWN ↓' : key === 'bubble' ? 'SOAPSUD ENTRY · DOWN ↓' : 'RABBIT STEM · DESCEND ↓');
       dlbl.position.set(gx, deckY + 6, gz); dlbl.scale.set(13, 3.2, 1); dlbl.userData.noCull = true; scene.add(dlbl);
       pathCue(gx, deckY + 2.2, gz, 'ENTRY · DOWN ↓', 1.5);
       var prev = { x: gx, z: gz, y: deckY };
@@ -3792,11 +3905,13 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
             sn.slabs.push(wing); roomCenters.push({ x: wx, z: wz, side });
           }
           const roomNames = key === 'house' ? ['CANDLE GALLERY', 'WIDOWS’ ARCHIVE']
-            : key === 'nest' ? ['RIBCAGE CHAPEL', 'BROOD CHAMBER'] : ['MOONCAP GALLERY', 'MAD TEA PARLOUR'];
+            : key === 'nest' ? ['RIBCAGE CHAPEL', 'BROOD CHAMBER']
+            : key === 'bone' ? ['RELIC GALLERY', 'OSSUARY STACKS']
+            : key === 'bubble' ? ['SODA PARLOUR', 'FOAM GALLERY'] : ['MOONCAP GALLERY', 'MAD TEA PARLOUR'];
           for (let ri = 0; ri < roomCenters.length; ri++) {
             const room = roomCenters[ri], roomName = roomNames[ri];
             sn.rooms.push({ name: roomName, x: room.x, y: dy, z: room.z, floor: Math.max(1, Math.ceil((deckY - dy) / 30)) });
-            const detailMat = lam(key === 'house' ? 0x4a3a4c : key === 'nest' ? 0xb34668 : 0xc9a981,
+            const detailMat = lam(key === 'house' ? 0x4a3a4c : key === 'nest' ? 0xb34668 : key === 'bone' ? 0xcbc3b2 : key === 'bubble' ? 0x9fd8f0 : 0xc9a981,
               { emissive: zone.plate, emissiveIntensity: 0.18 });
             if (key === 'house') {
               const tomb = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.2, 2.8), detailMat);
@@ -3811,8 +3926,29 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
               for (let rib = -1; rib <= 1; rib++) {
                 const bone = new THREE.Mesh(new THREE.TorusGeometry(2.1 + Math.abs(rib) * 0.5, 0.22, 5, 12, Math.PI), detailMat);
                 bone.rotation.z = Math.PI / 2; bone.position.set(room.x + rib * 1.15, dy + 3.2, room.z); bone.userData.noCull = true; scene.add(bone);
-              }
-            } else {
+              }              } else if (key === 'bone') {
+                const slab = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.5, 2), detailMat);   // the reliquary altar
+                slab.position.set(room.x, dy + 0.35, room.z); slab.userData.noCull = true; scene.add(slab);
+                const effigy = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.75, 1.1), detailMat);   // a lying stone saint
+                effigy.position.set(room.x, dy + 1.0, room.z); effigy.rotation.y = 0.4; effigy.userData.noCull = true; scene.add(effigy);
+                const halo = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.14, 5, 12), new THREE.MeshBasicMaterial({ color: 0xdfe8ff, transparent: true, opacity: 0.85 }));
+                halo.position.set(room.x, dy + 2.6, room.z); halo.userData.noCull = true; scene.add(halo);
+                for (let ws2 = -1; ws2 <= 1; ws2 += 2) {   // candle stumps
+                  const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 1.1, 6), detailMat);
+                  stump.position.set(room.x + ws2 * 2.4, dy + 0.9, room.z + 1.6); stump.userData.noCull = true; scene.add(stump);
+                  const flame = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 4), new THREE.MeshBasicMaterial({ color: 0xfff2d8, toneMapped: false }));
+                  flame.position.set(room.x + ws2 * 2.4, dy + 1.7, room.z + 1.6); flame.userData.noCull = true; scene.add(flame);
+                }
+              } else if (key === 'bubble') {
+                const basin = new THREE.Mesh(new THREE.TorusGeometry(1.9, 0.32, 5, 14), detailMat);   // the soap basin
+                basin.rotation.x = Math.PI / 2; basin.position.set(room.x, dy + 0.3, room.z); basin.userData.noCull = true; scene.add(basin);
+                const bubble = new THREE.Mesh(new THREE.SphereGeometry(1.5, 9, 7), new THREE.MeshBasicMaterial({ color: 0xcff4ff, transparent: true, opacity: 0.34, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+                bubble.position.set(room.x, dy + 2.1, room.z); bubble.userData.noCull = true; scene.add(bubble);
+                for (let fb3 = 0; fb3 < 3; fb3++) {        // the trail of fizzes off the basin
+                  const fizz = new THREE.Mesh(new THREE.SphereGeometry(0.42 + fb3 * 0.14, 7, 5), bubble.material);
+                  fizz.position.set(room.x + (fb3 - 1) * 1.35, dy + 3.4 + fb3 * 0.8, room.z + (fb3 % 2 ? 0.9 : -0.9)); fizz.userData.noCull = true; scene.add(fizz);
+                }
+              } else {
               const cup = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.35, 2.5, 10, 1, true), detailMat);
               cup.position.set(room.x, dy + 1.5, room.z); cup.userData.noCull = true; scene.add(cup);
               const saucer = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.28, 5, 12), detailMat);
@@ -3824,13 +3960,13 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
           // One room in every third hall is trapped. The inlaid warning sigil matches the
           // site theme; the pulse is avoidable by crossing the opposite wing or timing a dash.
           if (rung % 18 === 0) {
-            const room = roomCenters[0], hazardColor = key === 'house' ? 0x9dff3a : key === 'nest' ? 0xff416f : 0x47f3c2;
+            const room = roomCenters[0], hazardColor = key === 'house' ? 0x9dff3a : key === 'nest' ? 0xff416f : key === 'bone' ? 0xcfe8ff : key === 'bubble' ? 0xff9de0 : 0x47f3c2;
             const hazardMat = new THREE.MeshBasicMaterial({ color: hazardColor, transparent: true, opacity: 0.55, toneMapped: false });
             const sigil = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.32, 5, 16), hazardMat);
             sigil.rotation.x = Math.PI / 2; sigil.position.set(room.x, dy + 0.18, room.z); sigil.userData.noCull = true; scene.add(sigil);
             const core = new THREE.Mesh(new THREE.CircleGeometry(3.45, 10), new THREE.MeshBasicMaterial({ color: hazardColor, transparent: true, opacity: 0.18, side: THREE.DoubleSide, toneMapped: false }));
             core.rotation.x = -Math.PI / 2; core.position.set(room.x, dy + 0.12, room.z); core.userData.noCull = true; scene.add(core);
-            let hazardName = key === 'house' ? 'CURSED CANDLE RUNE' : key === 'nest' ? 'THORN-BLOOM PATCH' : 'SPORE VENT';
+            let hazardName = key === 'house' ? 'CURSED CANDLE RUNE' : key === 'nest' ? 'THORN-BLOOM PATCH' : key === 'bone' ? 'GRAVE-CHILL RUNE' : key === 'bubble' ? 'FIZZ CROWN RUNE' : 'SPORE VENT';
             if (key === 'nest') for (let thorn = 0; thorn < 5; thorn++) {
               const angle = thorn * Math.PI * 2 / 5, spike = new THREE.Mesh(new THREE.ConeGeometry(0.38, 1.8, 5), hazardMat);
               spike.position.set(room.x + Math.cos(angle) * 2.6, dy + 1, room.z + Math.sin(angle) * 2.6); spike.userData.noCull = true; scene.add(spike);
@@ -3839,19 +3975,28 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
               const vent = new THREE.Mesh(new THREE.SphereGeometry(0.65, 7, 5), hazardMat);
               vent.position.set(room.x + (puff - 1) * 1.8, dy + 0.7, room.z + (puff % 2 ? 0.7 : -0.7)); vent.userData.noCull = true; scene.add(vent);
             }
+            if (key === 'bone') for (let sdk = -1; sdk <= 1; sdk += 2) {   // two long vigil candles flank the sigil
+              const candle = new THREE.Mesh(new THREE.BoxGeometry(0.34, 4.6, 0.34), hazardMat);
+              candle.position.set(room.x + sdk * 3.6, dy + 2.3, room.z); candle.userData.noCull = true; scene.add(candle);
+            }
+            if (key === 'bubble') for (let pr3 = 0; pr3 < 4; pr3++) {      // pop rings ring the sigil puddle
+              const pa3 = pr3 * Math.PI / 2;
+              const ring = new THREE.Mesh(new THREE.TorusGeometry(2.1, 0.3, 5, 12), hazardMat);
+              ring.position.set(room.x + Math.cos(pa3) * 2.4, dy + 0.5, room.z + Math.sin(pa3) * 2.4); ring.userData.noCull = true; scene.add(ring);
+            }
             sn.hazards.push({ name: hazardName, x: room.x, y: dy, z: room.z, radius: 4.5, cooldown: 0, sigil, core });
           }
           // A single late-floor cache is tucked into the other wing. It is optional, off
           // the main spiral, and doubles as the dungeon's hidden-secret completion reward.
           if (!sn.secrets.length && (deckY - dy) / Math.max(1, deckY - botY) > 0.84) {
-            const room = roomCenters[1], chestMat = lam(key === 'house' ? 0x28202d : key === 'nest' ? 0x61243a : 0x765438,
+            const room = roomCenters[1], chestMat = lam(key === 'house' ? 0x28202d : key === 'nest' ? 0x61243a : key === 'bone' ? 0x8a8174 : key === 'bubble' ? 0x7fc4e0 : 0x765438,
               { emissive: zone.plate, emissiveIntensity: 0.24 });
             const chest = new THREE.Group();
             const box = new THREE.Mesh(new THREE.BoxGeometry(2.7, 1.7, 1.8), chestMat); box.position.y = 0.9; chest.add(box);
             const lid = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.42, 2), chestMat); lid.position.set(0, 1.95, 0); chest.add(lid);
-            const jewel = new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 0), new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffd48a : key === 'nest' ? 0xff668b : 0xf7e4a7, toneMapped: false }));
+            const jewel = new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 0), new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffd48a : key === 'nest' ? 0xff668b : key === 'bone' ? 0xdfe8ff : key === 'bubble' ? 0xfff2f8 : 0xf7e4a7, toneMapped: false }));
             jewel.position.set(0, 2.8, 0); chest.add(jewel); chest.position.set(room.x, dy, room.z); chest.userData.noCull = true; scene.add(chest);
-            const secret = { name: key === 'house' ? 'WIDOW’S LAST WILL' : key === 'nest' ? 'HEART OF THE BROOD' : 'THE WHITE QUEEN’S TEACUP', x: room.x, y: dy + 2.8, z: room.z, found: false };
+            const secret = { name: key === 'house' ? 'WIDOW’S LAST WILL' : key === 'nest' ? 'HEART OF THE BROOD' : key === 'bone' ? 'THE CHOIR MASTER’S PAY' : key === 'bubble' ? 'THE UNSPOILED TITHE' : 'THE WHITE QUEEN’S TEACUP', x: room.x, y: dy + 2.8, z: room.z, found: false };
             sn.secrets.push(secret); items.push({ mesh: chest, type: 'dungeonSecret', taken: false, secretLabel: secret.name, secret });
             secret.pickup = items[items.length - 1];
           }
@@ -3868,7 +4013,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
         }
         if (rung % 6 === 3) {
           const floor = Math.max(1, Math.ceil((deckY - dy) / 30));
-          const sign = makeLabel(`${key === 'house' ? 'HOUSE' : key === 'nest' ? 'NEST' : 'SHROOM'} LEVEL ${floor} · DOWN ↓`);
+          const sign = makeLabel(`${key === 'house' ? 'HOUSE' : key === 'nest' ? 'NEST' : key === 'bone' ? 'OSSUARY' : key === 'bubble' ? 'CITADEL' : 'SHROOM'} LEVEL ${floor} · DOWN ↓`);
           sign.position.set(dx + Math.cos(a) * (discR + 2), dy + 4, dz + Math.sin(a) * (discR + 2));
           sign.scale.set(8, 2, 1); sign.userData.noCull = true; scene.add(sign);
         }
@@ -3886,9 +4031,9 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
       if (prev && (prev.x !== gx || prev.z !== gz)) addRail(prev.x, prev.z, prev.y + 1.35, gx, gz, col, botY + 1.35, false);
       const rim = new THREE.Mesh(new THREE.TorusGeometry(discR + 2.4, 0.5, 6, 22), new THREE.MeshBasicMaterial({ color: col, fog: false, toneMapped: false }));
       rim.rotation.x = Math.PI / 2; rim.position.set(gx, botY + 1.4, gz); rim.userData.noCull = true; scene.add(rim);
-      const vl = makeLabel(key === 'nest' ? 'LOWEST LEVEL · VAULT OF THE DEEP HEAT' : key === 'house' ? 'LOWEST LEVEL · NEXUS CRYPT' : 'LOWEST LEVEL · CHESHIRE PARLOUR');
+      const vl = makeLabel(key === 'nest' ? 'LOWEST LEVEL · VAULT OF THE DEEP HEAT' : key === 'house' ? 'LOWEST LEVEL · NEXUS CRYPT' : key === 'bone' ? 'LOWEST LEVEL · OSSUARY CRYPT' : key === 'bubble' ? 'LOWEST LEVEL · FIZZ PARLOUR' : 'LOWEST LEVEL · CHESHIRE PARLOUR');
       vl.position.set(gx, botY + 9, gz); vl.scale.set(15, 3.4, 1); scene.add(vl);
-      pathCue(gx, botY + 2.2, gz, key === 'house' ? 'NEXUS CRYPT' : 'BOSS VAULT', 1.6);
+      pathCue(gx, botY + 2.2, gz, key === 'house' ? 'NEXUS CRYPT' : key === 'bone' ? 'OSSUARY CRYPT' : key === 'bubble' ? 'FIZZ PARLOUR' : 'BOSS VAULT', 1.6);
       vl.userData.noCull = true;
     }
 
@@ -3898,9 +4043,9 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
     // floating in open air. Distinct materials keep each landmark's interior on-theme.
     const shellHalf = discR * 2 + 21, shellThickness = 1.8, shellBand = 28;
     const shellBottom = botY, shellTop = deckY + 14;
-    const shellMat = lam(key === 'house' ? 0x191520 : key === 'shroom' ? 0x694c40 : 0x421b30,
-      { emissive: key === 'house' ? 0x120b19 : key === 'shroom' ? 0x28120e : 0x220813, emissiveIntensity: 0.4 });
-    const paneMat = new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffc47a : key === 'shroom' ? 0xf4d8a4 : 0xff668b, transparent: true, opacity: 0.78, fog: false, toneMapped: false });
+    const shellMat = lam(key === 'house' ? 0x191520 : key === 'shroom' ? 0x694c40 : key === 'bone' ? 0x8f887c : key === 'bubble' ? 0x4f88a8 : 0x421b30,
+      { emissive: key === 'house' ? 0x120b19 : key === 'shroom' ? 0x28120e : key === 'bone' ? 0x2a2620 : key === 'bubble' ? 0x14283a : 0x220813, emissiveIntensity: 0.4 });
+    const paneMat = new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffc47a : key === 'shroom' ? 0xf4d8a4 : key === 'bone' ? 0xfff2d8 : key === 'bubble' ? 0xcff4ff : 0xff668b, transparent: true, opacity: 0.78, fog: false, toneMapped: false });
     const addDungeonWall = (x0, x1, z0, z1, y0, y1) => {
       addSolid(x0, x1, y0, y1, z0, z1);
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), shellMat);
@@ -3949,7 +4094,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
         pane.position.set(gx + offset, paneY, gz + side * (half + 0.12)); pane.userData.noCull = true; scene.add(pane);
       }
       // Vertical corner ribs emphasize the height and reinforce the gothic / storybook silhouette.
-      const ribMat = lam(key === 'house' ? 0x554055 : key === 'shroom' ? 0xd8b88a : 0xc34a70,
+      const ribMat = lam(key === 'house' ? 0x554055 : key === 'shroom' ? 0xd8b88a : key === 'bone' ? 0xe8e0cc : key === 'bubble' ? 0x8fd6f2 : 0xc34a70,
         { emissive: zone.plate, emissiveIntensity: 0.32 });
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
         const rib = new THREE.Mesh(new THREE.BoxGeometry(2.2, ceilY - floorY, 2.2), ribMat);
@@ -4175,12 +4320,63 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
       seedLeadChain('shroom', mx, mz);
     } else console.log('[mids] shroom cap blocked at every outward nudge — site skipped this build');
   }
+  // ---- sites 4+5: THE BONE CATHEDRAL and THE BUBBLE CITADEL (pure descent dungeons — no boss arena, garrison-haunted halls) ----
+  // Same framework as the three boss lands: far anchor -> forecourt plaza -> climb the monument -> descend the shell.
+  // They skip the mid-band boss pipeline entirely (no woken/waves/boss fields); a standing garrison holds the halls.
+  const dungeonSites = [
+    { node: boneNode, key: 'bone', zone: BONE_ZONE, kinds: BONE_KINDS, col: 0xd8d0c0, deckLocal: 200, botLocal: -100, discR: 15, name: 'THE BONE CATHEDRAL' },
+    { node: bubbleNode, key: 'bubble', zone: BUBBLE_ZONEX, kinds: BUBBLE_KINDS, col: 0x9fe8ff, deckLocal: 184, botLocal: -100, discR: 13, name: 'THE BUBBLE CITADEL' },
+  ];
+  for (const ds of dungeonSites) {
+    if (!ds.node) continue;
+    const AD = farAnchor(ds.node, ds.key);
+    const nx = Math.cos(AD.a), nz = Math.sin(AD.a);
+    const X0 = AD.X0, Z0 = AD.Z0, y0 = AD.y0;
+    if (AD.far) addSlab(X0, y0, Z0, 9, 9, 2.4, ds.zone, true);      // far land: the causeway's landing rim pad
+    let bx = X0 + nx * 42, bz = Z0 + nz * 42, by = y0 - 10;         // the forecourt plaza where the dungeon ascent starts
+    for (let mo = 42; blocked(bx, by, bz, 15) && mo <= 150; mo += 36) { bx = X0 + nx * mo; bz = Z0 + nz * mo; }
+    if (blocked(bx, by, bz, 15)) { console.log(`[mids] ${ds.key} forecourt blocked at every outward nudge — site skipped this build`); continue; }
+    const hsteps = [];
+    for (let k = 1; k <= 3; k++) {                                   // 3 hop-steps from the rim pad down to the plaza
+      const sx = X0 + nx * (14 + k * 10), sz = Z0 + nz * (14 + k * 10), sy = y0 - 3 * k;
+      if (blocked(sx, sy, sz, 4.2)) continue;
+      hsteps.push({ x: sx, z: sz, y: sy, sl: addSlab(sx, sy, sz, 4.2, 4.2, 2, ds.zone, true) });
+    }
+    {
+      let A2 = { x: X0, z: Z0, y: y0 };
+      for (const B of hsteps) { addRail(A2.x, A2.z, A2.y + 1.35, B.x, B.z, ds.col, B.y + 1.35, false); addDashPad(A2.x, A2.y, A2.z, B.x - A2.x, B.z - A2.z); A2 = B; }
+      addRail(A2.x, A2.z, A2.y + 1.35, bx, bz, ds.col, by + 1.35, false);
+    }
+    const plaza = addSlab(bx, by, bz, 12, 9, 2.6, ds.zone, true);
+    const dl2 = makeLabel(ds.name); dl2.position.set(bx, by + 11, bz); dl2.scale.set(14, 3.5, 1); scene.add(dl2);
+    const db2 = beacon(bx, by + 1, bz, ds.col);
+    sites[ds.key] = { x: bx, z: bz, y: by, slabs: [...hsteps.map(h => h.sl), plaza] };
+    if (AD.far) {
+      db2.material.fog = false; db2.userData.noCull = true;
+      farMonument(ds.key, bx + nz * 52, bz - nx * 52, by - 26);      // spawn-visible giant monument
+      farDungeon(ds.key, { x: bx, z: bz, y: by }, { x: bx + nz * 52, z: bz - nx * 52, base: by - 26 }, ds.zone, ds.col, ds.deckLocal, ds.botLocal, ds.discR);
+    }
+    if (AD.far) connectMid(ds.node, X0, Z0, y0, ds.zone, 9, 9);      // THE JOURNEY: full causeway from the ring to this land
+    seedLeadChain(ds.key, bx, bz);
+    // THE GARRISON: a standing watch on the forecourt and every few shaft landings — the halls are never empty
+    try {
+      const sn2 = sites[ds.key];
+      const seats = [plaza, ...(sn2.shaft || []).filter((_, i) => i % 5 === 0).map(s => s.slab)].filter(Boolean).slice(0, 7);
+      for (const seat of seats) {
+        const a = rand() * 6.283, r = 2 + rand() * 3;
+        const e = makeWalker(seat.cx + Math.cos(a) * r, seat.top + 0.4, seat.cz + Math.sin(a) * r, seat, 1, false, ds.kinds[(rand() * ds.kinds.length) | 0]);
+        if (e) { e.zone = ds.zone; e.midGuard = ds.key; e.neverDespawn = true; }
+      }
+    } catch (err) { console.warn(`[mids] ${ds.key} garrison seed failed`, err); }
+  }
   commons.mid = {
     nest: sites.nest ? { ...sites.nest, woken: false, waves: 0, guardCd: 6, bossSpawned: false, bossDead: false, gen: midGen++ } : null,
     house: sites.house ? { ...sites.house, woken: false, waves: 0, guardCd: 6, waveCd: 8, bossSpawned: false, bossDead: false, gen: midGen++ } : null,
     shroom: sites.shroom ? { ...sites.shroom, woken: false, waves: 0, guardCd: 6, bossSpawned: false, bossDead: false, gen: midGen++ } : null,
+    bone: sites.bone ? { ...sites.bone, dungeonOnly: true, gen: midGen++ } : null,
+    bubble: sites.bubble ? { ...sites.bubble, dungeonOnly: true, gen: midGen++ } : null,
   };
-  for (const k of ['nest', 'house', 'shroom']) if (commons.mid[k]) commons.mid[k].key = k;
+  for (const k of ['nest', 'house', 'shroom', 'bone', 'bubble']) if (commons.mid[k]) commons.mid[k].key = k;
   for (const k of ['nest', 'house', 'shroom']) {                   // seat the outrider platoon on the lead-in platforms the moment the world exists
     const s2 = commons.mid[k]; const lead = s2 && s2.lead ? s2.lead : [];
     if (lead.length < 2) continue;
@@ -4188,7 +4384,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode) {
   }
   {                                  // the far lands live past the stock world edge: widen the bounds like the other far builders do
     let farD = 0;
-    for (const k of ['nest', 'house', 'shroom']) if (commons.mid[k]) farD = Math.max(farD, Math.hypot(commons.mid[k].x, commons.mid[k].z));
+    for (const k of ['nest', 'house', 'shroom', 'bone', 'bubble']) if (commons.mid[k]) farD = Math.max(farD, Math.hypot(commons.mid[k].x, commons.mid[k].z));
     if (farD) { WORLD_R = Math.max(WORLD_R, farD + 320); camera.far = Math.max(camera.far, (farD + 400) * 1.7); camera.updateProjectionMatrix(); }
   }
 }
@@ -6486,7 +6682,7 @@ function buildTowerWindows() {
 }
 function towerWindowCheck() {
   if (inInterior || state !== 'play' || towerEnterCd > 0) return;
-  if (commons && commons.mid && ['nest', 'house', 'shroom'].some(k => { const s = commons.mid[k]; return s && Math.abs(pos.x - s.x) < 130 && Math.abs(pos.z - s.z) < 130 && Math.abs(pos.y - s.y) < 80; })) return;      // FAR LANDS GATE: the sites live inside the skyline-tower field — tower interiors must never swallow the player (inInterior freezes the mid tick)
+  if (commons && commons.mid && ['nest', 'house', 'shroom', 'bone', 'bubble'].some(k => { const s = commons.mid[k]; return s && Math.abs(pos.x - s.x) < 130 && Math.abs(pos.z - s.z) < 130 && Math.abs(pos.y - s.y) < 80; })) return;      // FAR LANDS GATE: the sites live inside the skyline-tower field — tower interiors must never swallow the player (inInterior freezes the mid tick)
   for (const h of buildingHubs) {
     if (!h.windows || !h.windows.length || Math.abs(pos.x - h.x) > h.hw + 4 || Math.abs(pos.z - h.z) > h.hd + 4 || pos.y > h.top) continue;
     for (const w of h.windows) {
@@ -7915,6 +8111,21 @@ let d4ObserverBoss = null;         // reference to boss
 let d4BossFloor = null;            // boss arena floor
 let d4BossOutline = null;          // tell on real boss
 
+// SESSION GUARD: D4 PSYCHOSIS state must never leak into another level's session. Added because concurrent
+// builds (level select / restart) can otherwise leave a mid-drain poison value behind that the habit tracker and
+// hallucination tick then read on every frame in ANY world. d4UpdateSanity guards before ANY mutation, and the
+// world-switch path calls d4SwitchCleanup() so no half-drained sanity / hallucination meshes survive a level change.
+function d4SwitchCleanup() {
+  if (typeof d4SanityT !== 'number' || Number.isNaN(d4SanityT)) { d4SanityT = 1; d4HallT = 4; d4Hallucinations = []; }
+  for (const h of d4Hallucinations || []) if (h && h.mesh) h.mesh.removeFromParent();
+  d4Hallucinations = []; d4SanityT = 1; d4HallT = 4;
+  d4HabitTracker = { jumpFreq: 0, dashFreq: 0, attackFreq: 0, moveDir: new THREE.Vector2(), lastJump: 0, lastDash: 0, lastAttack: 0, samples: 0 };
+  d4GroundingAnchors = [];
+  if (d4BossOutline) { d4BossOutline.removeFromParent(); d4BossOutline = null; }
+  d4ObserverBoss = null; d4BossFloor = null;
+  const w = document.getElementById('d4SanityWarn'); if (w) w.remove();
+}
+
 // Habit tracking (called from player input handling)
 function d4TrackHabit(action) {
   const now = performance.now() / 1000;
@@ -8020,6 +8231,7 @@ function d4UpdateHallucinations(dt) {
 
 // Sanity drain and restoration
 function d4UpdateSanity(dt) {
+  if (typeof d4SanityT !== 'number' || Number.isNaN(d4SanityT)) { d4SanityT = 1; d4HallT = 4; d4Hallucinations = []; }   // guard before ANY mutation (session conflict fallback)
   if (d4SanityT <= 0) return;
   // Drain: faster when moving, in combat, near geometry
   let drain = dt * 0.01; // base drain
@@ -10232,23 +10444,32 @@ function hurt(n, fromX, fromZ) {
 const menuBtns = ['bStart', 'bMulti', 'bExit'];
 let menuSel = 0, menuMode = 'main';
 // LEVEL SELECT: pure data so a second real level is a data-only addition later (no UI rewrite).
-// Each entry: id, display name/subtitle (player-facing copy only), unlocked, startFn (what actually begins play).
-const SP_ONLY_DESCENT = true;   // TEMP: single-player menu shows only Lil Spasticism while the other levels are built; multiplayer joins via LEVEL_DEFS so it still reaches them
+// Each entry: id, display name/subtitle (player-facing copy only), unlocked, startFn (what actually begins play),
+// plus the card art: glyph + gradient colors for the procedural thumbnail and a feature list for the preview panel.
+// lockedNote = shown on the preview panel for entries that are still locked (the "unlock criteria" copy).
 const LEVELS_ALL = [
-  { id: 'descent', name: 'Lil Spasticism', subtitle: "The one endless procedural descent — floating platforms all the way down.", unlocked: true, startFn: () => startLevelDef('descent') },
-  { id: 'rent', name: "Rent's Due", subtitle: 'Urban decay all the way down - eviction notices, loan sharks, and the rent is overdue.', unlocked: true, startFn: () => startLevelDef('rent') },
-  { id: 'nos', name: 'Nostalgia Overdose', subtitle: 'VHS fog, CRT scanlines, cassette platforms and 80s synth bosses - be kind, rewind.', unlocked: true, startFn: () => startLevelDef('nos') },
-  { id: 'arena', name: 'THE ARENAS', subtitle: 'Four closed deathmatch chambers - Longest Yard, Deck, Camping Grounds, Facing Worlds - rocket, rail and quad, 2-8 players.', unlocked: true, startFn: () => startLevelDef('arena') },
-  { id: 'between', name: 'THE BETWEEN', subtitle: 'The seam between Moon and Mars. Six organ-dungeons, low gravity, sanity, and a Gravity Well to the Moon.', unlocked: true, startFn: () => startLevelDef('between') },
-  { id: 'locked3', name: '???', subtitle: 'LOCKED — COMING SOON', unlocked: false },
+  { id: 'descent', name: 'Lil Spasticism', subtitle: "The one endless procedural descent — floating platforms all the way down.", unlocked: true, startFn: () => startLevelDef('descent'),
+    glyph: '⬇', c1: '#0a2a5e', c2: '#36f6ff', features: ['Endless procedural descent — hop platforms all the way down', 'Far descent dungeons: the BONE CATHEDRAL & the BUBBLE CITADEL', 'Boss arenas, skates, grapple hook and a growing weapon rack'] },
+  { id: 'rent', name: "Rent's Due", subtitle: 'Urban decay all the way down - eviction notices, loan sharks, and the rent is overdue.', unlocked: true, startFn: () => startLevelDef('rent'),
+    glyph: '🏚', c1: '#3a2214', c2: '#ff9d4d', features: ['Urban decay: eviction banners, pawn shops, fire escapes', 'Loan-shark minibosses and tenant-horde ambushes', 'The rent is due — everything you break comes out of the deposit'] },
+  { id: 'nos', name: 'Nostalgia Overdose', subtitle: 'VHS fog, CRT scanlines, cassette platforms and 80s synth bosses - be kind, rewind.', unlocked: true, startFn: () => startLevelDef('nos'),
+    glyph: '📼', c1: '#1a1036', c2: '#b96bff', features: ['VHS fog, CRT scanlines and a synthwave skyline', 'Cassette platforms, arcade cabinets and 80s synth bosses', 'Downhill highway cruise — take the DeLorean up to speed'] },
+  { id: 'arena', name: 'THE ARENAS', subtitle: 'Four closed deathmatch chambers - Longest Yard, Deck, Camping Grounds, Facing Worlds - rocket, rail and quad, 2-8 players.', unlocked: true, startFn: () => startLevelDef('arena'),
+    glyph: '🏟', c1: '#20242c', c2: '#ff5347', features: ['Four deathmatch chambers: Longest Yard, Deck, Camping Grounds, Facing Worlds', 'Rocket, rail and quad pickups — frag or be fragged', '2–8 players through the host / join screens'] },
+  { id: 'between', name: 'THE BETWEEN', subtitle: 'The seam between Moon and Mars. Six organ-dungeons, low gravity, sanity, and a Gravity Well to the Moon.', unlocked: true, startFn: () => startLevelDef('between'),
+    glyph: '🌙', c1: '#0e2145', c2: '#8fd2ff', features: ['Low-gravity seam between Moon and Mars', 'Six organ-dungeons, one per phase — sanity it eats', 'Gravity Well: charge the anchors, launch to the Moon'] },
+  { id: 'locked3', name: '???', subtitle: 'LOCKED — COMING SOON', unlocked: false,
+    glyph: '❔', c1: '#1c1c24', c2: '#585868', features: [], lockedNote: 'SEAL INTACT — ??? unlocks when ALL other worlds have been conquered. Nothing on the moon says otherwise… yet.' },
 ];
-const LEVELS = SP_ONLY_DESCENT ? LEVELS_ALL.filter(lv => lv.id === 'descent') : LEVELS_ALL;
+const LEVELS = LEVELS_ALL;                            // single player: the full roster (locked tiles included) lives on the select screen
 let levelSel = 0;
+try { const saved = localStorage.getItem('sk3d_lastLevel'); const j = typeof saved === 'string' ? LEVELS.findIndex(lv => lv.id === saved && lv.unlocked) : -1; if (j >= 0) levelSel = j; } catch (e) {}   // remember last choice
+let launchBusy = false;                                // one launch at a time, for the fade/zoom transition window
 // Switch the live level definition, rebuild the world for it if it differs from what is already built, then run the usual preload -> begin.
 // (The world is built once at boot for the default descent, so choosing 'descent' while it is already live is exactly the old path.)
 function startLevelDef(id) {
   if (levelDef.id !== id) {
-    levelDef = LEVEL_DEFS[id] || LEVEL_DEFS.descent; level = 1;
+    levelDef = LEVEL_DEFS[id] || LEVEL_DEFS.descent; level = 1; d4SwitchCleanup();      // never carry dungeon-local state (D4 sanity/hallucinations) across a world switch
     preloadThen.done = false;           // new world = new materials/shaders: run the compile+warm pass again under the loading screen
     preloadThen(begin, () => { buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); });      // build happens behind the overlay, not while the menu looks frozen
     return;
@@ -10256,11 +10477,38 @@ function startLevelDef(id) {
   preloadThen(begin);
 }
 function buildLevelButtons() {
-  const list = $('lvlList');
-  list.innerHTML = LEVELS.map((lv, i) => `<button id="lvlBtn${i}" ${lv.unlocked ? '' : 'disabled'}>${lv.name}<span class="lvlSub">${lv.subtitle}</span></button>`).join('');
-  LEVELS.forEach((lv, i) => { const b = $('lvlBtn' + i); if (b) { if (lv.unlocked) b.onclick = () => lv.startFn(); b.onmouseenter = () => { if (lv.unlocked) { levelSel = i; menuLevelsRender(); } }; } });
+  const list = $('lvlCards'); if (!list) return;
+  list.innerHTML = LEVELS.map((lv, i) => `<button id="lvlBtn${i}" class="lvlCard${lv.unlocked ? '' : ' locked'}" data-lv="${lv.id}">`
+    + `<span class="lvlThumb" style="background:linear-gradient(160deg,${lv.c1},${lv.c2})">${lv.glyph}</span>`
+    + `<span class="lvlTxt"><span class="lvlName">${lv.unlocked ? lv.name : '???'}</span><span class="lvlSub">${lv.unlocked ? lv.subtitle : 'LOCKED — ???'}</span></span>`
+    + (lv.unlocked ? '' : '<span class="lvlLock">🔒</span>')
+    + `</button>`).join('');
+  LEVELS.forEach((lv, i) => { const b = $('lvlBtn' + i); if (b) {
+    b.onclick = () => { if (levelSel !== i) { levelSel = i; menuLevelsRender(); } };            // click selects (shows the preview)
+    if (lv.unlocked) b.ondblclick = () => launchLevel(i);                                       // double-click drops in
+    b.onmouseenter = () => { if (levelSel !== i) { levelSel = i; menuLevelsRender(); } };        // hover previews locked tiles too (their criteria)
+  } });
 }
-function menuLevelsRender() { LEVELS.forEach((lv, i) => { const b = $('lvlBtn' + i); if (b) b.className = (i === levelSel && lv.unlocked) ? 'sel' : ''; }); }
+function launchLevel(i) {
+  const lv = LEVELS[i];
+  if (launchBusy || !lv || !lv.unlocked) return;
+  launchBusy = true; levelSel = i;
+  try { localStorage.setItem('sk3d_lastLevel', lv.id); } catch (e) {}
+  const m = $('menu'); if (m) m.classList.add('launching');                                      // fade / zoom out into the level
+  setTimeout(() => {
+    try { lv.startFn(); } catch (err) { console.error('[menu] launch failed', err); launchBusy = false; if (m) m.classList.remove('launching'); toast('LAUNCH FAILED — SEE CONSOLE', 2600); }
+  }, 420);
+}
+function menuLevelsRender() {
+  LEVELS.forEach((lv, i) => { const b = $('lvlBtn' + i); if (b) b.className = 'lvlCard' + (i === levelSel ? ' sel' : '') + (lv.unlocked ? '' : ' locked'); });
+  const lv = LEVELS[levelSel]; if (!lv) return;
+  const un = !!lv.unlocked;  $('lvlPrevThumb').style.background = `linear-gradient(160deg,${lv.c1},${lv.c2})`;
+  $('lvlPrevThumb').textContent = lv.glyph;
+  $('lvlPrevName').textContent = un ? lv.name : '???';
+  $('lvlPrevSub').textContent = un ? lv.subtitle : lv.lockedNote || 'LOCKED';
+  $('lvlPrevFeat').innerHTML = un ? (lv.features || []).map(f => `<li>${f}</li>`).join('') : '';
+  $('lvlPrevHint').textContent = un ? 'ENTER / DOUBLE-CLICK TO DROP IN' : 'LOCKED';
+}
 function menuRender() {
   $('menuSub').style.display = 'none';
   $('menu').classList.toggle('main', menuMode === 'main'); const hn = document.querySelector('#menu .hint'); if (hn) hn.style.display = menuMode === 'main' ? 'none' : '';
@@ -10273,13 +10521,20 @@ function menuRender() {
   $('menuBye').style.display = menuMode === 'bye' ? 'block' : 'none';
   if (menuMode === 'levels') menuLevelsRender();
 }
-function showMenu(v) { 
-  const m = $('menu'); 
+function showMenu(v) {
+  const m = $('menu');
+
   if (!m) { console.error('MENU ELEMENT NOT FOUND'); return; }
+  document.documentElement.classList.toggle('inmenu', !!v);   // hide the touch overlay while any menu screen is up
+  if (v) { m.classList.remove('launching'); launchBusy = false; }   // returning to the menu clears the launch transition
   m.style.display = v ? 'flex' : 'none';
+
   if (v) menuRender(); 
+  updateTouchUI();
 }
-function menuStart() { LEVELS[0].startFn(); }      // ENTER drops straight into the first level (level select is hidden for now; LEVELS_ALL keeps the rest for when it returns)
+function menuStart() {                                        // START now opens the single-player level select (levelSel is already the remembered last choice)
+  menuMode = 'levels'; levelSel = Math.min(Math.max(levelSel, 0), LEVELS.length - 1); menuRender();
+}
 // PRELOAD: show a loading screen, finish the platform merge, then compile EVERY shader variant that exists anywhere in the level (hidden objects included),
 // so nothing hitches the first time a new enemy, biome or effect comes into view.
 function preloadThen(go, pre) {      // pre: optional heavy work (e.g. a level rebuild) run AFTER the overlay has painted
@@ -10411,11 +10666,11 @@ function menuKey(e) {
     else if (e.code === 'KeyP') menuMulti();
     else if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'ArrowLeft' || e.code === 'KeyA') { menuSel = menuBtns.indexOf(vis[(idx + vis.length - 1) % vis.length]); menuRender(); }
     else if (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'ArrowRight' || e.code === 'KeyD') { menuSel = menuBtns.indexOf(vis[(idx + 1) % vis.length]); menuRender(); }
-  } else if (menuMode === 'levels') {
-    const n = LEVELS.length, step = dir => { let j = levelSel; for (let k = 0; k < n; k++) { j = (j + dir + n) % n; if (LEVELS[j].unlocked) { levelSel = j; break; } } };
-    if (e.code === 'ArrowUp' || e.code === 'KeyW') { step(-1); menuLevelsRender(); }
-    else if (e.code === 'ArrowDown' || e.code === 'KeyS') { step(1); menuLevelsRender(); }
-    else if (e.code === 'Enter' || e.code === 'Space') { if (LEVELS[levelSel] && LEVELS[levelSel].unlocked) LEVELS[levelSel].startFn(); }
+  } else if (menuMode === 'levels') {   // level select: browse EVERY card (locked ones preview their unlock criteria), A/Enter drops in when unlocked
+    const n = LEVELS.length, step = dir => { levelSel = (levelSel + dir + n) % n; menuLevelsRender(); };
+    if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'ArrowLeft' || e.code === 'KeyA') step(-1);
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'ArrowRight' || e.code === 'KeyD') step(1);
+    else if (e.code === 'Enter' || e.code === 'Space') launchLevel(levelSel);
     else if (e.code === 'Escape') { menuMode = 'main'; menuRender(); }
   } else if (menuMode === 'multi') {
     if (e.code === 'KeyH') menuHostOpen(); else if (e.code === 'KeyJ') menuJoinOpen(); else if (e.code === 'Escape') { menuMode = 'main'; menuRender(); }
@@ -10433,6 +10688,8 @@ $('bRefresh').onclick = menuHostOpen; $('inRoom').oninput = hostRefresh; $('bNet
 $('bCopyInv').onclick = () => { copyText($('inviteAddr').textContent); $('bCopyInv').textContent = 'COPIED!'; setTimeout(() => { $('bCopyInv').textContent = 'COPY INVITE LINK'; }, 1500); };
 $('bGo').onclick = hostGo; $('bTest').onclick = joinTest; $('bJoinGo').onclick = joinGo;
 $('bMenu').onclick = () => location.reload();
+
+try { setTwilight(localStorage.getItem('sk3d_twilight') === '1'); } catch (e) {}      // twilight palette persists across boots (F6 toggles)
 menuBtns.forEach((id, i) => { $(id).onmouseenter = () => { menuSel = i; menuRender(); }; });
 
 
@@ -10449,6 +10706,7 @@ addEventListener('keydown', e => {
   if (e.code === 'F2') { e.preventDefault(); PERF.toggle(); return; }
   if (e.code === 'F3') { e.preventDefault(); dbgOn = !dbgOn; return; }
   if (e.code === 'F4') { e.preventDefault(); noclip = !noclip; toast(noclip ? 'NOCLIP on (F4 to leave) — Space up, C down' : 'NOCLIP off', 1800); return; }
+  if (e.code === 'F6') { e.preventDefault(); const on = !document.documentElement.classList.contains('twilight'); setTwilight(on); toast('TWILIGHT PALETTE ' + (on ? 'ON' : 'OFF'), 1600); return; }
   if (paused) return;
   if (guideDialogOpen) { guideDialogKey(e); keys[e.code] = false; return; }
   if (state === 'title') return menuKey(e);
@@ -10647,12 +10905,77 @@ document.addEventListener('pointerlockchange', () => {
 });
 document.addEventListener('pointerlockerror', () => lockLost('reload hook'));
 addEventListener('contextmenu', e => e.preventDefault());
+
+// ---------- twilight palette (indigo/violet) + mobile touch controls (handheld / overnight suite) ----------
+function setTwilight(on) {
+  document.documentElement.classList.toggle('twilight', !!on);
+  try { localStorage.setItem('sk3d_twilight', on ? '1' : '0'); } catch (e) {}
+}
+let touchShown = null;                // null = auto (coarse-pointer device only), true/false = manual override
+const isTouchOn = () => (touchShown !== null ? touchShown : matchMedia('(pointer: coarse)').matches);
+function updateTouchUI() {
+  const el = document.getElementById('touchUI'); if (!el) return;  el.classList.toggle('on', isTouchOn() && !document.documentElement.classList.contains('inmenu'));
+
+  document.documentElement.classList.toggle('touchmode', isTouchOn());
+}
+function touchToggle() { touchShown = !isTouchOn(); updateTouchUI(); return touchShown; }
+(function buildTouchUI() {
+  const ui = document.getElementById('touchUI'); if (!ui) return;
+  const canvas = renderer.domElement;
+  const press = (el, start, end) => {
+    el.addEventListener('touchstart', e => { e.preventDefault(); if (state === 'play' && !guideDialogOpen && start) start(e); }, { passive: false });
+    const stop = e => { e.preventDefault(); if (end) end(e); };
+    el.addEventListener('touchend', stop, { passive: false });
+    el.addEventListener('touchcancel', stop, { passive: false });
+  };
+  const mk = (cls, label) => { const d = document.createElement('div'); d.className = 'tbtn ' + cls; d.textContent = label; ui.appendChild(d); return d; };
+  const key = (code, down) => window.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code, bubbles: true }));
+  const btn = (which, down) => canvas.dispatchEvent(new MouseEvent(down ? 'mousedown' : 'mouseup', { button: which, bubbles: true, clientX: innerWidth / 2, clientY: innerHeight / 2 }));
+  press(mk('bFire', 'FIRE'), () => btn(0, true), () => btn(0, false));                       // hold = auto fire (LMB)
+  press(mk('bJump', 'JUMP'), () => key('Space', true), () => key('Space', false));
+  press(mk('bAim', 'AIM'), () => btn(2, true), () => btn(2, false));                          // aim down sights (RMB)
+  press(mk('bWpn', 'WPN'), () => canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true })));
+  press(mk('bPause', 'PAUSE'), () => key('Escape', true), () => key('Escape', false));
+  // Left virtual stick -> WASD (drives the same keys[] map the keyboard writer feeds, so every mechanic just works)
+  const stick = mk('stick', ''); stick.classList.remove('tbtn'); stick.classList.add('stick');
+  const knob = document.createElement('div'); knob.className = 'knob'; stick.appendChild(knob);
+  let sid = null;
+  const setMove = (dx, dy) => {
+    const t = 16;   // dead zone in px
+    keys.KeyW = dy < -t; keys.KeyS = dy > t; keys.KeyA = dx < -t; keys.KeyD = dx > t;
+  };
+  const track = t0 => {
+    const r = stick.getBoundingClientRect();
+    const dx = t0.clientX - (r.left + r.width / 2), dy = t0.clientY - (r.top + r.height / 2), lim = r.width / 2 - 10, m = Math.hypot(dx, dy), s = m > lim ? lim / m : 1;
+    knob.style.transform = `translate(${dx * s}px,${dy * s}px)`;
+    setMove(dx, dy);
+  };
+  press(stick, e => { const t0 = e.changedTouches && e.changedTouches[0]; sid = t0 ? t0.identifier : null; setMove(0, 0); }, () => { sid = null; setMove(0, 0); knob.style.transform = ''; });
+  stick.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === sid || sid === null) track(t); }, { passive: false });
+  // Any drag on the canvas area itself = look
+  let look = null;
+  canvas.addEventListener('touchstart', e => { if (state !== 'play' || guideDialogOpen) return; e.preventDefault(); const t0 = e.changedTouches[0]; look = { id: t0.identifier, x: t0.clientX, y: t0.clientY }; }, { passive: false });
+  canvas.addEventListener('touchmove', e => {
+    if (!look) return; e.preventDefault();
+    for (const t of e.changedTouches) if (t.identifier === look.id) {
+      const dx = t.clientX - look.x, dy = t.clientY - look.y;
+      look.x = t.clientX; look.y = t.clientY;
+      camYaw -= dx * 0.004; camPitch = clamp(camPitch + dy * 0.003, -0.15, 1.3); fpPitch = clamp(fpPitch - dy * 0.003, -1.45, 1.45);
+    }
+  }, { passive: false });
+  canvas.addEventListener('touchend', () => { look = null; }, { passive: false });
+  canvas.addEventListener('touchcancel', () => { look = null; }, { passive: false });
+  updateTouchUI();        // auto-show on coarse-pointer (handheld) devices
+})();
+// ---------- /twilight + touch ----------
+
 addEventListener('wheel', e => { if (state === 'play') { if (hotbarSel === 1) { hotbarSel = 0; updateHotbar(); } cycleWeapon(e.deltaY > 0 ? 1 : -1); } });
 addEventListener('keydown', e => { if (e.code === 'KeyE' && state === 'play' && hotbarSel === 1 && !eUsedProp && !hintProp && !hintNpc && !onVehicle) placeBlock(); });
 function begin() {
   scMusic.start();
   wipeGore();
   $('menu').style.display = 'none';
+  document.documentElement.classList.remove('inmenu'); updateTouchUI();   // gameplay resumes: bring the touch overlay back
   if (nosOn()) { camYaw = -universeCentre(mySlot).angle - Math.PI / 2; fpPitch = 0; }  // face outward along this home tower's highway
   initAudio();
   state = 'play'; showMsg('');
@@ -15610,7 +15933,40 @@ document.addEventListener('pointerlockchange', () => { if (!document.pointerLock
 // ---------- boot ----------
 buildLevel();
 pos.set(start.x, start.y, start.z);
-showMenu(true);  window.__ng = { ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toFixed(1), z: +q.z.toFixed(1), label: q.label })), mv: () => ({ vy: +vel.y.toFixed(2), onG: onGround, jumps, gliding, glide: +glide.toFixed(2), climbing: !!climbing, pounding, stam: +climbStam.toFixed(2), hp: health, st: state, paused }), bounces: () => solids.filter(s => s.bounce).map(s => ({ x: +(s.cx !== undefined ? s.cx : (s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +(s.cz !== undefined ? s.cz : (s.minz + s.maxz) / 2).toFixed(1), b: +(s.boost || 0).toFixed(1) })), spKinds: () => specials.reduce((a, s) => { const k = (s.sp && s.sp.kind) || s.kind || '?'; a[k] = (a[k] || 0) + 1; return a; }, {}), ladder: () => ({ cur: curPN, top: ladderTop && ladderTop.n, bot: ladderBot && ladderBot.n, len: ladder.length, voidY: VOID_Y }), falls: () => solids.filter(s => s.pn !== undefined).slice(0, 5).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), n: s.pn })), foes: () => enemies.filter(e => !e.dead).map(e => ({ id: e.mesh.id, v: e.variant, hp: +e.hp.toFixed(1), mh: e.maxhp, boss: !!e.boss, d: Math.round(Math.hypot(e.x - pos.x, e.y - pos.y, e.z - pos.z)) })), kit: () => ({ w: weapon, name: WEAPONS[weapon].name, owned: weaponOwned.slice(), ammo: { ...ammo } }), clearFoes: (keepBoss = true) => { let n = 0; for (const e of enemies) if (!e.dead && !(keepBoss && e.boss)) { damageEnemy(e, 99999, 'pound'); n++; } return n; }, setZone: (n, snap = false, quiet = true) => { const z = ZONES.concat(RENT_ZONES).find(x => x.name.toLowerCase() === String(n).toLowerCase()) || null; setZone(z, snap, quiet); return z ? z.name : null; }, get schizo() { return schizoOn; }, set schizo(v) { schizoOn = !!v; document.body.classList.toggle('schizo', schizoOn); }, get betweenTeamDrop() { return betweenTeamDrop; }, set betweenTeamDrop(v) { betweenTeamDrop = !!v; if (betweenOn()) buildLevel(); }, betweenCircuits: () => BETWEEN_CIRCUITS.map(c => ({ name: c.name, nodes: c.nodeIds.length })), betweenBeacons: () => betweenBeacons.map(b => ({ name: b.name, x: Math.round(b.x), z: Math.round(b.z), zone: b.zone && b.zone.name })), betweenMouths: () => betweenDungeonMouths.map(m => m && ({ idx: m.dungeonIndex, cx: Math.round(m.cx), cz: Math.round(m.cz), top: Math.round(m.top) })), betweenSectors: () => betweenSectorZones.map(z => z && z.name), betweenAnchors: () => betweenWell ? { anchorsActive: betweenWell.anchorsActive, anchors: betweenWell.anchors.map(a => a.active) } : null, betweenGeysers: () => solids.filter(s => s.returnGeyser).map(s => ({ cx: s.cx, cz: s.cz, top: s.top, target: s.geyserTarget })), giveWeapon: n => { const i = WEAPONS.findIndex(w => w.name.toLowerCase() === String(n).toLowerCase()); if (i < 0) return false; unlockWeapon(i); selectWeapon(i); return !!weaponOwned[i]; }, get killStreak() { return killStreak; }, set killStreak(v) { killStreak = v | 0; killStreakT = killStreak > 0 ? 4 : 0; }, get level() { return level; }, set level(v) { level = Math.max(1, v | 0); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; showMsg(''); toast('LEVEL ' + level + ' — ' + theme().name, 1600); }, rails: () => solids.filter(q => q.rail).map(q => { const a = q.rail.pts[0], b = q.rail.pts[q.rail.pts.length - 1]; return [a.x, a.y, a.z, b.x, b.y, b.z, q.rail.len]; }), grinding: () => !!grinding, dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => (i.type === 'lore' || i.type === 'betweenLore') && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), duel: (v = 'walker', dist = 4, boss = false) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, boss, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (k !== 'board') return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(zoneByName(n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; },  info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length, propList: props.map(p => ({ k: p.kind, at: p.mesh.position.toArray().map(v => Math.round(v * 10) / 10), taken: p.taken, vis: p.mesh.visible, inLvl: !!(p.mesh.parent && p.mesh.parent !== scene) })) }), missions: () => missionsSnapshot(), acceptMission, completeMission, turnIn, abandonMission, craftList, craft, guideTips, guideGreeting, base: () => ({ ...base, upgrades: { ...base.upgrades }, resources: { ...hotbarRes } }), homeBase: () => ({ guide: !!homeGuide, hintNpc, dialog: guideDialogOpen, slot: mySlot, tower: { x: myStartHub().x, z: myStartHub().z, top: myStartHub().top }, homes: activeStartHubs().map(h => ({ slot: h.slot, x: h.x, z: h.z })), enemiesNearSpawn: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).length, nearSpawns: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).map(e => ({ v: e.variant, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), boss: !!e.boss, mini: !!e.mini, zone: e.zone && e.zone.name })), guides: homeGuides.map(g => ({ slot: g.slot, x: +(g.group.position.x).toFixed(1), z: +(g.group.position.z).toFixed(1) })), parts: homeGuide && homeGuide.group.children.length }), applyNetSlot, missionsSnapshot, monkeys: () => [...dressings.values()].flatMap(d => d.anims.filter(a => a.k === 'monkey' && !a.dead).map(a => ({ x: +(d.site.x + a.mk.g.position.x).toFixed(2), y: +(d.site.y + a.mk.g.position.y).toFixed(2), z: +(d.site.z + a.mk.g.position.z).toFixed(2) }))), coins: () => ({ total: items.filter(i => i.type === 'coin' && !i.taken).length, bananas: items.filter(i => i.type === 'coin' && i.banana).length }), gore: () => ({ decals: decals.length, gibs: gibsList.filter(g => !g.dead).length, nearSpawn: decals.filter(r => spawnGoreBlocked(r[0], r[1], r[2])).length + gibsList.filter(g => !g.dead && spawnGoreBlocked(g.mesh.position.x, g.mesh.position.y, g.mesh.position.z)).length }), towers: () => buildingHubs.map((h, i) => ({ i, x: +h.x.toFixed(1), z: +h.z.toFixed(1), top: +h.top.toFixed(1), hw: +h.hw.toFixed(1), hd: +h.hd.toFixed(1), theme: towerThemeFor(h, i), opened: !!h.opened, alive: h.interior ? h.interior.enemies.filter(e => !e.dead).length : 0 })), openTower: (i = 0, themeKey = null) => { const hub = buildingHubs[i]; if (!hub) return null; const r = openTower(hub, themeKey); return r ? { theme: r.theme.name, floors: r.floors.length, enemies: r.enemies.length, loot: r.loot.length, targets: hub.interiorTargets.length } : null; }, interiors: () => ({ inside: inInterior, theme: activeTowerInterior ? activeTowerInterior.theme.name : null, opened: openedTowers.length, targets: interiorTargets.length }) };   // dev hook (console / test tools)
+showMenu(true);window.__ng = {
+ ports: () => portals.map(q => ({ x: +q.x.toFixed(1), y: +q.y.toFixed(1), z: +q.z.toFixed(1), label: q.label })), mv: () => ({ vy: +vel.y.toFixed(2), onG: onGround, jumps, gliding, glide: +glide.toFixed(2), climbing: !!climbing, pounding, stam: +climbStam.toFixed(2), hp: health, st: state, paused }), bounces: () => solids.filter(s => s.bounce).map(s => ({ x: +(s.cx !== undefined ? s.cx : (s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +(s.cz !== undefined ? s.cz : (s.minz + s.maxz) / 2).toFixed(1), b: +(s.boost || 0).toFixed(1) })), spKinds: () => specials.reduce((a, s) => { const k = (s.sp && s.sp.kind) || s.kind || '?'; a[k] = (a[k] || 0) + 1; return a; }, {}), ladder: () => ({ cur: curPN, top: ladderTop && ladderTop.n, bot: ladderBot && ladderBot.n, len: ladder.length, voidY: VOID_Y }), falls: () => solids.filter(s => s.pn !== undefined).slice(0, 5).map(s => ({ x: +((s.minx + s.maxx) / 2).toFixed(1), y: +(s.top !== undefined ? s.top : s.maxy).toFixed(1), z: +((s.minz + s.maxz) / 2).toFixed(1), n: s.pn })), foes: () => enemies.filter(e => !e.dead).map(e => ({ id: e.mesh.id, v: e.variant, hp: +e.hp.toFixed(1), mh: e.maxhp, boss: !!e.boss, d: Math.round(Math.hypot(e.x - pos.x, e.y - pos.y, e.z - pos.z)) })), kit: () => ({ w: weapon, name: WEAPONS[weapon].name, owned: weaponOwned.slice(), ammo: { ...ammo } }), clearFoes: (keepBoss = true) => { let n = 0; for (const e of enemies) if (!e.dead && !(keepBoss && e.boss)) { damageEnemy(e, 99999, 'pound'); n++; } return n; }, setZone: (n, snap = false, quiet = true) => { const z = ZONES.concat(RENT_ZONES).find(x => x.name.toLowerCase() === String(n).toLowerCase()) || null; setZone(z, snap, quiet); return z ? z.name : null; }, get schizo() { return schizoOn; }, set schizo(v) { schizoOn = !!v; document.body.classList.toggle('schizo', schizoOn); }, get betweenTeamDrop() { return betweenTeamDrop; }, set betweenTeamDrop(v) { betweenTeamDrop = !!v; if (betweenOn()) buildLevel(); }, betweenCircuits: () => BETWEEN_CIRCUITS.map(c => ({ name: c.name, nodes: c.nodeIds.length })), betweenBeacons: () => betweenBeacons.map(b => ({ name: b.name, x: Math.round(b.x), z: Math.round(b.z), zone: b.zone && b.zone.name })), betweenMouths: () => betweenDungeonMouths.map(m => m && ({ idx: m.dungeonIndex, cx: Math.round(m.cx), cz: Math.round(m.cz), top: Math.round(m.top) })), betweenSectors: () => betweenSectorZones.map(z => z && z.name), betweenAnchors: () => betweenWell ? { anchorsActive: betweenWell.anchorsActive, anchors: betweenWell.anchors.map(a => a.active) } : null, betweenGeysers: () => solids.filter(s => s.returnGeyser).map(s => ({ cx: s.cx, cz: s.cz, top: s.top, target: s.geyserTarget })), giveWeapon: n => { const i = WEAPONS.findIndex(w => w.name.toLowerCase() === String(n).toLowerCase()); if (i < 0) return false; unlockWeapon(i); selectWeapon(i); return !!weaponOwned[i]; }, get killStreak() { return killStreak; }, set killStreak(v) { killStreak = v | 0; killStreakT = killStreak > 0 ? 4 : 0; }, get level() { return level; }, set level(v) { level = Math.max(1, v | 0); buildLevel(); pos.set(start.x, start.y, start.z); vel.set(0, 0, 0); health = MAXHP; glide = 1; invuln = 1.5; onGround = false; state = 'play'; showMsg(''); toast('LEVEL ' + level + ' — ' + theme().name, 1600); }, rails: () => solids.filter(q => q.rail).map(q => { const a = q.rail.pts[0], b = q.rail.pts[q.rail.pts.length - 1]; return [a.x, a.y, a.z, b.x, b.y, b.z, q.rail.len]; }), grinding: () => !!grinding, dread: () => ({ dread, watchers: watchers.filter(w => w.on).length, made: watchers.length, cd: watchCd, cands: solids.filter(x => x.cx !== undefined && !x.bounce && Math.abs(x.top - pos.y) < 30 && Math.hypot(x.cx - pos.x, x.cz - pos.z) > 18 && Math.hypot(x.cx - pos.x, x.cz - pos.z) < 80).length, pulse: beatPulse }), setDread: v => { dreadForce = v; }, grow: () => { const s = solids.find(x => x.cx !== undefined && !x.sp && !x.grp && !x.arena && Math.abs(x.top - pos.y) < 2 && Math.abs(x.cx - pos.x) <= x.hw && Math.abs(x.cz - pos.z) <= x.hd); if (s) spontaneousArena(s, true); return !!s; }, lore: () => items.filter(i => (i.type === 'lore' || i.type === 'betweenLore') && !i.taken).map(i => i.mesh.position.toArray()), music: () => ({ on: musicOn, step: musicStep, ctx: actx && actx.state, gain: musicBus && musicBus.gain.value }), spawn: (v, dist = 6, sc = 1) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, null, sc, false, v), duel: (v = 'walker', dist = 4, boss = false) => makeWalker(pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist, { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, boss, v), riders: (n = 3) => { for (let k = 0; k < n; k++) makeWalker(pos.x + (Math.random() - 0.5) * 12, pos.y, pos.z + (Math.random() - 0.5) * 12, standOn || { minx: pos.x - 20, maxx: pos.x + 20, minz: pos.z - 20, maxz: pos.z + 20 }, 1, false, 'rider'); }, prop: (kind = 'bike', dist = 5) => addProp(kind, pos.x - Math.sin(camYaw) * dist, pos.y, pos.z - Math.cos(camYaw) * dist), useProp, equip: k => { if (k !== 'board') return; gear = k; toast('gear ' + k, 1200); }, look: (yaw, pitch = 0) => { camYaw = yaw; fpPitch = pitch; }, voice: (kind, cat = 'grunt', n = 0) => { lastSayAt = 0; say({ x: camera.position.x + 2, y: pos.y + 1, z: camera.position.z, boss: kind === 'boss', variant: kind, inner: kind === 'inner' }, { text: LINES[cat][n], cat, n }, true); }, zone: n => { setZone(zoneByName(n) || null, false, true); }, tp: (x, y, z) => pos.set(x, y, z), get pos() { return pos; },  info: () => ({ zone: activeZ && activeZ.name, sites: decorSites.length, dressings: dressings.size, state, paused, cam: camera.position.toArray().map(v => Math.round(v)), ground: groundCur, bd: Object.keys(backdrops), moon: moonInfo, space: spaceNow, gear, riding: !!onVehicle, props: props.length, propList: props.map(p => ({ k: p.kind, at: p.mesh.position.toArray().map(v => Math.round(v * 10) / 10), taken: p.taken, vis: p.mesh.visible, inLvl: !!(p.mesh.parent && p.mesh.parent !== scene) })) }), missions: () => missionsSnapshot(), acceptMission, completeMission, turnIn, abandonMission, craftList, craft, guideTips, guideGreeting, base: () => ({ ...base, upgrades: { ...base.upgrades }, resources: { ...hotbarRes } }), homeBase: () => ({ guide: !!homeGuide, hintNpc, dialog: guideDialogOpen, slot: mySlot, tower: { x: myStartHub().x, z: myStartHub().z, top: myStartHub().top }, homes: activeStartHubs().map(h => ({ slot: h.slot, x: h.x, z: h.z })), enemiesNearSpawn: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).length, nearSpawns: enemies.filter(e => !e.dead && activeStartHubs().some(h => Math.hypot(e.x - h.x, e.z - h.z) < 50)).map(e => ({ v: e.variant, x: Math.round(e.x), y: Math.round(e.y), z: Math.round(e.z), boss: !!e.boss, mini: !!e.mini, zone: e.zone && e.zone.name })), guides: homeGuides.map(g => ({ slot: g.slot, x: +(g.group.position.x).toFixed(1), z: +(g.group.position.z).toFixed(1) })), parts: homeGuide && homeGuide.group.children.length }), applyNetSlot, missionsSnapshot, monkeys: () => [...dressings.values()].flatMap(d => d.anims.filter(a => a.k === 'monkey' && !a.dead).map(a => ({ x: +(d.site.x + a.mk.g.position.x).toFixed(2), y: +(d.site.y + a.mk.g.position.y).toFixed(2), z: +(d.site.z + a.mk.g.position.z).toFixed(2) }))), coins: () => ({ total: items.filter(i => i.type === 'coin' && !i.taken).length, bananas: items.filter(i => i.type === 'coin' && i.banana).length }), gore: () => ({ decals: decals.length, gibs: gibsList.filter(g => !g.dead).length, nearSpawn: decals.filter(r => spawnGoreBlocked(r[0], r[1], r[2])).length + gibsList.filter(g => !g.dead && spawnGoreBlocked(g.mesh.position.x, g.mesh.position.y, g.mesh.position.z)).length }), towers: () => buildingHubs.map((h, i) => ({ i, x: +h.x.toFixed(1), z: +h.z.toFixed(1), top: +h.top.toFixed(1), hw: +h.hw.toFixed(1), hd: +h.hd.toFixed(1), theme: towerThemeFor(h, i), opened: !!h.opened, alive: h.interior ? h.interior.enemies.filter(e => !e.dead).length : 0 })), openTower: (i = 0, themeKey = null) => { const hub = buildingHubs[i]; if (!hub) return null; const r = openTower(hub, themeKey); return r ? { theme: r.theme.name, floors: r.floors.length, enemies: r.enemies.length, loot: r.loot.length, targets: hub.interiorTargets.length } : null; }, interiors: () => ({ inside: inInterior, theme: activeTowerInterior ? activeTowerInterior.theme.name : null, opened: openedTowers.length, targets: interiorTargets.length }),
+  // ---- session persistence hook: overnight /sesh runs snapshot the player and resume after crash/restart ----
+  get twilight() { return document.documentElement.classList.contains('twilight'); },
+  set twilight(v) { setTwilight(v); },
+  touchToggle,
+  d4cleanup: () => { d4SwitchCleanup(); return d4SanityT; },
+  saveSession: () => {
+    const snap = { t: Date.now(), levelId: levelDef && levelDef.id, level: Math.max(1, level | 0), pos: [Math.round(pos.x * 10) / 10, Math.round(pos.y * 10) / 10, Math.round(pos.z * 10) / 10], look: [Math.round(camYaw * 1000) / 1000, Math.round(fpPitch * 1000) / 1000], hp: Math.round(health), weapon, weaponOwned: weaponOwned.slice(), ammo: { ...ammo }, killStreak: killStreak | 0 };
+    try { localStorage.setItem('sk3d_session', JSON.stringify(snap)); } catch (e) { console.warn('[session] save failed', e); return null; }
+    return snap;
+  },
+  loadSession: s => {
+    if (!s) { try { s = JSON.parse(localStorage.getItem('sk3d_session') || 'null'); } catch (e) { s = null; } }
+    if (!s || !s.levelId || !LEVEL_DEFS[s.levelId]) { toast('NO SAVED SESSION', 1800); return false; }
+    const sameWorld = levelDef && levelDef.id === s.levelId;
+    const apply = () => {
+      try {
+        health = Math.max(1, Math.min(MAXHP, s.hp || MAXHP));
+        if (typeof s.weapon === 'number' && s.weapon >= 0 && s.weapon < WEAPONS.length) weapon = s.weapon;
+        if (Array.isArray(s.weaponOwned)) for (let i = 0; i < Math.min(WEAPONS.length, s.weaponOwned.length); i++) weaponOwned[i] = !!s.weaponOwned[i];
+        if (s.ammo) for (const k of Object.keys(ammo)) if (typeof s.ammo[k] === 'number') ammo[k] = Math.max(0, s.ammo[k] | 0);
+        if (Array.isArray(s.look)) { camYaw = s.look[0]; fpPitch = s.look[1]; }
+        if (sameWorld && Array.isArray(s.pos)) { pos.set(s.pos[0], s.pos[1], s.pos[2]); vel.set(0, 0, 0); onGround = false; }   // only teleport back into the EXACT world we saved in — a rebuilt world is procedurally different, the old coords may not be open air
+        if (typeof s.killStreak === 'number') { killStreak = s.killStreak | 0; killStreakT = killStreak > 0 ? 4 : 0; }
+        toast('SESSION RESTORED — ' + s.levelId.toUpperCase(), 2400);
+      } catch (err) { console.error('[session] restore failed', err); }
+    };
+    if (sameWorld) { apply(); return true; }
+    startLevelDef(s.levelId);                                     // rebuild the right world behind the loading screen, apply the snapshot once it's live
+    let tries = 0;
+    const watch = setInterval(() => { if (preloadThen.done && state === 'play') { clearInterval(watch); apply(); } else if (++tries > 960) { clearInterval(watch); toast('SESSION RESTORE TIMED OUT', 2400); } }, 250);   // wait for the rebuild to actually finish (preloadThen.done flips + begin runs); failsafe ~4min for slow machines
+    return true;
+  } };   // dev hook (console / test tools)
 
 {   // opened from the relay server with ?room=... -> connect right away
   const qp = new URLSearchParams(location.search || '');
