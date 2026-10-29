@@ -539,8 +539,9 @@ Platforms are **solid clouds, floating islands, and weather formations**. Player
 
 ---
 
-## DELIVERABLES (for future execution — do not start now)
+## DELIVERABLES — START IMMEDIATELY (user authorized 2026-10-29, overriding the prior "do not start now" gate)
 
+**HANDOFF for whoever picks this up next:** research for Lvl2 "The Overgrowth" was started 2026-10-29 (an Explore agent was mapping the exact LEVEL_DEFS/zone/dressSite/dungeon-framework pattern used by Rent's Due and Nostalgia Overdose, as a blueprint to copy) but the session was cut short before any Overgrowth code was written — no `LEVEL_DEFS.overgrowth`, no `OVERGROWTH_ZONES`, nothing exists yet. Follow the exact Rent's Due/NOS pattern (see their 2026-10-23 log entries above for the template: own zone array, `overgrowthOn()` gate, `buildOvergrowthNetwork()`, tree/branch/mushroom-cap/vine dressing in `dressSite`, reuse the existing enemy roster via `AI_ALIAS`, reuse the shared dungeon framework (`commonsMidBuild`/`farDungeon`/`farMonument`) for its own 5 forest-themed dungeons gated to this level only). Build ONE level per session per this file's own established convention (line ~39) — do not attempt Lvl2+3+4 together.
 - [x] Lvl1 has 5 dungeons (3 existing + 2 new) — Bone Cathedral + Bubble Citadel landed 2026-10-29.
 - [ ] Lvl2 "The Overgrowth" — full forest level, 5 dungeons.
 - [ ] Lvl3 "The Ascent" — full mountain level, 5 dungeons.
