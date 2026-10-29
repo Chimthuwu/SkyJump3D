@@ -10539,7 +10539,11 @@ const LEVELS_ALL = [
   { id: 'locked3', name: '???', subtitle: 'LOCKED — COMING SOON', unlocked: false,
     glyph: '❔', c1: '#1c1c24', c2: '#585868', features: [], lockedNote: 'SEAL INTACT — ??? unlocks when ALL other worlds have been conquered. Nothing on the moon says otherwise… yet.' },
 ];
-const LEVELS = LEVELS_ALL;                            // single player: the full roster (locked tiles included) lives on the select screen
+// Single player menu roster: user request 2026-10-29 — only Lil Spasticism (plus the planned Overgrowth/Ascent/Skyfall,
+// added here as each lands) should be reachable from the START button. Rent's Due / Nostalgia Overdose / THE ARENAS /
+// THE BETWEEN are NOT deleted (their code, LEVEL_DEFS entries and LEVELS_ALL cards all still exist, untouched) — they're
+// just filtered out of the menu roster, so this is a one-line, fully reversible change if any of them are wanted back.
+const LEVELS = LEVELS_ALL.filter(lv => ['descent', 'overgrowth', 'ascent', 'skyfall'].includes(lv.id));
 let levelSel = 0;
 try { const saved = localStorage.getItem('sk3d_lastLevel'); const j = typeof saved === 'string' ? LEVELS.findIndex(lv => lv.id === saved && lv.unlocked) : -1; if (j >= 0) levelSel = j; } catch (e) {}   // remember last choice
 let launchBusy = false;                                // one launch at a time, for the fade/zoom transition window
