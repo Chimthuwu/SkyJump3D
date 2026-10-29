@@ -410,9 +410,10 @@ let TOP = 190;            // roof height of the tower (grows each level)
 let level = 1;
 // LEVEL DEFINITION: which selectable level is live. 'descent' (Lil Spasticism) is the original game and every gate below is a no-op for it.
 // Set by LEVELS[i].startFn before buildLevel(); everything level-specific is gated on rentOn() / levelDef.id so the default level is unchanged.
-const LEVEL_DEFS = { descent: { id: 'descent' }, rent: { id: 'rent' }, nos: { id: 'nos' }, gut: { id: 'gut' }, arena: { id: 'arena' }, between: { id: 'between' }, overgrowth: { id: 'overgrowth' }, ascent: { id: 'ascent' } };
+const LEVEL_DEFS = { descent: { id: 'descent' }, rent: { id: 'rent' }, nos: { id: 'nos' }, gut: { id: 'gut' }, arena: { id: 'arena' }, between: { id: 'between' }, overgrowth: { id: 'overgrowth' }, ascent: { id: 'ascent' }, skyfall: { id: 'skyfall' } };
 let levelDef = LEVEL_DEFS.descent;
 const rentOn = () => levelDef.id === 'rent';
+const skyfallOn = () => levelDef.id === 'skyfall';   // LEVEL 4 "Skyfall": same descent/moon/hell-platform skeleton as 'descent'/'overgrowth'/'ascent', a cloud reskin + its own 6 dungeons — NOT in themeZones() below, so it keeps the real moon/space
 const ascentOn = () => levelDef.id === 'ascent';   // LEVEL 3 "The Ascent": same descent/moon/hell-platform skeleton as 'descent' and 'overgrowth', a mountain reskin + its own 6 dungeons — NOT in themeZones() below, so it keeps the real moon/space
 const overgrowthOn = () => levelDef.id === 'overgrowth';   // LEVEL 2 "The Overgrowth": same descent/moon/hell-platform skeleton as 'descent', just a forest reskin + its own 6 dungeons — NOT in themeZones() below, so it keeps the real moon/space (unlike rent/nos/gut)
 let nosPipes = [], pipeCd = 0, pipeHeld = true;                                  // Nostalgia Overdose warp pipes (rebuilt with the level)
@@ -3515,6 +3516,21 @@ const AVALANCHEVAULT_KINDS = ['frozenStalker', 'frozenStalker', 'charger'];
 const EAGLESAERIE_KINDS = ['drone', 'bomber', 'gunner'];
 const DEEPCAVERN_KINDS = ['skeleton', 'cryptGhost', 'zombie'];
 const FROZENKEEP_KINDS = ['frozenStalker', 'shield', 'skeleton'];
+// LEVEL 4 "SKYFALL" — 6 cloud/storm-themed pure-descent dungeons, same commonsMidBuild/farDungeon/farMonument
+// framework as Lvl1's bone/bubble/eiffel and Overgrowth's/Ascent's own six (see the skyfallOn() branch near the top
+// of commonsMidBuild), own theme set only: no new AI, kinds below are all existing WALKER_STATS variants.
+const CLOUDCASTLE_ZONE = { name: 'CloudCastle', desc: 'a castle built from compacted cloud, battlements of solid mist', top: '#dce8f8', mid: '#b8d0ee', bot: '#8aa8d8', fog: 0xc8dcf4, hemi: 0.9, hemiCol: 0xffffff, sun: 0.75, sunCol: 0xfff8e8, cloud: 0xdce8f8, plate: 0xaec8ea, weather: 'none' };
+const SKYTEMPLE_ZONE = { name: 'SkyTemple', desc: 'a golden temple adrift on a cloud bank, columns fading into haze', top: '#1a2a4a', mid: '#3a5a8a', bot: '#eac878', fog: 0x2a3a5e, hemi: 0.78, hemiCol: 0xcce0ff, sun: 0.85, sunCol: 0xffe8b0, cloud: 0xeadcc0, plate: 0xd8b878, weather: 'none' };
+const AURORAVAULT_ZONE = { name: 'AuroraVault', desc: 'curtains of green and violet light rippling over a vault of glass', top: '#060818', mid: '#0e2838', bot: '#1a4a3a', fog: 0x0a1428, hemi: 0.6, hemiCol: 0x7af0c8, sun: 0.5, sunCol: 0xd85aff, cloud: 0x1a3a4a, plate: 0x5af0a8, weather: 'none' };
+const THUNDERDOCK_ZONE = { name: 'ThunderDock', desc: 'a landing dock lashed by rolling storm clouds, air crackling before every strike', top: '#0a0e1a', mid: '#1c2438', bot: '#3a4258', fog: 0x121828, hemi: 0.5, hemiCol: 0x8ac8ff, sun: 0.6, sunCol: 0xd8e8ff, cloud: 0x2a3248, plate: 0x6ab4ea, weather: 'none' };
+const FLOATINGRUIN_ZONE = { name: 'FloatingRuin', desc: 'a shattered ancient structure drifting apart, moss and mist in every crack', top: '#283038', mid: '#4a5258', bot: '#6a8a6a', fog: 0x3a4240, hemi: 0.55, hemiCol: 0xaabcac, sun: 0.4, sunCol: 0xc8d8c0, cloud: 0x4a5248, plate: 0x7a9a7a, weather: 'none' };
+const LIGHTNINGSPIRE_ZONE = { name: 'LightningSpire', desc: 'a needle of a tower drawing every bolt from the storm above', top: '#0c0a20', mid: '#241848', bot: '#5a3ad8', fog: 0x180f38, hemi: 0.65, hemiCol: 0x9a8aff, sun: 0.7, sunCol: 0xd8c8ff, cloud: 0x2a1a4a, plate: 0x8a5aff, weather: 'none' };
+const CLOUDCASTLE_KINDS = ['walker', 'shield', 'gunner'];
+const SKYTEMPLE_KINDS = ['kaomoji', 'alien', 'raver'];
+const AURORAVAULT_KINDS = ['raver', 'kaomoji', 'prismWraith'];
+const THUNDERDOCK_KINDS = ['drone', 'bomber', 'gunner'];
+const FLOATINGRUIN_KINDS = ['skeleton', 'cryptGhost', 'zombie'];
+const LIGHTNINGSPIRE_KINDS = ['drone', 'stormWraith', 'bomber'];
 let midWins = { maw: false, nex: false, oss: false, fizz: false };        // survives commons rebuilds (per level); re-fighting a boss re-grants nothing
 let midGen = 0;                                  // debug: which mid-site state instance is live right now
 const palaceMotions = [];
@@ -3985,6 +4001,71 @@ function farMonument(kind, gx, gz, gy, CX, CZ) {         // discovery monument p
       for (let x = -36; x <= 36; x += 18) { M(cn2, iceClear, x, 192, 26, 2.2, 10, 2.2, 0, Math.PI); M(cn2, iceClear, x, 192, -26, 2.2, 10, 2.2, 0, Math.PI); }   // hanging icicle fringe along the parapet
       const gate2 = new THREE.Mesh(new THREE.BoxGeometry(22, 48, 1), iceDark);
       gate2.position.set(0, 24, 30.4); g.add(gate2);     // the dark ice-gate entrance
+    } else if (kind === 'cloudcastle') {                // LEVEL 4 dungeon: a castle built from compacted cloud, puffy battlements and towers
+      const cloudBody = lamF(0xe8f0ff, 0x7a90b8, 0.3), cloudTrim = lamF(0xfafdff, 0x9ab0d8, 0.26);
+      M(sp2, cloudBody, 0, 70, 0, 70, 70, 60);           // the main cloud-mass keep, rounded not angular
+      for (const [tx, tz, h] of [[-44, 10, 130], [44, 10, 130], [-30, -30, 150], [30, -30, 150]]) {
+        M(cy2, cloudBody, tx, h / 2, tz, 16, h, 16); M(sp2, cloudTrim, tx, h + 6, tz, 17, 15, 17);   // four cloud-puff towers
+      }
+      for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5, r = 62; M(sp2, cloudTrim, Math.cos(a) * r, 128, Math.sin(a) * r, 11, 9, 11); }   // battlement puffs ringing the keep top
+      M(sp2, cloudTrim, 0, 150, 0, 26, 20, 26);          // a crowning cloud dome
+      const mist = new THREE.Mesh(new THREE.CircleGeometry(13, 14), glow(0xdce8ff));
+      mist.position.set(0, 46, 54.9); g.add(mist);       // the misty keep entrance
+    } else if (kind === 'skytemple') {                  // LEVEL 4 dungeon: a golden colonnade temple adrift on its own cloud bank
+      const marble = lamF(0xd8c088, 0x5a4420, 0.3), gold = lamF(0xf0d888, 0x6a5420, 0.5), cloudBase = lamF(0xf0f4ff, 0xa0b0d8, 0.24);
+      M(sp2, cloudBase, 0, 16, 0, 72, 24, 72);           // the drifting cloud plinth it stands on
+      for (let i = 0; i < 12; i++) {                      // ringed marble columns holding up the roof
+        const a = i * Math.PI / 6, r = 46;
+        M(cy2, marble, Math.cos(a) * r, 100, Math.sin(a) * r, 6, 150, 6);
+        M(sp2, gold, Math.cos(a) * r, 176, Math.sin(a) * r, 7, 5, 7);
+      }
+      M(cn2, gold, 0, 196, 0, 58, 40, 58);               // the gilded pyramid roof
+      M(sp2, glow(0xfff2c8), 0, 220, 0, 6, 8, 6);         // the summit finial
+      const door = new THREE.Mesh(new THREE.CircleGeometry(12, 14), glow(0x2a1c08));
+      door.position.set(0, 40, 48.9); g.add(door);       // the dark sanctum entrance between the front columns
+    } else if (kind === 'auroravault') {                 // LEVEL 4 dungeon: a glass vault wrapped in rippling aurora bands
+      const glassM2 = lamF(0x2a4a5a, 0x0c1a22, 0.3), auroraA = glow(0x5af0a8), auroraB = glow(0xb05aff);
+      M(cy2, glassM2, 0, 120, 0, 50, 220, 50);           // the main vault cylinder
+      M(sp2, glassM2, 0, 230, 0, 34, 30, 34);            // the domed cap
+      for (let i = 0; i < 7; i++) {                       // rippling aurora ring bands climbing the vault, alternating colour
+        const y = 20 + i * 30, ring = new THREE.Mesh(new THREE.TorusGeometry(54 + Math.sin(i) * 4, 2.2, 6, 24), i % 2 ? auroraA : auroraB);
+        ring.rotation.set(Math.PI / 2 + Math.sin(i * 1.3) * 0.25, 0, i * 0.4); ring.position.set(0, y, 0); ring.userData.noCull = true; g.add(ring);
+      }
+      const seam = new THREE.Mesh(new THREE.CircleGeometry(13, 14), glow(0x0a1a20));
+      seam.position.set(0, 34, 49.9); g.add(seam);       // the dark seam into the vault
+    } else if (kind === 'thunderdock') {                // LEVEL 4 dungeon: an industrial dock lashed by storm clouds, a lightning mast at its heart
+      const metal = lamF(0x3a4258, 0x14182a, 0.3), rust2 = lamF(0x5a4a3a, 0x201810, 0.24), stormCloud = glow(0x1c2438);
+      M(cy2, metal, 0, 50, 0, 58, 100, 58);              // the dock's main drum
+      M(bx2, rust2, 0, 104, 0, 68, 10, 68);               // the landing deck ring
+      M(cy2, metal, 0, 170, 0, 5, 130, 5);                // the tall lightning mast
+      M(cn2, glow(0xd8e8ff), 0, 236, 0, 2.5, 10, 2.5);    // its glowing conductive tip
+      for (let i = 0; i < 5; i++) { M(sp2, stormCloud, (rand() - 0.5) * 90, 140 + i * 16, (rand() - 0.5) * 90, 20 + rand() * 10, 10, 20 + rand() * 10); }   // dark storm clouds wreathing the mast
+      const hatch2 = new THREE.Mesh(new THREE.CircleGeometry(11, 14), glow(0x0a0c16));
+      hatch2.position.set(0, 24, 57.9); g.add(hatch2);   // the dock's own dark hatch
+    } else if (kind === 'floatingruin') {               // LEVEL 4 dungeon: a shattered ancient ruin, broken arches drifting apart in the haze
+      const stoneM2 = lamF(0x5a6258, 0x1e241e, 0.24), mossM = lamF(0x7a9a6a, 0x263a1e, 0.26);
+      M(bx2, stoneM2, 0, 60, -10, 64, 120, 54);           // the main broken keep mass
+      for (let i = 0; i < 4; i++) {                        // crumbling arch fragments, each tilted as if mid-collapse
+        const a = i * Math.PI / 2 + 0.3, r = 58;
+        const arch2 = new THREE.Mesh(new THREE.TorusGeometry(20, 3, 6, 16, Math.PI), stoneM2);
+        arch2.rotation.set(Math.PI / 2, 0, a + 0.4); arch2.position.set(Math.cos(a) * r, 70 + i * 14, Math.sin(a) * r); arch2.userData.noCull = true; g.add(arch2);
+      }
+      for (let i = 0; i < 14; i++) { const a = rand() * 6.283, r = 30 + rand() * 40; M(sp2, mossM, Math.cos(a) * r, 20 + rand() * 100, Math.sin(a) * r, 4 + rand() * 3, 3 + rand() * 2, 4 + rand() * 3); }   // moss-caked rubble chunks
+      const breach = new THREE.Mesh(new THREE.CircleGeometry(12, 12), glow(0x0e1410));
+      breach.position.set(0, 44, 36.9); g.add(breach);   // the breach into the ruin
+    } else if (kind === 'lightningspire') {             // LEVEL 4 dungeon: a needle-thin tower drawing every bolt from the storm above
+      const spireM = lamF(0x3a2a6a, 0x120a28, 0.3), boltM = glow(0xd8c8ff), coreM = glow(0x8a5aff);
+      M(cy2, spireM, 0, 130, 0, 22, 260, 22);            // the slender main spire, very tall and thin
+      for (let i = 0; i < 6; i++) { const y = 30 + i * 40; M(new THREE.TorusGeometry(26 - i * 1.5, 1.4, 5, 16), spireM, 0, y, 0).rotation.x = Math.PI / 2; }   // tapering support rings up the shaft
+      for (let i = 0; i < 9; i++) {                        // jagged lightning-bolt tubes crackling around the top third
+        const y = 180 + (i % 3) * 24, a = rand() * 6.283;
+        const bolt = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
+          new THREE.Vector3(0, y, 0), new THREE.Vector3(Math.cos(a) * 20, y + 10, Math.sin(a) * 20), new THREE.Vector3(Math.cos(a) * 32, y - 4, Math.sin(a) * 32)
+        ]), 8, 0.7, 5, false), boltM); bolt.userData.noCull = true; g.add(bolt);
+      }
+      M(sp2, coreM, 0, 260, 0, 9, 11, 9);                // the crackling core at the very top
+      const vent = new THREE.Mesh(new THREE.CircleGeometry(10, 12), glow(0x0e0820));
+      vent.position.set(0, 26, 21.9); g.add(vent);       // the dark access vent at the spire's base
     } else {                                           // fairytale mushroom: ivory gills, a russet cap, and cream spots
       const stem2 = lamF(0xe8d8bb, 0x65513c, 0.24), cap2 = lamF(0xb9474f, 0x5a1727, 0.28);
       const capY = 220, capRadius = 82, capHeight = 48;
@@ -4036,7 +4117,7 @@ function farDungeon(key, sn, site, mon, zone, col, deckLocal, botLocal, discR) {
     const tag = makeLabel(label); tag.position.set(x, y + 2.8, z); tag.scale.set(8.5, 2.1, 1); tag.userData.noCull = true; scene.add(tag);
     return dot;
   };
-  const routeHeading = makeLabel(key === 'nest' ? 'GIANT NEST · FOLLOW THE GLOW TO THE VAULT' : key === 'house' ? 'HAUNTED KEEP · CLIMB THE SPIRE, DESCEND INSIDE' : key === 'bone' ? 'BONE CATHEDRAL · CLIMB THE BUTTRESSES, DESCEND THE OSSUARY' : key === 'bubble' ? 'BUBBLE CITADEL · CLIMB THE DOME, SINK INTO THE FIZZ'  : key === 'roothollow' ? 'ROOT HOLLOW · CLIMB THE ROOTS, DESCEND THE HOLLOW' : key === 'beastnest' ? "BEAST'S NEST · CLIMB THE BOUGHS, DESCEND THE DEN" : key === 'sunkenstump' ? 'SUNKEN STUMP · CLIMB THE RINGS, DESCEND THE FLOOD' : key === 'sporevault' ? 'SPORE VAULT · CLIMB THE STALK, DESCEND THE BLOOM' : key === 'canopytemple' ? 'CANOPY TEMPLE · CLIMB THE VINES, DESCEND THE SHRINE' : key === 'hornetshive' ? "HORNET'S HIVE · CLIMB THE COMB, DESCEND THE SWARM" : key === 'mineshaft' ? 'MINE SHAFT · CLIMB THE HEADFRAME, DESCEND THE SHAFT' : key === 'crystalgrotto' ? 'CRYSTAL GROTTO · CLIMB THE SPIRES, DESCEND THE GEODE' : key === 'avalanchevault' ? 'AVALANCHE VAULT · CLIMB THE CORNICE, DESCEND THE VAULT' : key === 'eaglesaerie' ? "EAGLE'S AERIE · CLIMB THE CRAG, DESCEND THE NEST" : key === 'deepcavern' ? 'DEEP CAVERN · CLIMB THE SPIKES, DESCEND THE DARK' : key === 'frozenkeep' ? 'FROZEN KEEP · CLIMB THE BATTLEMENTS, DESCEND THE ICE': key === 'eiffel' ? 'THE EIFFEL CANARD · CLIMB THE TOWER, DESCEND THE CELLAR' : 'GRAND SHROOM · CLIMB THE STEM, DESCEND WITHIN');
+  const routeHeading = makeLabel(key === 'nest' ? 'GIANT NEST · FOLLOW THE GLOW TO THE VAULT' : key === 'house' ? 'HAUNTED KEEP · CLIMB THE SPIRE, DESCEND INSIDE' : key === 'bone' ? 'BONE CATHEDRAL · CLIMB THE BUTTRESSES, DESCEND THE OSSUARY' : key === 'bubble' ? 'BUBBLE CITADEL · CLIMB THE DOME, SINK INTO THE FIZZ'  : key === 'roothollow' ? 'ROOT HOLLOW · CLIMB THE ROOTS, DESCEND THE HOLLOW' : key === 'beastnest' ? "BEAST'S NEST · CLIMB THE BOUGHS, DESCEND THE DEN" : key === 'sunkenstump' ? 'SUNKEN STUMP · CLIMB THE RINGS, DESCEND THE FLOOD' : key === 'sporevault' ? 'SPORE VAULT · CLIMB THE STALK, DESCEND THE BLOOM' : key === 'canopytemple' ? 'CANOPY TEMPLE · CLIMB THE VINES, DESCEND THE SHRINE' : key === 'hornetshive' ? "HORNET'S HIVE · CLIMB THE COMB, DESCEND THE SWARM" : key === 'mineshaft' ? 'MINE SHAFT · CLIMB THE HEADFRAME, DESCEND THE SHAFT' : key === 'crystalgrotto' ? 'CRYSTAL GROTTO · CLIMB THE SPIRES, DESCEND THE GEODE' : key === 'avalanchevault' ? 'AVALANCHE VAULT · CLIMB THE CORNICE, DESCEND THE VAULT' : key === 'eaglesaerie' ? "EAGLE'S AERIE · CLIMB THE CRAG, DESCEND THE NEST" : key === 'deepcavern' ? 'DEEP CAVERN · CLIMB THE SPIKES, DESCEND THE DARK' : key === 'cloudcastle' ? 'CLOUD CASTLE · CLIMB THE RAMPARTS, DESCEND THE MIST' : key === 'skytemple' ? 'SKY TEMPLE · CLIMB THE COLUMNS, DESCEND THE SANCTUM' : key === 'auroravault' ? 'AURORA VAULT · CLIMB THE BANDS, DESCEND THE GLASS' : key === 'thunderdock' ? 'THUNDER DOCK · CLIMB THE MAST, DESCEND THE HATCH' : key === 'floatingruin' ? 'FLOATING RUIN · CLIMB THE ARCHES, DESCEND THE BREACH' : key === 'lightningspire' ? 'LIGHTNING SPIRE · CLIMB THE SHAFT, DESCEND THE VENT' : key === 'frozenkeep' ? 'FROZEN KEEP · CLIMB THE BATTLEMENTS, DESCEND THE ICE': key === 'eiffel' ? 'THE EIFFEL CANARD · CLIMB THE TOWER, DESCEND THE CELLAR' : 'GRAND SHROOM · CLIMB THE STEM, DESCEND WITHIN');
   routeHeading.position.set(site.x, site.y + 20, site.z); routeHeading.scale.set(20, 4.6, 1); routeHeading.userData.noCull = true; scene.add(routeHeading);
     const wallClearR = shellHalf + 12, innerEndR = discR + 16;   // innerEndR unchanged from before: lands the climb right next to the deck slab
     const baseR = Math.max(r0 + 40, discR + 30, wallClearR + 1);
@@ -4051,7 +4132,7 @@ function farDungeon(key, sn, site, mon, zone, col, deckLocal, botLocal, discR) {
 
       addRail(px, pz, py + 1.35, sx, sz, col, sy + 1.35, false);
       if (k % 7 === 1) addDashPad(px, py, pz, sx - px, sz - pz);        if (k % 16 === 8) {
-          const sign = makeLabel(key === 'house' ? 'GOTHIC KEEP · CLIMB ↑' : key === 'nest' ? 'GIANT PUSSY · CLIMB ↑' : key === 'bone' ? 'BONE CATHEDRAL · CLIMB ↑' : key === 'bubble' ? 'BUBBLE CITADEL · CLIMB ↑'  : key === 'roothollow' ? 'ROOT HOLLOW · CLIMB ↑' : key === 'beastnest' ? "BEAST'S NEST · CLIMB ↑" : key === 'sunkenstump' ? 'SUNKEN STUMP · CLIMB ↑' : key === 'sporevault' ? 'SPORE VAULT · CLIMB ↑' : key === 'canopytemple' ? 'CANOPY TEMPLE · CLIMB ↑' : key === 'hornetshive' ? "HORNET'S HIVE · CLIMB ↑" : key === 'mineshaft' ? 'MINE SHAFT · CLIMB ↑' : key === 'crystalgrotto' ? 'CRYSTAL GROTTO · CLIMB ↑' : key === 'avalanchevault' ? 'AVALANCHE VAULT · CLIMB ↑' : key === 'eaglesaerie' ? "EAGLE'S AERIE · CLIMB ↑" : key === 'deepcavern' ? 'DEEP CAVERN · CLIMB ↑' : key === 'frozenkeep' ? 'FROZEN KEEP · CLIMB ↑': key === 'eiffel' ? 'THE EIFFEL CANARD · CLIMB ↑' : 'GRAND SHROOM · CLIMB ↑');
+          const sign = makeLabel(key === 'house' ? 'GOTHIC KEEP · CLIMB ↑' : key === 'nest' ? 'GIANT PUSSY · CLIMB ↑' : key === 'bone' ? 'BONE CATHEDRAL · CLIMB ↑' : key === 'bubble' ? 'BUBBLE CITADEL · CLIMB ↑'  : key === 'roothollow' ? 'ROOT HOLLOW · CLIMB ↑' : key === 'beastnest' ? "BEAST'S NEST · CLIMB ↑" : key === 'sunkenstump' ? 'SUNKEN STUMP · CLIMB ↑' : key === 'sporevault' ? 'SPORE VAULT · CLIMB ↑' : key === 'canopytemple' ? 'CANOPY TEMPLE · CLIMB ↑' : key === 'hornetshive' ? "HORNET'S HIVE · CLIMB ↑" : key === 'mineshaft' ? 'MINE SHAFT · CLIMB ↑' : key === 'crystalgrotto' ? 'CRYSTAL GROTTO · CLIMB ↑' : key === 'avalanchevault' ? 'AVALANCHE VAULT · CLIMB ↑' : key === 'eaglesaerie' ? "EAGLE'S AERIE · CLIMB ↑" : key === 'deepcavern' ? 'DEEP CAVERN · CLIMB ↑' : key === 'cloudcastle' ? 'CLOUD CASTLE · CLIMB ↑' : key === 'skytemple' ? 'SKY TEMPLE · CLIMB ↑' : key === 'auroravault' ? 'AURORA VAULT · CLIMB ↑' : key === 'thunderdock' ? 'THUNDER DOCK · CLIMB ↑' : key === 'floatingruin' ? 'FLOATING RUIN · CLIMB ↑' : key === 'lightningspire' ? 'LIGHTNING SPIRE · CLIMB ↑' : key === 'frozenkeep' ? 'FROZEN KEEP · CLIMB ↑': key === 'eiffel' ? 'THE EIFFEL CANARD · CLIMB ↑' : 'GRAND SHROOM · CLIMB ↑');
           sign.position.set(sx, sy + 7, sz); sign.scale.set(10, 2.5, 1); sign.userData.noCull = true; scene.add(sign);
         }
         if (k % 8 === 1) pathCue(sx, sy + 1.8, sz, 'CLIMB ↑', 1.2);
@@ -4065,7 +4146,7 @@ function farDungeon(key, sn, site, mon, zone, col, deckLocal, botLocal, discR) {
       const dk = addSlab(gx, deckY, gz, deckR, deckR, 2.2, zone, true);
       sn.slabs.push(dk);
       addRail(px, pz, py + 1.35, gx, gz, col, deckY + 1.35, false);
-      const dlbl = makeLabel(key === 'nest' ? 'ENTER THE DEEP HEAT · DESCEND ↓' : key === 'house' ? 'HAUNTED HOUSE · ENTER HERE · DOWN ↓' : key === 'bone' ? 'OSSUARY DOOR · ENTER HERE · DOWN ↓' : key === 'bubble' ? 'SOAPSUD ENTRY · DOWN ↓'  : key === 'roothollow' ? 'ROOT HOLLOW · ENTER HERE · DOWN ↓' : key === 'beastnest' ? "BEAST'S NEST · ENTER HERE · DOWN ↓" : key === 'sunkenstump' ? 'SUNKEN STUMP · ENTER HERE · DOWN ↓' : key === 'sporevault' ? 'SPORE VAULT · ENTER HERE · DOWN ↓' : key === 'canopytemple' ? 'CANOPY TEMPLE · ENTER HERE · DOWN ↓' : key === 'hornetshive' ? "HORNET'S HIVE · ENTER HERE · DOWN ↓" : key === 'mineshaft' ? 'MINE SHAFT · ENTER HERE · DOWN ↓' : key === 'crystalgrotto' ? 'CRYSTAL GROTTO · ENTER HERE · DOWN ↓' : key === 'avalanchevault' ? 'AVALANCHE VAULT · ENTER HERE · DOWN ↓' : key === 'eaglesaerie' ? "EAGLE'S AERIE · ENTER HERE · DOWN ↓" : key === 'deepcavern' ? 'DEEP CAVERN · ENTER HERE · DOWN ↓' : key === 'frozenkeep' ? 'FROZEN KEEP · ENTER HERE · DOWN ↓': key === 'eiffel' ? 'ENTREZ ICI · DOWN ↓' : 'RABBIT STEM · DESCEND ↓');
+      const dlbl = makeLabel(key === 'nest' ? 'ENTER THE DEEP HEAT · DESCEND ↓' : key === 'house' ? 'HAUNTED HOUSE · ENTER HERE · DOWN ↓' : key === 'bone' ? 'OSSUARY DOOR · ENTER HERE · DOWN ↓' : key === 'bubble' ? 'SOAPSUD ENTRY · DOWN ↓'  : key === 'roothollow' ? 'ROOT HOLLOW · ENTER HERE · DOWN ↓' : key === 'beastnest' ? "BEAST'S NEST · ENTER HERE · DOWN ↓" : key === 'sunkenstump' ? 'SUNKEN STUMP · ENTER HERE · DOWN ↓' : key === 'sporevault' ? 'SPORE VAULT · ENTER HERE · DOWN ↓' : key === 'canopytemple' ? 'CANOPY TEMPLE · ENTER HERE · DOWN ↓' : key === 'hornetshive' ? "HORNET'S HIVE · ENTER HERE · DOWN ↓" : key === 'mineshaft' ? 'MINE SHAFT · ENTER HERE · DOWN ↓' : key === 'crystalgrotto' ? 'CRYSTAL GROTTO · ENTER HERE · DOWN ↓' : key === 'avalanchevault' ? 'AVALANCHE VAULT · ENTER HERE · DOWN ↓' : key === 'eaglesaerie' ? "EAGLE'S AERIE · ENTER HERE · DOWN ↓" : key === 'deepcavern' ? 'DEEP CAVERN · ENTER HERE · DOWN ↓' : key === 'cloudcastle' ? 'CLOUD CASTLE · ENTER HERE · DOWN ↓' : key === 'skytemple' ? 'SKY TEMPLE · ENTER HERE · DOWN ↓' : key === 'auroravault' ? 'AURORA VAULT · ENTER HERE · DOWN ↓' : key === 'thunderdock' ? 'THUNDER DOCK · ENTER HERE · DOWN ↓' : key === 'floatingruin' ? 'FLOATING RUIN · ENTER HERE · DOWN ↓' : key === 'lightningspire' ? 'LIGHTNING SPIRE · ENTER HERE · DOWN ↓' : key === 'frozenkeep' ? 'FROZEN KEEP · ENTER HERE · DOWN ↓': key === 'eiffel' ? 'ENTREZ ICI · DOWN ↓' : 'RABBIT STEM · DESCEND ↓');
       dlbl.position.set(gx, deckY + 6, gz); dlbl.scale.set(13, 3.2, 1); dlbl.userData.noCull = true; scene.add(dlbl);
       pathCue(gx, deckY + 2.2, gz, 'ENTRY · DOWN ↓', 1.5);
       var prev = { x: gx, z: gz, y: deckY };
@@ -4098,12 +4179,13 @@ function farDungeon(key, sn, site, mon, zone, col, deckLocal, botLocal, discR) {
             : key === 'bone' ? ['RELIC GALLERY', 'OSSUARY STACKS']
             : key === 'bubble' ? ['SODA PARLOUR', 'FOAM GALLERY']
              : key === 'roothollow' ? ['ROOT CELLAR', 'GRUB LARDER'] : key === 'beastnest' ? ['TROPHY DEN', 'MARROW PIT'] : key === 'sunkenstump' ? ['FLOODED HOLLOW', 'MOSS ARCHIVE'] : key === 'sporevault' ? ['SPORE BLOOM HALL', 'MYCELIUM VAULT'] : key === 'canopytemple' ? ['VINE SANCTUM', 'SUNBEAM CLOISTER'] : key === 'hornetshive' ? ['BROOD COMB', 'HONEY STORE']
-             : key === 'mineshaft' ? ['ORE LOCKER', 'TIMBER ARCHIVE'] : key === 'crystalgrotto' ? ['GEODE HALL', 'PRISM VAULT'] : key === 'avalanchevault' ? ['DRIFT CHAMBER', 'CORNICE LOCKER'] : key === 'eaglesaerie' ? ['TALON ROOST', 'BONE LARDER'] : key === 'deepcavern' ? ['VEIN GALLERY', 'STALACTITE ARCHIVE'] : key === 'frozenkeep' ? ['FROST ARMORY', 'ICE RESERVE']
+             : key === 'mineshaft' ? ['ORE LOCKER', 'TIMBER ARCHIVE'] : key === 'crystalgrotto' ? ['GEODE HALL', 'PRISM VAULT'] : key === 'avalanchevault' ? ['DRIFT CHAMBER', 'CORNICE LOCKER'] : key === 'eaglesaerie' ? ['TALON ROOST', 'BONE LARDER'] : key === 'deepcavern' ? ['VEIN GALLERY', 'STALACTITE ARCHIVE'] : key === 'cloudcastle' ? ['MIST ARMORY', 'VAPOR LARDER'] : key === 'skytemple' ? ['SANCTUM HALL', 'OFFERING VAULT'] : key === 'auroravault' ? ['PRISM CHAMBER', 'RIPPLE ARCHIVE'] : key === 'thunderdock' ? ['CARGO HOLD', 'CHARGE LOCKER'] : key === 'floatingruin' ? ['FALLEN ATRIUM', 'RUBBLE ARCHIVE'] : key === 'lightningspire' ? ['CAPACITOR VAULT', 'CONDUIT STORE']
+             : key === 'frozenkeep' ? ['FROST ARMORY', 'ICE RESERVE']
              : key === 'eiffel' ? ['CAFÉ TERRACE', 'POND AVIARY'] : ['MOONCAP GALLERY', 'MAD TEA PARLOUR'];
           for (let ri = 0; ri < roomCenters.length; ri++) {
             const room = roomCenters[ri], roomName = roomNames[ri];
             sn.rooms.push({ name: roomName, x: room.x, y: dy, z: room.z, floor: Math.max(1, Math.ceil((deckY - dy) / 30)) });
-            const detailMat = lam(key === 'house' ? 0x4a3a4c : key === 'nest' ? 0xb34668 : key === 'bone' ? 0xcbc3b2 : key === 'bubble' ? 0x9fd8f0  : key === 'roothollow' ? 0x7a5a2a : key === 'beastnest' ? 0x8a5a2a : key === 'sunkenstump' ? 0x4a7a5a : key === 'sporevault' ? 0x9a6ad8 : key === 'canopytemple' ? 0x5a9a4a : key === 'hornetshive' ? 0xc89a1a : key === 'mineshaft' ? 0x6a4a2a : key === 'crystalgrotto' ? 0x5a9ad8 : key === 'avalanchevault' ? 0xaecbe8 : key === 'eaglesaerie' ? 0x7a5a38 : key === 'deepcavern' ? 0x4a4458 : key === 'frozenkeep' ? 0x6ab4da: key === 'eiffel' ? 0xd9b878 : 0xc9a981,
+            const detailMat = lam(key === 'house' ? 0x4a3a4c : key === 'nest' ? 0xb34668 : key === 'bone' ? 0xcbc3b2 : key === 'bubble' ? 0x9fd8f0  : key === 'roothollow' ? 0x7a5a2a : key === 'beastnest' ? 0x8a5a2a : key === 'sunkenstump' ? 0x4a7a5a : key === 'sporevault' ? 0x9a6ad8 : key === 'canopytemple' ? 0x5a9a4a : key === 'hornetshive' ? 0xc89a1a : key === 'mineshaft' ? 0x6a4a2a : key === 'crystalgrotto' ? 0x5a9ad8 : key === 'avalanchevault' ? 0xaecbe8 : key === 'eaglesaerie' ? 0x7a5a38 : key === 'deepcavern' ? 0x4a4458 : key === 'cloudcastle' ? 0xc8d8f0 : key === 'skytemple' ? 0xd8b878 : key === 'auroravault' ? 0x5af0a8 : key === 'thunderdock' ? 0x6ab4ea : key === 'floatingruin' ? 0x7a9a7a : key === 'lightningspire' ? 0x8a5aff : key === 'frozenkeep' ? 0x6ab4da: key === 'eiffel' ? 0xd9b878 : 0xc9a981,
               { emissive: zone.plate, emissiveIntensity: 0.18 });
             if (key === 'house') {
               const tomb = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.2, 2.8), detailMat);
@@ -4164,13 +4246,13 @@ function farDungeon(key, sn, site, mon, zone, col, deckLocal, botLocal, discR) {
           // One room in every third hall is trapped. The inlaid warning sigil matches the
           // site theme; the pulse is avoidable by crossing the opposite wing or timing a dash.
           if (rung % 18 === 0) {
-            const room = roomCenters[0], hazardColor = key === 'house' ? 0x9dff3a : key === 'nest' ? 0xff416f : key === 'bone' ? 0xcfe8ff : key === 'bubble' ? 0xff9de0  : key === 'roothollow' ? 0x8a6a2a : key === 'beastnest' ? 0xff8a3a : key === 'sunkenstump' ? 0x6adf9a : key === 'sporevault' ? 0xd89aff : key === 'canopytemple' ? 0x9adf5a : key === 'hornetshive' ? 0xffcf3a : key === 'mineshaft' ? 0xd89a4a : key === 'crystalgrotto' ? 0x9adfff : key === 'avalanchevault' ? 0xeaf4ff : key === 'eaglesaerie' ? 0xd8dce8 : key === 'deepcavern' ? 0x9a7aff : key === 'frozenkeep' ? 0x9adfff: key === 'eiffel' ? 0xffb020 : 0x47f3c2;
+            const room = roomCenters[0], hazardColor = key === 'house' ? 0x9dff3a : key === 'nest' ? 0xff416f : key === 'bone' ? 0xcfe8ff : key === 'bubble' ? 0xff9de0  : key === 'roothollow' ? 0x8a6a2a : key === 'beastnest' ? 0xff8a3a : key === 'sunkenstump' ? 0x6adf9a : key === 'sporevault' ? 0xd89aff : key === 'canopytemple' ? 0x9adf5a : key === 'hornetshive' ? 0xffcf3a : key === 'mineshaft' ? 0xd89a4a : key === 'crystalgrotto' ? 0x9adfff : key === 'avalanchevault' ? 0xeaf4ff : key === 'eaglesaerie' ? 0xd8dce8 : key === 'deepcavern' ? 0x9a7aff : key === 'cloudcastle' ? 0xaec8ea : key === 'skytemple' ? 0xffe8b0 : key === 'auroravault' ? 0xb05aff : key === 'thunderdock' ? 0xd8e8ff : key === 'floatingruin' ? 0x9adf8a : key === 'lightningspire' ? 0xd8c8ff : key === 'frozenkeep' ? 0x9adfff: key === 'eiffel' ? 0xffb020 : 0x47f3c2;
             const hazardMat = new THREE.MeshBasicMaterial({ color: hazardColor, transparent: true, opacity: 0.55, toneMapped: false });
             const sigil = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.32, 5, 16), hazardMat);
             sigil.rotation.x = Math.PI / 2; sigil.position.set(room.x, dy + 0.18, room.z); sigil.userData.noCull = true; scene.add(sigil);
             const core = new THREE.Mesh(new THREE.CircleGeometry(3.45, 10), new THREE.MeshBasicMaterial({ color: hazardColor, transparent: true, opacity: 0.18, side: THREE.DoubleSide, toneMapped: false }));
             core.rotation.x = -Math.PI / 2; core.position.set(room.x, dy + 0.12, room.z); core.userData.noCull = true; scene.add(core);
-            let hazardName = key === 'house' ? 'CURSED CANDLE RUNE' : key === 'nest' ? 'THORN-BLOOM PATCH' : key === 'bone' ? 'GRAVE-CHILL RUNE' : key === 'bubble' ? 'FIZZ CROWN RUNE'  : key === 'roothollow' ? 'ROOT SNARE' : key === 'beastnest' ? 'CLAW MARK WARNING' : key === 'sunkenstump' ? 'BOG GAS VENT' : key === 'sporevault' ? 'SPORE BURST' : key === 'canopytemple' ? 'THORN WARD' : key === 'hornetshive' ? 'STING SWARM' : key === 'mineshaft' ? 'CAVE-IN WARNING' : key === 'crystalgrotto' ? 'RESONANCE SHARD' : key === 'avalanchevault' ? 'SLIDE TRIGGER' : key === 'eaglesaerie' ? 'TALON STRIKE' : key === 'deepcavern' ? 'VEIN BURST' : key === 'frozenkeep' ? 'RIME SHATTER': key === 'eiffel' ? 'BAGUETTE BARRAGE' : 'SPORE VENT';
+            let hazardName = key === 'house' ? 'CURSED CANDLE RUNE' : key === 'nest' ? 'THORN-BLOOM PATCH' : key === 'bone' ? 'GRAVE-CHILL RUNE' : key === 'bubble' ? 'FIZZ CROWN RUNE'  : key === 'roothollow' ? 'ROOT SNARE' : key === 'beastnest' ? 'CLAW MARK WARNING' : key === 'sunkenstump' ? 'BOG GAS VENT' : key === 'sporevault' ? 'SPORE BURST' : key === 'canopytemple' ? 'THORN WARD' : key === 'hornetshive' ? 'STING SWARM' : key === 'mineshaft' ? 'CAVE-IN WARNING' : key === 'crystalgrotto' ? 'RESONANCE SHARD' : key === 'avalanchevault' ? 'SLIDE TRIGGER' : key === 'eaglesaerie' ? 'TALON STRIKE' : key === 'deepcavern' ? 'VEIN BURST' : key === 'cloudcastle' ? 'STATIC DOWNDRAFT' : key === 'skytemple' ? 'SUNBEAM LANCE' : key === 'auroravault' ? 'AURORA FLARE' : key === 'thunderdock' ? 'ARC DISCHARGE' : key === 'floatingruin' ? 'CRUMBLE WARNING' : key === 'lightningspire' ? 'VOLTAGE SPIKE' : key === 'frozenkeep' ? 'RIME SHATTER': key === 'eiffel' ? 'BAGUETTE BARRAGE' : 'SPORE VENT';
             if (key === 'nest') for (let thorn = 0; thorn < 5; thorn++) {
               const angle = thorn * Math.PI * 2 / 5, spike = new THREE.Mesh(new THREE.ConeGeometry(0.38, 1.8, 5), hazardMat);
               spike.position.set(room.x + Math.cos(angle) * 2.6, dy + 1, room.z + Math.sin(angle) * 2.6); spike.userData.noCull = true; scene.add(spike);
@@ -4197,14 +4279,14 @@ function farDungeon(key, sn, site, mon, zone, col, deckLocal, botLocal, discR) {
           // A single late-floor cache is tucked into the other wing. It is optional, off
           // the main spiral, and doubles as the dungeon's hidden-secret completion reward.
           if (!sn.secrets.length && (deckY - dy) / Math.max(1, deckY - botY) > 0.84) {
-            const room = roomCenters[1], chestMat = lam(key === 'house' ? 0x28202d : key === 'nest' ? 0x61243a : key === 'bone' ? 0x8a8174 : key === 'bubble' ? 0x7fc4e0  : key === 'roothollow' ? 0x5a3c18 : key === 'beastnest' ? 0x6a4018 : key === 'sunkenstump' ? 0x2a4a2a : key === 'sporevault' ? 0x5a2a7a : key === 'canopytemple' ? 0x2a5a1a : key === 'hornetshive' ? 0x6a4a08 : key === 'mineshaft' ? 0x4a3418 : key === 'crystalgrotto' ? 0x1c3a52 : key === 'avalanchevault' ? 0x5a7a9a : key === 'eaglesaerie' ? 0x3a2c18 : key === 'deepcavern' ? 0x241e34 : key === 'frozenkeep' ? 0x123a56: key === 'eiffel' ? 0x8a6d3a : 0x765438,
+            const room = roomCenters[1], chestMat = lam(key === 'house' ? 0x28202d : key === 'nest' ? 0x61243a : key === 'bone' ? 0x8a8174 : key === 'bubble' ? 0x7fc4e0  : key === 'roothollow' ? 0x5a3c18 : key === 'beastnest' ? 0x6a4018 : key === 'sunkenstump' ? 0x2a4a2a : key === 'sporevault' ? 0x5a2a7a : key === 'canopytemple' ? 0x2a5a1a : key === 'hornetshive' ? 0x6a4a08 : key === 'mineshaft' ? 0x4a3418 : key === 'crystalgrotto' ? 0x1c3a52 : key === 'avalanchevault' ? 0x5a7a9a : key === 'eaglesaerie' ? 0x3a2c18 : key === 'deepcavern' ? 0x241e34 : key === 'cloudcastle' ? 0x7a8ab0 : key === 'skytemple' ? 0x6a5420 : key === 'auroravault' ? 0x163a2a : key === 'thunderdock' ? 0x242c40 : key === 'floatingruin' ? 0x3a4a3a : key === 'lightningspire' ? 0x241848 : key === 'frozenkeep' ? 0x123a56: key === 'eiffel' ? 0x8a6d3a : 0x765438,
               { emissive: zone.plate, emissiveIntensity: 0.24 });
             const chest = new THREE.Group();
             const box = new THREE.Mesh(new THREE.BoxGeometry(2.7, 1.7, 1.8), chestMat); box.position.y = 0.9; chest.add(box);
             const lid = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.42, 2), chestMat); lid.position.set(0, 1.95, 0); chest.add(lid);
-            const jewel = new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 0), new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffd48a : key === 'nest' ? 0xff668b : key === 'bone' ? 0xdfe8ff : key === 'bubble' ? 0xfff2f8  : key === 'roothollow' ? 0xd8a858 : key === 'beastnest' ? 0xffb868 : key === 'sunkenstump' ? 0x8af0c8 : key === 'sporevault' ? 0xe8b8ff : key === 'canopytemple' ? 0xb8f08a : key === 'hornetshive' ? 0xffe868 : key === 'mineshaft' ? 0xf0c878 : key === 'crystalgrotto' ? 0xc8f0ff : key === 'avalanchevault' ? 0xeaf6ff : key === 'eaglesaerie' ? 0xfff0c8 : key === 'deepcavern' ? 0xd8c8ff : key === 'frozenkeep' ? 0xd8f4ff: key === 'eiffel' ? 0xffd700 : 0xf7e4a7, toneMapped: false }));
+            const jewel = new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 0), new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffd48a : key === 'nest' ? 0xff668b : key === 'bone' ? 0xdfe8ff : key === 'bubble' ? 0xfff2f8  : key === 'roothollow' ? 0xd8a858 : key === 'beastnest' ? 0xffb868 : key === 'sunkenstump' ? 0x8af0c8 : key === 'sporevault' ? 0xe8b8ff : key === 'canopytemple' ? 0xb8f08a : key === 'hornetshive' ? 0xffe868 : key === 'mineshaft' ? 0xf0c878 : key === 'crystalgrotto' ? 0xc8f0ff : key === 'avalanchevault' ? 0xeaf6ff : key === 'eaglesaerie' ? 0xfff0c8 : key === 'deepcavern' ? 0xd8c8ff : key === 'cloudcastle' ? 0xf0f8ff : key === 'skytemple' ? 0xfff2c8 : key === 'auroravault' ? 0xb8ffe0 : key === 'thunderdock' ? 0xd8e8ff : key === 'floatingruin' ? 0xc8e0c0 : key === 'lightningspire' ? 0xe0d0ff : key === 'frozenkeep' ? 0xd8f4ff: key === 'eiffel' ? 0xffd700 : 0xf7e4a7, toneMapped: false }));
             jewel.position.set(0, 2.8, 0); chest.add(jewel); chest.position.set(room.x, dy, room.z); chest.userData.noCull = true; scene.add(chest);
-            const secret = { name: key === 'house' ? 'WIDOW’S LAST WILL' : key === 'nest' ? 'HEART OF THE BROOD' : key === 'bone' ? 'THE CHOIR MASTER’S PAY' : key === 'bubble' ? 'THE UNSPOILED TITHE'  : key === 'roothollow' ? 'THE DEEP TAPROOT' : key === 'beastnest' ? "THE ALPHA'S HOARD" : key === 'sunkenstump' ? 'THE DROWNED LANTERN' : key === 'sporevault' ? 'THE MOTHER SPORE' : key === 'canopytemple' ? "THE GARDENER'S RELIC" : key === 'hornetshive' ? "THE QUEEN'S COMB" : key === 'mineshaft' ? "THE PROSPECTOR'S CLAIM" : key === 'crystalgrotto' ? 'THE MOTHER GEODE' : key === 'avalanchevault' ? 'THE FROZEN CACHE' : key === 'eaglesaerie' ? "THE EYRIE'S HOARD" : key === 'deepcavern' ? 'THE LOST LANTERN' : key === 'frozenkeep' ? "THE JARL'S CROWN": key === 'eiffel' ? 'THE GOLDEN CROISSANT' : 'THE WHITE QUEEN’S TEACUP', x: room.x, y: dy + 2.8, z: room.z, found: false };
+            const secret = { name: key === 'house' ? 'WIDOW’S LAST WILL' : key === 'nest' ? 'HEART OF THE BROOD' : key === 'bone' ? 'THE CHOIR MASTER’S PAY' : key === 'bubble' ? 'THE UNSPOILED TITHE'  : key === 'roothollow' ? 'THE DEEP TAPROOT' : key === 'beastnest' ? "THE ALPHA'S HOARD" : key === 'sunkenstump' ? 'THE DROWNED LANTERN' : key === 'sporevault' ? 'THE MOTHER SPORE' : key === 'canopytemple' ? "THE GARDENER'S RELIC" : key === 'hornetshive' ? "THE QUEEN'S COMB" : key === 'mineshaft' ? "THE PROSPECTOR'S CLAIM" : key === 'crystalgrotto' ? 'THE MOTHER GEODE' : key === 'avalanchevault' ? 'THE FROZEN CACHE' : key === 'eaglesaerie' ? "THE EYRIE'S HOARD" : key === 'deepcavern' ? 'THE LOST LANTERN' : key === 'cloudcastle' ? "THE CLOUDSMITH'S KEY" : key === 'skytemple' ? 'THE TEMPLE OFFERING' : key === 'auroravault' ? 'THE AURORA PRISM' : key === 'thunderdock' ? "THE STORMKEEPER'S LOG" : key === 'floatingruin' ? 'THE LAST FRESCO' : key === 'lightningspire' ? 'THE CAPACITOR CORE' : key === 'frozenkeep' ? "THE JARL'S CROWN": key === 'eiffel' ? 'THE GOLDEN CROISSANT' : 'THE WHITE QUEEN’S TEACUP', x: room.x, y: dy + 2.8, z: room.z, found: false };
             sn.secrets.push(secret); items.push({ mesh: chest, type: 'dungeonSecret', taken: false, secretLabel: secret.name, secret });
             secret.pickup = items[items.length - 1];
           }
@@ -4221,7 +4303,7 @@ function farDungeon(key, sn, site, mon, zone, col, deckLocal, botLocal, discR) {
         }
         if (rung % 6 === 3) {
           const floor = Math.max(1, Math.ceil((deckY - dy) / 30));
-          const sign = makeLabel(`${key === 'house' ? 'HOUSE' : key === 'nest' ? 'NEST' : key === 'bone' ? 'OSSUARY' : key === 'bubble' ? 'CITADEL'  : key === 'roothollow' ? 'ROOT' : key === 'beastnest' ? 'NEST' : key === 'sunkenstump' ? 'STUMP' : key === 'sporevault' ? 'VAULT' : key === 'canopytemple' ? 'TEMPLE' : key === 'hornetshive' ? 'HIVE' : key === 'mineshaft' ? 'SHAFT' : key === 'crystalgrotto' ? 'GROTTO' : key === 'avalanchevault' ? 'VAULT' : key === 'eaglesaerie' ? 'AERIE' : key === 'deepcavern' ? 'CAVERN' : key === 'frozenkeep' ? 'KEEP': key === 'eiffel' ? 'TOUR' : 'SHROOM'} LEVEL ${floor} · DOWN ↓`);
+          const sign = makeLabel(`${key === 'house' ? 'HOUSE' : key === 'nest' ? 'NEST' : key === 'bone' ? 'OSSUARY' : key === 'bubble' ? 'CITADEL'  : key === 'roothollow' ? 'ROOT' : key === 'beastnest' ? 'NEST' : key === 'sunkenstump' ? 'STUMP' : key === 'sporevault' ? 'VAULT' : key === 'canopytemple' ? 'TEMPLE' : key === 'hornetshive' ? 'HIVE' : key === 'mineshaft' ? 'SHAFT' : key === 'crystalgrotto' ? 'GROTTO' : key === 'avalanchevault' ? 'VAULT' : key === 'eaglesaerie' ? 'AERIE' : key === 'deepcavern' ? 'CAVERN' : key === 'cloudcastle' ? 'KEEP' : key === 'skytemple' ? 'TEMPLE' : key === 'auroravault' ? 'VAULT' : key === 'thunderdock' ? 'DOCK' : key === 'floatingruin' ? 'RUIN' : key === 'lightningspire' ? 'SPIRE' : key === 'frozenkeep' ? 'KEEP': key === 'eiffel' ? 'TOUR' : 'SHROOM'} LEVEL ${floor} · DOWN ↓`);
           sign.position.set(dx + Math.cos(a) * (discR + 2), dy + 4, dz + Math.sin(a) * (discR + 2));
           sign.scale.set(8, 2, 1); sign.userData.noCull = true; scene.add(sign);
         }
@@ -4239,9 +4321,9 @@ function farDungeon(key, sn, site, mon, zone, col, deckLocal, botLocal, discR) {
       if (prev && (prev.x !== gx || prev.z !== gz)) addRail(prev.x, prev.z, prev.y + 1.35, gx, gz, col, botY + 1.35, false);
       const rim = new THREE.Mesh(new THREE.TorusGeometry(discR + 2.4, 0.5, 6, 22), new THREE.MeshBasicMaterial({ color: col, fog: false, toneMapped: false }));
       rim.rotation.x = Math.PI / 2; rim.position.set(gx, botY + 1.4, gz); rim.userData.noCull = true; scene.add(rim);
-      const vl = makeLabel(key === 'nest' ? 'LOWEST LEVEL · VAULT OF THE DEEP HEAT' : key === 'house' ? 'LOWEST LEVEL · NEXUS CRYPT' : key === 'bone' ? 'LOWEST LEVEL · OSSUARY CRYPT' : key === 'bubble' ? 'LOWEST LEVEL · FIZZ PARLOUR'  : key === 'roothollow' ? 'LOWEST LEVEL · THE DEEP TAPROOT' : key === 'beastnest' ? "LOWEST LEVEL · THE ALPHA'S DEN" : key === 'sunkenstump' ? 'LOWEST LEVEL · THE DROWNED HOLLOW' : key === 'sporevault' ? 'LOWEST LEVEL · THE MOTHER BLOOM' : key === 'canopytemple' ? 'LOWEST LEVEL · THE SUNKEN SHRINE' : key === 'hornetshive' ? "LOWEST LEVEL · THE QUEEN'S CHAMBER" : key === 'mineshaft' ? "LOWEST LEVEL · THE PROSPECTOR'S CLAIM" : key === 'crystalgrotto' ? 'LOWEST LEVEL · THE MOTHER GEODE' : key === 'avalanchevault' ? 'LOWEST LEVEL · THE FROZEN CACHE' : key === 'eaglesaerie' ? "LOWEST LEVEL · THE EYRIE'S HOARD" : key === 'deepcavern' ? 'LOWEST LEVEL · THE LOST LANTERN' : key === 'frozenkeep' ? "LOWEST LEVEL · THE JARL'S CROWN": key === 'eiffel' ? 'LOWEST LEVEL · THE ROTISSERIE' : 'LOWEST LEVEL · CHESHIRE PARLOUR');
+      const vl = makeLabel(key === 'nest' ? 'LOWEST LEVEL · VAULT OF THE DEEP HEAT' : key === 'house' ? 'LOWEST LEVEL · NEXUS CRYPT' : key === 'bone' ? 'LOWEST LEVEL · OSSUARY CRYPT' : key === 'bubble' ? 'LOWEST LEVEL · FIZZ PARLOUR'  : key === 'roothollow' ? 'LOWEST LEVEL · THE DEEP TAPROOT' : key === 'beastnest' ? "LOWEST LEVEL · THE ALPHA'S DEN" : key === 'sunkenstump' ? 'LOWEST LEVEL · THE DROWNED HOLLOW' : key === 'sporevault' ? 'LOWEST LEVEL · THE MOTHER BLOOM' : key === 'canopytemple' ? 'LOWEST LEVEL · THE SUNKEN SHRINE' : key === 'hornetshive' ? "LOWEST LEVEL · THE QUEEN'S CHAMBER" : key === 'mineshaft' ? "LOWEST LEVEL · THE PROSPECTOR'S CLAIM" : key === 'crystalgrotto' ? 'LOWEST LEVEL · THE MOTHER GEODE' : key === 'avalanchevault' ? 'LOWEST LEVEL · THE FROZEN CACHE' : key === 'eaglesaerie' ? "LOWEST LEVEL · THE EYRIE'S HOARD" : key === 'deepcavern' ? 'LOWEST LEVEL · THE LOST LANTERN' : key === 'cloudcastle' ? "LOWEST LEVEL · THE CLOUDSMITH'S KEY" : key === 'skytemple' ? 'LOWEST LEVEL · THE TEMPLE OFFERING' : key === 'auroravault' ? 'LOWEST LEVEL · THE AURORA PRISM' : key === 'thunderdock' ? "LOWEST LEVEL · THE STORMKEEPER'S LOG" : key === 'floatingruin' ? 'LOWEST LEVEL · THE LAST FRESCO' : key === 'lightningspire' ? 'LOWEST LEVEL · THE CAPACITOR CORE' : key === 'frozenkeep' ? "LOWEST LEVEL · THE JARL'S CROWN": key === 'eiffel' ? 'LOWEST LEVEL · THE ROTISSERIE' : 'LOWEST LEVEL · CHESHIRE PARLOUR');
       vl.position.set(gx, botY + 9, gz); vl.scale.set(15, 3.4, 1); scene.add(vl);
-      pathCue(gx, botY + 2.2, gz, key === 'house' ? 'NEXUS CRYPT' : key === 'bone' ? 'OSSUARY CRYPT' : key === 'bubble' ? 'FIZZ PARLOUR'  : key === 'roothollow' ? 'TAPROOT' : key === 'beastnest' ? "ALPHA'S DEN" : key === 'sunkenstump' ? 'DROWNED HOLLOW' : key === 'sporevault' ? 'MOTHER BLOOM' : key === 'canopytemple' ? 'SUNKEN SHRINE' : key === 'hornetshive' ? "QUEEN'S CHAMBER" : key === 'mineshaft' ? "PROSPECTOR'S CLAIM" : key === 'crystalgrotto' ? 'MOTHER GEODE' : key === 'avalanchevault' ? 'FROZEN CACHE' : key === 'eaglesaerie' ? "EYRIE'S HOARD" : key === 'deepcavern' ? 'LOST LANTERN' : key === 'frozenkeep' ? "JARL'S CROWN": key === 'eiffel' ? 'THE ROTISSERIE' : 'BOSS VAULT', 1.6);
+      pathCue(gx, botY + 2.2, gz, key === 'house' ? 'NEXUS CRYPT' : key === 'bone' ? 'OSSUARY CRYPT' : key === 'bubble' ? 'FIZZ PARLOUR'  : key === 'roothollow' ? 'TAPROOT' : key === 'beastnest' ? "ALPHA'S DEN" : key === 'sunkenstump' ? 'DROWNED HOLLOW' : key === 'sporevault' ? 'MOTHER BLOOM' : key === 'canopytemple' ? 'SUNKEN SHRINE' : key === 'hornetshive' ? "QUEEN'S CHAMBER" : key === 'mineshaft' ? "PROSPECTOR'S CLAIM" : key === 'crystalgrotto' ? 'MOTHER GEODE' : key === 'avalanchevault' ? 'FROZEN CACHE' : key === 'eaglesaerie' ? "EYRIE'S HOARD" : key === 'deepcavern' ? 'LOST LANTERN' : key === 'cloudcastle' ? "CLOUDSMITH'S KEY" : key === 'skytemple' ? 'TEMPLE OFFERING' : key === 'auroravault' ? 'AURORA PRISM' : key === 'thunderdock' ? "STORMKEEPER'S LOG" : key === 'floatingruin' ? 'LAST FRESCO' : key === 'lightningspire' ? 'CAPACITOR CORE' : key === 'frozenkeep' ? "JARL'S CROWN": key === 'eiffel' ? 'THE ROTISSERIE' : 'BOSS VAULT', 1.6);
       vl.userData.noCull = true;
     }
 
@@ -4251,9 +4333,9 @@ function farDungeon(key, sn, site, mon, zone, col, deckLocal, botLocal, discR) {
     // floating in open air. Distinct materials keep each landmark's interior on-theme.
     const shellThickness = 1.8, shellBand = 28;   // shellHalf itself is computed earlier (before the climb spiral) so the climb can be kept outside it
     const shellBottom = botY, shellTop = deckY + 14;
-    const shellMat = lam(key === 'house' ? 0x191520 : key === 'shroom' ? 0x694c40 : key === 'bone' ? 0x8f887c : key === 'bubble' ? 0x4f88a8  : key === 'roothollow' ? 0x2a1c0e : key === 'beastnest' ? 0x3a2410 : key === 'sunkenstump' ? 0x0e2416 : key === 'sporevault' ? 0x2a1438 : key === 'canopytemple' ? 0x12280e : key === 'hornetshive' ? 0x2a2006 : key === 'mineshaft' ? 0x3a2e1c : key === 'crystalgrotto' ? 0x12203a : key === 'avalanchevault' ? 0x9ec0e0 : key === 'eaglesaerie' ? 0x1e1a14 : key === 'deepcavern' ? 0x120e18 : key === 'frozenkeep' ? 0x123a56: key === 'eiffel' ? 0x5a4428 : 0x421b30,
-      { emissive: key === 'house' ? 0x120b19 : key === 'shroom' ? 0x28120e : key === 'bone' ? 0x2a2620 : key === 'bubble' ? 0x14283a  : key === 'roothollow' ? 0x140e06 : key === 'beastnest' ? 0x1a1008 : key === 'sunkenstump' ? 0x06120a : key === 'sporevault' ? 0x140a1c : key === 'canopytemple' ? 0x081404 : key === 'hornetshive' ? 0x140f02 : key === 'mineshaft' ? 0x140e08 : key === 'crystalgrotto' ? 0x081428 : key === 'avalanchevault' ? 0x5a8ab0 : key === 'eaglesaerie' ? 0x0e0a06 : key === 'deepcavern' ? 0x08060c : key === 'frozenkeep' ? 0x081828: key === 'eiffel' ? 0x3a2a14 : 0x220813, emissiveIntensity: 0.4 });
-    const paneMat = new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffc47a : key === 'shroom' ? 0xf4d8a4 : key === 'bone' ? 0xfff2d8 : key === 'bubble' ? 0xcff4ff  : key === 'roothollow' ? 0xc8a868 : key === 'beastnest' ? 0xe8a858 : key === 'sunkenstump' ? 0x8ae8c8 : key === 'sporevault' ? 0xd8a8ff : key === 'canopytemple' ? 0xb8f08a : key === 'hornetshive' ? 0xffd868 : key === 'mineshaft' ? 0xd8b878 : key === 'crystalgrotto' ? 0x9adfff : key === 'avalanchevault' ? 0xeaf6ff : key === 'eaglesaerie' ? 0xd8dce8 : key === 'deepcavern' ? 0x9a7aff : key === 'frozenkeep' ? 0x9adfff: key === 'eiffel' ? 0xffcf7a : 0xff668b, transparent: true, opacity: 0.78, fog: false, toneMapped: false });
+    const shellMat = lam(key === 'house' ? 0x191520 : key === 'shroom' ? 0x694c40 : key === 'bone' ? 0x8f887c : key === 'bubble' ? 0x4f88a8  : key === 'roothollow' ? 0x2a1c0e : key === 'beastnest' ? 0x3a2410 : key === 'sunkenstump' ? 0x0e2416 : key === 'sporevault' ? 0x2a1438 : key === 'canopytemple' ? 0x12280e : key === 'hornetshive' ? 0x2a2006 : key === 'mineshaft' ? 0x3a2e1c : key === 'crystalgrotto' ? 0x12203a : key === 'avalanchevault' ? 0x9ec0e0 : key === 'eaglesaerie' ? 0x1e1a14 : key === 'deepcavern' ? 0x120e18 : key === 'cloudcastle' ? 0x8aa0c8 : key === 'skytemple' ? 0x3a2e14 : key === 'auroravault' ? 0x0c2a22 : key === 'thunderdock' ? 0x1c2438 : key === 'floatingruin' ? 0x2a3228 : key === 'lightningspire' ? 0x1c1038 : key === 'frozenkeep' ? 0x123a56: key === 'eiffel' ? 0x5a4428 : 0x421b30,
+      { emissive: key === 'house' ? 0x120b19 : key === 'shroom' ? 0x28120e : key === 'bone' ? 0x2a2620 : key === 'bubble' ? 0x14283a  : key === 'roothollow' ? 0x140e06 : key === 'beastnest' ? 0x1a1008 : key === 'sunkenstump' ? 0x06120a : key === 'sporevault' ? 0x140a1c : key === 'canopytemple' ? 0x081404 : key === 'hornetshive' ? 0x140f02 : key === 'mineshaft' ? 0x140e08 : key === 'crystalgrotto' ? 0x081428 : key === 'avalanchevault' ? 0x5a8ab0 : key === 'eaglesaerie' ? 0x0e0a06 : key === 'deepcavern' ? 0x08060c : key === 'cloudcastle' ? 0x3a4a68 : key === 'skytemple' ? 0x1a1408 : key === 'auroravault' ? 0x061a14 : key === 'thunderdock' ? 0x0a0e1a : key === 'floatingruin' ? 0x121810 : key === 'lightningspire' ? 0x0c0818 : key === 'frozenkeep' ? 0x081828: key === 'eiffel' ? 0x3a2a14 : 0x220813, emissiveIntensity: 0.4 });
+    const paneMat = new THREE.MeshBasicMaterial({ color: key === 'house' ? 0xffc47a : key === 'shroom' ? 0xf4d8a4 : key === 'bone' ? 0xfff2d8 : key === 'bubble' ? 0xcff4ff  : key === 'roothollow' ? 0xc8a868 : key === 'beastnest' ? 0xe8a858 : key === 'sunkenstump' ? 0x8ae8c8 : key === 'sporevault' ? 0xd8a8ff : key === 'canopytemple' ? 0xb8f08a : key === 'hornetshive' ? 0xffd868 : key === 'mineshaft' ? 0xd8b878 : key === 'crystalgrotto' ? 0x9adfff : key === 'avalanchevault' ? 0xeaf6ff : key === 'eaglesaerie' ? 0xd8dce8 : key === 'deepcavern' ? 0x9a7aff : key === 'cloudcastle' ? 0xdce8ff : key === 'skytemple' ? 0xf0d888 : key === 'auroravault' ? 0x7af0c8 : key === 'thunderdock' ? 0x8ac8ff : key === 'floatingruin' ? 0xaabcac : key === 'lightningspire' ? 0xb09aff : key === 'frozenkeep' ? 0x9adfff: key === 'eiffel' ? 0xffcf7a : 0xff668b, transparent: true, opacity: 0.78, fog: false, toneMapped: false });
     const addDungeonWall = (x0, x1, z0, z1, y0, y1) => {
       addSolid(x0, x1, y0, y1, z0, z1);
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), shellMat);
@@ -4306,7 +4388,7 @@ function farDungeon(key, sn, site, mon, zone, col, deckLocal, botLocal, discR) {
         pane.position.set(gx + offset, paneY, gz + side * (half + 0.12)); pane.userData.noCull = true; scene.add(pane);
       }
       // Vertical corner ribs emphasize the height and reinforce the gothic / storybook silhouette.
-      const ribMat = lam(key === 'house' ? 0x554055 : key === 'shroom' ? 0xd8b88a : key === 'bone' ? 0xe8e0cc : key === 'bubble' ? 0x8fd6f2  : key === 'roothollow' ? 0x8a6a2a : key === 'beastnest' ? 0xc87a2a : key === 'sunkenstump' ? 0x3a9a6a : key === 'sporevault' ? 0xb05aff : key === 'canopytemple' ? 0x6ac84a : key === 'hornetshive' ? 0xe8a81a : key === 'mineshaft' ? 0x8a5a30 : key === 'crystalgrotto' ? 0x9adfff : key === 'avalanchevault' ? 0xbcdcf4 : key === 'eaglesaerie' ? 0xd8dce8 : key === 'deepcavern' ? 0x8a6ad8 : key === 'frozenkeep' ? 0x9adfff: key === 'eiffel' ? 0xb8905a : 0xc34a70,
+      const ribMat = lam(key === 'house' ? 0x554055 : key === 'shroom' ? 0xd8b88a : key === 'bone' ? 0xe8e0cc : key === 'bubble' ? 0x8fd6f2  : key === 'roothollow' ? 0x8a6a2a : key === 'beastnest' ? 0xc87a2a : key === 'sunkenstump' ? 0x3a9a6a : key === 'sporevault' ? 0xb05aff : key === 'canopytemple' ? 0x6ac84a : key === 'hornetshive' ? 0xe8a81a : key === 'mineshaft' ? 0x8a5a30 : key === 'crystalgrotto' ? 0x9adfff : key === 'avalanchevault' ? 0xbcdcf4 : key === 'eaglesaerie' ? 0xd8dce8 : key === 'deepcavern' ? 0x8a6ad8 : key === 'cloudcastle' ? 0xfafdff : key === 'skytemple' ? 0xf0d888 : key === 'auroravault' ? 0xb05aff : key === 'thunderdock' ? 0x6ab4ea : key === 'floatingruin' ? 0x7a9a7a : key === 'lightningspire' ? 0xd8c8ff : key === 'frozenkeep' ? 0x9adfff: key === 'eiffel' ? 0xb8905a : 0xc34a70,
         { emissive: zone.plate, emissiveIntensity: 0.32 });
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
         const rib = new THREE.Mesh(new THREE.BoxGeometry(2.2, ceilY - floorY, 2.2), ribMat);
@@ -4329,10 +4411,12 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
   // crowded world can still fall back to the old spur layout unchanged.
   const MID_DIST = { nest: 2200, house: 1850, shroom: 2500, bone: 2050, bubble: 2650, eiffel: 2350,
     roothollow: 2150, beastnest: 1950, sunkenstump: 2450, sporevault: 2600, canopytemple: 2300, hornetshive: 2050,
-    mineshaft: 2100, crystalgrotto: 2400, avalanchevault: 1900, eaglesaerie: 2550, deepcavern: 2250, frozenkeep: 2000 };  // much further out than before (was a tight 1010-1140 band) so the dungeons genuinely spread across the map
+    mineshaft: 2100, crystalgrotto: 2400, avalanchevault: 1900, eaglesaerie: 2550, deepcavern: 2250, frozenkeep: 2000,
+    cloudcastle: 2250, skytemple: 2500, auroravault: 1950, thunderdock: 2400, floatingruin: 2050, lightningspire: 2600 };  // much further out than before (was a tight 1010-1140 band) so the dungeons genuinely spread across the map
   const ELEV = { nest: 0, house: 190, shroom: -190, bone: 110, bubble: -150, eiffel: 200,
     roothollow: -40, beastnest: 150, sunkenstump: -170, sporevault: 90, canopytemple: 190, hornetshive: -110,
-    mineshaft: -160, crystalgrotto: 60, avalanchevault: 180, eaglesaerie: 195, deepcavern: -190, frozenkeep: 20 };            // distinct absolute height offsets so the six lands sit at different elevations relative to each other, not just different compass bearings (connectFar's causeway can climb/descend up to ~200 units safely — kept each offset under that cap so the causeway back to spawn stays reliable)
+    mineshaft: -160, crystalgrotto: 60, avalanchevault: 180, eaglesaerie: 195, deepcavern: -190, frozenkeep: 20,
+    cloudcastle: 190, skytemple: 90, auroravault: -150, thunderdock: -60, floatingruin: 150, lightningspire: 200 };            // distinct absolute height offsets so the six lands sit at different elevations relative to each other, not just different compass bearings (connectFar's causeway can climb/descend up to ~200 units safely — kept each offset under that cap so the causeway back to spawn stays reliable)
   const farAnchor = (node, key) => {
     if (!node) return null;
     const D0 = MID_DIST[key];
@@ -4496,6 +4580,68 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
       if (farD) { WORLD_R = Math.max(WORLD_R, farD + 320); camera.far = Math.max(camera.far, (farD + 400) * 1.7); camera.updateProjectionMatrix(); }
     }
     return;        // Ascent's 6 dungeons are built — skip Lvl1's own nest/house/shroom/bone/bubble/eiffel content below entirely
+  }
+  // ---- LEVEL 4 "SKYFALL": 6 cloud/storm dungeons on all 6 ring-node slots, exact same shape as Overgrowth's/
+  // Ascent's own six just above (far anchor -> forecourt plaza -> hop-steps -> farMonument+farDungeon -> causeway ->
+  // garrison), own theme set, gated entirely on skyfallOn() so the default level's 6 dungeons below are untouched. ----
+  if (skyfallOn()) {
+    const skySites = [
+      { node: nestNode, key: 'cloudcastle', zone: CLOUDCASTLE_ZONE, kinds: CLOUDCASTLE_KINDS, col: 0xaec8ea, deckLocal: 200, botLocal: -100, discR: 15, name: 'CLOUD CASTLE' },
+      { node: houseNode, key: 'skytemple', zone: SKYTEMPLE_ZONE, kinds: SKYTEMPLE_KINDS, col: 0xd8b878, deckLocal: 210, botLocal: -100, discR: 14, name: 'SKY TEMPLE' },
+      { node: shroomNode, key: 'auroravault', zone: AURORAVAULT_ZONE, kinds: AURORAVAULT_KINDS, col: 0x5af0a8, deckLocal: 220, botLocal: -100, discR: 13, name: 'AURORA VAULT' },
+      { node: boneNode, key: 'thunderdock', zone: THUNDERDOCK_ZONE, kinds: THUNDERDOCK_KINDS, col: 0x6ab4ea, deckLocal: 190, botLocal: -100, discR: 16, name: 'THUNDER DOCK' },
+      { node: bubbleNode, key: 'floatingruin', zone: FLOATINGRUIN_ZONE, kinds: FLOATINGRUIN_KINDS, col: 0x7a9a7a, deckLocal: 180, botLocal: -100, discR: 15, name: 'FLOATING RUIN' },
+      { node: eiffelNode, key: 'lightningspire', zone: LIGHTNINGSPIRE_ZONE, kinds: LIGHTNINGSPIRE_KINDS, col: 0x8a5aff, deckLocal: 230, botLocal: -100, discR: 14, name: 'LIGHTNING SPIRE' },
+    ];
+    for (const ds of skySites) {
+      if (!ds.node) continue;
+      const AD = farAnchor(ds.node, ds.key);
+      const nx = Math.cos(AD.a), nz = Math.sin(AD.a);
+      const X0 = AD.X0, Z0 = AD.Z0, y0 = AD.y0 + (ELEV[ds.key] || 0);
+      if (AD.far) addSlab(X0, y0, Z0, 9, 9, 2.4, ds.zone, true);      // far land: the causeway's landing rim pad
+      let bx = X0 + nx * 42, bz = Z0 + nz * 42, by = y0 - 10;         // the forecourt plaza where the dungeon ascent starts
+      for (let mo = 42; blocked(bx, by, bz, 15) && mo <= 150; mo += 36) { bx = X0 + nx * mo; bz = Z0 + nz * mo; }
+      if (blocked(bx, by, bz, 15)) { console.log(`[skyfall-mids] ${ds.key} forecourt blocked at every outward nudge — site skipped this build`); continue; }
+      const hsteps = [];
+      for (let k = 1; k <= 3; k++) {                                   // 3 hop-steps from the rim pad down to the plaza
+        const sx = X0 + nx * (14 + k * 10), sz = Z0 + nz * (14 + k * 10), sy = y0 - 3 * k;
+        if (blocked(sx, sy, sz, 4.2)) continue;
+        hsteps.push({ x: sx, z: sz, y: sy, sl: addSlab(sx, sy, sz, 4.2, 4.2, 2, ds.zone, true) });
+      }
+      {
+        let A2 = { x: X0, z: Z0, y: y0 };
+        for (const B of hsteps) { addRail(A2.x, A2.z, A2.y + 1.35, B.x, B.z, ds.col, B.y + 1.35, false); addDashPad(A2.x, A2.y, A2.z, B.x - A2.x, B.z - A2.z); A2 = B; }
+        addRail(A2.x, A2.z, A2.y + 1.35, bx, bz, ds.col, by + 1.35, false);
+      }
+      const plaza = addSlab(bx, by, bz, 12, 9, 2.6, ds.zone, true);
+      const dl2 = makeLabel(ds.name); dl2.position.set(bx, by + 11, bz); dl2.scale.set(14, 3.5, 1); scene.add(dl2);
+      const db2 = beacon(bx, by + 1, bz, ds.col);
+      sites[ds.key] = { x: bx, z: bz, y: by, slabs: [...hsteps.map(h => h.sl), plaza] };
+      if (AD.far) {
+        db2.material.fog = false; db2.userData.noCull = true;
+        farMonument(ds.key, bx + nz * 52, bz - nx * 52, by - 26, CX, CZ);      // spawn-visible giant monument
+        farDungeon(ds.key, sites[ds.key], { x: bx, z: bz, y: by }, { x: bx + nz * 52, z: bz - nx * 52, base: by - 26 }, ds.zone, ds.col, ds.deckLocal, ds.botLocal, ds.discR);
+      }
+      if (AD.far) connectMid(ds.node, X0, Z0, y0, ds.zone, 9, 9);      // THE JOURNEY: full causeway from the ring to this land
+      // THE GARRISON: a standing watch on the forecourt and every few shaft landings — the halls are never empty
+      try {
+        const sn3 = sites[ds.key];
+        const seats = [plaza, ...(sn3.shaft || []).filter((_, i) => i % 5 === 0).map(s => s.slab)].filter(Boolean).slice(0, 7);
+        for (const seat of seats) {
+          const a = rand() * 6.283, r = 2 + rand() * 3;
+          const e = makeWalker(seat.cx + Math.cos(a) * r, seat.top + 0.4, seat.cz + Math.sin(a) * r, seat, 1, false, ds.kinds[(rand() * ds.kinds.length) | 0]);
+          if (e) { e.zone = ds.zone; e.midGuard = ds.key; e.neverDespawn = true; }
+        }
+      } catch (err) { console.warn(`[skyfall-mids] ${ds.key} garrison seed failed`, err); }
+    }
+    commons.mid = {};
+    for (const ds of skySites) if (sites[ds.key]) { commons.mid[ds.key] = { ...sites[ds.key], dungeonOnly: true, gen: midGen++ }; commons.mid[ds.key].key = ds.key; }
+    {                                  // the far lands live past the stock world edge: widen the bounds like the other far builders do
+      let farD = 0;
+      for (const ds of skySites) if (commons.mid[ds.key]) farD = Math.max(farD, Math.hypot(commons.mid[ds.key].x, commons.mid[ds.key].z));
+      if (farD) { WORLD_R = Math.max(WORLD_R, farD + 320); camera.far = Math.max(camera.far, (farD + 400) * 1.7); camera.updateProjectionMatrix(); }
+    }
+    return;        // Skyfall's 6 dungeons are built — skip Lvl1's own nest/house/shroom/bone/bubble/eiffel content below entirely
   }
   // ---- site 1: THE GIANT PUSSY (flesh nest + ball-chair arena) ----
   // Adaptive placement: try several arena radii/drops, then build the chain BACK from whichever arena found air.
@@ -5367,6 +5513,16 @@ function buildOvergrowthNetwork(exitAngle) { return buildNetwork(exitAngle); }
 // into setZone and buildLevel's rebuild-safety call) turns every boxMesh building into a jagged rock spire with a
 // snow cap, firing unconditionally while ascentOn() is true regardless of the current biome zone.
 function buildAscentNetwork(exitAngle) { return buildNetwork(exitAngle); }
+
+// LEVEL 4 "SKYFALL": same reasoning as Overgrowth/Ascent just above — reuse buildNetwork() verbatim (hub graph,
+// moon/space, hell platforms, co-op, commons/dungeon framework all untouched) and reskin visually through the same
+// two extension points: (1) commonsMidBuild's skyfallOn() branch swaps in 6 cloud/storm dungeon themes on the
+// identical far-anchor/forecourt/climb/descend/garrison shape; (2) a new cloudify() (sibling of trunkify()/
+// rockify(), wired the same way into setZone and buildLevel's rebuild-safety call) turns every boxMesh building
+// into a solid cloud-mass platform with wispy edges, firing unconditionally while skyfallOn() is true regardless
+// of the current biome zone. The existing updateClouds()/cloudMotion decorative sky-sprite systems are flat
+// billboards with no 3D geometry to reskin buildings with, so this is new code rather than a dial-up of those.
+function buildSkyfallNetwork(exitAngle) { return buildNetwork(exitAngle); }
 
   // ===== LEVEL-SPECIFIC NETWORK BUILDERS =====
   // Each level gets its own completely unique platform architecture
@@ -7432,6 +7588,7 @@ function buildLevel() {
   loadGore();                            // blood and guts from earlier runs of this level
   { const wantTrunks = overgrowthOn() || !!(activeZ && activeZ.name === 'Jungle'); trunkify(false); if (wantTrunks) trunkify(true); }   // rebuilt levels in an active jungle (or Overgrowth, always) keep/get their trunks; always toggled off first so a stale `true` from a level we just left (e.g. leaving Overgrowth for a non-jungle level) doesn't stick, and so the canopy list always rebuilds fresh against this level's own buildingBoxes
   { const wantRock = ascentOn(); rockify(false); if (wantRock) rockify(true); }   // same rebuild-safety toggle as trunkify, for Ascent's rock spires
+  { const wantCloud = skyfallOn(); cloudify(false); if (wantCloud) cloudify(true); }   // same rebuild-safety toggle, for Skyfall's cloud masses
 }
 
 function buildBelowZeroForLevel() {
@@ -10067,7 +10224,7 @@ function buildLevelBody() {
   buildSky();
   // ten biome-styled heavy units guard the bottom terminal
   const padA = rand() * 6.283, endA = padA + Math.PI;
-  const bossRoster = rentOn() ? RENT_BOSSES : nosOn() ? NOS_BOSSES : gutOn() ? GUT_BOSSES : arenaOn() ? ARENA_BOSSES : overgrowthOn() ? OVERGROWTH_BOSSES : ascentOn() ? ASCENT_BOSSES : [
+  const bossRoster = rentOn() ? RENT_BOSSES : nosOn() ? NOS_BOSSES : gutOn() ? GUT_BOSSES : arenaOn() ? ARENA_BOSSES : overgrowthOn() ? OVERGROWTH_BOSSES : ascentOn() ? ASCENT_BOSSES : skyfallOn() ? SKYFALL_BOSSES : [
     { variant: 'gorilla', biome: 'Jungle', name: 'CANOPY TYRANT', color: 0x9bdf4a },
     { variant: 'dinosaur', biome: 'Jungle', name: 'THE RAZOR KING', color: 0xb6d84a },
     { variant: 'charger', biome: 'Inferno', name: 'THE RAM', color: 0xff533e },
@@ -10127,6 +10284,7 @@ function buildLevelBody() {
     else if (gutOn()) levelHubs = buildGutNetwork(padA);
     else if (overgrowthOn()) levelHubs = buildOvergrowthNetwork(padA);
     else if (ascentOn()) levelHubs = buildAscentNetwork(padA);
+    else if (skyfallOn()) levelHubs = buildSkyfallNetwork(padA);
     else levelHubs = buildNetwork(padA);
     scatterBosses();
   buildTowerWindows();
@@ -10876,6 +11034,8 @@ const LEVELS_ALL = [
     glyph: '🌳', c1: '#0a2a12', c2: '#6ac84a', features: ['Every tower is a giant tree trunk — same sky, moon and descent as Lil Spasticism', '6 forest dungeons: Root Hollow, Beast’s Nest, Sunken Stump, Spore Vault, Canopy Temple, Hornet’s Hive', 'Same biomes, bosses and co-op — just grown wild'] },
   { id: 'ascent', name: 'The Ascent', subtitle: 'A mountain range grown skyscraper-tall — rock spires and snow caps, all the way down to the magma core.', unlocked: true, startFn: () => startLevelDef('ascent'),
     glyph: '⛰', c1: '#0e1a3a', c2: '#9adfff', features: ['Every tower is a jagged rock spire with a snow cap — same sky, moon and descent as Lil Spasticism', "6 alpine dungeons: Mine Shaft, Crystal Grotto, Avalanche Vault, Eagle's Aerie, Deep Cavern, Frozen Keep", 'Same biomes, bosses and co-op — just carved from stone'] },
+  { id: 'skyfall', name: 'Skyfall', subtitle: 'A sky grown skyscraper-tall — solid cloud and storm, all the way down to the bedrock below.', unlocked: true, startFn: () => startLevelDef('skyfall'),
+    glyph: '☁', c1: '#0a0e1a', c2: '#aec8ea', features: ['Every tower is a drifting cloud mass with wispy edges — same sky, moon and descent as Lil Spasticism', '6 cloud/storm dungeons: Cloud Castle, Sky Temple, Aurora Vault, Thunder Dock, Floating Ruin, Lightning Spire', 'Same biomes, bosses and co-op — just gone to the clouds'] },
   { id: 'rent', name: "Rent's Due", subtitle: 'Urban decay all the way down - eviction notices, loan sharks, and the rent is overdue.', unlocked: true, startFn: () => startLevelDef('rent'),
     glyph: '🏚', c1: '#3a2214', c2: '#ff9d4d', features: ['Urban decay: eviction banners, pawn shops, fire escapes', 'Loan-shark minibosses and tenant-horde ambushes', 'The rent is due — everything you break comes out of the deposit'] },
   { id: 'nos', name: 'Nostalgia Overdose', subtitle: 'VHS fog, CRT scanlines, cassette platforms and 80s synth bosses - be kind, rewind.', unlocked: true, startFn: () => startLevelDef('nos'),
@@ -12460,6 +12620,18 @@ const ASCENT_BOSSES = [
   { variant: 'stegosaurus', biome: 'Psychedelic', name: 'THE PRISM WYRM', color: 0xb05aff },
   { variant: 'dinosaur', biome: 'Jungle', name: "THE PEAK'S OLD BONES", color: 0xaecbe8 },
 ];
+const SKYFALL_BOSSES = [
+  { variant: 'stormWraith', biome: 'Storm', name: 'THE JETSTREAM', color: 0x7aaaf0 },
+  { variant: 'drone', biome: 'Storm', name: 'THE SQUALL', color: 0x9adfff },
+  { variant: 'bomber', biome: 'Storm', name: 'THUNDERHEAD', color: 0x6ab4ea },
+  { variant: 'gunner', biome: 'Storm', name: 'CLOUDBREAKER', color: 0xd8e8ff },
+  { variant: 'shield', biome: 'Horror', name: 'THE CUMULONIMBUS', color: 0x8f887c },
+  { variant: 'stalker', biome: 'Horror', name: 'THE VOID DRAFT', color: 0x4a4458 },
+  { variant: 'kaomoji', biome: 'Psychedelic', name: 'THE AURORA FACE', color: 0x5af0a8 },
+  { variant: 'prismWraith', biome: 'Psychedelic', name: 'THE PRISM GALE', color: 0xb05aff },
+  { variant: 'alien', biome: 'Psychedelic', name: 'SKYBORNE VISITOR', color: 0xd85aff },
+  { variant: 'raver', biome: 'Rave', name: 'DISCO ZEPHYR', color: 0xff5ad8 },
+];
 const rentZoneForY = y => RENT_ZONES[y > TOP * 0.55 ? 0 : y > 0 ? 1 : 2];
 // NOSTALGIA OVERDOSE zones: also OUTSIDE ZONES (same reasons as RENT_ZONES). nos = severity 1..3: Sunset Strip (synthwave dusk, cassette platforms) ->
 // Tracking Error (the Storm biome retuned: no rain, a 'static' weather and periodic tape tears, no lightning) -> Arcade Overdrive (neon on black, cabinets everywhere).
@@ -12672,6 +12844,47 @@ function rockify(on) {
     towersOfStone.peaks.length = 0;
   }
 }
+// LEVEL 4 "SKYFALL": sibling of trunkify()/rockify() just above — same mechanism (swap every boxMesh building's
+// material, cap a soft accent on top), different texture/geometry, so every building in the level reads as a
+// solid cloud mass with wispy edges instead of a tree trunk or rock spire. The decorative updateClouds()/
+// cloudMotion sky-sprite systems are flat fog-billboards with no mesh to reuse here, hence new geometry.
+const cloudTexBuild = (() => {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 128;
+  const x = c.getContext('2d');
+  x.fillStyle = '#eef4ff'; x.fillRect(0, 0, 64, 128);
+  for (let i = 0; i < 46; i++) { x.fillStyle = i % 2 ? '#dbe6fa' : '#ffffff'; const y = Math.random() * 128, r = 6 + Math.random() * 14; x.beginPath(); x.arc(Math.random() * 64, y, r, 0, 6.283); x.fill(); }
+  const t = trackRetroTexture(new THREE.CanvasTexture(c)); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 1;
+  return t;
+})();
+const cloudMat2 = retroMaterial(new THREE.MeshLambertMaterial({ map: cloudTexBuild, flatShading: true }));
+const wispMats = [0xffffff, 0xeaf2ff, 0xd8e6fb].map(c => new THREE.MeshLambertMaterial({ color: c, flatShading: true, transparent: true, opacity: 0.88 }));
+const wispGeo = new THREE.SphereGeometry(1, 8, 6);          // one shared puffy wisp for every cloud-mass cap
+const towersOfCloud = { on: false, wisps: [] };
+function cloudify(on) {
+  if (towersOfCloud.on === on) return;
+  towersOfCloud.on = on;
+  if (on) {
+    for (const m of buildingBoxes) {
+      if (!m.userData.origMat) m.userData.origMat = m.material;
+      m.material = cloudMat2;
+      const bw = m.geometry.parameters.width, bd = m.geometry.parameters.depth, bh = m.geometry.parameters.height;
+      const s = Math.min(bw, bd);
+      if (s < 10 || towersOfCloud.wisps.length >= 220) continue;      // thin stacks stay bare cloud; cap wisp draws
+      const wn = 1 + ((Math.random() * 2) | 0), ws = Math.max(6, Math.min(30, bh * 0.12));
+      for (let i = 0; i < wn; i++) {
+        const wp = new THREE.Mesh(wispGeo, wispMats[(Math.random() * wispMats.length) | 0]);
+        wp.scale.set(bw * 0.55, ws, bd * 0.55);
+        wp.position.set(m.position.x + (Math.random() - 0.5) * bw * 0.3, m.position.y * 2 + ws * (0.1 + i * 0.7), m.position.z + (Math.random() - 0.5) * bd * 0.3);
+        wp.rotation.y = Math.random() * 6.28;
+        scene.add(wp); towersOfCloud.wisps.push(wp);
+      }
+    }
+  } else {
+    for (const m of buildingBoxes) if (m.userData.origMat) m.material = m.userData.origMat;
+    for (const c of towersOfCloud.wisps) c.removeFromParent();
+    towersOfCloud.wisps.length = 0;
+  }
+}
 
 // ---------- SPACE: above the roof the sky fades to black and gravity fades away ----------
 const ALIEN_ZONE = { name: 'Alien Void', desc: 'past the moon: xenos, saucers and drifting space cities', top: '#02010a', mid: '#140a2e', bot: '#1d3a34', fog: 0x0e0a22, hemi: 0.75, hemiCol: 0x9affc4, sun: 0.85, sunCol: 0xc06aff, cloud: 0x1a1030, plate: 0x7dff4a, weather: 'static' };
@@ -12728,6 +12941,7 @@ function setZone(z, snap = false, quiet = false) {
   if (snap) { for (const k of ENV_COLS) env[k].copy(goal[k]); env.hemi = goal.hemi; env.sun = goal.sun; flash = 0; wOp = 0; }
   if (!interior) trunkify(overgrowthOn() || !!(z && z.name === 'Jungle'));   // jungle takes over: every building becomes a giant tree trunk. LEVEL 2 "The Overgrowth": every building is ALWAYS a tree trunk, regardless of the current biome zone — the whole level reads as a forest, not just its Jungle-zoned stretches.
   if (!interior) rockify(ascentOn());   // LEVEL 3 "The Ascent": every building is ALWAYS a rock spire, regardless of the current biome zone — the whole level reads as a mountain range, not just its Frozen-zoned stretches.
+  if (!interior) cloudify(skyfallOn());   // LEVEL 4 "Skyfall": every building is ALWAYS a cloud mass, regardless of the current biome zone — the whole level reads as a sky of drifting cloud platforms, not just its Storm-zoned stretches.
   const w = interior ? WEATHER.none : z ? WEATHER[z.weather] : nosOn() ? WEATHER.dust : rentOn() ? WEATHER.paper : WEATHER.rain;
   wOn = !!w.op; if (w.op) { wCfg = w; wMat.color.setHex(w.color); wMat.size = w.size; }
   else if (!z) { wCfg = WEATHER.rain; wMat.color.setHex(wCfg.color); wMat.size = wCfg.size; wOp = wCfg.op; wMat.opacity = wOp; }
@@ -15499,6 +15713,17 @@ function dressSite(site, zone) {
     }
     const snowM = MM('asSnow', () => lamC(0xeaf4ff)), snowG = GG('asSnow', () => new THREE.IcosahedronGeometry(0.5, 0));
     for (let i = 0, c = n(0, 2); i < c; i++) { const [x, z] = spot(); add(new THREE.Mesh(snowG, snowM), x, 0.25, z).scale.set(0.5 + r() * 0.6, 0.35 + r() * 0.3, 0.5 + r() * 0.6); }
+  }
+  if (skyfallOn()) {                        // LEVEL 4 "Skyfall": a light storm/cloud-flavor layer on EVERY site regardless of its own zone's
+    // normal dressing below (additive, never returns early) — drifting wisp puffs clinging to every ledge and an
+    // occasional spark accent, so even an Inferno/Horror/Jungle stretch still reads as part of the same sky world.
+    const wispM = MM('sfWisp', () => new THREE.MeshBasicMaterial({ color: 0xf0f6ff, transparent: true, opacity: 0.55, depthWrite: false })), wispSiteG = GG('sfWisp', () => new THREE.SphereGeometry(0.5, 7, 5));
+    for (let i = 0, c = n(1, big ? 4 : 2); i < c; i++) {
+      const [x, z] = spot(), wy = 0.3 + r() * 0.6;
+      add(new THREE.Mesh(wispSiteG, wispM), x, wy, z).scale.set(1.1 + r() * 0.9, 0.6 + r() * 0.4, 1.1 + r() * 0.9);
+    }
+    const sparkM = MM('sfSpark', () => addC(0xd8c8ff, 0.7)), sparkG = GG('sfSpark', () => new THREE.OctahedronGeometry(0.16, 0));
+    for (let i = 0, c = n(0, 2); i < c; i++) { const [x, z] = spot(); add(new THREE.Mesh(sparkG, sparkM), x, 0.4 + r() * 0.5, z).scale.setScalar(0.6 + r() * 0.5); }
   }
   if (zone.name === 'Psychosis') {          // mutation: a hell or horror ledge with the Glitch dressing laid over it
     const baseName = r() < 0.5 ? 'Hellscape' : 'Horror';      // (decided once: r() inside the find predicate re-rolled per element and found nothing)
