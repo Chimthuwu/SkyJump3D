@@ -775,6 +775,7 @@ function resizeRenderer() {
     outputViewport.width = width; outputViewport.height = height;
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    vmCamera.aspect = camera.aspect; vmCamera.updateProjectionMatrix();
     return;
   }
   // PS1 / N64: keep the low-res height, widen the target to the window aspect so there are no black bars
@@ -786,6 +787,7 @@ function resizeRenderer() {
   outputViewport.width = width; outputViewport.height = height;
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
+  vmCamera.aspect = camera.aspect; vmCamera.updateProjectionMatrix();
 }
 renderer.domElement.addEventListener('webglcontextlost', event => {
   event.preventDefault();
@@ -827,6 +829,12 @@ const scene = new THREE.Scene(); scene.matrixAutoUpdate = false;        // the s
 }
 scene.fog = new THREE.Fog(0x1a1038, 60, 260);
 const camera = new THREE.PerspectiveCamera(60, RETRO_WIDTH / RETRO_HEIGHT, 1.0, 2500);
+// Viewmodel gets its own tiny scene + camera (fixed at the origin, never rotates) so its own near plane
+// can sit far below the world camera's 1.0 (raised to fix a separate flicker bug) without re-breaking that
+// fix: the held weapon sits well inside 1.0 world units of the eye, so sharing the world near plane clipped
+// away most of every gun's body, leaving only far tips visible — the reported "transparent weapon" glitch.
+const vmScene = new THREE.Scene();
+const vmCamera = new THREE.PerspectiveCamera(60, RETRO_WIDTH / RETRO_HEIGHT, 0.01, 10);
 resizeRenderer();
 const hemi = new THREE.HemisphereLight(0x7c86df, 0x0a0b18, 0.3);
 scene.add(hemi);
@@ -3506,7 +3514,8 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
   // (flesh terraces / front-door steps / rabbit-hole discs), and each keeps its own unique boss + reward.
   // farAnchor tries a couple of radii/angle nudges for open air; the ladder ends at the legacy near-ring spot so a
   // crowded world can still fall back to the old spur layout unchanged.
-  const MID_DIST = { nest: 1100, house: 1010, shroom: 1080, bone: 1040, bubble: 1140 };  // staggered so the lands never bunch up
+  const MID_DIST = { nest: 2200, house: 1850, shroom: 2500, bone: 2050, bubble: 2650 };  // much further out than before (was a tight 1010-1140 band) so the dungeons genuinely spread across the map
+  const ELEV = { nest: 0, house: 170, shroom: -230, bone: 95, bubble: -150 };            // distinct absolute height offsets so the five lands sit at different elevations relative to each other, not just different compass bearings (connectFar's causeway can climb/descend up to ~200 units safely)
   const farAnchor = (node, key) => {
     if (!node) return null;
     const D0 = MID_DIST[key];
@@ -3700,15 +3709,27 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
         M(cn2, paleGold, side * 55, 64, 31.8, 3, 6, 3, Math.PI, 0);
       }
 
-      // A soft pink cloudbank cradles the foundation without recoloring or reshaping the castle.
+      // A soft pink cloudbank conceals the whole keep, not just its foundation: three stacked rings
+      // (base / mid-spire / crown) climb with the castle silhouette (which rises to local y~220) so the
+      // landmark reads as "clouds covering it" from a distance, not just a decorated footing.
       const cloudMat = new THREE.MeshBasicMaterial({ color: 0xf08bc8, transparent: true, opacity: 0.78, depthWrite: false, fog: false, toneMapped: false });
       const cloudHi = new THREE.MeshBasicMaterial({ color: 0xffb8df, transparent: true, opacity: 0.75, depthWrite: false, fog: false, toneMapped: false });
-      for (let i = 0; i < 24; i++) {
-        const angle = i * Math.PI * 2 / 24, radius = 110;
-        for (const [dx, dy, dz, sx, sy, sz, mat] of [[0, -2, 0, 18, 7, 13, cloudMat], [-8, 1, 1, 12, 8, 11, cloudHi], [8, 0, -2, 13, 7, 10, cloudMat], [0, 3, 4, 10, 6, 9, cloudHi]]) {
-          const puff = M(softGeo, mat, Math.cos(angle) * radius + dx, dy, Math.sin(angle) * radius + dz, sx, sy, sz);
-          cloudMotion.push({ mesh: puff, angle, radius, radiusWobble: 1.5, puffX: dx, puffZ: dz, y: dy, sx, sy, sz, phase: i * 0.73 + dx * 0.04 + dz * 0.03, orbitSpeed: 0.012 + (i % 3) * 0.0015, bob: 0.2 });
+      const cloudFar = new THREE.MeshBasicMaterial({ color: 0xe8a8cc, transparent: true, opacity: 0.55, depthWrite: false, fog: false, toneMapped: false });
+      for (const [ringY, radius, count, mat1, mat2] of [[-2, 110, 24, cloudMat, cloudHi], [95, 128, 20, cloudHi, cloudMat], [185, 96, 16, cloudMat, cloudHi]]) {
+        for (let i = 0; i < count; i++) {
+          const angle = i * Math.PI * 2 / count;
+          for (const [dx, dy, dz, sx, sy, sz, mat] of [[0, -2, 0, 18, 7, 13, mat1], [-8, 1, 1, 12, 8, 11, mat2], [8, 0, -2, 13, 7, 10, mat1], [0, 3, 4, 10, 6, 9, mat2]]) {
+            const puff = M(softGeo, mat, Math.cos(angle) * radius + dx, ringY + dy, Math.sin(angle) * radius + dz, sx, sy, sz);
+            cloudMotion.push({ mesh: puff, angle, radius, radiusWobble: 1.5, puffX: dx, puffZ: dz, y: ringY + dy, sx, sy, sz, phase: i * 0.73 + dx * 0.04 + dz * 0.03, orbitSpeed: 0.012 + (i % 3) * 0.0015, bob: 0.2 });
+          }
         }
+      }
+      // A loose, wide outer haze ring (bigger, flatter, fainter puffs) softens the whole silhouette from
+      // the descent shelf / spawn side so the keep is genuinely hard to make out at range, not just framed.
+      for (let i = 0; i < 18; i++) {
+        const angle = i * Math.PI * 2 / 18 + 0.17, radius = 190 + (i % 3) * 14;
+        const puff = M(softGeo, cloudFar, Math.cos(angle) * radius, 60 + (i % 4) * 34, Math.sin(angle) * radius, 30, 14, 22);
+        cloudMotion.push({ mesh: puff, angle, radius, radiusWobble: 2.2, puffX: 0, puffZ: 0, y: 60 + (i % 4) * 34, sx: 30, sy: 14, sz: 22, phase: i * 0.91, orbitSpeed: 0.008 + (i % 3) * 0.001, bob: 0.3 });
       }
       palaceMotions.push({ clouds: cloudMotion, highlights: wetHighlights, drips: wetDrips, folds: entranceFolds, clefts: [{ material: cleftMat, opacity: 0.86 }], breathPhase: palaceMotions.length * 1.7 });
       // Masonry frame stones tie the living gate back into the castle wall.
@@ -3840,6 +3861,16 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
     sn.rooms = []; sn.hazards = []; sn.secrets = [];
     // EXTERIOR STAIR: hop-up steps (~3.6 m each) spiral the monument from the arena side up to the deck; rails connect them, dash pads refuel the climb
     const r0 = Math.hypot(site.x - gx, site.z - gz), a0 = Math.atan2(site.z - gz, site.x - gx);
+    // The shell wall (built below) is a square ring of radius shellHalf with one door gap; the climb
+    // spiral used to shrink its radius down below shellHalf while still partway around the loop (angle
+    // far from the door), so the player's own hop-step path crossed the solid wall nowhere near the
+    // door and got stuck outside ("no entrance" / "walls aren't solid in the way I expect"). Fix:
+    // compute shellHalf here too (same formula as below) and keep the climb's radius outside it for
+    // most of the ascent (crossT), only diving inward to the deck in the final stretch — the door
+    // (below) is then built to match the angle at that crossing (aCross), not the boss arena's
+    // original approach angle.
+    const shellHalf = discR * 2 + 21;
+    const crossT = 0.82, aCross = a0 + crossT * 6.0;
     const climbGuide = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, Math.max(1, deckY - botY), 6), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false }));
     climbGuide.position.set(gx, (deckY + botY) / 2, gz); climbGuide.userData.noCull = true; scene.add(climbGuide);
     const vaultGuide = beacon(gx, botY + 1, gz, col); vaultGuide.scale.set(0.45, 0.45, 0.45); vaultGuide.material.opacity = 0.42; vaultGuide.userData.noCull = true;
@@ -3852,11 +3883,14 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
   };
   const routeHeading = makeLabel(key === 'nest' ? 'GIANT NEST · FOLLOW THE GLOW TO THE VAULT' : key === 'house' ? 'HAUNTED KEEP · CLIMB THE SPIRE, DESCEND INSIDE' : key === 'bone' ? 'BONE CATHEDRAL · CLIMB THE BUTTRESSES, DESCEND THE OSSUARY' : key === 'bubble' ? 'BUBBLE CITADEL · CLIMB THE DOME, SINK INTO THE FIZZ' : 'GRAND SHROOM · CLIMB THE STEM, DESCEND WITHIN');
   routeHeading.position.set(site.x, site.y + 20, site.z); routeHeading.scale.set(20, 4.6, 1); routeHeading.userData.noCull = true; scene.add(routeHeading);
-    const baseR = Math.max(r0 + 40, discR + 30), endR = discR + 16;
+    const wallClearR = shellHalf + 12, innerEndR = discR + 16;   // innerEndR unchanged from before: lands the climb right next to the deck slab
+    const baseR = Math.max(r0 + 40, discR + 30, wallClearR + 1);
     const steps = Math.max(24, Math.min(140, Math.round((deckY - site.y) / 3.6)));
     let px = site.x, py = site.y + 3.2, pz = site.z;
     for (let k = 1; k <= steps; k++) {
-      const t = k / steps, a = a0 + t * 6.0, rr = baseR + (endR - baseR) * t;        const sx = gx + Math.cos(a) * rr, sz = gz + Math.sin(a) * rr, sy = site.y + 3.2 + (deckY - site.y - 3.2) * t;
+      const t = k / steps, a = a0 + t * 6.0;
+      const rr = t < crossT ? baseR + (wallClearR - baseR) * (t / crossT) : wallClearR + (innerEndR - wallClearR) * ((t - crossT) / (1 - crossT));
+      const sx = gx + Math.cos(a) * rr, sz = gz + Math.sin(a) * rr, sy = site.y + 3.2 + (deckY - site.y - 3.2) * t;
       if (blocked(sx, sy, sz, 3.6)) continue;
       addSlab(sx, sy, sz, 3.6, 3.6, 1.4, zone, true);
 
@@ -4041,7 +4075,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
     // have a permanent front doorway; the broad interior landings and side chambers all
     // remain inside the walls, so the spiral is an explorable building rather than stairs
     // floating in open air. Distinct materials keep each landmark's interior on-theme.
-    const shellHalf = discR * 2 + 21, shellThickness = 1.8, shellBand = 28;
+    const shellThickness = 1.8, shellBand = 28;   // shellHalf itself is computed earlier (before the climb spiral) so the climb can be kept outside it
     const shellBottom = botY, shellTop = deckY + 14;
     const shellMat = lam(key === 'house' ? 0x191520 : key === 'shroom' ? 0x694c40 : key === 'bone' ? 0x8f887c : key === 'bubble' ? 0x4f88a8 : 0x421b30,
       { emissive: key === 'house' ? 0x120b19 : key === 'shroom' ? 0x28120e : key === 'bone' ? 0x2a2620 : key === 'bubble' ? 0x14283a : 0x220813, emissiveIntensity: 0.4 });
@@ -4052,8 +4086,12 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
       mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); mesh.userData.noCull = true; scene.add(mesh);
     };
     let shellFloors = 0;
-    const doorOnX = Math.abs(site.x - gx) > Math.abs(site.z - gz);
-    const doorSide = (doorOnX ? site.x - gx : site.z - gz) < 0 ? -1 : 1;
+    // Door faces the angle the climb spiral actually crosses the wall at (aCross), not the boss arena's
+    // original bearing (a0) — the spiral winds most of the way around the building before diving in, so
+    // a door built at a0 left the real crossing point walled in solid on every floor band.
+    const doorDirX = Math.cos(aCross), doorDirZ = Math.sin(aCross);
+    const doorOnX = Math.abs(doorDirX) > Math.abs(doorDirZ);
+    const doorSide = (doorOnX ? doorDirX : doorDirZ) < 0 ? -1 : 1;
     for (let floorY = shellBottom; floorY < shellTop; floorY += shellBand) {
       const ceilY = Math.min(shellTop, floorY + shellBand), half = shellHalf, t = shellThickness, doorHalf = 9;
       // The open side faces the outside stair, making the ground-level portal easy to find.
@@ -4109,7 +4147,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
   if (nestNode) {
     const AN = farAnchor(nestNode, 'nest');
     const nx = Math.cos(AN.a), nz = Math.sin(AN.a);
-    const X0 = AN.X0, Z0 = AN.Z0, y0 = AN.y0;
+    const X0 = AN.X0, Z0 = AN.Z0, y0 = AN.y0 + ELEV.nest;
     const FP = { name: 'FleshNest', desc: 'warm meat under a purring pink dusk', top: '#160a14', mid: '#2c1226', bot: '#42182f', fog: 0x1e0a18, hemi: 0.85, hemiCol: 0xff9ec4, sun: 1.0, sunCol: 0xff6aa2, cloud: 0x2c1228, plate: 0xff5aa0, weather: 'none' };
     if (AN.far) addSlab(X0, y0, Z0, 9, 9, 2.4, FP, true);           // far land: the causeway's landing rim pad
     let arenaSite = null;
@@ -4154,7 +4192,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
   if (houseNode) {
     const AH = farAnchor(houseNode, 'house');
     const nx = Math.cos(AH.a), nz = Math.sin(AH.a);
-    const X0 = AH.X0, Z0 = AH.Z0, y0 = AH.y0;
+    const X0 = AH.X0, Z0 = AH.Z0, y0 = AH.y0 + ELEV.house;
     const FHT = { name: 'HauntedHouse', desc: 'the halls are awake — walk soft', top: '#05070c', mid: '#111722', bot: '#242b31', fog: 0x20262c, hemi: 0.48, hemiCol: 0x879293, sun: 0.28, sunCol: 0xc4a77a, cloud: 0x4b5558, plate: 0xc6a16d, weather: 'none' };
     if (AH.far) addSlab(X0, y0, Z0, 9, 9, 2.4, FHT, true);          // far land: the causeway's landing rim pad
     let hx = X0 + nx * 34, hz = Z0 + nz * 34, hy = y0 - 7.5;          // house base sits in the mid band
@@ -4274,7 +4312,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
   if (shroomNode) {
     const AS = farAnchor(shroomNode, 'shroom');
     const nx = Math.cos(AS.a), nz = Math.sin(AS.a);
-    const X0 = AS.X0, Z0 = AS.Z0, y0 = AS.y0;
+    const X0 = AS.X0, Z0 = AS.Z0, y0 = AS.y0 + ELEV.shroom;
     const FSH = { name: 'Shroom', desc: 'a storybook cap hides a strange little court', top: '#130b16', mid: '#392630', bot: '#71634d', fog: 0x55453d, hemi: 0.78, hemiCol: 0xe5d5b6, sun: 0.62, sunCol: 0xf0c989, cloud: 0x94826b, plate: 0xd8b88a, weather: 'none' };
     if (AS.far) addSlab(X0, y0, Z0, 9, 9, 2.4, FSH, true);          // far land: the causeway's landing rim pad
     // a spiral rabbit-hole of glowing cap-discs winding DOWN from the rim to the cap arena (down = into wonderland)
@@ -4331,7 +4369,7 @@ function commonsMidBuild(CX, CZ, nestNode, houseNode, shroomNode, boneNode, bubb
     if (!ds.node) continue;
     const AD = farAnchor(ds.node, ds.key);
     const nx = Math.cos(AD.a), nz = Math.sin(AD.a);
-    const X0 = AD.X0, Z0 = AD.Z0, y0 = AD.y0;
+    const X0 = AD.X0, Z0 = AD.Z0, y0 = AD.y0 + (ELEV[ds.key] || 0);
     if (AD.far) addSlab(X0, y0, Z0, 9, 9, 2.4, ds.zone, true);      // far land: the causeway's landing rim pad
     let bx = X0 + nx * 42, bz = Z0 + nz * 42, by = y0 - 10;         // the forecourt plaza where the dungeon ascent starts
     for (let mo = 42; blocked(bx, by, bz, 15) && mo <= 150; mo += 36) { bx = X0 + nx * mo; bz = Z0 + nz * mo; }
@@ -9855,10 +9893,10 @@ function makeWeaponMeshes() {
 function heroWeapon(g, i) {
   const colors = [0x2ad8ff, 0x39ff6a, 0xff3af0, 0x5aff8a, 0x72baff, 0x3affd0, 0xb06aff, 0xff5aa0, 0x9dff3a, 0xc86aff];
   const z = [1.42, 1.66, 1.28, 1.2, 1.82, 1.72, 1.25, 1.75, 1.72, 1.7][i], col = colors[i];
-  const coreMat = new THREE.MeshBasicMaterial({ color: col });
+  const coreMat = new THREE.MeshBasicMaterial({ color: col, transparent: true, toneMapped: false });
   const core = new THREE.Mesh(new THREE.SphereGeometry(i === 4 ? .12 : .09, 8, 6), coreMat); core.position.set(0, .02, z); g.add(core);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(i === 4 ? .18 : .13, .025, 5, 12), coreMat); ring.position.copy(core.position); ring.rotation.x = Math.PI / 2; g.add(ring);
-  const finMat = new THREE.MeshBasicMaterial({ color: 0x1a1d26 });
+  const finMat = new THREE.MeshBasicMaterial({ color: 0x1a1d26, transparent: true });
   const fin = new THREE.Mesh(new THREE.BoxGeometry(.018, .12, .34), finMat); fin.position.set(0, .02, z - .1); g.add(fin);
   g.userData.hero = { core, ring, fin, coreMat, finMat, kick: 0, phase: i * .8, z };
   return g;
@@ -9872,9 +9910,10 @@ const model = new THREE.Group(); model.add(player); scene.add(model);
 // street gear worn on the player model: a skateboard under the feet
 const gearBoard = makeBoard(); gearBoard.position.set(0, -0.05, 0.15); gearBoard.rotation.y = Math.PI; gearBoard.scale.setScalar(0.85); gearBoard.visible = false; player.add(gearBoard);
 
-// first-person viewmodel: weapons parented to the camera
+// first-person viewmodel: lives in its own scene/camera (vmScene/vmCamera, declared near `camera`) rather
+// than parented to the world camera, so it gets a much smaller near plane and is never clipped
 scene.add(camera);
-const vm = new THREE.Group(); vm.scale.setScalar(0.7); vm.position.set(0.3, -0.3, -0.55); vm.visible = false; camera.add(vm);
+const vm = new THREE.Group(); vm.scale.setScalar(0.7); vm.position.set(0.3, -0.3, -0.55); vm.visible = false; vmScene.add(vm);
 const vmGuns = makeWeaponMeshes().map(heroWeapon);
 vmGuns.forEach(g => { g.rotation.y = Math.PI; vm.add(g); });
 vmGuns[1].scale.setScalar(0.72); vmGuns[1].position.set(-0.08, 0.06, 0.05);        // the rifle is long: shrink it in first person so it does not fill the screen
@@ -9896,7 +9935,7 @@ function makeBoard() {
   return g;
 }
 const boardW = makeBoard(); boardW.visible = false; scene.add(boardW);
-const boardV = makeBoard(); boardV.visible = false; boardV.position.set(0, -1.65, -0.35); camera.add(boardV);          // what you see under your feet in first person
+const boardV = makeBoard(); boardV.visible = false; boardV.position.set(0, -1.65, -0.35); vmScene.add(boardV);          // what you see under your feet in first person (vmScene: same near-plane fix as the weapon viewmodel)
 let glideK = 0, leanK = 0, wasGliding = false;  const blob = new THREE.Mesh(new THREE.CircleGeometry(0.7, 8), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 }));
 blob.rotation.x = -Math.PI / 2; scene.add(blob);
 
@@ -10560,7 +10599,7 @@ function preloadThen(go, pre) {      // pre: optional heavy work (e.g. a level r
         const cq = new THREE.Mesh(crackGeo, crackMat); cq.position.set(0, -5000, 0); scene.add(cq); warmObjs.push(cq);
         const pent = pentagramDecal(4); pent.position.set(0, -5000, 0); scene.add(pent); warmObjs.push(pent);
       } catch (err) { console.warn('[preload] texture warmup failed', err); }
-      try { renderer.compile(scene, camera); } catch (err) { console.warn('[preload] compile failed', err); }
+      try { renderer.compile(scene, camera); renderer.compile(vmScene, vmCamera); } catch (err) { console.warn('[preload] compile failed', err); }
       for (const o of hidden) o.visible = false;
       await step(80, 'WARMING UP');
       renderer.render(scene, camera);
@@ -16197,9 +16236,11 @@ renderer.setAnimationLoop(now => {
       renderer.setViewport(0, 0, outputWidth, outputHeight);
       renderer.clear(true, true, true);
       renderer.render(scene, camera);
+      renderer.clearDepth(); renderer.render(vmScene, vmCamera);
     } else {
       renderer.setRenderTarget(sceneTarget);
       renderer.render(scene, camera);
+      renderer.clearDepth(); renderer.render(vmScene, vmCamera);
       renderer.setRenderTarget(null);
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, outputWidth, outputHeight);
