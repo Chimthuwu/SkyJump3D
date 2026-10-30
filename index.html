@@ -854,6 +854,9 @@ const camera = new THREE.PerspectiveCamera(60, RETRO_WIDTH / RETRO_HEIGHT, 1.0, 
 // fix: the held weapon sits well inside 1.0 world units of the eye, so sharing the world near plane clipped
 // away most of every gun's body, leaving only far tips visible — the reported "transparent weapon" glitch.
 const vmScene = new THREE.Scene();
+// vmScene lights its own gun/board with its own lights: world lights (hemi/fillAmb/sun) live in `scene` only,
+// so without these the held weapon and first-person deck rendered with unlit Lambert bodies (reported as "black guns").
+vmScene.add(new THREE.HemisphereLight(0x7c86df, 0x0a0b18, 0.85), new THREE.DirectionalLight(0x9db6ff, 0.8));
 const vmCamera = new THREE.PerspectiveCamera(60, RETRO_WIDTH / RETRO_HEIGHT, 0.01, 10);
 resizeRenderer();
 const hemi = new THREE.HemisphereLight(0x7c86df, 0x0a0b18, 0.3);
@@ -10922,7 +10925,7 @@ function returnPooledMesh(poolName, mesh) {
   }
 }
 const SCHIZO_TOASTS = ['the walls agree with you', 'you left it behind. it did not.', 'the count is wrong', 'it climbed when you fell', 'that was your copy', 'the count is wrong', 'you are the backup', 'it knows the route better', 'do not read this twice'];
-let schizoOn = true, schizoAcc = 20;                       // ON by default — the game talks, G-shift style
+let schizoOn = false, schizoAcc = 20;                      // was ON by default; on top of the always-on horror-world vignette it buried everything in three stacked dark layers — KeyH re-enables it if you want the full treatment
 
 // Minecraft-style hotbar pinned bottom-centre: [1] blade  [2] builder hand, rest reserved for future slots
 const hotbarCss = document.createElement('style'); hotbarCss.textContent = `
