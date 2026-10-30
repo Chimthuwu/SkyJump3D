@@ -615,7 +615,7 @@ Agent: stop now. Only `todo.md` should have changed.
   - [ ] City light-haze horizon sprites — verify 12-sprite ring present
   - [x] Remove dead code: `betweenBatchPlatforms()` call site disabled but function remains — clean or re-enable after verifying merged mesh renders clean
   - [x] Consolidate duplicate `CANOPY_Y` declarations (one module-level, one local in buildBetween — caused crash)
-  - [ ] Verify no `Math.random()` in seeded paths (breaks determinism/co-op)
+  - [x] Verify no `Math.random()` in seeded paths (breaks determinism/co-op) — verified 2026-10-31: buildBetween/buildLevelBody/buildSkyfallNetwork Math.random hits are only in texture/cosmetic gen; seeded worldgen uses rand().
   - [x] HUD innerHTML writes only on change (already done 2026-10-21 — verify still active) — verified 2026-10-31: updateVisuals caches hudHtml in updateVisuals._hud and only writes $('hud').innerHTML when it changes (index.html:15182); hp gated similarly (15169).
   - [x] Player shadow scans `nearSolids` only (already done — verify) — verified 2026-10-31: playerShadowTick (index.html:14928) iterates nearSolids, not solids.
   - [ ] Far enemy bodies hidden >170m but aura/beacon/arrow stays (verify active)
