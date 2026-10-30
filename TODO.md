@@ -63,6 +63,20 @@ A. **Every level carries ALL available biomes**, with depth constraints:
      today caverns only cover rungs 1–14 and Horror/Hellscape start at ~15 — make `DEPTH_ZONES.caverns`
      the band up to -666 (cycling cavern-style zone variants so it doesn't repeat flat), with the
      Horror/Hellscape/pentagram band only kicking in *below* -666. Keep the psychosis dial as overlay.
+   - **Psychosis re-theme (user direction 2026-10-31): horror meets psychedelia/insanity — NOT fire.**
+     Currently part-built and it FAILS this: `DEPTH_ZONES.psychosis` (~12831) is a red palette
+     (fog 0x2a0016, hemi 0xff3a6a, sun 0xff00aa, plate 0xff0a50, bot #ff0066, desc "hell remembers being a place"),
+     and — worst offender — its `dressSite` branch (~16072) literally composites the **HELLSCAPE dressing**
+     (r()<0.5) under the Glitch layer, so half of all Psychosis sites ARE hell platforms with glitch on top,
+     plus its enemy table (~12843) includes `infernal` (fire). Rework so the identity is: base = Horror (never
+     Hellscape) + Glitch layer + a NEW psychedelic dressing (impossible/melting geometry, hue-swimming props,
+     spiral/idiot-grin motifs, wrong-direction shadows), palette shift OFF the ember reds onto sickly
+     violet/acid-green/neon-magenta with the hermi-drop brightness 0.8→~0.5, desc reworded away from "hell",
+     swap `infernal` for a non-fire variant (glitchling/skeleton/stalker already fit). Under the -666 plan
+     Psychosis stays as the growing-insanity mutation share of the Caverns band (-40 → -666); it must stay
+     visually UNMISTAKABLE from the fire/hell band below -666 — that is exactly why it cannot keep any ember
+     red today. The glitch/tear/invert flicker (~16661) and horror-joins-psychosis handler (~16686) already
+     fit the new direction and stay.
 
 B. **Spawn differs per level** — not the same height, not the same location, not the same biomes around
    spawn. Per level: own start height (currently everything uses the same TOP-derived start hub), own
