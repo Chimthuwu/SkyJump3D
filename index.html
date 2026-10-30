@@ -2721,7 +2721,13 @@ function marsReached(sol) {
     spawnMarsReward();
   }
   buildPlanetLeg(0);          // existing leg
-  buildSpaceOpenWorld();      // <<< NEW: open world starts here
+  // buildSpaceOpenWorld() removed 2026-10-31: its giant asteroid sphere (r=1500, opacity .85,
+  // giant smooth dome centred at origin) blanketed the whole Mars->Jupiter region as an
+  // opaque orange-beige shell (fog-tinted) that blocked gameplay. Star-Wars cameo content
+  // that rode in on an unrelated commit; not part of the planned sky content.
+  // Replaced by the deliberately-built per-leg ASTEROID SET-PIECE in buildPlanetLegGen
+  // (small rock with real collision, hop stones, loot + beacon) and the solid summit
+  // APRON rewrite at the planet pads.
 }
 function planetReached(sol) {
   const i = sol.planet - 1, spec = PLANETS[i]; if (!spec) return;
@@ -2804,6 +2810,50 @@ function* buildPlanetLegGen(i) {
       if (n % 80 === 40) weaponPickup(2 + ((R() * (WEAPONS.length - 2)) | 0), x, y + 1.2, z);
     }
   }
+  // ASTEROID SET-PIECE (2026-10-31): one deliberate detour per leg. A ~30 m rubble-rock parked
+  // ~60 m to the side of lane 1 at mid-route; reachable over four ledge-hop stones, with REAL
+  // collision (stacked AABB tiers, like every solid in this game), loot + a guard on the summit and
+  // a beacon so it reads as a destination, not debris. Properly-scaled redo of the old 1500-rad
+  // open-world asteroid shell that was removed (that one blanketed the sky, had no collision and
+  // no gameplay). Axis-aligned tiers on purpose: the whole game's collision is AABB.
+  {
+    const anchor = all.find(q => q.L === 1 && q.n === (PER >> 1)) || all[all.length >> 1];
+    const aSeg = Math.min(SEGS - 1, Math.floor((PER >> 1) / PER * SEGS)), aZ = segZones[aSeg];
+    const aSide = R() < 0.5 ? 1 : -1, offD = 56 + R() * 12;
+    const topT = anchor.y + 1, bottom = topT - 13;
+    const bx = anchor.x + px * aSide * offD, bz = anchor.z + pz * aSide * offD;
+    const tierDef = [[11, bottom, topT - 7], [8, topT - 7, topT - 2.5], [5, topT - 2.5, topT]];
+    let summitSolid = null;
+    for (let k = 0; k < tierDef.length; k++) {
+      const [thw, y0, y1] = tierDef[k];
+      const ts = addSolid(bx - thw, bx + thw, y0, y1, bz - thw, bz + thw); Object.assign(ts, { cx: bx, cz: bz, top: y1, hw: thw, hd: thw, zone: aZ, asteroid: true });
+      if (k === 2) summitSolid = ts;
+    }
+    const astGeo = new THREE.IcosahedronGeometry(1, 0), astM = lam(0x6b5f52), astM2 = lam(0x514740);
+    for (let k = 0; k < tierDef.length; k++) {
+      const [thw, y0, y1] = tierDef[k], h = y1 - y0;
+      const lump = new THREE.Mesh(astGeo, k % 2 ? astM2 : astM);
+      lump.position.set(bx, (y0 + y1) / 2, bz); lump.scale.set(thw * 1.35, h * 0.8, thw * 1.35);
+      lump.rotation.set(k * 1.1, k * 2.3, k * 0.6); lvl.add(lump);
+    }
+    for (let k = 0; k < 3; k++) {          // loose boulders on the summit, jump-over cover
+      const a = R() * Math.PI * 2, d = 2.5 + R() * 3.5, rs = 1.1 + R() * 1.2;
+      const ox = bx + Math.cos(a) * d, oz = bz + Math.sin(a) * d;
+      const bs = addSolid(ox - rs, ox + rs, topT, topT + rs * 0.8, oz - rs, oz + rs); Object.assign(bs, { cx: ox, cz: oz, top: topT + rs * 0.8, hw: rs, hd: rs, zone: aZ, asteroid: true });
+      const bo = new THREE.Mesh(astGeo, astM2); bo.position.set(ox, topT + rs * 0.28, oz); bo.scale.set(rs * 1.3, rs * 0.8, rs * 1.3); bo.rotation.set(R() * 3, R() * 3, R() * 3); lvl.add(bo);
+    }
+    // approach stones: lane -> rock, ~10-12 m apart like the rest of the bridge; disc plates ride the leg's own instanced batches
+    const fr = [0.16, 0.34, 0.52, 0.7];
+    for (let h = 0; h < fr.length; h++) {
+      const d = fr[h] * offD, sx = anchor.x + px * aSide * d, sz = anchor.z + pz * aSide * d;
+      addStatic(sx, anchor.y - 0.5 - 0.4 * h, sz, 1.8, 1.8, 'disc', aSeg);
+    }
+    coin(bx, topT + 1.2, bz, aZ); coin(bx + 4, topT + 1.2, bz, aZ); coin(bx - 4, topT + 1.2, bz + 2, aZ);
+    heart(bx + 1.5, topT + 1.4, bz - 3.5);
+    weaponPickup(2 + ((R() * (WEAPONS.length - 2)) | 0), bx - 2.5, topT + 1.2, bz - 2);
+    beacon(bx, topT, spec.col);
+    spawnBiomeEnemy(bx + 3, topT, bz + 3, summitSolid, aZ, 0.9, 1);
+  }
   // CROSS-LINKS: where two lanes weave near each other, bridge them so the three lanes form a network you can switch between (mirrors buildAlienRouteGen's Mars cross-links)
   { const linkSeen = new Set();
     for (let a = 0; a < all.length; a++) for (let b = a + 1; b < all.length; b++) {
@@ -2837,13 +2887,26 @@ function* buildPlanetLegGen(i) {
   for (let k = 0; k < 4; k++) addStatic(cx + ux * (k * 11 + 5), topY - 2.2 + k * 0.5, cz + uz * (k * 11 + 5), 3.2, 3.2, 'box', SEGS - 1);
   for (const b of Object.values(batches)) { const ms = [b.body, b.plate]; if (b.cap) ms.push(b.cap); for (const m of ms) if (m.count !== (m === b.body ? b.nb : m === b.plate ? b.np : b.nc)) m.count = Math.min(m.count, cap); }
   coin(cx + ux * 60 - 6, topY + 1.2, cz + uz * 60, ALIEN_ZONE); coin(cx + ux * 60 + 6, topY + 1.2, cz + uz * 60, ALIEN_ZONE); heart(cx + ux * 60, topY + 1.3, cz + uz * 60 + 6);
-  // SOLID WALKABLE PLANET SURFACE
-  const surfSize = rad * 3.5;
-  const surf = new THREE.Mesh(new THREE.PlaneGeometry(surfSize, surfSize), new THREE.MeshBasicMaterial({ color: spec.cols[0], transparent: false, fog: false, roughness: 0.8 }));
-  surf.rotation.x = -Math.PI / 2;
-  surf.position.set(cx + ux * 60, topY - 0.5, cz + uz * 60);
-  lvl.add(surf);
-  surf.userData = { solid: true, planetSurface: true, zone: ALIEN_ZONE };
+  // SUMMIT APRON (2026-10-31 rewrite of "SOLID WALKABLE PLANET SURFACE"): the old version was a
+  // rad*3.5 plane (~5.2 km on Jupiter) in spec.cols[0], opaque, fog:false, userData.solid only (no
+  // collider) — one giant beige sheet blanketing the whole region. Proper scale now: ~5% of the
+  // planet radius, respects scene fog, and a REAL addSolid collider so you can stroll off the pad
+  // onto the planet surface — plus a few solid crust rocks to jump over.
+  const APR = Math.min(75, Math.max(40, rad * 0.05)), ax = cx + ux * 60, az = cz + uz * 60, ay = topY - 0.5;
+  const apron = addSolid(ax - APR, ax + APR, ay - 2, ay, az - APR, az + APR);
+  Object.assign(apron, { cx: ax, cz: az, top: ay, hw: APR, hd: APR, zone: ALIEN_ZONE, planetSurface: true });
+  const apronMesh = new THREE.Mesh(new THREE.CircleGeometry(APR, 28), lam(0x9a8874));      // dry rock, darker than the old raw cols[0] sheet
+  apronMesh.rotation.x = -Math.PI / 2; apronMesh.position.set(ax, ay + 0.01, az); lvl.add(apronMesh);
+  const crustGeo = new THREE.IcosahedronGeometry(1, 0);
+  for (let k = 0; k < 6; k++) {
+    const a = R() * Math.PI * 2, d = (0.4 + R() * 0.5) * APR, rs = 1.2 + R() * 1.8, gs = 1.4 + R() * 1.6;
+    const rx = ax + Math.cos(a) * d, rz = az + Math.sin(a) * d;
+    const rock = addSolid(rx - rs, rx + rs, ay, ay + gs, rz - rs, rz + rs);
+    Object.assign(rock, { cx: rx, cz: rz, top: ay + gs, hw: rs, hd: rs, zone: ALIEN_ZONE });
+    const lump = new THREE.Mesh(crustGeo, lam(spec.cols[1] || 0x6b5f52));
+    lump.position.set(rx, ay + gs * 0.42, rz); lump.scale.set(rs * 1.25, gs * 0.7, rs * 1.25);
+    lump.rotation.set(R() * 0.7, R() * Math.PI, R() * 0.7); lvl.add(lump);
+  }
   WORLD_R = Math.max(WORLD_R, Math.hypot(cx - 0, cz - 0) + 1400); camera.far = Math.max(camera.far, (lastD + rad) * 1.6); camera.updateProjectionMatrix();
 }
 // ====================== SPACE OPEN WORLD (asteroid + Falcon) ======================
