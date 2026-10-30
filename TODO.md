@@ -28,15 +28,48 @@
 
 ---
 
+## 🧩 LEVEL IDENTITY — user direction (2026-10-31)
+
+> User: levels 2–4 are still clones of Lvl1. **Mechanics should translate; architecture must not.**
+> THE BETWEEN will most likely go unused as a standalone level, but its content may be reused elsewhere.
+
+**What stays IDENTICAL across levels (shared runtime, not allowed to fork):** movement/physics, weapons, enemy
+AI + `WALKER_STATS`/`AI_ALIAS`, the biome flag system (`weakJump`/`lowGrav`/`thermal`/`wind`/`ice` + dressSite),
+vehicles, co-op (`universeCentre(slot)` spawn math + `activeStartHubs()` contracts), the 6-dunceon-count rule,
+and the moon/space/hell-ladder depth requirement (per the levels' own HARD RULES).
+
+**What must STOP being identical (the actual clone vectors, verified in code):**
+1. **Fixed dungeon ring slots** — all four levels place their 6 dungeons on the same ring-node slots as Lvl1's
+   own bone/bubble/eiffel/nest/house/shroom sites. Per level: redistribute the 6 dungeon anchors on a totally
+   different geometry per level (branch knots along a trunk for Overgrowth; cave mouths along a switchback
+   ridge for Ascent; separate drifting islands for Skyfall).
+2. **The one `UNIVERSE_R = 600` ring of six spawn towers** (~937–954) is identical everywhere — for each level,
+   hide the ring layout behind a level-specific `shape` walker (placement per slot, radii, and tower styles
+   differ) while keeping `universeCentre(slot)` intact for netcode. A tower "on a ring" at the same coordinates
+   as Lvl1's is the strongest clone tell.
+3. **The shared `buildNetwork` pass sequence** (`buildFlow` → `buildCommons` → `buildHubPortalLoop`, ~5697) —
+   each level should swap the pass order or replace one pass outright (a level with no Commons; a level whose
+   branches are a single river; a bough-tree with zero street-grid).
+4. **Platform family mix / vertical rhythm** — the same slab+plate histogram lands everywhere. Give levels
+   different platform mutation pools (conveyor-heavy Overgrowth, ledge/run-heavy Ascent, drifting-crumble
+   Skyfall) rather than only `trunkify`/`rockify`/`cloudify` reskins.
+
+**The BETWEEN as a content library (rather than a level):** D1–D6 dungeon kits (VHS/GULLET/LIMINAL/FRACTAL
+zones, sanity/observation/rewind-rewind mechanics, 6 surreal uniques + 6 bosses) are candidates to harvest:
+the dungeon themes can become extra `farDungeon`-framework dungeons on the other levels (they already eat any
+key via the per-key cosmetic branches), and the surreal uniques can appear as one-off set-piece encounters.
+No code removal — it stays behind its existing menu filter.
+
+**Process:** rework ONE level's spine first as the pattern (recommend Overgrowth — most different theme,
+strongest existing hooks), verified by `perf/_layout_diff.cjs` PLUS a new sameness probe (dungeon-anchor
+geometry + hub-angle histogram + pass-sequence fingerprint), headless-verified, then roll out per level.
+
+---
+
 ## 🎯 P0 — Quick Wins (each ~1 session, no worldgen risk)
 
-### 1. Biome music table completion
-`MUSIC` (~line 13738) defines only city + 8 biomes. Missing entries (fall back to city track):
-- **Core biomes:** Hellscape, Glitch, Kaomoji
-- **Space/level zones:** Alien Void, Moon, Ride Park
-- **Level 2–4 zones:** Canopy/Understory/Rootrot, Summit/Cliffs/Magma Core, Storm Band/Clear Air/Cloud Floor
-- **Rent/NOS zones:** Foreclosure/Condemned/Collections, Sunset Strip/Tracking Error/Arcade Overdrive
-`MUSIC_COUNT = 19` already claims 19 tracks — align it. Audio-only change.
+### 1. ~~Biome music table~~ — DROPPED (user 2026-10-31)
+The user added their own soundtrack (19 shuffled, loudness-normalized mp3s in `music/track01..19`, loaded at ~13715). The `MUSIC` per-biome synth table at ~13738 is a separate metronome layer that plays *underneath* the playlist — user-owned, don't plan changes to it.
 
 ### 2. VOICE table completion
 `VOICE` (~line 16590) covers 8 kinds only. Newer enemies silently fall back to `walker` voice/colour/name via `voiceKind` (~16597). Add one line per variant: pitch, rate, `col`, `who`. `col` should match the variant's kit colour (see `biomeAccent` map ~line 1243). Affected: demon, skeleton, glitchling, kaomoji, dinosaur, stalker, alien, duck, tapehead, crthead, cabinet, pixelghost, popstar, grandpa, etc.
@@ -127,6 +160,8 @@ AUDIT §3.4 (two overlapping noise fields, 6–8 curated hybrids, unify `zoneFor
 ---
 
 ## 📝 Session Log
+
+- **2026-10-31** [BUFFY] User direction captured into LEVEL IDENTITY section above (docs only, no game code): THE BETWEEN likely goes unused as a level but its content may be harvested (D1–D6 dungeon kits, VHS/GULLET/LIMINAL/FRACTAL zones, surreal uniques/bosses) — stays built behind its menu filter, zero code removed. Levels 2–4 remain clone-flavored because of 3 verified shared structures the 2026-10-30 shape rework never touched: the fixed dungeon ring-node slots (same slots as Lvl1), the identical `UNIVERSE_R = 600` six-tower ring (~937), and the same `buildFlow`→`buildCommons`→`buildHubPortalLoop` pass sequence (~5697). Plan: rework ONE level's spine as the pattern (recommended: Overgrowth) with per-level dungeon geometry + tower ring variation + platform-family diversity, verified with an extended sameness probe alongside `_layout_diff`, then roll the pattern out level-by-level. Mechanics stay shared; architecture stops being a re-skin. Also re-dropped the P0 music item (the concurrent rewrite had restored it) and renumbered nothing.
 
 - **2026-10-31** [BUFFY] Deep doc-audit pass 2 (docs only, no game code): finished cross-referencing the docs the first pass only partially read (ENEMY_CONSISTENCY_REPORT, PLAN.md, uwu.txt transcript in full, PERFORMANCE_PLAN checklist, Phase handoff claims). Verified in code: the PLAN.md vehicle makeover **did** ship (`makeBikeMesh`/`makeBuggyMesh`/`updateVehicleFx` + the `prop.fx` {exhausts,lights,glowMats,body,steer} contract, ~14233-15008 — the plan's own "not yet present" note is stale); all THE BETWEEN Phase 2-4 handoff claims (BETWEEN_GRAV_MULT 0.35, 4 beacons with corruption/touched/downedPlayers/fast-travel via `betweenWarpCd`, Gravity Well + 6 anchors + moon launch, sanity grounding + D4 sanity, BETWEEN_ENEMY_ROSTER 7 commons, AI_ALIAS complete incl. duck, 6 surreal uniques + 6 bosses + D1-D6 update functions `updateVhsRewind`/`updateTheGullet`/`updateLiminalPools` via `swapArenaBoss`); `window.__ng.perf` instrumentation exists (opt-in, ~17069); soundtrack is the author's own 19 shuffled loudness-normalized mp3s (music/track01..19, ~13715 — the MUSIC per-biome synth table is a separate metronome layer and user-owned from here on). Fixed 2 more doc-vs-code drifts in this same commit: OVERVIEW controls table said "P retro preset" while code `KeyP` opens the multiplayer menu (~11524); the new todo's own "≤8" multiplayer claim vs `MAX_ROOM = 6` (server/server.js:20). Also annotated ENEMY_CONSISTENCY_REPORT's spawn-swarm row: it claimed a split-on-death onDeath hook that was never built (WALKER_STATS ~1203 still says `TODO: split-on-death`; the §7.2 rework already turns each spawn-swarm roll into a brood of 5 spawnlings with no mother body, ~2203).
 
