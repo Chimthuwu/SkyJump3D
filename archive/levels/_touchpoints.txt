@@ -1,0 +1,101 @@
+  413 const LEVEL_DEFS = { descent: { id: 'descent' }, rent: { id: 'rent' }, nos: { id: 'nos' }, gut: { id: 'gut' }, arena: { id: 'arena' }, between: { id: 
+  416 const skyfallOn = () => levelDef.id === 'skyfall';   // LEVEL 4 "Skyfall": same descent/moon/hell-platform skeleton as 'descent'/'overgrowth'/'ascent'
+  417 const ascentOn = () => levelDef.id === 'ascent';   // LEVEL 3 "The Ascent": same descent/moon/hell-platform skeleton as 'descent' and 'overgrowth', a 
+  418 const overgrowthOn = () => levelDef.id === 'overgrowth';   // LEVEL 2 "The Overgrowth": same descent/moon/hell-platform skeleton as 'descent', just a 
+  488 const levelZones = () => overgrowthOn() ? OVERGROWTH_ZONES : ascentOn() ? ASCENT_ZONES : skyfallOn() ? SKYFALL_ZONES : null;      // like themeZones()
+  898 const buildingBoxes = [];                          // every boxMesh() building, so the jungle can trunkify them
+ 3584 // LEVEL 2 "THE OVERGROWTH" — 6 forest-themed pure-descent dungeons, same commonsMidBuild/farDungeon/farMonument
+ 3585 // framework as Lvl1's bone/bubble/eiffel (see the overgrowthOn() branch near the top of commonsMidBuild), own
+ 3599 // LEVEL 3 "THE ASCENT" — 6 alpine-themed pure-descent dungeons, same commonsMidBuild/farDungeon/farMonument
+ 3600 // framework as Lvl1's bone/bubble/eiffel and Overgrowth's forest six (see the ascentOn() branch near the top of
+ 3614 // LEVEL 4 "SKYFALL" — 6 cloud/storm-themed pure-descent dungeons, same commonsMidBuild/farDungeon/farMonument
+ 3615 // framework as Lvl1's bone/bubble/eiffel and Overgrowth's/Ascent's own six (see the skyfallOn() branch near the top
+ 4200 // most of the ascent (crossT), only diving inward to the deck in the final stretch — the door
+ 4667 // ---- LEVEL 2 "THE OVERGROWTH": 6 forest dungeons on all 6 ring-node slots, same pure-descent-dungeon shape as
+ 4669 // garrison), own theme set, gated entirely on overgrowthOn() so the default level's 6 dungeons below are untouched. ----
+ 4685 let bx = X0 + nx * 42, bz = Z0 + nz * 42, by = y0 - 10;         // the forecourt plaza where the dungeon ascent starts
+ 4687 if (blocked(bx, by, bz, 15)) { console.log(`[overgrowth-mids] ${ds.key} forecourt blocked at every outward nudge — site skipped this build`); continue
+ 4718 } catch (err) { console.warn(`[overgrowth-mids] ${ds.key} garrison seed failed`, err); }
+ 4727 return;        // Overgrowth's 6 dungeons are built — skip Lvl1's own nest/house/shroom/bone/bubble/eiffel content below entirely
+ 4729 // ---- LEVEL 3 "THE ASCENT": 6 alpine dungeons on all 6 ring-node slots, exact same shape as Overgrowth's forest
+ 4731 // own theme set, gated entirely on ascentOn() so the default level's 6 dungeons below are untouched. ----
+ 4747 let bx = X0 + nx * 42, bz = Z0 + nz * 42, by = y0 - 10;         // the forecourt plaza where the dungeon ascent starts
+ 4749 if (blocked(bx, by, bz, 15)) { console.log(`[ascent-mids] ${ds.key} forecourt blocked at every outward nudge — site skipped this build`); continue; }
+ 4780 } catch (err) { console.warn(`[ascent-mids] ${ds.key} garrison seed failed`, err); }
+ 4789 return;        // Ascent's 6 dungeons are built — skip Lvl1's own nest/house/shroom/bone/bubble/eiffel content below entirely
+ 4791 // ---- LEVEL 4 "SKYFALL": 6 cloud/storm dungeons on all 6 ring-node slots, exact same shape as Overgrowth's/
+ 4792 // Ascent's own six just above (far anchor -> forecourt plaza -> hop-steps -> farMonument+farDungeon -> causeway ->
+ 4793 // garrison), own theme set, gated entirely on skyfallOn() so the default level's 6 dungeons below are untouched. ----
+ 4809 let bx = X0 + nx * 42, bz = Z0 + nz * 42, by = y0 - 10;         // the forecourt plaza where the dungeon ascent starts
+ 4811 if (blocked(bx, by, bz, 15)) { console.log(`[skyfall-mids] ${ds.key} forecourt blocked at every outward nudge — site skipped this build`); continue; }
+ 4842 } catch (err) { console.warn(`[skyfall-mids] ${ds.key} garrison seed failed`, err); }
+ 4851 return;        // Skyfall's 6 dungeons are built — skip Lvl1's own nest/house/shroom/bone/bubble/eiffel content below entirely
+ 5083 let bx = X0 + nx * 42, bz = Z0 + nz * 42, by = y0 - 10;         // the forecourt plaza where the dungeon ascent starts
+ 5234 // bone/bubble/eiffel and all 18 Overgrowth/Ascent/Skyfall dungeons register into commons.mid too (dungeonOnly:true)
+ 5542 if (launch) for (const u of slots) {                                 // every universe's ascent to the shared skyway
+ 5584 const zoneForRegion = (region, i = 0, slot = 0) => themeZones() ? rentZoneForHub(i) : levelZones() ? levelZoneForHub(i) : level <= 2 ? ZONES.find(z =>
+ 5588 // `shape` (LEVEL_SHAPES.overgrowth/ascent/skyfall, see below) replaces the default's uniform radial-band
+ 5624 // archipelago shapes (Skyfall) deliberately space islands far enough apart that the generic distance-capped
+ 5734 // LEVEL 2 "THE OVERGROWTH": per the 2026-10-29 DELIVERABLES plan, every new level must feel like the same game as
+ 5739 // Overgrowth can't), this reuses buildNetwork() verbatim and reskins visually through two existing, already-proven
+ 5740 // shared-helper extension points instead: (1) commonsMidBuild's overgrowthOn() branch (just above, in this same
+ 5741 // function) swaps Lvl1's 6 dungeon themes for 6 forest ones on the exact same framework; (2) setZone's trunkify()
+ 5742 // call (and buildLevel's matching rebuild-safety call) now also fires on overgrowthOn(), so EVERY boxMesh building
+ 5745 // zone). ACCEPTANCE CRITERIA is satisfied to the letter this way: a player dropped into Overgrowth cannot tell
+ 5747 function buildOvergrowthNetwork(exitAngle) { return buildNetwork(exitAngle, OVERGROWTH_SHAPE); }
+ 5749 // LEVEL 3 "THE ASCENT": same reasoning as Overgrowth just above — reuse buildNetwork() verbatim (hub graph, moon/
+ 5751 // extension points: (1) commonsMidBuild's ascentOn() branch swaps in 6 alpine dungeon themes on the identical
+ 5752 // far-anchor/forecourt/climb/descend/garrison shape; (2) a new rockify() (sibling of trunkify(), wired the same way
+ 5754 // snow cap, firing unconditionally while ascentOn() is true regardless of the current biome zone.
+ 5755 function buildAscentNetwork(exitAngle) { return buildNetwork(exitAngle, ASCENT_SHAPE); }
+ 5757 // LEVEL 4 "SKYFALL": same reasoning as Overgrowth/Ascent just above — reuse buildNetwork() verbatim (hub graph,
+ 5759 // two extension points: (1) commonsMidBuild's skyfallOn() branch swaps in 6 cloud/storm dungeon themes on the
+ 5760 // identical far-anchor/forecourt/climb/descend/garrison shape; (2) a new cloudify() (sibling of trunkify()/
+ 5761 // rockify(), wired the same way into setZone and buildLevel's rebuild-safety call) turns every boxMesh building
+ 5762 // into a solid cloud-mass platform with wispy edges, firing unconditionally while skyfallOn() is true regardless
+ 5765 function buildSkyfallNetwork(exitAngle) { return buildNetwork(exitAngle, SKYFALL_SHAPE); }
+ 6683 arenaPad(-3.5, 26, -33, 0, 10, -8);                // porch return accelerator west -> back into the court (NOT the stone: the stone is the ascent cha
+ 7523 if (commons && commons.mid && ['nest', 'house', 'shroom', 'bone', 'bubble', 'eiffel', 'roothollow', 'beastnest', 'sunkenstump', 'sporevault', 'canopyt
+ 7853 { const wantTrunks = overgrowthOn() || !!(activeZ && activeZ.name === 'Jungle'); trunkify(false); if (wantTrunks) trunkify(true); }   // rebuilt level
+ 7854 { const wantRock = ascentOn(); rockify(false); if (wantRock) rockify(true); }   // same rebuild-safety toggle as trunkify, for Ascent's rock spires
+ 7855 { const wantCloud = skyfallOn(); cloudify(false); if (wantCloud) cloudify(true); }   // same rebuild-safety toggle, for Skyfall's cloud masses
+10497 const bossRoster = rentOn() ? RENT_BOSSES : nosOn() ? NOS_BOSSES : gutOn() ? GUT_BOSSES : arenaOn() ? ARENA_BOSSES : overgrowthOn() ? OVERGROWTH_BOSSE
+10555 else if (overgrowthOn()) levelHubs = buildOvergrowthNetwork(padA);
+10556 else if (ascentOn()) levelHubs = buildAscentNetwork(padA);
+10557 else if (skyfallOn()) levelHubs = buildSkyfallNetwork(padA);
+11303 { id: 'overgrowth', name: 'The Overgrowth', subtitle: 'A forest grown skyscraper-tall — tree trunks, branches and canopy, all the way down to the root
+11305 { id: 'ascent', name: 'The Ascent', subtitle: 'A mountain range grown skyscraper-tall — rock spires and snow caps, all the way down to the magma core.
+11307 { id: 'skyfall', name: 'Skyfall', subtitle: 'A sky grown skyscraper-tall — solid cloud and storm, all the way down to the bedrock below.', unlocked: t
+11320 // Single player menu roster: user request 2026-10-29 — only Lil Spasticism (plus the planned Overgrowth/Ascent/Skyfall,
+11324 const LEVELS = LEVELS_ALL.filter(lv => ['descent', 'overgrowth', 'ascent', 'skyfall'].includes(lv.id));
+12840 const zoneByName = nm => ZONES.find(z => z.name === nm) || DEPTH_ZONES[nm.toLowerCase()] || RENT_ZONES.find(z => z.name === nm) || NOS_ZONES.find(z =>
+12864 // LEVEL 2 "THE OVERGROWTH" boss roster: same 10-biome-champion shape as the default descent's own bossRoster
+12866 // forest-flavored names/colors. `biome` now names OVERGROWTH_ZONES' own 3 zones (Canopy/Understory/Rootrot,
+12868 // that it has its own `levelZones()` ladder, so scatterBosses' biome-match bonus (index.html ~10368) lands
+12870 const OVERGROWTH_BOSSES = [
+12882 const ASCENT_BOSSES = [
+12894 const SKYFALL_BOSSES = [
+12931 // LEVELS 2-4's own 3-zone ladders (OVERGROWTH/ASCENT/SKYFALL_ZONES), same shape as RENT_ZONES/NOS_ZONES, kept OUTSIDE ZONES for the
+12932 // same reason. Unlike RENT/NOS, these are read via `levelZones()` (not `themeZones()`), which is deliberately NOT wired into
+12936 const OVERGROWTH_ZONES = [
+12941 const ASCENT_ZONES = [
+12946 const SKYFALL_ZONES = [
+12962 // hub-order severity pick for levelZones(), same formula/shape as rentZoneForHub above.
+12963 const levelZoneForHub = i => levelZones()[Math.min(2, Math.floor(Math.max(0, i) / (2 + (level >> 1))))];
+12970 const OVERGROWTH_SHAPE = {        // branching tree: BOUGHS boughs per universe, hubs climb outward rung by rung,
+12982 const ASCENT_SHAPE = {        // single switchback trail: a zigzagging path per universe, hairpinning left/right every
+12992 const SKYFALL_SHAPE = {        // archipelago: ISLANDS tight clusters per universe, each its own little floating
+13044 if (levelZones()) return levelZones()[2 - Math.min(2, Math.max(0, region | 0))];
+13060 const standardBiomes = levelZones() || ZONES.filter(zone => zone.name !== 'Psychedelic');
+13124 function trunkify(on) {
+13149 // LEVEL 3 "THE ASCENT": sibling of trunkify() just above — same mechanism (swap every boxMesh building's material,
+13166 function rockify(on) {
+13191 // LEVEL 4 "SKYFALL": sibling of trunkify()/rockify() just above — same mechanism (swap every boxMesh building's
+13207 function cloudify(on) {
+13286 if (!interior) trunkify(overgrowthOn() || !!(z && z.name === 'Jungle'));   // jungle takes over: every building becomes a giant tree trunk. LEVEL 2 "T
+13287 if (!interior) rockify(ascentOn());   // LEVEL 3 "The Ascent": every building is ALWAYS a rock spire, regardless of the current biome zone — the whole
+13288 if (!interior) cloudify(skyfallOn());   // LEVEL 4 "Skyfall": every building is ALWAYS a cloud mass, regardless of the current biome zone — the whole 
+13549 const a = R() * 6.283, r = Math.sqrt(R()) * 55, zone = (dir < 0 && n < 0 && !themeZones()) ? depthZoneFor(-n) : R() < 0.4 ? (themeZones() ? themeZones
+16039 if (overgrowthOn()) {                     // LEVEL 2 "The Overgrowth": a light forest-flavor layer on EVERY site regardless of its own zone's
+16050 if (ascentOn()) {                         // LEVEL 3 "The Ascent": a light alpine-flavor layer on EVERY site regardless of its own zone's
+16061 if (skyfallOn()) {                        // LEVEL 4 "Skyfall": a light storm/cloud-flavor layer on EVERY site regardless of its own zone's

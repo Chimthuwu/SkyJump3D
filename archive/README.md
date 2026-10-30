@@ -47,7 +47,15 @@ D1–D6 dungeon kits, surreal uniques and bosses are harvest candidates for othe
 - `nexsteps.md` — a snapshot plan that predates LEVEL IDENTITY; its content was folded into `TODO.md`. (An earlier variant lives here as `nexsteps.md.2026-10-31`.)
 - `nexsteps.md.2026-10-31` — earlier snapshot, as above.
 
-## logs/ — one-off run output, not documentation
+## levels/ — archived LEVEL content backlog (salvage vault, not void)
+
+⛔ DO NOT treat as current levels — they are OUT of the game (menu filter is `['descent']` only).
+BUT content here is explicitly meant for REUSE in future worlds built under the WORLD RULES in `../TODO.md`.
+
+- `LEVELS-2-4-SALVAGE.md` — design summary + verbatim constants (zone palettes, garrison rosters, dungeon lists, shape walkers) for the archived Overgrowth/Ascent/Skyfall levels.
+- `salvage_code.txt` — 55 verbatim code sections cut from `index.html` (2026-10-31): 18 dungeon exterior builders, 18 room-prop branches, branch families, dressSite layers, rockify()/cloudify(), boss rosters, MID_DIST/ELEV, label/color/hazard chains.
+- `_l234_cut.cjs` / `_touchpoints.txt` / `_l234_probe.cjs` — the surgery script, its touchpoint map, and the archived probe.
+
 
 - `err.log`, `out71.log`, `out72.log`, `out73.log`, `phase2_output.json` — console/environment dumps from past sessions.
 - `freebuff-chat-2026-10-26T08-23-45.843Z.md` — exported chat transcript; historical session log.

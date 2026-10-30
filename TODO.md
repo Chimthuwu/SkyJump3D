@@ -1,7 +1,7 @@
 # SkyJump3D — Task List / Agent Handoff
 
 > **Read this first.** Newest entries at the top. Append a dated log entry when you finish work.
-> `index.html` is a single ES module (~17,320 lines). Search by function name; line numbers drift.
+> `index.html` is a single ES module (~16,500 lines). Search by function name; line numbers drift.
 > Run `node perf/_synchk.cjs` after every edit; `node perf/_brace_scan.cjs` for brace balance.
 > Boot a headless page via `perf/_asteroid_smoke.cjs` for anything touching `buildLevel`/multiplayer.
 > Determinism is sacred: no `Math.random()` in seeded worldgen paths.
@@ -10,11 +10,9 @@
 
 ## 📍 Current Status (2026-10-31)
 
-**All 4 main levels built & headless-verified:**
-- **Descent** (Lvl1) — original sky-city, 6 dungeons (nest/house/shroom/bone/bubble/eiffel)
-- **Overgrowth** (Lvl2) — forest theme, 6 dungeons (roothollow/beastnest/sunkenstump/sporevault/canopytemple/hornetshive), `trunkify()` reskin
-- **Ascent** (Lvl3) — alpine theme, 6 dungeons (mineshaft/crystalgrotto/avalanchevault/eaglesaerie/deepcavern/frozenkeep), `rockify()` reskin
-- **Skyfall** (Lvl4) — cloud theme, 6 dungeons (cloudcastle/skytemple/auroravault/thunderdock/floatingruin/lightningspire), `cloudify()` reskin
+**One shippable level (user request 2026-10-31: Levels 2–4 ARCHIVED — code out of the game, content salved for reuse):**
+- **Descent / Lil Spasticism** (Lvl1) — original sky-city, 6 dungeons (nest/house/shroom/bone/bubble/eiffel)
+- ~~Overgrowth / Ascent / Skyfall~~ — archived 2026-10-31 per user call ("start from scratch" for new levels). Their full content — zone palettes, dungeon themes + builders, boss rosters, shape walkers, reskin fns, mechanic-flag wiring pattern — is captured verbatim in `archive/levels/LEVELS-2-4-SALVAGE.md` + `archive/levels/salvage_code.txt` (55 code sections). Menu cards, builders, chains and constants removed from `index.html`; no-op gate stubs (`overgrowthOn` etc.) remain so any stray call site parses.
 
 **Other completed levels:**
 - **Rent's Due** — Kowloon block layout, 3 zones (Foreclosure/Condemned/Collections), 5 new enemies, 9 bosses, Rent Clock
@@ -259,6 +257,8 @@ AUDIT §3.4 (two overlapping noise fields, 6–8 curated hybrids, unify `zoneFor
 ---
 
 ## 📝 Session Log
+
+- **2026-10-31** [BUFFY] LEVELS 2–4 ARCHIVED (user request: keep only Lvl1, salvage content for reuse, new levels get built from scratch under the LEVEL IDENTITY/WORLD RULES instead of cloned): (1) verbatim salvage extracted FIRST into `archive/levels/salvage_code.txt` (55 sections via `archive/levels/_l234_cut.cjs` — 18 farMonument exterior builders, 18 farDungeon room-prop branches, the whole commonsMidBuild branch families, dressSite flavor layers, rockify()/cloudify(), boss rosters, zone arrays, macro-shape walkers, menu cards, MID_DIST/ELEV tables, all 30 label/color/hazard chains) + the design summary already in `LEVELS-2-4-SALVAGE.md`; (2) cut from `index.html`: 3 menu cards, `LEVEL_DEFS` entries + `LEVELS` roster filter (now `['descent']` only, revert = one line), belt-level gate stubs (`skyfallOn/ascentOn/overgrowthOn = () => false` kept so stray call sites parse), the 3 network builders + wrappers, `levelZones()` + OVERGROWTH/ASCENT/SKYFALL_ZONES, boss rosters + roster ternary, trunkify/rockify/cloudify call-sites (generic mechanic FLAGS `weakJump/lowGrav/thermal/wind` + `zoneCrumbleRoll` KEPT — they're the reusable pattern the salvage doc documents), dressSite L2-4 layers, the 18-key chains trimmed across `farDungeon`/`farMonument`/hazard/label sites, unused zone/kind constants (RootHollow..LightningSpire, 45 lines), towerWindowCheck keys, `zoneByName` clause, `pickAmbientZone`/`zoneFor`/`zoneForRegion`/`ladderExtend` levelZones branches. `trunkify()` itself KEPT (Lvl1 Jungle uses it). `_l234_probe.cjs` + cut script moved to `archive/levels/`. Verified: `node perf/_synchk.cjs` SYNTAX OK after fixing two self-inflicted issues (a lost try/catch partner → stray `};` removed; duplicate gate consts removed); ES-module parse OK (`_parse_module.cjs` PARSE OK); grep-sweep shows ZERO remaining lowercase dungeon keys / builders / zone refs; `perf/_smoke.cjs` — 0 runtime errors, Lvl1 baseline identical to pre-cut run (platforms/enemies/items/portals/hubs/seed exact; the ±5 solids rebuild wobble confirmed pre-existing by re-running stashed head). NOT done: real-GPU eyeball of Lvl1 (unchanged level, same caveat as all recent sessions).
 
 - **2026-10-31** [BUFFY] Instructions quarantine (user request: old instructions archived and never followed again): every instruction-shaped doc under `archive/` (5 handoffs, 10 plans + newly moved `AUDIT.md`, both `old_root_docs/` snapshots = 17 files) now carries a ⛔ DO-NOT-FOLLOW banner naming the voided rules (THE BETWEEN = reference only; old depth banding void → caverns to -666, fire/hell only below -666; ring-node dungeon slots void; rooms = 6). Root stale docs moved: `AUDIT.md` → `archive/plans/` (git mv), `nexsteps.md` → `archive/old_root_docs/`. `archive/README.md` rewritten as the do-not-follow manifest with the final file list; README/OVERVIEW pointers to the old root audit updated. Root now keeps ONLY: index.html, TODO.md, README.md, OVERVIEW.md, PERFORMANCE_PLAN.md, package.json+lock, wrangler.jsonc, oembed/og-image, the archive/perf/server dirs and the user's scratch files (uwu.txt, "debug jupiter nebula .txt"). Docs only — no game code touched.
 
