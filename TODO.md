@@ -644,3 +644,6 @@ Agent: stop now. Only `todo.md` should have changed.
 itesesh/runs/ will trigger 
 ode server/start-server.bat with --overnight --no-interaction; health probe every 30s; auto-restart on ReferenceError or SyntaxError.
 - [NITESH] Ready: start-server.bat exists; .env configured; server.js listens on port from .env.
+
+
+## Inbox (agent-proposed)
