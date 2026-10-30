@@ -18,11 +18,12 @@ Origin: "a 3D game where you jump off a tall building" → grew by user requests
 
 ## 2. Tech & file map
 
-- **Single file** `index.html` (~4,050 lines): inline ES module, **Three.js r160** via importmap (jsdelivr). No build step, no bundler, no assets — every texture/model/sound is procedural.
-- `server/server.js` (Node, dep: `ws`): static file host + WebSocket relay (`/ws`) + Fish Audio TTS proxy (`/tts`) + `/net-info`, `/tts-status`, `/voice-lines.json`. Rooms of up to 8, host migration. Start with `server/start-server.bat` (port 8080).
+- **Single file** `index.html` (~17,300 lines, ~1.3 MB): inline ES module, **Three.js r160** via importmap (jsdelivr). No build step, no bundler, no assets — every texture/model/sound is procedural.
+- `server/server.js` (Node, dep: `ws`): static file host + WebSocket relay (`/ws`) + Fish Audio TTS proxy (`/tts`) + `/net-info`, `/tts-status`, `/voice-lines.json`. Rooms of up to 6, host migration. Start with `server/start-server.bat` (port 8080). The public-site multiplayer path is the Cloudflare Worker relay in `cloudflare/` + `wrangler.jsonc` (deployed as the `sky-jump` Pages project — see README's Deploy section).
 - `server/voice-lines.json` — voice lines (must mirror `LINES` in `index.html`). `server/.env` (git-ignored) holds the key + `FISH_AUDIO_MODEL=s2.1-pro-free`. `server/tts-cache/` caches clips.
-- `TODO.md` — shared task list / agent handoff channel (read first). 
-- Test tooling lives outside the repo in `C:\Users\Serge\skytest\` (puppeteer-core driving Edge with SwiftShader; stub harness scripts).
+- `todo.md` — shared task list / agent handoff channel (read first; newest entries at the top).
+- `AUDIT.md` + `PERFORMANCE_PLAN.md` — the current global audit (measured numbers, bug list, roadmap) and the active perf playbook.
+- Headless test tooling lives in `perf/` in-repo (puppeteer-core driving Edge with SwiftShader; entry points: `perf/_synchk.cjs` syntax gate, `perf/_asteroid_smoke.cjs` page-boot smoke).
 
 Section order in `index.html`: tuning → helpers → renderer + retro pipeline → textures/materials → world → enemies (`WALKER_STATS`, `makeWalker`, `makeDrone`) → evolving backdrop → sky network (`pickEnemy`, `spawnBiomeEnemy`, `buildArena`, `buildBuildingHub`, portals/routes, `connect`, `buildNetwork`, `walkBranch`, `buildBranches`) → Skyway/Moon → `buildLevel` → player model/weapon meshes/`makeBoard` → effects → audio → saved best → gore → game state → input → combat → weapons → continuous weapons → first-person camera → reactive environment (zones) → Jungle morph → space → wall climbing → physics → enemy AI → items → visuals/HUD → multiplayer → weird platforms/portals → zone worlds → enemy voices → main menu/wizard → dev tools → boot.
 

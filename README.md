@@ -92,6 +92,17 @@ deployments, with build command `npm run cf:prep` and output directory `cf-publi
 ## Project docs
 
 - [OVERVIEW.md](OVERVIEW.md) — architecture, systems, constants and known issues.
-- [TODO.md](TODO.md) — current status and the handoff channel between agents.
-- [PLAN.md](PLAN.md), [PLAN-HOMEBASE.md](PLAN-HOMEBASE.md), [PLAN-INTERIORS-MP.md](PLAN-INTERIORS-MP.md) — multi-agent work plans (vehicles, home base + Guide + missions, tower interiors + 6-player spawns).
-- [PERFORMANCE_AUDIT.md](PERFORMANCE_AUDIT.md) — what to measure and fix for performance.
+- [todo.md](todo.md) — current status and the handoff channel between agents (read this first; newest entries at the top).
+- [AUDIT.md](AUDIT.md) — full game audit (2026-10-23): measured perf numbers, bug list, biome/design audit and roadmap.
+- [PERFORMANCE_PLAN.md](PERFORMANCE_PLAN.md) — active performance playbook: measurement protocol and rules for perf commits.
+- `archive/` — completed phase handoffs, older plans and one-off logs. Historical only; see [archive/README.md](archive/README.md).
+- Headless test harnesses and probes live in `perf/` (`node perf/_synchk.cjs` is the quick syntax gate; `perf/_asteroid_smoke.cjs` boots the whole page headless).
+
+## Repository map
+
+- `index.html` — the entire game (client) in one file.
+- `server/` — Node static host + WebSocket relay (+ TTS proxy); `cloudflare/` + `wrangler.jsonc` — Cloudflare Worker relay config; `cf-public/` is the deploy build output.
+- `perf/` — headless harnesses, probes and profiling tools (puppeteer-core driving Edge).
+- `music/`, `voices/` — published audio assets copied into the deploy.
+- `nitesesh/` — separate scratch/experiment files.
+- `todo.md`, `AUDIT.md`, `PERFORMANCE_PLAN.md`, `OVERVIEW.md`, `README.md` — living docs; everything else is under `archive/`.
