@@ -106,6 +106,49 @@ No code removal — it stays behind its existing menu filter.
 strongest existing hooks), verified by `perf/_layout_diff.cjs` PLUS a new sameness probe (dungeon-anchor
 geometry + hub-angle histogram + pass-sequence fingerprint), headless-verified, then roll out per level.
 
+**AUDIT PASS 3 — verified code anchors (2026-10-31), so the next generated level can't be a clone:**
+
+✅ **Already per-level (do not redo):** the above-zero hub *scatter* is genuinely per level — `buildNetwork(exitAngle, shape)`
+   (~5574) takes a shape walker: `OVERGROWTH_SHAPE` branching boughs (~12970), `ASCENT_SHAPE` switchback (~12982),
+   `SKYFALL_SHAPE` archipelago (~12992), each carrying its own 3-zone ladder (`themeZones()` ~487 covers rent/nos/gut,
+   `levelZones()` ~488 the 3 grown levels, `levelZoneForHub` in `zoneForRegion` ~5585).
+
+❌ **Still shared (verified):**
+   1. **Spawn**: `syncStartLayout()` (~954–964) puts every grown level's spawn at `universeCentre(slot)+10m, y=TOP`,
+      and `TOP` is keyed to the level *number*, not the world (`TOP = min(480 + level*100, 1200)`, ~7840) — so at
+      "level 1" every world wakes at the same height on the same ring bearing. A per-level `levelDef.startTop`
+      (+ optional start/bearing offset, still via `universeCentre(slot)` API) plus a per-def guest-join spot in the
+      host-adopt block (~15421) covers co-op.
+   2. **Dungeon nodes**: ONE shared node-selection function (~3529–3564) fixes the 6 ring nodes as Lvl1's
+      nest/house/shroom/bone/bubble/eiffel; `commonsMidBuild` (~4609) then binds EVERY level's dungeons to those
+      same nodes in the same compass order (Overgrowth table ~4672, Ascent ~4734). AND `farDungeon` (~4187) is a
+      single morphological template (forecourt plaza + 3 hop-steps + hop-disc spiral down + boss vault + causeway
+      + garrison) with per-key *cosmetic* branches — so per-level dungeon identity must vary BOTH the node set
+      (make node picking a per-level fn or a level arg) and the template's body (spiral arm count/direction, room
+      interleave, vault shape), not just dressing.
+   3. **Below-zero banding**: `themeZones()` deliberately excludes the 3 grown levels, so `depthZoneFor` (~12835)
+      runs bit-identically below zero on all of them: Caverns rungs 1–14 → Horror/Hellscape alternating every 10 →
+      Psychosis seeping in from -40. GOOD NEWS: this is one lever — rework `depthZoneFor` once (caverns to -666,
+      hell below) and all four levels comply, matching the user's global world rule. Note the gate must ALSO go
+      into `pickAmbientZone` (~13042)/`zoneForRegion` — the standard `ZONES` list still includes Horror/Hellscape
+      for above-zero region picks today.
+   4. **Platform size/shape literals**: `addSlab` (~2282) is a uniform box+plate+underside; every shared pass
+      hardcodes the same size families on all levels — junctions 10×10×2.5 at y 90–(TOP-200) (`buildFlow` ~14751),
+      trampoline steps 4.2×4.2×1.5 (~14764), building hubs 18+rand()*14 footprint / 35+rand()*(TOP-60) height
+      (~5612), dungeon ladders 9×9 / 4.2×4.2 / 12×9 (commonsMidBuild). Per-zone shape/size pools (plan D) should
+      hook exactly there: a weighted table fed by the zone (or levelDef), replacing the literals.
+   5. **Pass sequence**: `buildSkyway` FIRST, ride park, scatter, connect()s, `buildUniverseLinks`, `buildCommons`,
+      `buildBranches`, `buildHubPortalLoop` — fixed order, no per-level override hook yet (plan item 3).
+
+📖 **Checklist for a NEW level def (what today's stubs actually carry):** `LEVEL_DEFS.<id>` is just `{ id }` (~413).
+   A new world needs: def entry + menu card (~11301), `startLevelDef` wiring, an `xxxOn()` flag + `LEVELS` filter
+   allow-list, a 3-zone `XXX_ZONES` table (~12936 style), an `XXX_SHAPE` walker (~12970 style), theme roofs in
+   `themeZones()`/`levelZones()` consumers, a sky profile (`SKY_PROFILES`), a reskin fn (`trunkify/rockify/cloudify`
+   sibling + its two setZone callsites), a `commonsMidBuild` branch with 6 dungeons + 17 farDungeon cosmetic keys,
+   a boss roster ternary in `buildLevelBody`, ELEV/MID_DIST table entries (±200 causeway cap), and — NEW per this
+   audit — its own start height/offset + its own dungeon-node picker + one pass-sequence deviation, or it clones
+   Lvl1 again automatically.
+
 ---
 
 ## 🎯 P0 — Quick Wins (each ~1 session, no worldgen risk)
