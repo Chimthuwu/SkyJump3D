@@ -1,7 +1,7 @@
 ⛔ **ARCHIVED 2026-10-31 — HISTORICAL ONLY. DO NOT FOLLOW.**
 
 > This document is kept for history, not as instruction. The ONLY active instruction sources are:
-> 1.  (repo root) — LEVEL IDENTITY + the user's world-rules brief + P0/P1/P2 work lists and the dated session log.
+> 1. `TODO.md` (repo root) — LEVEL IDENTITY + the user's world-rules brief + P0/P1/P2 work lists and the dated session log.
 > 2.  — the perf playbook (harness + measurement rules only).
 > 3.  /  — describe the game as built.
 >
