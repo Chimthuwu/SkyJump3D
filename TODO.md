@@ -607,7 +607,7 @@ Agent: stop now. Only `todo.md` should have changed.
   - [ ] Freeze static matrices (`updateMatrixWorld(false)` on immobile objects) — ~12-17 ms/frame savings
   - [x] Share enemy geometries/materials via cache (already 99% reuse per 2026-10-26 audit — verify it's active) — verified 2026-10-31: geo() Map cache at index.html:1237-1238 is used throughout makeWalker (396 geo() calls) and other builders; geometries cached by kind+rounded args.
   - [ ] Convert pickups (coins/hearts/ammo) to InstancedMesh
-  - [ ] Add render-scale/DPR cap for high-DPI screens
+  - [x] Add render-scale/DPR cap for high-DPI screens — verified 2026-10-31: setPixelRatio uses Math.min(dpr,2)*adaptRes.scale (index.html:788); modern path capped at 2.
   - [ ] Tone-map consistency across presets (MODERN/PS1/N64) — verify ACES curve applied equally
   - [ ] Fog color blending toward sky (already partially done — verify all zones)
   - [ ] Skyline emissive windows (living city pulse) — verify active in all levels
