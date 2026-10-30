@@ -1,0 +1,1485 @@
+ ▐▛███▛█   Claude Code v2.1.312
+▝▜██████▀  Sonnet 5 · Claude Pro
+ ▝▝   ▝▝   Z:\GITHUB\GAME · SKYJUMP3D
+
+
+❯ OK ULTRACODE YOUR WAY THROUGH THE REMAINING TODO.MD TASKS :)                  
+
+  Read 1 file (ctrl+o to expand)
+
+● Workflow(Scout then sequentially implement several bounded TODO.md backlog
+          items in SkyJump3D)
+  ⎿  /workflows to view dynamic workflow runs
+
+● Launched a workflow tackling four remaining TODO.md backlog items: NOS pipe
+  linking/bonus room/piranha plant, planet leg cross-link/ramp/decor polish, THE
+  BETWEEN biome coverage, and building Level 3 ("The Gut"). It runs in two
+  phases: parallel read-only scouts map each task first, then a single agent at
+  a time implements/verifies/commits each one sequentially (deliberately not
+  parallel, since this is one giant shared index.html — this exact codebase's
+  history shows concurrent edits to it have caused real breakage before). I'll
+  report back with what landed once it completes.
+
+✻ Brewed for 2m 0s · done 4:28 AM
+
+❯ OH SHIT JUST REMEMBERED I HAD CLOUD AGENT WORKIN ON STUFF , MAYBE GOTTA PULL  
+  FROM REPO !!!!!!!                                                             
+
+  Ran 3 shell commands (ctrl+o to expand)
+
+● Stop Task
+  ⎿  Scout then sequentially implement several bounded TODO.md backlog
+     items in SkyJump3D · stopped
+
+● Good catch — stopped the workflow before it touched anything (it hadn't
+  committed yet). Here's the situation:
+
+  Cloud agent branch found: origin/claude/new-session-vc6i2m, 4 commits ahead of
+  our current live (clean fast-forward, no divergence):
+  - Pussy Palace cloud-parting fix (entrance clouds open/close)
+  - Level 2 "The Overgrowth" (forest, 6 dungeons)
+  - Level 3 "The Ascent" (mountain, 6 dungeons)
+  - Level 4 "Skyfall" (cloud level, 6 dungeons) — "closing out the DELIVERABLES
+    plan"
+
+  This directly conflicts with what I'd just launched: my workflow was about to
+  build "The Gut" as Level 3 — but the cloud agent already shipped a different
+  Level 3 ("The Ascent"). Good thing I checked before it committed.
+
+  Want me to:
+
+● User answered Claude's questions:
+  ⎿  · The cloud agent already shipped Levels 2/3/4 (Overgrowth/Ascent/Skyfall) 
+     on a separate branch, fast-forwardable onto `live`. How do you want to 
+     proceed? → Merge cloud branch now, then re-scope my sweep (Recommended)
+
+  Merged origin/claude/new-session-vc6i2m (ctrl+o to expand)
+
+● Fast-forwarded cleanly, no conflicts. Let me verify it boots before pushing or
+  doing anything else.
+
+  Ran 5 shell commands (ctrl+o to expand)
+
+● The merge is clean: brace-balanced, 0 runtime errors, default-level
+  fingerprint only shows the pre-existing ±5 solids wobble this project has
+  documented repeatedly as non-regression. Pushing now.
+
+  Pushed to live (ctrl+o to expand)
+
+● Pushed. Now relaunching the sweep, dropping "The Gut" (Level 3 slot's taken by
+  "The Ascent") and keeping the three bounded fixes: NOS pipe linking/bonus
+  room, planet leg polish, and THE BETWEEN biome coverage.
+
+● Workflow(Scout then sequentially implement 3 bounded TODO.md backlog items in
+          SkyJump3D (post cloud-branch merge))
+  ⎿  /workflows to view dynamic workflow runs
+
+● Status:
+  - Pulled and fast-forward-merged the cloud agent's work: Pussy Palace
+    cloud-parting fix + Levels 2/3/4 (The Overgrowth, The Ascent, Skyfall) with
+    6 dungeons each — verified clean (balanced braces, 0 runtime errors) and
+    pushed to origin/live.
+  - Relaunched the TODO sweep without "The Gut" (that Level 3 slot's now taken
+    by "The Ascent") — just the three bounded fixes: NOS pipe linking/bonus
+    room/piranha plant, planet-leg cross-link/ramp polish, and THE BETWEEN biome
+    coverage. Running now in the background; I'll report when it lands.
+
+✻ Brewed for 2m 15s · done 4:33 AM
+
+● Dynamic workflow "Scout then sequentially implement 3 bounded TODO.md backlog
+items in SkyJump3D (post cloud-branch merge)" completed · 14m 44s
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● All 3 implementations committed cleanly on top of the merged cloud work. Let
+  me run a final verification pass before pushing.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Clean — balanced braces, 0 runtime errors, pipes now fully linked (30/30 vs
+  24/18 before), default fingerprint only moves by the pre-existing ±5 solids
+  wobble. Pushing.
+
+  Pushed to live (ctrl+o to expand)
+
+● Pushed. Summary of this session:
+
+  1. Pulled the cloud agent's work you'd forgotten about — merged
+     claude/new-session-vc6i2m (4 commits): Pussy Palace cloud-parting fix +
+     Levels 2/3/4 ("The Overgrowth", "The Ascent", "Skyfall", 6 dungeons each).
+     Caught this before my own workflow tried to build a conflicting "Level 3:
+     The Gut" — dropped that task.
+  2. NOS warp pipes fixed: the last pipe on every road was a dead end (.to === 
+     null); now routes into a new bonus coin room with its own return pipe.
+     Added piranha-plant hazards popping out of alternating pipes. Pipes went
+     from 24 linked/18 to 30/30.
+  3. Planet legs polished: added Mars-style cross-links between the 3 lanes,
+     widened ramp frequency, and wired decor dressing onto the instanced
+     platforms (previously undressed).
+  4. THE BETWEEN biome coverage: identified RENT_ZONES/NOS_ZONES as the missing
+     Lil Spasticism biomes and widened the Canopy sector shuffle pool to include
+     them.
+
+  All verified (brace-balanced, 0 runtime errors, default-level fingerprint
+  stable within the project's documented wobble) and pushed to live at 1952157.
+  Nothing here has been eyeballed on a real GPU — same caveat as every other
+  session in this repo's history.
+
+✻ Churned for 22m 30s · done 4:49 AM
+
+❯ oh ok                                                                         
+
+● Anything else you want me to look at, or good for now?
+
+✻ Churned for 3s · done 8:25 AM
+
+❯ So I just tried the new levels, and they, all three of them, they just feel   
+  like they've copied and pasted the first level, the little spasticism, and    
+  instead of spawning on a skyscraper, the player just simply spawns on a       
+  building that is shaped exactly the same but a different paint job. it's      
+  basically the exact same levels. Maybe the platforms are slightly different,  
+  but all the dungeons are like nearly in the same kind of orientation and      
+  place and it's essentially the exact same level. And with like very little    
+  difference. This is exactly the kind of thing I was strictly hoping to avoid  
+  . I wanted new unique levels . I didn't want copy-paste and then some slight  
+  changes like this.                                                            
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Explore(Map shared vs unique structure across Levels 1-4)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+● The code confirms your instinct — I'm digging into exactly how deep the
+  copy-paste goes (comments in the commits literally say things like "same
+  skeleton... a forest reskin"). Give me a moment to map precisely what's shared
+  vs cosmetic before I bring you options for fixing it.
+
+✻ Crunched for 34s · done 8:49 AM
+
+› Message from Explore
+  SUMMARY: The user's suspicion is correct and is in fact DOCUMENTED,
+  INTENTIONAL, and EXPLICITLY SPEC'D in the repo's own TODO.md.
+  Overgrowth/Ascent/Skyfall are not "feel like" reskins — they are, by design,
+  pixel-identical world layouts to "Lil Spasticism" (descent) with only
+  textures/colors/names/palette swapped. Below is the evidence for each of your
+  six questions.
+
+  ====================================================================
+  1. buildNetwork() — verbatim reuse, zero parameter differences
+  ====================================================================
+  index.html:5385-5520 — `function buildNetwork(exitAngle) { ... }` is the
+  ~140-line core hub/graph/world builder. It controls literally everything about
+  world shape:
+  - hub count & placement (`activeStartHubs()`, `buildRidePark()`, the
+  `nAu`/`nBu` per-universe arena/building counts, the region/biome-band angle
+  math at 5406-5415)
+  - the skyway to the moon (`buildSkyway(hubs)` at 5387)
+  - branch layout (`buildBranches(hubs)` at 5516)
+  - tower/hub positions (the `for (let slot...)` universe loop, 5399-5419)
+  - the entire route graph (`connect()` calls, `buildUniverseLinks`,
+  `buildFlow`, the up-staircase/extra-link loops at 5473-5511)
+  - the Commons ring/contract (`buildCommons`, 5512-5515)
+  - weapon placement, lore terminals, ride props, exit pad — everything.
+
+  index.html:5535, 5543, 5553:
+  ```
+  function buildOvergrowthNetwork(exitAngle) { return buildNetwork(exitAngle); }
+  function buildAscentNetwork(exitAngle) { return buildNetwork(exitAngle); }
+  function buildSkyfallNetwork(exitAngle) { return buildNetwork(exitAngle); }
+  ```
+  Confirmed: all three are one-line pass-through wrappers. No parameters differ,
+  no conditional branching inside buildNetwork() keys off
+  overgrowthOn()/ascentOn()/skyfallOn() to alter layout (I checked — the only
+  level-conditional logic inside buildNetwork itself is the pre-existing
+  `rentOn()`/`nosOn()`/`level` checks for zone selection, at line 5395, which
+  doesn't change geometry). So yes — hub count/positions, moon/Mars route,
+  branch layout, tower positions, and route-graph shape are 100% identical
+  across descent/overgrowth/ascent/skyfall. Only the visual reskin layer
+  (described in Q2) differs.
+
+  The code's own comments admit this outright (index.html:5522-5553), e.g. for
+  Overgrowth:
+  "per the 2026-10-29 DELIVERABLES plan, every new level must feel like the same
+  game as Lvl1 — same hub graph, same moon/space/zero-G band, same -1/-2 hell
+  platforms, same co-op, same commons/dungeon framework — with ONLY the
+  platform/building visuals and the 6 dungeon themes actually changing... this
+  reuses buildNetwork() verbatim... ACCEPTANCE CRITERIA is satisfied to the
+  letter this way: a player dropped into Overgrowth cannot tell they're not
+  playing Lvl1 except for what the platforms look like and what's inside the
+  dungeons."
+  The Ascent/Skyfall comments (5537-5553) say the same thing almost word for
+  word.
+
+  ====================================================================
+  2. trunkify()/rockify()/cloudify() — purely cosmetic
+  ====================================================================
+  index.html:12838 `trunkify(on)`, 12880 `rockify(on)`, 12921 `cloudify(on)`.
+  All three are structurally identical functions (siblings, explicitly labeled
+  as such in comments at 12863 and 12905):
+  - They iterate `buildingBoxes` (the existing boxMesh buildings already placed
+  by buildNetwork)
+  - Swap `m.material` to a bark/rock/cloud canvas-texture material (barkMat /
+  rockMat / cloudMat2)
+  - Stick a cosmetic cap mesh on top (leaf canopy / rock+snow peak / cloud wisp)
+  sized relative to the existing box's width/depth/height
+  - Restore `origMat` when toggled off
+
+  None of them touch hub positions, the route graph, `connect()`,
+  `solids`/`reserved` arrays, or world structure in any way — they run strictly
+  after the network/world geometry already exists, mutating only `.material` and
+  adding decorative non-collidable meshes (`scene.add`, not `addSolid`). They
+  are wired into `setZone` and `buildLevel`'s rebuild-safety call purely so the
+  geometry reskin re-applies on rebuild (per the same comments at 12863/12905).
+  Confirmed: purely cosmetic, no gameplay/layout effect whatsoever.
+
+  ====================================================================
+  3. commonsMidBuild overgrowthOn()/ascentOn()/skyfallOn() branches
+  ====================================================================
+  index.html:4491-4549 (overgrowthOn), 4553-4610 (ascentOn), 4615-4672
+  (skyfallOn). These three blocks are structurally line-for-line identical —
+  same variable names, same order of operations, same magic numbers — differing
+  only in the `*Sites` array's theme fields (key/zone/kinds/col/name) and the
+  console.log tag string. Evidence:
+
+  Overgrowth (4500-4540) vs Ascent (4562-4601) vs Skyfall (4624-4663) all do,
+  verbatim:
+  ```
+  const AD = farAnchor(ds.node, ds.key);
+  const nx = Math.cos(AD.a), nz = Math.sin(AD.a);
+  const X0 = AD.X0, Z0 = AD.Z0, y0 = AD.y0 + (ELEV[ds.key] || 0);
+  if (AD.far) addSlab(X0, y0, Z0, 9, 9, 2.4, ds.zone, true);
+  let bx = X0 + nx * 42, bz = Z0 + nz * 42, by = y0 - 10;
+  for (let mo = 42; blocked(bx, by, bz, 15) && mo <= 150; mo += 36) { ... }
+  ```
+  ...through identical hop-step generation (`for (let k = 1; k <= 3; k++)`),
+  identical plaza/label/beacon placement, identical
+  `farMonument(...)`/`farDungeon(...)` calls with identical argument shapes,
+  identical `connectMid(...)` causeway call, and an identical "THE GARRISON"
+  enemy-seeding block (`seats = [plaza, ...shaft.filter(i%5===0)].slice(0,7)`).
+
+  The comments say this explicitly:
+  - 4488-4490 (Overgrowth): "6 forest dungeons on all 6 ring-node slots, same
+  pure-descent-dungeon shape as Lvl1's bone/bubble/eiffel (far anchor ->
+  forecourt plaza -> hop-steps -> farMonument+farDungeon -> causeway ->
+  garrison), own theme set"
+  - 4550-4552 (Ascent): "6 alpine dungeons on all 6 ring-node slots, exact same
+  shape as Overgrowth's forest six just above... own theme set"
+  - 4612-4614 (Skyfall): "6 cloud/storm dungeons on all 6 ring-node slots, exact
+  same shape as Overgrowth's/Ascent's own six just above... own theme set"
+
+  Only the content differs: node→key→zone→kinds→col→name tuples (e.g.
+  nestNode→'roothollow'/ROOTHOLLOW_ZONE vs nestNode→'mineshaft'/MINESHAFT_ZONE
+  vs nestNode→'cloudcastle'/CLOUDCASTLE_ZONE — same ring-node slot `nestNode` in
+  all three, just different theme). `farDungeon`/`farMonument` are module-scope
+  shared functions (index.html:4120, explicitly refactored "so new levels can
+  reuse this verbatim for their own dungeons") — not per-level duplicates. So
+  dungeon placement, orientation, shape, and internal structure (deep-run
+  spiral, hop-discs, boss vault) are structurally identical across all three new
+  levels and Lvl1's own bone/bubble/eiffel dungeons; only theme
+  names/colors/zone palettes/enemy-kind pools differ.
+
+  ====================================================================
+  4. The DELIVERABLES plan — found in TODO.md, not a separate file
+  ====================================================================
+  No DELIVERABLES.md exists; the "2026-10-29 DELIVERABLES plan" referenced in
+  code comments (index.html:5522, 12655) is a section inside TODO.md starting at
+  line 557: "## DELIVERABLES — START IMMEDIATELY (user authorized
+  2026-10-29...)". Key excerpts (TODO.md:575-581), under "ACCEPTANCE CRITERIA
+  (for future execution)":
+  ```
+  - A player dropped into Lvl2/3/4 cannot tell they are not playing Lvl1 except
+  for
+    what the platforms look like and what's inside the dungeons.
+  - Fall-to-sky respawn, moon, space, -1/-2 hell platforms, all biomes — all
+  present
+    and identical to Lvl1.
+  - No new mechanics, no new verbs, no new systems, no new physics.
+  - Co-op behaves identically to Lvl1 in every new level.
+  - Every level has the same number of dungeons as Lvl1 (6, as of 2026-10-29).
+  ```
+  This is the smoking gun: the plan that was actually specced and authorized
+  explicitly demanded that the three new levels be indistinguishable from Lvl1
+  except for paint and dungeon contents — "No new mechanics, no new verbs, no
+  new systems, no new physics." The implementation (confirmed in Q1-3) satisfies
+  this spec to the letter. So what the user is experiencing is not a shortfall
+  against the plan — it's the plan working exactly as authorized. (For contrast,
+  I also found NEW_LEVEL.md, a design doc for a much later, genuinely distinct
+  level called "THE BETWEEN" — horizontal Canopy spine, no tower/skyway, unique
+  per-dungeon mechanics, global low-gravity, wiring/circuit system, sanity
+  mechanic — which is NOT yet built/reachable from the menu (filtered out, per
+  TODO.md:562). That doc is proof the team knows how to spec a genuinely
+  different level; Overgrowth/Ascent/Skyfall were deliberately NOT built to that
+  standard.)
+
+  Git history corroborates the sequence: 441a5bf ("Filter single-player menu...
+  clarify the 4-level plan") → 552e169 ("Level 2 'The Overgrowth': forest level
+  with 6 new dungeons, reusing Lvl1's framework") → d112e3c ("Level 3 'The
+  Ascent'... reusing Overgrowth's framework") → 9e19aef ("Level 4 'Skyfall'...
+  closing out the DELIVERABLES plan").
+
+  ====================================================================
+  5. Zone/palette arrays — no distinct biome mechanics for the 3 new levels
+  ====================================================================
+  Overgrowth/Ascent/Skyfall have NO ZONES-equivalent array of their own (unlike
+  Rent's Due's `RENT_ZONES` at 12610 or Nostalgia Overdose's `NOS_ZONES` at
+  12696, which ARE distinct 3-tier palette arrays with their own weather types,
+  used via `themeZones()` at line 487).
+
+  Explicit code comment confirms this (index.html:12652-12656), re:
+  OVERGROWTH_BOSSES:
+  "forest-flavored names/colors. `biome` names real ZONES entries (Overgrowth
+  has no zone array of its own — it reuses the global ZONES/BIOME_ENEMIES
+  exactly, per the 2026-10-29 DELIVERABLES note superseding the older 'own zone
+  array' plan)."
+
+  The level-gate functions themselves say the same (index.html:416-418):
+  "LEVEL 4 'Skyfall': same descent/moon/hell-platform skeleton as
+  'descent'/'overgrowth'/'ascent', a cloud reskin + its own 6 dungeons — NOT in
+  themeZones() below, so it keeps the real moon/space" (ditto for
+  ascentOn/overgrowthOn at 417/418).
+
+  The only new "zone"-shaped objects for these levels are the 18 single-purpose
+  dungeon palette literals (ROOTHOLLOW_ZONE, MINESHAFT_ZONE, CLOUDCASTLE_ZONE,
+  etc., e.g. lines 3520/3535/3550) — these are purely cosmetic
+  sky-gradient/fog/weather-string objects used ONLY inside their one dungeon's
+  commonsMidBuild branch, not a biome-mechanics ladder like
+  RENT_ZONES/NOS_ZONES. Outside the dungeons, the open world reuses the exact
+  same global `ZONES` array (Jungle, Frozen, Inferno, Storm, Horror,
+  Psychedelic, Beach, Rave, etc.) as the default level, with all the same
+  gameplay effects (slippery Frozen, weak-jump Jungle, etc.) — zero new biome
+  mechanics were added for these levels.
+
+  ====================================================================
+  6. Boss lists — renamed/recolored copies of the same template
+  ====================================================================
+  index.html:10284-10296 — the default descent `bossRoster` (10 bosses) uses
+  variants: gorilla, dinosaur, charger, gunner, frozenStalker, infernal,
+  stormWraith, stalker, shield, stegosaurus, across biomes
+  Jungle/Inferno/Storm/Frozen/Horror/Psychedelic.
+
+  OVERGROWTH_BOSSES (12657-12668), ASCENT_BOSSES (12669-12680), SKYFALL_BOSSES
+  (12681-12692) each have exactly 10 entries drawing from the SAME pool of
+  existing enemy `variant`s (gorilla, dinosaur, stegosaurus, charger, infernal,
+  frozenStalker, stormWraith, stalker, shield, plus a couple already-existing
+  variants like drone/bomber/gunner/kaomoji/alien/raver/prismWraith used
+  elsewhere in the game) mapped onto the SAME existing `biome` names (Jungle,
+  Inferno, Frozen, Storm, Horror, Psychedelic, Rave) — just with new flavor
+  `name` strings and new hex `color` values. Explicit comment (12652-12654):
+  "LEVEL 2 'THE OVERGROWTH' boss roster: same 10-biome-champion shape as the
+  default descent's own bossRoster..., reusing existing enemy variants/AI
+  verbatim (HARD RULES: no new AI) with forest-flavored names/colors."
+
+  Example direct mapping (same variant+biome, different label/color):
+  - gorilla/Jungle: "CANOPY TYRANT" (descent) → "THE CANOPY KING" (Overgrowth)
+  - dinosaur/Jungle: "THE RAZOR KING" (descent) → "ROOT TYRANT" (Overgrowth) →
+  "THE PEAK'S OLD BONES" (Ascent)
+  - frozenStalker/Frozen: "CRYO WRAITH" (descent) → "FROSTBARK" (Overgrowth) →
+  "THE RIME KING"/"GLACIER WIDOW" (Ascent)
+  - stormWraith/Storm: "ION PHANTOM" (descent) → "THE GALE OAK" (Overgrowth) →
+  "THE SUMMIT'S BREATH" (Ascent) → "THE JETSTREAM" (Skyfall)
+
+  So: genuinely NOT new enemies or new mechanics — same AI, same stats
+  (WALKER_STATS untouched), same hit-box/behavior per variant, just renamed and
+  recolored to match the level's reskin theme. "No new AI" is literally stated
+  as a hard rule in the comment.
+
+  ====================================================================
+  OVERALL CONCLUSION
+  ====================================================================
+  The user's read is accurate and is explicitly, deliberately how the codebase's
+  own authors (per TODO.md's authorized DELIVERABLES plan) built it:
+  buildNetwork()'s hub graph/route/tower/branch/moon layout is reused verbatim
+  with zero parameters changed; trunkify/rockify/cloudify are cosmetic
+  material/cap swaps with no layout effect; the three levels' 6-dungeon
+  placement code is structurally identical (same
+  farAnchor/forecourt/hop-step/farMonument/farDungeon/causeway/garrison
+  pipeline, same ring-node slots) differing only in theme/palette/name fields;
+  there is no level-specific biome-mechanics zone ladder (they reuse the global
+  ZONES exactly, confirmed in-code); and the three boss rosters are the same 10
+  existing enemy variants on the same biomes, renamed and recolored, with an
+  explicit "no new AI" rule. This was an explicit, authorized design choice ("No
+  new mechanics, no new verbs, no new systems, no new physics") rather than an
+  engineering shortcut taken against the spec — but functionally it does mean
+  the three new levels are, as the user suspected, the same level graph/dungeon
+  placement with a paint job, differing from Lvl1 only in surface visuals,
+  dungeon theme names/colors, and boss names/colors.
+
+● Found it — and it's not a bug, it's a deliberate choice. TODO.md has a section
+  called "DELIVERABLES" (dated 2026-10-29, marked "user authorized") whose
+  acceptance criteria literally say:
+
+  ▎ "A player dropped into Lvl2/3/4 cannot tell they are not playing Lvl1 except
+  ▎ for what the platforms look like and what's inside the dungeons."
+  ▎ "No new mechanics, no new verbs, no new systems, no new physics."
+
+  So the cloud agent built exactly to spec:
+  buildOvergrowthNetwork/buildAscentNetwork/buildSkyfallNetwork are literally
+  one-line pass-throughs to the same buildNetwork() as Level 1 — identical hub
+  graph, moon/Mars route, tower positions, everything. The
+  "forest/mountain/cloud" theming (trunkify/rockify/cloudify) only swaps
+  materials and sticks a cosmetic cap on existing buildings — zero effect on
+  layout. The 6 dungeons per level use the same farDungeon/farMonument pipeline
+  with only names/colors changed. Bosses are the same 10 enemy variants/AI,
+  renamed and recolored. That plan explicitly says "no new AI" as a hard rule.
+
+  So either that authorization doesn't reflect what you actually want, or it was
+  written for a reason (speed/safety) that's no longer the priority. Before I
+  plan a rework, I need to know how far you want to go.
+
+● User answered Claude's questions:
+  ⎿  · How different should Levels 2-4 actually be from Level 1 and each other? 
+     → New layouts, same core systems (Recommended)
+
+● Agent "Map shared vs unique structure across Levels 1-4" finished · 2m 8s
+
+● Entered plan mode
+  Claude is now exploring and designing an implementation approach.
+
+● 3 background agents launched (↓ to manage)
+   ├ Map buildNetwork internals + bespoke-layout precedents
+   ├ Map zone-mechanics template for new per-level biomes
+   └ Map dungeon framework variance + least-copy-paste precedent
+
+● Three research agents are running in parallel to figure out exactly how far
+  buildNetwork() can be made to vary per level, what zone-mechanics hooks
+  already exist for giving each level its own feel, and how much hand-written
+  structure Level 1's dungeons actually have (as the bar
+  Overgrowth/Ascent/Skyfall should hit). I'll check back once they're done and
+  build the plan from there.
+
+✻ Worked for 1m 20s · done 8:53 AM
+
+● Agent "Map dungeon framework variance + least-copy-paste precedent" finished ·
+1m 39s
+
+● One of the three research agents is back — it confirms the dungeon framework
+  (farDungeon/farMonument) only lets height/width vary structurally; everything
+  else (room layout, hazard placement, descent shape, vault shape) is hardcoded,
+  with per-dungeon content just picked off long key === '...' ? string chains.
+  Bone Cathedral-level content (room names/props/hazard flavor) costs ~20-25
+  lines per dungeon; House's fully bespoke structure costs 100+ lines. The 18
+  new dungeons currently have zero room-prop branches (they all fall through to
+  the default teacup room) and no working hazards or bosses. Still waiting on
+  the other two (layout-shape options, zone-mechanics hooks).
+
+✻ Churned for 6s · done 8:55 AM
+
+● Agent "Map buildNetwork internals + bespoke-layout precedents" finished · 2m 
+30s
+
+● Second report's back: confirms buildNetwork()'s shape constants (6-tower ring,
+  moon skyway, bridge topology) are all hardcoded globals, not level-aware — so
+  a real layout change for these 3 levels means following the Rent's
+  Due/NOS/THE BETWEEN precedent (a separate top-level builder reusing only
+  low-level helpers like connect()), not tweaking buildNetwork() in place. It
+  also flags a real landmine: co-op spawn-near-host math hardcodes the 6-tower
+  ring position, so any level that moves home towers off that ring needs that
+  path updated too. Still waiting on the zone-mechanics report.
+
+✻ Brewed for 4s · done 8:55 AM
+
+● Agent "Map zone-mechanics template for new per-level biomes" finished · 2m 43s
+
+● User answered Claude's questions:
+  ⎿  · This is a genuinely large change (new per-level world shape + mechanics +
+     18 hand-built dungeons interiors). How do you want it tackled? → All 3 
+     levels in one pass (Recommended)
+
+● Updated plan
+  ⎿  /plan to preview
+
+● User approved Claude's plan
+  ⎿  Plan saved to: C:\Users\Serge\.claude\plans\delegated-dreaming-sedgewick.md
+     · /plan to edit
+     Make Levels 2-4 genuinely distinct from Level 1 (and each other)
+
+     Context
+
+     The user played "The Overgrowth" (L2), "The Ascent" (L3) and "Skyfall" (L4)
+     and
+     reported they all feel like Level 1 ("Lil Spasticism") with a different
+     paint
+     job — same building shapes, same dungeon placement, essentially the same
+     level.
+
+     Research confirms this is not a bug — it's a prior, explicitly authorized
+     design decision, documented in TODO.md's "DELIVERABLES" section
+     (2026-10-29): "A player dropped into Lvl2/3/4 cannot tell they are not
+     playing Lvl1 except for what the platforms look like... No new mechanics, 
+     no
+     new verbs, no new systems, no new physics." The cloud agent that built
+     these
+     levels followed that spec to the letter:
+
+     - buildOvergrowthNetwork/buildAscentNetwork/buildSkyfallNetwork
+       (index.html:5535,5543,5553) are one-line pass-throughs to the exact same
+       buildNetwork(exitAngle) Level 1 uses — identical 6-tower ring, identical
+       moon/Mars skyway, identical branch graph. Nothing level-aware inside it.
+     - trunkify/rockify/cloudify (index.html:12838,12880,12921) only swap
+       materials and stick a cosmetic cap on existing buildings — zero layout
+       effect.
+     - The 18 new dungeons (commonsMidBuild's overgrowthOn()/ascentOn()/
+       skyfallOn() branches, index.html:4491-4672) are structurally identical
+       to Level 1's bone/bubble/eiffel dungeons (same farAnchor→forecourt→hop-
+       step→farMonument+farDungeon→causeway→garrison pipeline) with only a
+       theme/palette/name config line changed. They have no room-prop branches
+       (fall through to the default teacup room), no hazard damage (the
+       hazard-damage loop in commonsMidTick only checks
+       ['nest','house','shroom'],
+       index.html:5054), and no boss.
+     - They reuse the global ZONES array verbatim — no biome-mechanic
+       differences at all (confirmed: OVERGROWTH_BOSSES/ASCENT_BOSSES/
+       SKYFALL_BOSSES are the same 10 existing enemy variants/AI, just renamed
+       and recolored; explicit "no new AI" rule in the code comments).
+
+     User's decision (via AskUserQuestion): go with "new layouts, same core
+     systems" — genuinely different world shape and biome mechanics per level,
+     new per-dungeon content, but keep moon/Mars/co-op/physics/verbs intact so
+     it's
+     still clearly the same game. Tackle all three levels in one pass.
+
+     This plan supersedes the DELIVERABLES acceptance criteria in TODO.md for
+     L2-4
+     (that section should be marked superseded, not deleted, since it's a real
+     record of a prior authorized decision).
+
+     Non-negotiable constraints (from research)
+
+     1. Co-op spawn-near-host math is hardcoded to the 6-tower ring
+        (index.html:15137-15139, uses universeCentre(slot)/HOME_SLOT_COUNT
+        directly, not levelHubs). Home towers must stay at their existing
+        universeCentre(slot) positions for all three levels, or this breaks
+        silently. (THE BETWEEN avoids this by deactivating startHubs[].active
+        entirely and using its own beacon positions — we are NOT doing that
+        here;
+        home bases stay put, only what's built beyond them differs.)
+     2. buildUniverseLinks's bridge topology hardcodes N=6 ring-neighbor +
+        3 diagonal links (index.html:5350). Don't change universe count.
+     3. Moon/space/-1/-2 hell ladder must stay present and reachable on all
+        three levels (TODO.md's own requirement, still valid) — do NOT add these
+        levels to themeZones() (that flag removes the moon/space column
+        entirely, per index.html:3164). Use a new, separate levelZones()
+        accessor instead (see below), wired into only 4 call sites, not the 10+
+        places themeZones() touches.
+     4. Zone mechanics are keyed on zone.name string equality, not data
+        fields (only ice is an existing boolean flag, checked via
+        zone.name === 'Frozen' || zone.ice at index.html:13092). Reusing exact
+        names like 'Jungle'/'Psychedelic'/'Inferno'/'Storm' for new zones
+        would collide with zoneByName, BIOME_ENEMIES, and decoration branches.
+     5. farDungeon/farMonument only vary structurally by height
+        (deckLocal) and width (discR) — room count, hazard placement, descent
+        shape all follow from those. Per-dungeon content (room names, props,
+        hazard flavor, secrets) is picked via key === '...' ? string chains
+        inside farDungeon (room names index.html:4205-4212, room props
+        4216-4271, hazard name 4283, etc.) — this is the mechanism to extend,
+        not the shared geometry function itself.
+     6. Keep edits strictly sequential (one agent/edit at a time on
+        index.html), per this repo's own established convention — its history
+        has multiple real breakages from concurrent edits to this file.
+
+     Implementation plan
+
+     Step 1 — Zone-mechanic flags (foundation, low risk)
+
+     In the single physics block at index.html:13092-13100, extend each name
+     check with an || clause mirroring the existing ice pattern:
+     - iceUnderfoot: already has || zone.ice — no change needed.
+     - jumpMul's Jungle weak-jump check → add || standOn.zone.weakJump.
+     - gravMul's Psychedelic low-gravity check → add || activeZ.lowGrav.
+     - thermal's Inferno check → add || activeZ.thermal.
+     - envWind's Storm check → add || activeZ.wind.
+
+     This lets any zone object (regardless of name) opt into these four existing
+     mechanical effects without touching zoneByName/BIOME_ENEMIES/decoration
+     (which stay keyed on name as before, falling back to defaults for unknown
+     names — already the existing behavior for RENT_ZONES/NOS_ZONES names).
+
+     Step 2 — Per-level zone arrays + levelZones() accessor
+
+     Add OVERGROWTH_ZONES, ASCENT_ZONES, SKYFALL_ZONES (3 entries each, same
+     object shape as RENT_ZONES/NOS_ZONES at index.html:12610-12614/
+     12696-12700), using only existing fields plus the new flags from Step 1:
+
+     - Overgrowth — Canopy (weakJump:true, more bounce platforms via the
+       existing bounceDress/crumble-roll generation hooks, weather:'leaves'),
+       Understory (lowGrav:true as spore-drift, weather:'spores' — this
+       preset exists at index.html:12782 but no zone currently uses it),
+       Rootrot (heavier crumble-roll, weather:'ash').
+     - Ascent — Summit (ice:true works unmodified, weather:'snow'),
+       Cliffs (wind:true mountain crosswind, weather:'snow'/'rain'), Magma
+       Core (thermal:true, weather:'embers').
+     - Skyfall — Storm Band (wind:true, lightning:true visual,
+       weather:'rain'), Clear Air (lowGrav:true, light/no weather), Cloud
+       Floor (raise bounceDress rate so landings read as soft; reuse
+       interiorCatch-style "SOFT LANDING" framing already present on
+       bounce-flagged solids at index.html:11967).
+
+     Add const levelZones = () => overgrowthOn() ? OVERGROWTH_ZONES : ascentOn()
+     ? ASCENT_ZONES : skyfallOn() ? SKYFALL_ZONES : null; (separate from
+     themeZones()). Wire it into exactly these 4 sites, each falling back to the
+     existing ZONES-based behavior when levelZones() is null:
+     1. zoneFor's idx ≥ 3 rotation branch (index.html:12774-12775)
+     2. pickAmbientZone/region-biome pick (12757-12768)
+     3. zoneForRegion (5395)
+     4. ladderExtend's ZONES[...] pick (13263)
+
+     Do not touch themeZones(), moonless, the below-zero/threshold
+     respawn logic, or the Horror boss arena pick — those stay exactly as they
+     are
+     so moon/space/-1/-2 hell remain intact per the constraint above. Add
+     entries
+     for the 3 new zone names to BIOME_ENEMIES (reuse existing per-biome enemy
+     pools matching each zone's flavor, e.g. Overgrowth's Canopy → Jungle's
+     pool)
+     so evolution/ambient spawning doesn't silently no-op for unknown names.
+
+     Step 3 — Real per-dungeon content for all 18 new dungeons
+
+     For each of the 18 dungeons (6 per level), extend the existing key === 
+     '...' ? chains inside farDungeon (index.html:4205-4317 region) with:
+     - A real roomNames pair (currently falls through to Lvl1's defaults).
+     - A room-prop branch (currently falls through to the shroom teacup else at
+       4265-4271) — reuse existing mesh-building helpers in the same style as
+       Lvl1's bone (altar/effigy/candles) or bubble (basin/fizz) branches,
+       themed
+       per dungeon (e.g. Overgrowth's root-cellar dungeon gets a
+       root-tangle/moss
+       prop set).
+     - A hazard name + an extra hazard prop (mirrors Lvl1's per-key hazard prop
+       lines at 4284-4301).
+     - A themed secret name/color.
+
+     Bug fix (do while in there, per standing instruction to fix bugs found):
+     commonsMidTick's hazard-damage loop only checks ['nest','house','shroom']
+     (index.html:5054,5059-5068), so hazard runes in bone/bubble/eiffel AND all
+     18 new dungeons are decorative-only and never actually hurt the player.
+     Extend that key list to include every dungeonOnly:true site key (bone,
+     bubble, eiffel, and the 18 new ones) so hazards actually function
+     everywhere
+     they're dressed.
+
+     Boss encounter: give each level at least one "flagship" dungeon a real
+     boss, following the exact pattern nest/house/shroom already use
+     (MID_SITE_KEY/commonsMidTick boss pipeline, index.html:5050-5079) —
+     pick one dungeon per level (e.g. the biggest/tallest one) to carry a themed
+     boss name using the existing boss-fight machinery (no new AI, per the
+     user's
+     accepted "same core systems" framing); the other 5 per level stay
+     dungeonOnly:true pure-descent dungeons like Lvl1's bone/bubble/eiffel.
+
+     Step 4 — Bespoke world-shape builder per level
+
+     Replace the pass-through buildOvergrowthNetwork/buildAscentNetwork/
+     buildSkyfallNetwork (index.html:5535,5543,5553) with real per-level
+     top-level builders, following the Rent's Due / Nostalgia Overdose precedent
+     (separate top-level layout function reusing only the low-level connective
+     helpers — connect(), buildHubPortalLoop, universeCentre/
+     HOME_SLOT_COUNT for home-base placement) rather than buildNetwork's
+     tower-ring/branch-graph shape verbatim:
+
+     - Home bases (activeStartHubs()) stay at their existing
+       universeCentre(slot) ring positions (constraint #1) — only what's built
+       outward from each home base differs.
+     - Still call buildSkyway(hubs) for the moon/Mars route (it's gated only by
+       moonless/themeZones(), which these levels correctly stay out of per
+       Step 2 — so the existing 3-lane climb is reused as-is, satisfying "same
+       moon/space").
+     - Replace buildBranches/the generic hub-scatter-and-connect loop with a
+       genuinely different macro-shape per level:
+       - Overgrowth: branching-tree structure — platforms radiate as
+         branches/boughs from each universe's trunk, descending through
+         Canopy → Understory → Rootrot (Step 2's zones) rather than a scattered
+         branch graph.
+       - Ascent: single-massif switchback trail — one zigzagging path per
+         universe climbing/descending a mountain, through Summit → Cliffs →
+         Magma Core, instead of scattered hubs.
+       - Skyfall: archipelago of drifting cloud islands linked by
+         wind-bridges, through Storm Band → Clear Air → Cloud Floor.
+     - Each macro-shape still seeds and connects its 6 dungeon sites (Step 3)
+       the same way the current branches do (farAnchor+connectMid), and still
+       calls buildCommons/buildHubPortalLoop so missions/commons/portal-loop
+       keep working.
+     - Downstream consumers (scatterBosses, generateMissions,
+       buildSurroundings, radar) are confirmed shape-agnostic (duck-typed on
+       .kind/.x/.z/.top) — no changes needed there.
+
+     Step 5 — Final verification + TODO.md + commit/push
+
+     - node perf/_brace_scan.cjs (balanced) + node perf/_smoke.cjs (0 runtime
+       errors, default-level fingerprint within the documented ±5 solids wobble)
+       after every step, not just at the end.
+     - Manually sanity-check via a probe (reuse the pattern of
+       perf/_bonebubble_probe.cjs) that each of the 18 dungeons still has a real
+       interior/rooms/deck/boss-or-garrison reachable, and that the moon/Mars
+       pad is still reachable from each of the 3 levels.
+     - Confirm co-op spawn-near-host math still lands joiners next to the host's
+       home tower (unchanged code path, but re-verify given the home-base
+       placement is untouched by design).
+     - Update TODO.md: mark the 2026-10-29 DELIVERABLES acceptance criteria as
+       superseded by this change (not deleted — keep the historical record),
+       and log what was actually built, in the project's usual terse factual
+       style, noting what still needs a human eyeball (feel/difficulty/visual
+       read of the new macro-shapes — nothing here has been played on a real
+       GPU).
+     - Commit incrementally per step (not one giant commit), push once at the
+       end.
+
+     Execution notes
+
+     - Steps 1-3 are additive/low-risk and should land first. Step 4
+       (world-shape
+       rewrite) is the highest-risk, most structural piece — it touches the
+       thing
+       the co-op spawn math depends on, so it goes last, after 1-3 are verified
+       solid.
+     - Given the scale (comparable to building 3 separate levels), this will run
+       as a sequence of agents, one editing index.html at a time (never
+       concurrently), each verifying with the smoke harness and committing
+       before
+       the next starts — matching this repo's own established practice.
+
+● Starting implementation myself, sequentially, per the plan. Step 1 first:
+  zone-mechanic flags.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(index.html)
+  ⎿  Added 4 lines, removed 4 lines
+      13090  }
+      13091  // gameplay side-effects of the active zone / the surface un
+             derfoot
+      13092  const iceUnderfoot = () => onGround && standOn && standOn.zo
+             ne && (standOn.zone.name === 'Frozen' || standOn.zone.ice);
+      13093 -const jumpMul = () => (onVehicle ? (onVehicle.kind === 'bugg
+            -y' ? 1.2 : 1.35) : 1) * (standOn && standOn.zone && standOn.
+            -zone.name === 'Jungle' ? 0.88 : 1) * (base && base.upgrades.
+            -jumpBoots ? 1.08 : 1) * (betweenOn() ? BETWEEN_JUMP_MUL : 1)
+            -;                                                           
+      13094 -const gravMul = () => (onVehicle && onVehicle.kind === 'bike
+            -' ? 0.55 : 1) * (activeZ && activeZ.name === 'Psychedelic' ?
+            - 0.7 : 1) * (psy.t > 0 && psy.kind === 'invert' ? 0.45 : 1) 
+            -* (betweenOn() ? BETWEEN_GRAV_MULT : 1) * (1 - 0.65 * spaceK
+            -(pos.y));      // lighter and lighter the higher you climb  
+      13095 -const thermal = () => !!(activeZ && activeZ.name === 'Infern
+            -o');                                                        
+      13093 +const jumpMul = () => (onVehicle ? (onVehicle.kind === 'bugg
+            +y' ? 1.2 : 1.35) : 1) * (standOn && standOn.zone && (standOn
+            +.zone.name === 'Jungle' || standOn.zone.weakJump) ? 0.88 : 1
+            +) * (base && base.upgrades.jumpBoots ? 1.08 : 1) * (betweenO
+            +n() ? BETWEEN_JUMP_MUL : 1);                                
+      13094 +const gravMul = () => (onVehicle && onVehicle.kind === 'bike
+            +' ? 0.55 : 1) * (activeZ && (activeZ.name === 'Psychedelic' 
+            +|| activeZ.lowGrav) ? 0.7 : 1) * (psy.t > 0 && psy.kind === 
+            +'invert' ? 0.45 : 1) * (betweenOn() ? BETWEEN_GRAV_MULT : 1)
+            + * (1 - 0.65 * spaceK(pos.y));      // lighter and lighter t
+            +he higher you climb                                         
+      13095 +const thermal = () => !!(activeZ && (activeZ.name === 'Infer
+            +no' || activeZ.thermal));                                   
+      13096  function envWind(dt) {
+      13097 -  if (inInterior || !activeZ || activeZ.name !== 'Storm' || 
+            -onGround || climbing) return;                               
+      13097 +  if (inInterior || !activeZ || !(activeZ.name === 'Storm' |
+            +| activeZ.wind) || onGround || climbing) return;            
+      13098    const t = performance.now() / 1000;
+      13099    vel.x += Math.sin(t * 0.6) * 9 * dt; vel.z += Math.cos(t *
+              0.45) * 6 * dt;
+      13100  }
+
+● Step 1 done. Now Step 2 — look at the exact RENT_ZONES/NOS_ZONES/BIOME_ENEMIES
+  /zoneByName/zoneFor/pickAmbientZone/zoneForRegion/ladderExtend code to wire
+  levelZones() in correctly.
+
+  Read 1 file (ctrl+o to expand)
+
+● Now let's look at zoneForRegion around line 5395 and ladderExtend around
+  13255-13271.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(index.html)
+  ⎿  Added 1 line
+      485  const arenaOn = () => levelDef.id === 'arena';                
+              // THE ARENAS: closed deathmatch chambers (UT99/Q3 layouts,
+            rebuilt)
+      486  const betweenOn = () => levelDef.id === 'between';            
+              // THE BETWEEN: Lovecraftian seam between Moon and Mars
+      487  const themeZones = () => rentOn() ? RENT_ZONES : nosOn() ? NOS
+           _ZONES : gutOn() ? GUT_ZONES : null;      // a themed level's 
+           own 3-zone ladder (null = the default descent)
+      488 +const levelZones = () => overgrowthOn() ? OVERGROWTH_ZONES : a
+          +scentOn() ? ASCENT_ZONES : skyfallOn() ? SKYFALL_ZONES : null;
+          +      // like themeZones(), but deliberately NOT read by moonl
+          +ess/below-zero/threshold logic, so the moon/space/-1/-2 hell l
+          +adder stay intact on these 3 levels                           
+      489  const setLevelDefById = id => { levelDef = LEVEL_DEFS[id] || L
+           EVEL_DEFS.descent; };      // net: adopt the host's selected l
+           evel definition
+      490  const TH = 16;           // tower half-width
+      491  const RAD = 28;           // spiral radius
+
+● Update(index.html)
+  ⎿  Added 35 lines
+      12716    { variant: 'popstar', biome: 'Arcade Overdrive', name: 'TH
+             E LAST ARPEGGIO', color: 0xff2bd6 },
+      12717  ];
+      12718  const nosZoneForY = y => NOS_ZONES[y > TOP * 0.55 ? 0 : y > 
+             0 ? 1 : 2];
+      12719 +// LEVELS 2-4's own 3-zone ladders (OVERGROWTH/ASCENT/SKYFAL
+            +L_ZONES), same shape as RENT_ZONES/NOS_ZONES, kept OUTSIDE Z
+            +ONES for the                                                
+      12720 +// same reason. Unlike RENT/NOS, these are read via `levelZo
+            +nes()` (not `themeZones()`), which is deliberately NOT wired
+            + into                                                       
+      12721 +// moonless/below-zero/threshold-respawn logic, so these 3 l
+            +evels keep the real moon/space column and the -1/-2 hell lad
+            +der.                                                        
+      12722 +// They carry the new generic zone-mechanic flags added alon
+            +gside `ice` (weakJump/lowGrav/thermal/wind) and an optional 
+            +`decay`                                                     
+      12723 +// severity (reuses the same crumble-roll boost mechanism as
+            + RENT_ZONES' `rent` field, see zoneCrumbleRoll below).      
+      12724 +const OVERGROWTH_ZONES = [                                  
+      12725 +  { name: 'Canopy',    desc: 'sunlit boughs high above the f
+            +orest floor - the branches give less underfoot', top: '#061f
+            +0a', mid: '#0f5c1e', bot: '#5a9a2c', fog: 0x123a16, hemi: 0.
+            +68, hemiCol: 0x9fe07a, sun: 0.68, sunCol: 0xd8f08a, cloud: 0
+            +x1c4a22, plate: 0x7aff4a, weather: 'leaves', weakJump: true 
+            +},                                                          
+      12726 +  { name: 'Understory', desc: 'spore-light and hanging moss 
+            +- the air itself is thinner down here', top: '#0a1208', mid:
+            + '#1c3a1a', bot: '#4a6a2e', fog: 0x16281a, hemi: 0.5, hemiCo
+            +l: 0x8ad888, sun: 0.4, sunCol: 0xb8e08a, cloud: 0x1a2e1c, pl
+            +ate: 0x5aff8a, weather: 'spores', lowGrav: true },          
+      12727 +  { name: 'Rootrot',   desc: 'the roots go on forever and mo
+            +st of them have given up holding anything together', top: '#
+            +0c0603', mid: '#241408', bot: '#5a3a18', fog: 0x1e1208, hemi
+            +: 0.4, hemiCol: 0xa07850, sun: 0.32, sunCol: 0xc09050, cloud
+            +: 0x1a1008, plate: 0x8a5a2a, weather: 'ash', decay: 2 },    
+      12728 +];                                                          
+      12729 +const ASCENT_ZONES = [                                      
+      12730 +  { name: 'Summit',    desc: 'black ice and thin air above t
+            +he tree line - every ledge is slicker than it looks', top: '
+            +#02081a', mid: '#1a3a5a', bot: '#7ab8e0', fog: 0x1a3850, hem
+            +i: 0.6, hemiCol: 0xb0e0ff, sun: 0.55, sunCol: 0xe0f4ff, clou
+            +d: 0x2a4a68, plate: 0x9ae0ff, weather: 'snow', ice: true }, 
+      12731 +  { name: 'Cliffs',    desc: 'bare rock faces and a crosswin
+            +d that never stops pushing', top: '#0a0e14', mid: '#283038',
+            + bot: '#5a6470', fog: 0x242a30, hemi: 0.5, hemiCol: 0xaab4c0
+            +, sun: 0.42, sunCol: 0xd0dce8, cloud: 0x303840, plate: 0x8a9
+            +aaa, weather: 'rain', wind: true },                         
+      12732 +  { name: 'Magma Core', desc: 'the mountain is hollow and it
+            + is on fire underneath - the heat slows your glide', top: '#
+            +140402', mid: '#5a1608', bot: '#c05a1a', fog: 0x3a1206, hemi
+            +: 0.55, hemiCol: 0xff9a4a, sun: 0.6, sunCol: 0xffb050, cloud
+            +: 0x4a1a0a, plate: 0xff6a2a, weather: 'embers', thermal: tru
+            +e },                                                        
+      12733 +];                                                          
+      12734 +const SKYFALL_ZONES = [                                     
+      12735 +  { name: 'Storm Band', desc: 'the clouds are solid here and
+            + furious about it - constant crosswind, lightning overhead',
+            + top: '#06081a', mid: '#1c2850', bot: '#4a5aa0', fog: 0x1a24
+            +48, hemi: 0.5, hemiCol: 0x9ab0f0, sun: 0.4, sunCol: 0xb8c8ff
+            +, cloud: 0x222a4a, plate: 0x6a8aff, weather: 'rain', wind: t
+            +rue, lightning: true },                                     
+      12736 +  { name: 'Clear Air',  desc: 'above the weather, where the 
+            +air is thin and nothing weighs quite as much as it should', 
+            +top: '#0a1830', mid: '#2a5a8a', bot: '#9adaf0', fog: 0x2a506
+            +8, hemi: 0.75, hemiCol: 0xcaf0ff, sun: 0.85, sunCol: 0xfffff
+            +f, cloud: 0x3a6a90, plate: 0xaef0ff, weather: 'none', lowGra
+            +v: true },                                                  
+      12737 +  { name: 'Cloud Floor', desc: 'the bottom of the sky - ever
+            +ything down here is soft enough to land on', top: '#14101e',
+            + mid: '#3a2e4a', bot: '#cabce0', fog: 0x2a2238, hemi: 0.7, h
+            +emiCol: 0xe8d8ff, sun: 0.6, sunCol: 0xf0e0ff, cloud: 0xd8c8e
+            +a, plate: 0xe0d0ff, weather: 'none' },                      
+      12738 +];                                                          
+      12739 +Object.assign(BIOME_ENEMIES, {                              
+      12740 +  Canopy: ['dinosaur', 'gorilla', 'stegosaurus', 'frog', 'fr
+            +og', 'charger'],                                            
+      12741 +  Understory: ['sporeling', 'sporeling', 'prismWraith', 'cap
+            +Brute', 'prismWraith'],                                     
+      12742 +  Rootrot: ['roach', 'roach', 'spider', 'skeleton', 'charger
+            +'],                                                         
+      12743 +  Summit: ['frozenStalker', 'frozenStalker', 'shield', 'walk
+            +er', 'drone'],                                              
+      12744 +  Cliffs: ['stormWraith', 'stormWraith', 'gunner', 'shield',
+            + 'drone'],                                                  
+      12745 +  'Magma Core': ['infernal', 'infernal', 'charger', 'gunner'
+            +, 'bomber'],                                                
+      12746 +  'Storm Band': ['stormWraith', 'stormWraith', 'gunner', 'dr
+            +one', 'bomber'],                                            
+      12747 +  'Clear Air': ['alien', 'alien', 'drone', 'ufo', 'kaomoji']
+            +,                                                           
+      12748 +  'Cloud Floor': ['raver', 'raver', 'drone', 'kaomoji', 'kao
+            +moji'],                                                     
+      12749 +});                                                         
+      12750 +// hub-order severity pick for levelZones(), same formula/sh
+            +ape as rentZoneForHub above.                                
+      12751 +const levelZoneForHub = i => levelZones()[Math.min(2, Math.f
+            +loor(Math.max(0, i) / (2 + (level >> 1))))];                
+      12752 +// generic crumble-roll boost keyed on a zone's own `decay` 
+            +field (mirrors rentCrumbleRoll's `rent` tiers) - 0 for any z
+            +one without `decay`, so every existing level's odds are unto
+            +uched.                                                      
+      12753 +const zoneCrumbleRoll = zone => rand() < (zone && zone.decay
+            + ? [0.22, 0.42, 0.62][zone.decay - 1] : 0);                 
+      12754  // THE ARENAS: four ZONES-shaped palette objects kept OUTSID
+             E ZONES (same reason as RENT_ZONES / NOS_ZONES - appending w
+             ould
+      12755  // change 'Lil Spasticism'). One tight dueling palette per c
+             hamber family, all weather:'none':
+      12756  //   Longest Yard  ->stral void: black void, starlight cyan 
+             plates, no floor, fall = death
+
+● Now wire levelZones() into the 4 consumption sites and the two crumble-roll
+  call sites.
+
+● Update(index.html)  ⎿  Added 1 line
+      12792  function nosTear() { const b = document.body; b.classList.ad
+             d('nos-tear'); setTimeout(() => b.classList.remove('nos-tear
+             '), 430); }
+      12793  function pickAmbientZone(region = 0) {
+      12794    if (themeZones()) return themeZones()[2 - Math.min(2, Math
+             .max(0, region | 0))];       // region rises with height, so
+              region 0 (lowest) = Collections
+      12795 +  if (levelZones()) return levelZones()[2 - Math.min(2, Math
+            +.max(0, region | 0))];                                      
+      12796    const standard = ZONES.filter(zone => zone.name !== 'Psych
+             edelic' && zone.name !== 'Jungle');
+      12797    if (level >= 5 && rand() < 0.004) return ZONES.find(zone =
+             > zone.name === 'Psychedelic');
+      12798    return biomeForRegion(level, region) || standard[(rand() *
+              standard.length) | 0];
+
+● Update(index.html)
+  ⎿  Added 1 line, removed 1 line
+      12808    if (themeZones()) { const Z = themeZones(); return idx <= 
+             -72 ? Z[2] : idx <= -24 ? Z[1] : idx < 3 ? (idx <= -3 ? Z[0]
+              : null) : Z[0]; }      // Rent's Due: the further down the 
+             ladder, the worse it gets
+      12809    if (idx <= -1) return depthZoneFor(-idx);                 
+                              // below platform 0: caves -> strictly hell
+              / horror -> psychosis (never the surface biomes, never Kaom
+             oji)
+      12810    if (idx < 3) return null;
+      12811 -  const standardBiomes = ZONES.filter(zone => zone.name !== 
+            -'Psychedelic');                                             
+      12811 +  const standardBiomes = levelZones() || ZONES.filter(zone =
+            +> zone.name !== 'Psychedelic');                             
+      12812    return standardBiomes[Math.floor((idx - 3) / 24) % standar
+             dBiomes.length];
+      12813  };
+      12814  const WEATHER = {
+
+● Update(index.html)
+  ⎿  Added 1 line, removed 1 line
+      5393    const types = ARENA_TYPES.slice(); for (let i = types.lengt
+            h - 1; i > 0; i--) { const j = (rand() * (i + 1)) | 0; [types
+            [i], types[j]] = [types[j], types[i]]; }
+      5394  const prevActiveZone = () => activeZ;   // biome-evolution he
+            lper (used by setZone crossings)
+      5395  const EARLY_BIOMES = ['Jungle', 'Beach', 'Rave', 'Jungle'];
+      5396 -const zoneForRegion = (region, i = 0, slot = 0) => themeZones
+           -() ? rentZoneForHub(i) : level <= 2 ? ZONES.find(z => z.name 
+           -=== EARLY_BIOMES[(i + slot) % EARLY_BIOMES.length]) : biomeFo
+           -rRegion(level, region);      // early levels mix the common b
+           -iomes per building instead of one region-wide biome          
+      5396 +const zoneForRegion = (region, i = 0, slot = 0) => themeZones
+           +() ? rentZoneForHub(i) : levelZones() ? levelZoneForHub(i) : 
+           +level <= 2 ? ZONES.find(z => z.name === EARLY_BIOMES[(i + slo
+           +t) % EARLY_BIOMES.length]) : biomeForRegion(level, region);  
+           +    // early levels mix the common biomes per building instea
+           +d of one region-wide biome                                   
+      5397    const regionSpan = level <= 2 ? 3 : level <= 4 ? 12 : Math.
+            max(6, 12 - Math.floor((level - 4) / 2));
+      5398    const regionForHub = i => Math.floor(Math.max(0, i - 1) / r
+            egionSpan);
+      5399    const biomeBands = ZONES.filter(zone => zone.name !== 'Jung
+            le' && zone.name !== 'Psychedelic').length;
+
+● Now ladderExtend's zone pick:
+
+● Update(index.html)
+  ⎿  Added 1 line, removed 1 line
+      13297      for (let k = 0; k < 14; k++) {
+      13298        n += dir; if (n === 0) n = dir;                       
+                                                  // there is no #0: ... 
+             2, 1, -1, -2 ...
+      13299        y += dir * (15 + R() * 8);
+      13300 -      const a = R() * 6.283, r = Math.sqrt(R()) * 55, zone =
+            - (dir < 0 && n < 0 && !themeZones()) ? depthZoneFor(-n) : R(
+            -) < 0.4 ? (themeZones() ? themeZones()[Math.floor(R() * 3)] 
+            -: ZONES[Math.floor(R() * ZONES.length)]) : (themeZones() ? t
+            -hemeZones()[2] : null);                                     
+      13300 +      const a = R() * 6.283, r = Math.sqrt(R()) * 55, zone =
+            + (dir < 0 && n < 0 && !themeZones()) ? depthZoneFor(-n) : R(
+            +) < 0.4 ? (themeZones() ? themeZones()[Math.floor(R() * 3)] 
+            +: levelZones() ? levelZones()[Math.floor(R() * 3)] : ZONES[M
+            +ath.floor(R() * ZONES.length)]) : (themeZones() ? themeZones
+            +()[2] : levelZones() ? levelZones()[2] : null);             
+      13301        const sl = addSlab(ladderLoop.x + Math.cos(a) * r, y, 
+             ladderLoop.z + Math.sin(a) * r, 2.5 + R() * 4, 2.5 + R() * 4
+             , 1.5, zone, true);
+      13302        sl.pn = n; ladder.push(sl); if (R() < 0.4) coin(sl.cx,
+              y + 1.2, sl.cz, zone);
+      13303        if (dir > 0) ladderTop = { n, y }; else { ladderBot = 
+             { n, y }; VOID_Y = Math.min(VOID_Y, y - 60); }
+
+● Now the two crumble-roll call sites:
+
+● Update(index.html)
+  ⎿  Added 1 line, removed 1 line
+      5221      coin(x, y + 1.2, z, zone);
+      5222      if (prev && k % 2 === 0) for (let u = 0.33; u < 0.9; u +=
+             0.33) coin(prev.cx + (x - prev.cx) * u, prev.top + (y - prev
+            .top) * u + 1.5 + 3 * Math.sin(Math.PI * u), prev.cz + (z - p
+            rev.cz) * u, zone);
+      5223      // weird platforms: movers, crumblers and psychedelic war
+            pers (never the first/last stepping stone)
+      5224 -    const roll = rand(), weird = canMorph && k > 0 && k < n -
+           - 1 ? (nosOn() ? nosKind(zone, roll) : gutOn() ? gutKind(zone,
+           - roll) : rentOn() && rentCrumbleRoll(zone) ? 'crumble' : roll
+           - < 0.10 ? 'mover' : roll < 0.19 ? 'orbit' : roll < 0.28 ? 'cr
+           -umble' : roll < 0.37 ? 'piston' : roll < 0.46 ? 'breath' : ro
+           -ll < 0.472 && psyPlatformEligible() ? 'psy' : roll < 0.56 ? '
+           -blink' : roll < 0.65 ? 'swing' : roll < 0.74 ? 'spin' : '') :
+           - '';                                                         
+      5224 +    const roll = rand(), weird = canMorph && k > 0 && k < n -
+           + 1 ? (nosOn() ? nosKind(zone, roll) : gutOn() ? gutKind(zone,
+           + roll) : rentOn() && rentCrumbleRoll(zone) ? 'crumble' : zone
+           + && zone.decay && zoneCrumbleRoll(zone) ? 'crumble' : roll < 
+           +0.10 ? 'mover' : roll < 0.19 ? 'orbit' : roll < 0.28 ? 'crumb
+           +le' : roll < 0.37 ? 'piston' : roll < 0.46 ? 'breath' : roll 
+           +< 0.472 && psyPlatformEligible() ? 'psy' : roll < 0.56 ? 'bli
+           +nk' : roll < 0.65 ? 'swing' : roll < 0.74 ? 'spin' : '') : ''
+           +;                                                            
+      5225      if (weird === 'psy') tryPsySpecial(p, { ph: rand() * 6.28
+            , period: 4 + rand() * 3, amp: 4 + rand() * 2.5, lift: rand()
+             < 0.35, px: -uz, pz: ux, fx: ['trip', 'warp', 'invert'][(ran
+            d() * 3) | 0] });
+      5226      else if (weird) makeSpecial(p, weird, { ph: rand() * 6.28
+            , period: weird === 'piston' ? 2.6 + rand() * 1.6 : 4 + rand(
+            ) * 3, amp: weird === 'orbit' ? 5 + rand() * 3.5 : weird === 
+            'piston' ? 3.5 + rand() * 2.5 : 4 + rand() * 2.5, lift: rand(
+            ) < 0.35, px: -uz, pz: ux });
+      5227      else {
+
+● Update(index.html)
+  ⎿  Added 1 line, removed 1 line
+      7490    if (aim) heading = Math.atan2(aim.z - src.cz, aim.x - src.c
+            x) + (rand() - 0.5) * 0.5;
+      7491    let x = src.cx, y = src.top, z = src.cz, last = src, pendin
+            g = null;
+      7492    const decorate = (p, dir, canMorph) => {
+      7493 -    const roll = nosOn() ? nosWalkRoll(p.zone) : gutOn() ? gu
+           -tWalkRoll(p.zone) : rentOn() && rentCrumbleRoll(p.zone) ? 0.2
+           - : rand();      // Rent's Due: extra crumblers, more of them 
+           -the deeper the zone (0.2 lands in the 'crumble' band below)  
+      7493 +    const roll = nosOn() ? nosWalkRoll(p.zone) : gutOn() ? gu
+           +tWalkRoll(p.zone) : rentOn() && rentCrumbleRoll(p.zone) ? 0.2
+           + : p.zone && p.zone.decay && zoneCrumbleRoll(p.zone) ? 0.2 : 
+           +rand();      // Rent's Due: extra crumblers, more of them the
+           + deeper the zone (0.2 lands in the 'crumble' band below)     
+      7494      if (roll < 0.09) makeSpecial(p, 'mover', { ph: rand() * 6
+            .28, period: 4 + rand() * 3, amp: 4 + rand() * 2.5, lift: ran
+            d() < 0.35, px: -Math.sin(dir), pz: Math.cos(dir) });
+      7495      else if (roll < 0.17) makeSpecial(p, 'orbit', { ph: rand(
+            ) * 6.28, period: 5 + rand() * 4, amp: 5 + rand() * 3.5 });
+      7496      else if (roll < 0.23) makeSpecial(p, 'crumble', {});
+
+● Also need zoneByName to resolve these new zone names (used by
+  checkpoints/warps/boss biome lookups):
+
+● Update(index.html)
+  ⎿  Added 1 line, removed 1 line
+      12626    if (_dHash(k) < Math.min(1, Math.max(0, (k - 40) / 120))) 
+             return DEPTH_ZONES.psychosis;
+      12627    return ZONES.find(z => z.name === (Math.floor((k - 15) / 1
+             0) % 2 ? 'Horror' : 'Hellscape'));
+      12628  }
+      12629 -const zoneByName = nm => ZONES.find(z => z.name === nm) || D
+            -EPTH_ZONES[nm.toLowerCase()] || RENT_ZONES.find(z => z.name 
+            -=== nm) || NOS_ZONES.find(z => z.name === nm) || ARENA_ZONE_
+            -LIST.find(z => z.name === nm) || null;      // ARENA_ZONE_LI
+            -ST is a const declared later in module scope - fine, lookups
+            - only run at runtime                                        
+      12629 +const zoneByName = nm => ZONES.find(z => z.name === nm) || D
+            +EPTH_ZONES[nm.toLowerCase()] || RENT_ZONES.find(z => z.name 
+            +=== nm) || NOS_ZONES.find(z => z.name === nm) || OVERGROWTH_
+            +ZONES.find(z => z.name === nm) || ASCENT_ZONES.find(z => z.n
+            +ame === nm) || SKYFALL_ZONES.find(z => z.name === nm) || ARE
+            +NA_ZONE_LIST.find(z => z.name === nm) || null;      // ARENA
+            +_ZONE_LIST/OVERGROWTH/ASCENT/SKYFALL_ZONES are consts declar
+            +ed later in module scope - fine, lookups only run at runtime
+      12630  Object.assign(BIOME_ENEMIES, {
+      12631    Caverns: ['spider', 'spider', 'roach', 'roach', 'skeleton'
+             , 'stalker', 'charger'],
+      12632    Psychosis: ['demon', 'glitchling', 'glitchling', 'stalker'
+             , 'skeleton', 'spider', 'roach', 'infernal'],
+
+● Let me check how scatterBosses actually consumes the boss roster's biome
+  field, since I just changed what zone names actually appear in these levels'
+  hubs — the existing boss rosters reference old biome names
+  (Jungle/Frozen/etc.) that may no longer exist anywhere in these 3 levels now.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Good — it's a scoring bonus, not a hard requirement, so nothing breaks. But
+  for thematic correctness (bosses should actually land in their matching zone),
+  let me update the three rosters' biome fields to the new zone names.
+
+● Update(index.html)
+  ⎿  Added 34 lines, removed 33 lines
+      12652  ];
+      12653  // LEVEL 2 "THE OVERGROWTH" boss roster: same 10-biome-champ
+             ion shape as the default descent's own bossRoster
+      12654  // (buildLevelBody, ~line 9747), reusing existing enemy vari
+             ants/AI verbatim (HARD RULES: no new AI) with
+      12655 -// forest-flavored names/colors. `biome` names real ZONES en
+            -tries (Overgrowth has no zone array of its own —            
+      12656 -// it reuses the global ZONES/BIOME_ENEMIES exactly, per the
+            - 2026-10-29 DELIVERABLES note superseding the               
+      12657 -// older "own zone array" plan).                            
+      12655 +// forest-flavored names/colors. `biome` now names OVERGROWT
+            +H_ZONES' own 3 zones (Canopy/Understory/Rootrot,            
+      12656 +// defined above) rather than the global ZONES — those are t
+            +he zones that actually appear on this level now             
+      12657 +// that it has its own `levelZones()` ladder, so scatterBoss
+            +es' biome-match bonus (index.html ~10368) lands             
+      12658 +// correctly instead of silently never matching.            
+      12659  const OVERGROWTH_BOSSES = [
+      12659 -  { variant: 'gorilla', biome: 'Jungle', name: 'THE CANOPY K
+            -ING', color: 0x6adf4a },                                    
+      12660 -  { variant: 'dinosaur', biome: 'Jungle', name: 'ROOT TYRANT
+            -', color: 0x9bdf2a },                                       
+      12661 -  { variant: 'stegosaurus', biome: 'Jungle', name: 'BARKBACK
+            -', color: 0x4ab85a },                                       
+      12662 -  { variant: 'charger', biome: 'Inferno', name: 'THE KINDLIN
+            -G', color: 0xff6a2a },                                      
+      12663 -  { variant: 'infernal', biome: 'Inferno', name: 'EMBER STAG
+            -', color: 0xff8a3a },                                       
+      12664 -  { variant: 'frozenStalker', biome: 'Frozen', name: 'FROSTB
+            -ARK', color: 0x6adfff },                                    
+      12665 -  { variant: 'stormWraith', biome: 'Storm', name: 'THE GALE 
+            -OAK', color: 0x6a9aff },                                    
+      12666 -  { variant: 'stalker', biome: 'Horror', name: 'THE HOLLOW M
+            -AN', color: 0xff2a4a },                                     
+      12667 -  { variant: 'shield', biome: 'Horror', name: 'MOSSBACK WARD
+            -EN', color: 0xb0c08a },                                     
+      12668 -  { variant: 'stegosaurus', biome: 'Psychedelic', name: 'THE
+            - SPORE QUEEN', color: 0xd45aff },                           
+      12660 +  { variant: 'gorilla', biome: 'Canopy', name: 'THE CANOPY K
+            +ING', color: 0x6adf4a },                                    
+      12661 +  { variant: 'dinosaur', biome: 'Canopy', name: 'ROOT TYRANT
+            +', color: 0x9bdf2a },                                       
+      12662 +  { variant: 'stegosaurus', biome: 'Canopy', name: 'BARKBACK
+            +', color: 0x4ab85a },                                       
+      12663 +  { variant: 'frog', biome: 'Canopy', name: 'THE KINDLING', 
+            +color: 0xff6a2a },                                          
+      12664 +  { variant: 'sporeling', biome: 'Understory', name: 'EMBER 
+            +STAG', color: 0xff8a3a },                                   
+      12665 +  { variant: 'prismWraith', biome: 'Understory', name: 'THE 
+            +SPORE QUEEN', color: 0xd45aff },                            
+      12666 +  { variant: 'capBrute', biome: 'Understory', name: 'FROSTBA
+            +RK', color: 0x6adfff },                                     
+      12667 +  { variant: 'charger', biome: 'Rootrot', name: 'THE HOLLOW 
+            +MAN', color: 0xff2a4a },                                    
+      12668 +  { variant: 'shield', biome: 'Rootrot', name: 'MOSSBACK WAR
+            +DEN', color: 0xb0c08a },                                    
+      12669 +  { variant: 'skeleton', biome: 'Rootrot', name: 'THE GALE O
+            +AK', color: 0x6a9aff },                                     
+      12670  ];
+      12671  const ASCENT_BOSSES = [
+      12671 -  { variant: 'frozenStalker', biome: 'Frozen', name: 'THE RI
+            -ME KING', color: 0x9adfff },                                
+      12672 -  { variant: 'frozenStalker', biome: 'Frozen', name: 'GLACIE
+            -R WIDOW', color: 0x6ab4da },                                
+      12673 -  { variant: 'charger', biome: 'Inferno', name: 'THE AVALANC
+            -HE', color: 0xd89a4a },                                     
+      12674 -  { variant: 'shield', biome: 'Horror', name: 'STONE SENTINE
+            -L', color: 0x8f887c },                                      
+      12675 -  { variant: 'stalker', biome: 'Horror', name: 'THE CREVASSE
+            -', color: 0x4a4458 },                                       
+      12676 -  { variant: 'stormWraith', biome: 'Storm', name: "THE SUMMI
+            -T'S BREATH", color: 0x7aaaf0 },                             
+      12677 -  { variant: 'gunner', biome: 'Storm', name: 'RIDGE SNIPER',
+            - color: 0x9adfff },                                         
+      12678 -  { variant: 'infernal', biome: 'Inferno', name: 'MAGMA VEIN
+            -', color: 0xff6a2a },                                       
+      12679 -  { variant: 'stegosaurus', biome: 'Psychedelic', name: 'THE
+            - PRISM WYRM', color: 0xb05aff },                            
+      12680 -  { variant: 'dinosaur', biome: 'Jungle', name: "THE PEAK'S 
+            -OLD BONES", color: 0xaecbe8 },                              
+      12672 +  { variant: 'frozenStalker', biome: 'Summit', name: 'THE RI
+            +ME KING', color: 0x9adfff },                                
+      12673 +  { variant: 'frozenStalker', biome: 'Summit', name: 'GLACIE
+            +R WIDOW', color: 0x6ab4da },                                
+      12674 +  { variant: 'shield', biome: 'Summit', name: 'STONE SENTINE
+            +L', color: 0x8f887c },                                      
+      12675 +  { variant: 'stormWraith', biome: 'Cliffs', name: "THE SUMM
+            +IT'S BREATH", color: 0x7aaaf0 },                            
+      12676 +  { variant: 'gunner', biome: 'Cliffs', name: 'RIDGE SNIPER'
+            +, color: 0x9adfff },                                        
+      12677 +  { variant: 'stalker', biome: 'Cliffs', name: 'THE CREVASSE
+            +', color: 0x4a4458 },                                       
+      12678 +  { variant: 'charger', biome: 'Magma Core', name: 'THE AVAL
+            +ANCHE', color: 0xd89a4a },                                  
+      12679 +  { variant: 'infernal', biome: 'Magma Core', name: 'MAGMA V
+            +EIN', color: 0xff6a2a },                                    
+      12680 +  { variant: 'stegosaurus', biome: 'Magma Core', name: 'THE 
+            +PRISM WYRM', color: 0xb05aff },                             
+      12681 +  { variant: 'dinosaur', biome: 'Magma Core', name: "THE PEA
+            +K'S OLD BONES", color: 0xaecbe8 },                          
+      12682  ];
+      12683  const SKYFALL_BOSSES = [
+      12683 -  { variant: 'stormWraith', biome: 'Storm', name: 'THE JETST
+            -REAM', color: 0x7aaaf0 },                                   
+      12684 -  { variant: 'drone', biome: 'Storm', name: 'THE SQUALL', co
+            -lor: 0x9adfff },                                            
+      12685 -  { variant: 'bomber', biome: 'Storm', name: 'THUNDERHEAD', 
+            -color: 0x6ab4ea },                                          
+      12686 -  { variant: 'gunner', biome: 'Storm', name: 'CLOUDBREAKER',
+            - color: 0xd8e8ff },                                         
+      12687 -  { variant: 'shield', biome: 'Horror', name: 'THE CUMULONIM
+            -BUS', color: 0x8f887c },                                    
+      12688 -  { variant: 'stalker', biome: 'Horror', name: 'THE VOID DRA
+            -FT', color: 0x4a4458 },                                     
+      12689 -  { variant: 'kaomoji', biome: 'Psychedelic', name: 'THE AUR
+            -ORA FACE', color: 0x5af0a8 },                               
+      12690 -  { variant: 'prismWraith', biome: 'Psychedelic', name: 'THE
+            - PRISM GALE', color: 0xb05aff },                            
+      12691 -  { variant: 'alien', biome: 'Psychedelic', name: 'SKYBORNE 
+            -VISITOR', color: 0xd85aff },                                
+      12692 -  { variant: 'raver', biome: 'Rave', name: 'DISCO ZEPHYR', c
+            -olor: 0xff5ad8 },                                           
+      12684 +  { variant: 'stormWraith', biome: 'Storm Band', name: 'THE 
+            +JETSTREAM', color: 0x7aaaf0 },                              
+      12685 +  { variant: 'drone', biome: 'Storm Band', name: 'THE SQUALL
+            +', color: 0x9adfff },                                       
+      12686 +  { variant: 'bomber', biome: 'Storm Band', name: 'THUNDERHE
+            +AD', color: 0x6ab4ea },                                     
+      12687 +  { variant: 'gunner', biome: 'Storm Band', name: 'CLOUDBREA
+            +KER', color: 0xd8e8ff },                                    
+      12688 +  { variant: 'alien', biome: 'Clear Air', name: 'SKYBORNE VI
+            +SITOR', color: 0xd85aff },                                  
+      12689 +  { variant: 'kaomoji', biome: 'Clear Air', name: 'THE AUROR
+            +A FACE', color: 0x5af0a8 },                                 
+      12690 +  { variant: 'prismWraith', biome: 'Clear Air', name: 'THE P
+            +RISM GALE', color: 0xb05aff },                              
+      12691 +  { variant: 'shield', biome: 'Cloud Floor', name: 'THE CUMU
+            +LONIMBUS', color: 0x8f887c },                               
+      12692 +  { variant: 'stalker', biome: 'Cloud Floor', name: 'THE VOI
+            +D DRAFT', color: 0x4a4458 },                                
+      12693 +  { variant: 'raver', biome: 'Cloud Floor', name: 'DISCO ZEP
+            +HYR', color: 0xff5ad8 },                                    
+      12694  ];
+      12695  const rentZoneForY = y => RENT_ZONES[y > TOP * 0.55 ? 0 : y 
+             > 0 ? 1 : 2];
+      12696  // NOSTALGIA OVERDOSE zones: also OUTSIDE ZONES (same reason
+             s as RENT_ZONES). nos = severity 1..3: Sunset Strip (synthwa
+             ve dusk, cassette platforms) ->
+
+● Update(index.html)
+  ⎿  Added 10 lines, removed 10 lines
+      12660    { variant: 'gorilla', biome: 'Canopy', name: 'THE CANOPY K
+             ING', color: 0x6adf4a },
+      12661    { variant: 'dinosaur', biome: 'Canopy', name: 'ROOT TYRANT
+             ', color: 0x9bdf2a },
+      12662    { variant: 'stegosaurus', biome: 'Canopy', name: 'BARKBACK
+             ', color: 0x4ab85a },
+      12663 -  { variant: 'frog', biome: 'Canopy', name: 'THE KINDLING', 
+            -color: 0xff6a2a },                                          
+      12664 -  { variant: 'sporeling', biome: 'Understory', name: 'EMBER 
+            -STAG', color: 0xff8a3a },                                   
+      12665 -  { variant: 'prismWraith', biome: 'Understory', name: 'THE 
+            -SPORE QUEEN', color: 0xd45aff },                            
+      12666 -  { variant: 'capBrute', biome: 'Understory', name: 'FROSTBA
+            -RK', color: 0x6adfff },                                     
+      12667 -  { variant: 'charger', biome: 'Rootrot', name: 'THE HOLLOW 
+            -MAN', color: 0xff2a4a },                                    
+      12663 +  { variant: 'stormWraith', biome: 'Canopy', name: 'THE GALE
+            + OAK', color: 0x6a9aff },                                   
+      12664 +  { variant: 'charger', biome: 'Rootrot', name: 'THE KINDLIN
+            +G', color: 0xff6a2a },                                      
+      12665 +  { variant: 'infernal', biome: 'Rootrot', name: 'EMBER STAG
+            +', color: 0xff8a3a },                                       
+      12666 +  { variant: 'stalker', biome: 'Rootrot', name: 'THE HOLLOW 
+            +MAN', color: 0xff2a4a },                                    
+      12667    { variant: 'shield', biome: 'Rootrot', name: 'MOSSBACK WAR
+             DEN', color: 0xb0c08a },
+      12669 -  { variant: 'skeleton', biome: 'Rootrot', name: 'THE GALE O
+            -AK', color: 0x6a9aff },                                     
+      12668 +  { variant: 'frozenStalker', biome: 'Understory', name: 'FR
+            +OSTBARK', color: 0x6adfff },                                
+      12669 +  { variant: 'stegosaurus', biome: 'Understory', name: 'THE 
+            +SPORE QUEEN', color: 0xd45aff },                            
+      12670  ];
+      12671  const ASCENT_BOSSES = [
+      12672    { variant: 'frozenStalker', biome: 'Summit', name: 'THE RI
+             ME KING', color: 0x9adfff },
+      12673    { variant: 'frozenStalker', biome: 'Summit', name: 'GLACIE
+             R WIDOW', color: 0x6ab4da },
+      12674 -  { variant: 'shield', biome: 'Summit', name: 'STONE SENTINE
+            -L', color: 0x8f887c },                                      
+      12674 +  { variant: 'dinosaur', biome: 'Summit', name: "THE PEAK'S 
+            +OLD BONES", color: 0xaecbe8 },                              
+      12675 +  { variant: 'shield', biome: 'Cliffs', name: 'STONE SENTINE
+            +L', color: 0x8f887c },                                      
+      12676 +  { variant: 'stalker', biome: 'Cliffs', name: 'THE CREVASSE
+            +', color: 0x4a4458 },                                       
+      12677    { variant: 'stormWraith', biome: 'Cliffs', name: "THE SUMM
+             IT'S BREATH", color: 0x7aaaf0 },
+      12678    { variant: 'gunner', biome: 'Cliffs', name: 'RIDGE SNIPER'
+             , color: 0x9adfff },
+      12677 -  { variant: 'stalker', biome: 'Cliffs', name: 'THE CREVASSE
+            -', color: 0x4a4458 },                                       
+      12679    { variant: 'charger', biome: 'Magma Core', name: 'THE AVAL
+             ANCHE', color: 0xd89a4a },
+      12680    { variant: 'infernal', biome: 'Magma Core', name: 'MAGMA V
+             EIN', color: 0xff6a2a },
+      12681    { variant: 'stegosaurus', biome: 'Magma Core', name: 'THE 
+             PRISM WYRM', color: 0xb05aff },
+      12681 -  { variant: 'dinosaur', biome: 'Magma Core', name: "THE PEA
+            -K'S OLD BONES", color: 0xaecbe8 },                          
+      12682  ];
+      12683  const SKYFALL_BOSSES = [
+      12684    { variant: 'stormWraith', biome: 'Storm Band', name: 'THE 
+             JETSTREAM', color: 0x7aaaf0 },
+      12685    { variant: 'drone', biome: 'Storm Band', name: 'THE SQUALL
+             ', color: 0x9adfff },
+      12686    { variant: 'bomber', biome: 'Storm Band', name: 'THUNDERHE
+             AD', color: 0x6ab4ea },
+      12687    { variant: 'gunner', biome: 'Storm Band', name: 'CLOUDBREA
+             KER', color: 0xd8e8ff },
+      12688 -  { variant: 'alien', biome: 'Clear Air', name: 'SKYBORNE VI
+            -SITOR', color: 0xd85aff },                                  
+      12688    { variant: 'kaomoji', biome: 'Clear Air', name: 'THE AUROR
+             A FACE', color: 0x5af0a8 },
+      12689    { variant: 'prismWraith', biome: 'Clear Air', name: 'THE P
+             RISM GALE', color: 0xb05aff },
+      12690 +  { variant: 'alien', biome: 'Clear Air', name: 'SKYBORNE VI
+            +SITOR', color: 0xd85aff },                                  
+      12691    { variant: 'shield', biome: 'Cloud Floor', name: 'THE CUMU
+             LONIMBUS', color: 0x8f887c },
+      12692    { variant: 'stalker', biome: 'Cloud Floor', name: 'THE VOI
+             D DRAFT', color: 0x4a4458 },
+      12693    { variant: 'raver', biome: 'Cloud Floor', name: 'DISCO ZEP
+             HYR', color: 0xff5ad8 },
+
+● Let's verify Step 1+2 before moving to dungeon content.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Let's check if there's a generic per-level boot probe I can reuse to
+  sanity-check Overgrowth/Ascent/Skyfall directly.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Write(perf\_l234_probe.cjs)
+  ⎿  Wrote 47 lines to perf\_l234_probe.cjs
+      1 // Probe for Levels 2-4 (overgrowth/ascent/skyfall) after the "ge
+        nuinely distinct" rework:
+      2 // builds each level headless and reports stats + the actual zone
+         names that appear in its
+      3 // hub graph (to confirm levelZones() is really replacing the glo
+        bal ZONES for these levels).
+      4 const puppeteer = require('C:/Users/Serge/AppData/Roaming/npm/nod
+        e_modules/puppeteer');
+      5 const fs = require('fs');
+      6 const SRC = require('path').resolve(__dirname, '..', 'index.html'
+     … +42 lines (~3 KB) (ctrl+o to expand)
+
+● Update(perf\_l234_probe.cjs)
+  ⎿  Added 1 line, removed 1 line
+      30    await page.goto('file:///' + SRC.replace(/\\/g, '/'), { waitU
+          ntil: 'domcontentloaded', timeout: 120000 });
+      31    await page.waitForFunction('window.__hk', { timeout: 180000 }
+          );
+      32    await new Promise(r => setTimeout(r, 4000));
+      33 -  const evl = fn => page.evaluate(fn);                         
+      33 +  const evl = (fn, ...args) => page.evaluate(fn, ...args);     
+      34  
+      35    for (const id of ['overgrowth', 'ascent', 'skyfall']) {
+      36      await evl(lvl => { window.__hk.setLevelDefById(lvl); window
+          .__hk.buildLevel(); }, id);
+
+  Ran 2 shell commands (ctrl+o to expand)
+  ⎿  You've hit your 5-hour limit · resets 9:20am (Australia/Sydney)
+     /upgrade or /usage-credits to finish what you’re working on.
+
+✻ Brewed for 23m 33s · done 9:12 AM
+
+❯                                                                               
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  ──── (0 lines hidden) ─────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────────────── 
+  ───────────────────────────────────────────────────────────────────  ⏵⏵ auto  
+  mode on (shift+tab to cycle) · ← 4 agents                                     
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  had another agent finish......                                                
+                                                                                
+                                                                                
+  the new levels are still complete clones of the old one. exactly what i didnt 
+  want...                                                                       
+
+● Let me check for state first — both uncommitted work here and whether another
+  agent pushed something new.
+
+  Committed d235717, pushed to live, ran 2 shell commands (ctrl+o to expand)

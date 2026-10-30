@@ -1,3 +1,13 @@
+⛔ **ARCHIVED 2026-10-31 — HISTORICAL ONLY. DO NOT FOLLOW.**
+
+> This document is kept for history, not as instruction. The ONLY active instruction sources are:
+> 1. `TODO.md` (repo root) — LEVEL IDENTITY + the user's world-rules brief + P0/P1/P2 work lists and the dated session log.
+> 2. `PERFORMANCE_PLAN.md` — the perf playbook. 3. `OVERVIEW.md` / `README.md` — describe the game as built.
+>
+> Everything below that contradicts those files is VOID — notably: THE BETWEEN is reference material only; the below-zero banding (Caverns 1–14 → Horror/Hellscape → Psychosis) is obsolete (caverns to -666, fire/hell ONLY below -666, never above); dungeon ring-node placement and level layouts are superseded by the LEVEL IDENTITY anti-clone rules; multiplayer rooms are 6, not 8.
+
+---
+
 # SkyJump3D — Full Game Audit (2026-10-23)
 
 Scope: concept, performance, biomes, aesthetics, missed/half-built features, mechanics, level design, direction, bugs.

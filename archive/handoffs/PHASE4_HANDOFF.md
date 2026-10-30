@@ -1,3 +1,14 @@
+⛔ **ARCHIVED 2026-10-31 — HISTORICAL ONLY. DO NOT FOLLOW.**
+
+> This document is kept for history, not as instruction. The ONLY active instruction sources are:
+> 1.  (repo root) — LEVEL IDENTITY + the user's world-rules brief + P0/P1/P2 work lists and the dated session log.
+> 2.  — the perf playbook (harness + measurement rules only).
+> 3.  /  — describe the game as built.
+>
+> Everything below that contradicts those files is VOID — most notably: **THE BETWEEN is reference material only** (it stays behind its menu filter; D1–D6 kits/uniques are harvest candidates for other levels, per the user's 2026-10-31 direction); the below-zero depth banding (Caverns 1–14 → Horror/Hellscape → Psychosis) is obsolete — the new rule is caverns to -666, fire/hell ONLY below -666, fire/hell never above the caverns anywhere; dungeon ring-node placement and level layouts described here are superseded by the LEVEL IDENTITY anti-clone rules; multiplayer rooms are 6 players, not 8.
+
+---
+
 # PHASE4_HANDOFF.md — Phase 4 Complete: Hermes Integration & Final Systems
 
 ## Status: ✅ COMPLETE
