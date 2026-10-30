@@ -54,6 +54,48 @@ and the moon/space/hell-ladder depth requirement (per the levels' own HARD RULES
    different platform mutation pools (conveyor-heavy Overgrowth, ledge/run-heavy Ascent, drifting-crumble
    Skyfall) rather than only `trunkify`/`rockify`/`cloudify` reskins.
 
+**WORLD RULES — user's 2026-10-31 brief, applies to ALL levels:**
+
+A. **Every level carries ALL available biomes**, with depth constraints:
+   - **Fire/hell biomes (Hellscape, Inferno) only below depth 1** — never near spawn heights or the upper
+     regions. Enforce a hard depth gate in `zoneFor`/`pickAmbientZone`/`zoneForRegion`, not just the ladder.
+   - **Underground caverns run down to rung -666, then hell takes over.** Rework `depthZoneFor` (~12832):
+     today caverns only cover rungs 1–14 and Horror/Hellscape start at ~15 — make `DEPTH_ZONES.caverns`
+     the band up to -666 (cycling cavern-style zone variants so it doesn't repeat flat), with the
+     Horror/Hellscape/pentagram band only kicking in *below* -666. Keep the psychosis dial as overlay.
+
+B. **Spawn differs per level** — not the same height, not the same location, not the same biomes around
+   spawn. Per level: own start height (currently everything uses the same TOP-derived start hub), own
+   neighbourhood biome ordering around `universeCentre(slot)` (start-zone roll seeded per level, e.g.
+   Overgrowth wakes in jungle-adjacent Canopy, Ascent in Frozen, Skyfall in Storm Band), and own landmark
+   visible from spawn. Netcode keeps `universeCentre`'s x/z contract.
+
+C. **Every level has a moon, space planets, and 6 dungeons** — these four stay invariants.
+
+D. **Varied platform shapes and sizes everywhere** — including on future biome platforms (not just the
+   wild post-moon space platforms). Implement per-zone weighted shape/size pools in the platform builders
+   (`addSlab` takes width/depth/height today — feed it per-zone histogram tables + occasional exotic
+   geometry kinds), keeping zone assignment via colour/material untouched.
+
+E. **The neutral-platform marker problem (needs a design decision — proposed here):** biomes are dictated
+   by colour, but the wild space-route platforms use every colour AND every shape without affecting biome.
+   Once biome platforms also go shape-crazy, “colour+shape = biome” no longer identifies anything.
+   Proposed rule: **truth lives on the underside and the rim; the top face is decoration.**
+   - Biome platform: zone-coloured underside cone/casing + a thin zone-coloured edge strip or additive
+     halo on the rim (the existing `plate` colour resources go here).
+   - Neutral/wild platform: **always** a stone/steel-grey underside + a hazard-stripe rim + **no**
+     coloured edge glow — regardless of top colour or shape.
+   That is material-based, so it scales to any future shape/size mix, and can be applied retroactively to
+   the existing space-route platforms (a single styling change in their builder). Optionally stamp a tiny
+   white `○` glyph on neutral plates as a second tell once players are trained.
+
+F. **Randomize the bottom-ladder extension** — landing on the lowest rung extends by a **fixed 14**
+   platforms today (`ladderExtend`, ~13538, `for (let k = 0; k < 14; k++)`). Change to a randomized count:
+   current amount = minimum, **8× = maximum** (14–112 rungs per landing, rolled from the existing seeded
+   `R()` chain so co-op determinism is preserved — do NOT use `Math.random()`). Performance guard: 112
+   platforms in one tick will hitch — build them via the existing sliced/job (flushJobs) pattern or a few
+   per frame, and let the enemy/coin dressing respect the existing budgets.
+
 **The BETWEEN as a content library (rather than a level):** D1–D6 dungeon kits (VHS/GULLET/LIMINAL/FRACTAL
 zones, sanity/observation/rewind-rewind mechanics, 6 surreal uniques + 6 bosses) are candidates to harvest:
 the dungeon themes can become extra `farDungeon`-framework dungeons on the other levels (they already eat any
@@ -160,6 +202,8 @@ AUDIT §3.4 (two overlapping noise fields, 6–8 curated hybrids, unify `zoneFor
 ---
 
 ## 📝 Session Log
+
+- **2026-10-31** [BUFFY] World-rules brief captured into the LEVEL IDENTITY section (A–F, docs only, no game code): all-biome coverage with fire/hell gated below depth -1 and caverns extended to -666 (rework `depthZoneFor` ~12832), per-level spawn height/location/neighbour-biomes, moon+planets+dungeons invariants, per-zone shape/size platform pools, the neutral-platform marker decision ("truth on the underside + rim, top face is decoration"), and randomized bottom-ladder extension (fixed 14 today at `ladderExtend` ~13538 → 14–112 via the seeded `R()` chain so co-op determinism holds, built through the sliced job pattern to avoid a hitch).
 
 - **2026-10-31** [BUFFY] User direction captured into LEVEL IDENTITY section above (docs only, no game code): THE BETWEEN likely goes unused as a level but its content may be harvested (D1–D6 dungeon kits, VHS/GULLET/LIMINAL/FRACTAL zones, surreal uniques/bosses) — stays built behind its menu filter, zero code removed. Levels 2–4 remain clone-flavored because of 3 verified shared structures the 2026-10-30 shape rework never touched: the fixed dungeon ring-node slots (same slots as Lvl1), the identical `UNIVERSE_R = 600` six-tower ring (~937), and the same `buildFlow`→`buildCommons`→`buildHubPortalLoop` pass sequence (~5697). Plan: rework ONE level's spine as the pattern (recommended: Overgrowth) with per-level dungeon geometry + tower ring variation + platform-family diversity, verified with an extended sameness probe alongside `_layout_diff`, then roll the pattern out level-by-level. Mechanics stay shared; architecture stops being a re-skin. Also re-dropped the P0 music item (the concurrent rewrite had restored it) and renumbered nothing.
 
