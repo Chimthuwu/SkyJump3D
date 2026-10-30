@@ -613,7 +613,7 @@ Agent: stop now. Only `todo.md` should have changed.
   - [ ] Neon sign halos (additive glow behind signs) — verify active
   - [ ] City light-haze horizon sprites — verify 12-sprite ring present
   - [x] Remove dead code: `betweenBatchPlatforms()` call site disabled but function remains — clean or re-enable after verifying merged mesh renders clean
-  - [ ] Consolidate duplicate `CANOPY_Y` declarations (one module-level, one local in buildBetween — caused crash)
+  - [x] Consolidate duplicate `CANOPY_Y` declarations (one module-level, one local in buildBetween — caused crash)
   - [ ] Verify no `Math.random()` in seeded paths (breaks determinism/co-op)
   - [ ] HUD innerHTML writes only on change (already done 2026-10-21 — verify still active)
   - [ ] Player shadow scans `nearSolids` only (already done — verify)
