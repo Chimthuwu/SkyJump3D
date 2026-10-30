@@ -45,7 +45,7 @@ All existing enemy families behave identically to their base implementations. On
 | Watcher | watcher | stalker | Drifts toward player, hovers (bob), never touches ground. Whites bloodshot, never blinks. Heals when not observed (handled in variantAI stalker + custom). |
 | Crawler | crawler | spider | Segmented worm, rounds corners at exactly 90°. Uses spider pounce AI but constrained to 90° turns via platform rect. |
 | Whisperer | whisperer | stalker | Near-invisible (opacity 0.15), audio-only tell. Fought by sound direction. Whisper frequency: 440/660/880 Hz. |
-| Spawn-swarm | spawnSwarm | kaomoji | Fused cluster. On death: splits into 2-3 smaller swarms (handled in variantAI + onDeath hook). Lure off ledges. |
+| Spawn-swarm | spawnSwarm | kaomoji | Fused cluster. On death: splits into 2-3 smaller swarms (handled in variantAI + onDeath hook). Lure off ledges. **(2026-10-31 correction: verified against code — the §7.2 rework made the swarm a brood of 5 spawnlings with no mother body, index.html ~2203; the split-on-death hook this row describes was never implemented, it is still marked `TODO: split-on-death` at WALKER_STATS ~1203.)** |
 | Amalgam | amalgam | gorilla | Fused remains of killed enemies. Many limbs, three eyes. Ground slam (gorilla AI). Inherits attacks conceptually (visual only). |
 | Shell | shell | kaomoji | Patient nautilus. Harmless while watched (speed 0.45×). Grows when ignored — meek body slows to strike only later. `variantAI` has shellCd/shellBite logic. |
 | Angle | angle | stalker | Single-vertex silhouette in black. Hurts to look at (screen distortion shader). Closes distance when not observed. `variantAI` = stalker. |

@@ -1,0 +1,130 @@
+# NEXT STEPS — SkyJump3D (plan written 2026-10-31, after the doc audit)
+
+Status baseline: all 4 levels built and headless-verified (descent / overgrowth / ascent / skyfall),
+6 dungeons + real room props each, asteroid set-piece on every planet leg, doc audit + archive
+reorg committed (`9217d7c`). Everything below is ranked by (impact ÷ effort), verified by grep
+against `index.html` today. Working doc names in this file are approximate line anchors —
+search by function name; `index.html` is a single ES module ~17,320 lines.
+
+---
+
+## P0 — quick wins (each ~1 session or less, no risk to worldgen)
+
+**1. Biome music table completion** — `MUSIC` (`index.html` ~13738) defines only city + 8 biomes
+(Psychedelic, Jungle, Frozen, Inferno, Storm, Rave, Beach, Horror). Missing:
+**Hellscape, Glitch, Kaomoji, Alien Void, Moon, Ride Park** — plus the newer level zones
+(Foreclosure/Condemned/Collections, Sunset Strip/Tracking Error/Arcade Overdrive, and the 9
+l2-4 zone names). Those zones silently fall back to `musicTick`'s `zn = 'city'` fallback
+(~13773). Add one entry per zone: root MIDI note, bpm, scale, swing, kick/snare pattern.
+Audio-only — no worldgen risk. Note: `MUSIC_COUNT = 19` already claims 19 tracks; align it.
+
+**2. VOICE table completion** — `VOICE` (~16590) covers 8 kinds only; every newer enemy
+variant (demon, skeleton, glitchling, kaomoji, dinosaur, stalker, alien, duck, tapehead,
+crthead, cabinet, pixelghost, popstar, grandpa…) silently falls back to `walker` voice /
+colour / name via `voiceKind` (~16597). Add one line per variant: pitch, rate, `col`, `who`.
+The `col` value should match the variant's kit colour (see `biomeAccent` map ~1243 for hints).
+
+**3. Human-eyeball debt sweep (playtest pass, no code)** — everything recent is only
+headless-verified. One sitting in a real browser, checking:
+- the 18 new dungeon room props (do Overgrowth/Ascent/Skyfall rooms read as themed?)
+- Pussy Palace cloud-parting at ~15 m (reveal ramp feel, does it re-close)
+- level macro-shapes in hand (Overgrowth boughs, Ascent switchbacks, Skyfall cluster bridges)
+- the asteroid set-pieces from 5a5dfd0 (hop-stone pacing, loot density, beacon visibility)
+- viewmodel framing after the `vmScene`/`vmCamera` near-clip fix
+Log findings into `todo.md` per session convention so the next agent starts there.
+
+**4. Toast/banner polish + copy** — "KeyE" raw-keycode leak in block-placer toast; HUD banner
+overlaps the stats panel top-left (audit bugs #2/#3, both trivial). Also toasts + label tables
+(`clusterThemes` ~1732, `zoneLabel` ~1778) still lack the newer zones → generic "ZONE" labels.
+
+---
+
+## P1 — performance foundation (the big wins; measure every step)
+
+**Protocol (from PERFORMANCE_PLAN.md, non-negotiable):** one change per commit, before/after
+numbers from the same device + same 3 reference scenes (spawn roof / arena fight / Alien Void),
+save baselines as `perf/baseline-<sha>.json`. Real-GPU F2 captures still missing for every claim
+so far — do one before starting (press F2 on a real GPU browser, send the panel) to have an
+honest baseline.
+
+**5. Freeze static matrices (full)** — partially done: `scene` + `lvl` roots are frozen
+(~842, ~934). The remaining win is per-object: after each `buildLevel`, set
+`matrixAutoUpdate=false; updateMatrix()` for every non-animated object. Determine the exempt
+list empirically (run 60 frames headless, record whose position/rotation/scale changes — movers,
+enemies, spinning pickups) instead of hard-coding it. `updateMatrixWorld` measured 19.5 ms/call
+at 65k objects; this is the single biggest CPU item.
+
+**6. Instance the static world** — ~59k meshes / 28.9k unique materials / 44.7k geometries.
+- Platforms (slab/plate/under-cone/bullseye/springs) → 4–5 `InstancedMesh` + `setColorAt`
+  (the Alien route + asteroid debris already do this — pattern exists at ~3086, ~2758).
+- Coins / ammo / hearts / weapon pickups (~8,242 items) → one InstancedMesh per type,
+  update near-player instances only, `taken` hides the instance.
+- Rails, road segments, halo boxes, ground pads → `mergeGeometries` per ~250 m cell
+  (per-cell frustum culling stays free). One merged chunk already exists at ~14895 (`noCull`).
+- Payoff: delete the platform distance-cull (CULL_R 290 / CULL_BIG_R 450) and keep the full
+  silhouette draw distance — that was the design goal all along.
+
+**7. Enemy streaming** — ~1,157 enemies alive at boot (~19 meshes each). Region budget
+(e.g. ~120 live within ~450 m): spawn on approach, despawn behind, keep per-arena
+`cleared` flags so it persists. Also fixes multiplayer snapshot weight (host simulates all).
+Cheap pre-step while 6 lands: shared per-variant materials (currently per-enemy `lam(...)`)
+and instanced aura/beacon/aggro-cone sets.
+
+**8. Adaptive resolution scaler** — target 60 fps from the F2 frame-time ring: drop render
+scale 0.6–1.0 when avg > 18 ms for 1 s, recover slowly. `setPixelRatio(Math.min(dpr,2))*scale`
+already exists (~788) — this just automates the dial. Consider FXAA when scaled instead of MSAA.
+
+**9. CDN fallback / robustness** — Three.js comes from jsdelivr with no fallback (offline =
+blank page). Vendoring it (esbuild is already in node_modules) also enables minification and
+module splitting; at minimum, add a second importmap fallback or inline error state.
+
+---
+
+## P2 — design & feel (after perf, or interleaved when context-switching would help)
+
+**10. Kaomoji / Glitch / Hellscape become real mechanics biomes** — currently cosmetic-only
+(AUDIT §3.2/3.3 has full designs). Highest-value items: mochi squash-and-stretch bounce +
+face-mood escalation tied to HP/deaths (Kaomoji); beat-reactive flickering/ghost platforms
+(Glitch); heat line + brimstone vents (Hellscape). These ship as small mechanics attached to the
+existing zone flags (precedent: `weakJump`/`lowGrav`/`thermal`/`wind` already added for
+the 9 new zones — extend the same matchers).
+
+**11. Warp destination list UI** — Q-cycling works up to ~8 destinations, is painful beyond.
+A small panel (list + nearest-first ordering) at the warp pad, plus a cap of ~1 checkpoint
+per region (they're no longer respawn-fast-travel, they're chapter gates).
+
+**12. Style meter** — unify bullseye / trick / kill combos into one multiplier with rank
+letters, banked on landing. Feeds from systems that already exist; no new verbs.
+
+**13. Death marker / banked-at-checkpoint** — souls-like one-shot warp to retrieve dropped
+loot; makes deaths interesting without softening the punishment.
+
+**14. Authored set-pieces + far landmarks** — readable route rhythm (reveal → gauntlet →
+climb → breather → boss) per chapter, plus 2–3 giant lit silhouettes visible from spawn.
+Cheap: they're static `noCull`-style objects once 6 is done.
+
+**15. Biome-mechanics backlog / hybrids** — AUDIT §3.4 (two overlapping noise fields, 6–8
+curated hybrids, unify zoneFor/biomeForRegion/planet biomes[] into one `biomeAt(x,y,z)`).
+Design debt from three duplicated systems migrating toward one.
+
+---
+
+## Later / opportunistic
+
+- Boss-as-level, grapple/zipline, daily seeded run + leaderboard, photo/replay mode.
+- Full `PLAN-UNIVERSES` per-universe generation (six spawn slots exist; distinct mirror
+  universes don't — decide if this survives contact with the 4-level plan or gets retired).
+- `localStorage` key migration off `towerdrop.*` (cosmetic, only do when names are stable).
+- Rolling deploy reconnect: `npm run deploy:pages` when a playable milestone wants going live.
+
+---
+
+## Standing rules (repeated from the repo's own docs — they keep getting broken)
+
+- Read `todo.md` top entry before starting; append a dated log entry at the TOP when done.
+- `node perf/_synchk.cjs` after every edit; `node perf/_brace_scan.cjs` for brace balance;
+  boot a headless page through a `perf/_asteroid_smoke.cjs`-style harness for anything touching
+  buildLevel/multiplayer; never trust a "works" claim that has no probe output in the entry.
+- Determinism is sacred: no `Math.random()` in seeded worldgen paths (checked 2026-10-31 —
+  currently clean, keep it that way).
+- Everything not yet eyeballed on a real GPU is explicitly marked as such above.

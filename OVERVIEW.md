@@ -41,7 +41,7 @@ Section order in `index.html`: tuning → helpers → renderer + retro pipeline 
 | Caps Lock / V | toggle first/third person (**starts first-person**) |
 | Q / E | camera orbit (third person) |
 | R | respawn at checkpoint |
-| M mute · L voice lines · G gore · P retro preset · B "crazy" shader mode |
+| M mute · L voice lines · G gore · P multiplayer lobby · B "crazy" shader mode |
 | Esc | pause menu with debug report + Copy button |
 | F3 | live debug overlay · F4 noclip (Space up, C down) |
 
