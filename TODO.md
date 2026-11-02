@@ -8,9 +8,12 @@
 
 ---
 
-## 📍 Current Status (2026-10-31)
+## 📍 Current Status (2026-11-03)
 
-**One shippable level (user request 2026-10-31: Levels 2–4 ARCHIVED — code out of the game, content salved for reuse):**
+**WILDWOOD (the jungle world) SHIPPED 2026-11-03 — commit `0ab5b9c`:** trees, never box skyscrapers. All towers are living tree hubs (trunk/roots/foliage tiers), spawn on mother-tree canopies, 4-spiral-bough macro-shape, own seed (23011), own TOP band (340–760), own spawn bearing, own 3-zone ladder (Boughs → Underleaf → Rootmire), own 10-boss gauntlet, own dungeon pass replacing Lvl1's outright: 6 dungeons on bough-knot geometry (Grove Heart, Mossdeep, Chrysalis, Bough Roost, Spore Garden, Vine Maze) with farMonument/farDungeon kits, causeways, forecourt garrisons, rune traps, vine dressing. Shared runtime untouched (physics/weapons/AI/vehicles/co-op/moon/6-dungeon rule/hell ladder). Add-script (all-or-nothing, anchored): `archive/levels/_wildwood_add.cjs`; headless test: `perf/_wildwood_test.cjs` — descent baseline unchanged, 0 box towers, 6/6 mids, deterministic rebuild, no bad materials. Menu: `descent` + `wildwood` selectable. **Not yet GPU-played.**
+- Note: descent rebuild fingerprint can drift ±5 solids between boot and rebuild (pre-existing boot-timing nondeterminism, reproduced on pre-wildwood HEAD via `perf/_dbg_twobuild.cjs`) — not a wildwood regression; worth a proper root-cause someday.
+
+**One shippable level + wildwood (user request 2026-10-31: Levels 2–4 ARCHIVED — code out of the game, content salved for reuse):**
 - **Descent / Lil Spasticism** (Lvl1) — original sky-city, 6 dungeons (nest/house/shroom/bone/bubble/eiffel)
 - ~~Overgrowth / Ascent / Skyfall~~ — archived 2026-10-31 per user call ("start from scratch" for new levels). Their full content — zone palettes, dungeon themes + builders, boss rosters, shape walkers, reskin fns, mechanic-flag wiring pattern — is captured verbatim in `archive/levels/LEVELS-2-4-SALVAGE.md` + `archive/levels/salvage_code.txt` (55 code sections). Menu cards, builders, chains and constants removed from `index.html`; no-op gate stubs (`overgrowthOn` etc.) remain so any stray call site parses.
 
